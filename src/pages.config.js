@@ -50,12 +50,14 @@
 import Home from './pages/Home';
 import CharacterCreation from './pages/CharacterCreation';
 import NewGame from './pages/NewGame';
+import Game from './pages/Game';
 
 
 export const PAGES = {
     "Home": Home,
     "CharacterCreation": CharacterCreation,
     "NewGame": NewGame,
+    "Game": Game,
 }
 
 export const pagesConfig = {
