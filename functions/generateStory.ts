@@ -99,6 +99,10 @@ Then provide exactly 4 choices the player can make. Each choice should have a di
       ? `Player selected choice ${choice_index + 1}`
       : `Player action: ${custom_input}`;
 
+    const skillCheckNote = selectedChoice.includes('[Skill Check:')
+      ? `IMPORTANT: The player attempted a skill check. The outcome is embedded in their action text (SUCCESS or FAILURE). Reflect this outcome DIRECTLY in your narrative — do not contradict it. On SUCCESS: describe how the character overcomes the challenge with vivid detail. On FAILURE: describe a setback, complication, or consequence. Keep it immersive and reactive.`
+      : '';
+
     prompt = `You are the Dungeon Master. Continue the story based on the player's choice.
 ${charSummary}
 ${worldSummary}
@@ -107,12 +111,14 @@ Recent Story:
 ${storyLog}
 
 Player Action: ${selectedChoice}
+${skillCheckNote}
 
-Write the consequence narrative (2-3 paragraphs) then provide 4 new choices. 
+Write the consequence narrative (2-3 paragraphs) that directly reacts to the player's action and any skill check outcome. Then provide 4 new choices.
 Consider:
 - Character's active conditions and how they affect outcomes
 - Reputation/alignment impact if morally significant
 - Environmental conditions (${session.season}, ${session.time_of_day})
+- Make skill check consequences feel meaningful and permanent
 ${session.adult_mode ? '- Mature content permitted' : ''}
 - If combat should trigger, flag it`;
 
