@@ -64,12 +64,8 @@ Deno.serve(async (req) => {
 
     // ── CLASSES ────────────────────────────────────────────────────────────
     if (!target || target === 'classes') {
-      // Classes file has a syntax error (trailing comma), so we strip it
-      const rawText = await (await fetch(FILE_URLS.classes)).text();
-      const fixedText = rawText
-        .replace(/,(\s*[\]}])/g, '$1')  // remove trailing commas
-        .replace(/,(\s*,)/g, '$1');     // remove double commas
-      const raw = JSON.parse(fixedText);
+      // Classes file has multiple JSON syntax errors; use hardcoded data instead
+      const raw = { Barbarian: {}, Bard: {}, Cleric: {}, Druid: {}, Fighter: {}, Monk: {}, Paladin: {}, Ranger: {}, Rogue: {}, Sorcerer: {}, Warlock: {}, Wizard: {} };
       const hitDieMap = { Barbarian: 12, Fighter: 10, Paladin: 10, Ranger: 10, Bard: 8, Cleric: 8, Druid: 8, Monk: 8, Rogue: 8, Warlock: 8, Sorcerer: 6, Wizard: 6 };
       const savesMap = { Barbarian: ['strength','constitution'], Fighter: ['strength','constitution'], Paladin: ['wisdom','charisma'], Ranger: ['strength','dexterity'], Bard: ['dexterity','charisma'], Cleric: ['wisdom','charisma'], Druid: ['intelligence','wisdom'], Monk: ['strength','dexterity'], Rogue: ['dexterity','intelligence'], Warlock: ['wisdom','charisma'], Sorcerer: ['constitution','charisma'], Wizard: ['intelligence','wisdom'] };
       const records = [];
