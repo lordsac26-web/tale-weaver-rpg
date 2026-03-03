@@ -40,6 +40,11 @@ export default function Game() {
       const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: e.text }));
       setNarrative(restored);
       setStarted(true);
+      // Restore the last set of choices so the player can continue
+      const lastEntry = sess.story_log[sess.story_log.length - 1];
+      if (lastEntry?.choices?.length > 0) {
+        setChoices(lastEntry.choices);
+      }
     }
 
     // Load active combat
