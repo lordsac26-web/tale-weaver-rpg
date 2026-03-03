@@ -150,18 +150,21 @@ export default function Game() {
     await loadState();
   };
 
-  const handlePlayerAttack = async (targetId, actionType) => {
+  const handlePlayerAttack = async (targetId, actionType, weaponOrSpell) => {
     if (!combat?.id && !session?.combat_state?.combat_id) return;
     const combatId = combat?.id || session?.combat_state?.combat_id;
     setCombatLoading(true);
 
-    const weapon = character?.equipped?.weapon || { damage_dice: '1d6', attack_bonus: 0, damage_bonus: 0, type: 'melee' };
+    const isSpell = actionType === 'spell';
+    const weapon = isSpell ? null : (weaponOrSpell || character?.equipped?.weapon || { damage_dice: '1d6', attack_bonus: 0, damage_bonus: 0, type: 'melee' });
+    const spell = isSpell ? weaponOrSpell : null;
+
     const result = await base44.functions.invoke('combatEngine', {
       action: 'player_attack',
       session_id: sessionId,
       combat_id: combatId,
       character_id: character?.id,
-      payload: { target_id: targetId, weapon }
+      payload: { target_id: targetId, weapon, spell }
     });
 
     const data = result.data;
