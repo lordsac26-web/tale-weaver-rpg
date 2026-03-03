@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Loader2, Scroll, Feather } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import SkillCheckResult from './SkillCheckResult';
 
 const RISK_STYLES = {
   low:     { border: 'rgba(40,160,80,0.35)',  bg: 'rgba(10,40,15,0.5)',  hover: 'rgba(40,160,80,0.5)',  badge: { bg: 'rgba(10,50,20,0.7)', color: '#86efac', border: 'rgba(40,160,80,0.4)' } },
@@ -55,6 +56,10 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                     {entry.text}
                   </div>
                 </div>
+              )}
+
+              {entry.type === 'skill_check' && (
+                <SkillCheckResult entry={entry} />
               )}
 
               {entry.type === 'roll_result' && (
