@@ -201,19 +201,30 @@ Deno.serve(async (req) => {
     if (allEnemiesDead) result = 'victory';
     if (playerDead) result = 'defeat';
 
-    // Advance turn after player attacks (only if combat is still ongoing)
+    // Track actions used this turn in the combat log's world_state
+    const actionsPerTurn = getActionsPerTurn(character);
+    const currentActionsUsed = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
+    const actionsRemaining = actionsPerTurn - currentActionsUsed;
+
+    // Advance turn only if all actions for this turn are exhausted
     let nextIndex = combatLog.current_turn_index;
     let nextRound = combatLog.round;
-    if (result === 'ongoing') {
-      nextIndex = (combatLog.current_turn_index + 1) % updatedCombatants.length;
-      if (nextIndex === 0) nextRound += 1;
-      // Skip dead combatants
-      let safety = 0;
-      while (!updatedCombatants[nextIndex]?.is_conscious && safety < updatedCombatants.length) {
-        nextIndex = (nextIndex + 1) % updatedCombatants.length;
+    let newWorldState = { ...(combatLog.world_state || {}), actions_used_this_turn: currentActionsUsed };
+
+    if (result !== 'ongoing' || actionsRemaining <= 0) {
+      // Move to next combatant
+      if (result === 'ongoing') {
+        nextIndex = (combatLog.current_turn_index + 1) % updatedCombatants.length;
         if (nextIndex === 0) nextRound += 1;
-        safety++;
+        // Skip dead combatants
+        let safety = 0;
+        while (!updatedCombatants[nextIndex]?.is_conscious && safety < updatedCombatants.length) {
+          nextIndex = (nextIndex + 1) % updatedCombatants.length;
+          if (nextIndex === 0) nextRound += 1;
+          safety++;
+        }
       }
+      newWorldState.actions_used_this_turn = 0; // reset for next turn
     }
 
     await base44.asServiceRole.entities.CombatLog.update(combat_id, {
@@ -221,6 +232,7 @@ Deno.serve(async (req) => {
       log_entries: updatedLog,
       current_turn_index: nextIndex,
       round: nextRound,
+      world_state: newWorldState,
       is_active: result === 'ongoing',
       result
     });
@@ -235,7 +247,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    return Response.json({ hit, damage, damage_rolls: damageRolls, attack_roll: totalAttack, log_entry: logEntry, target_hp: target.hp_current, result, combat_ended: result !== 'ongoing', next_turn_index: nextIndex });
+    return Response.json({
+      hit, damage, damage_rolls: damageRolls, attack_roll: totalAttack, log_entry: logEntry,
+      target_hp: target.hp_current, result, combat_ended: result !== 'ongoing',
+      next_turn_index: nextIndex,
+      actions_remaining: actionsRemaining > 0 ? actionsRemaining : 0,
+      actions_per_turn: actionsPerTurn
+    });
   }
 
   if (action === 'enemy_turn') {
