@@ -258,7 +258,8 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
       )}
 
       {/* Spell Lists */}
-      {activeSection !== 'slots' && <div className="space-y-3">
+      {activeSection !== 'slots' && (
+      <div className="space-y-3">
         {activeSection === 'known' ? (
           knownList.length === 0 ? (
             <div className="text-center py-8 text-slate-500 text-sm">
