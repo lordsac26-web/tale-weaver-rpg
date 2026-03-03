@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Dice6 } from 'lucide-react';
+import { Dice6, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { calcStatMod, calcModDisplay, roll4d6DropLowest, CLASSES } from '@/components/game/gameData';
+import { calcStatMod, calcModDisplay, roll4d6DropLowest, CLASSES, RACES } from '@/components/game/gameData';
 
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
