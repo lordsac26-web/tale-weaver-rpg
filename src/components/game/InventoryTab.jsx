@@ -347,12 +347,13 @@ function AddItemForm({ onAdd, onCancel }) {
 }
 
 // ─── Item Row ──────────────────────────────────────────────────────────────────
-function ItemRow({ item, origIndex, equipped, onEquip, onRemove }) {
+function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify }) {
   const [expanded, setExpanded] = useState(false);
   const rarity = ITEM_RARITY[item.rarity] || ITEM_RARITY.common;
   const slot = item.equip_slot || CATEGORY_TO_SLOT[item.category];
   const canEquip = !!slot;
   const isEquipped = canEquip && Object.entries(equipped).some(([s, i]) => i && i === item);
+  const isUnidentifiedMagic = item.is_magic && !item.is_identified;
 
   return (
     <div className="rounded-xl overflow-hidden transition-all"
@@ -384,17 +385,25 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove }) {
               {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
           )}
+          {isUnidentifiedMagic && (
+           <button onClick={() => onIdentify?.(item)}
+             className="p-1.5 rounded-lg text-xs border transition-all"
+             style={{ background: 'rgba(80,30,120,0.5)', border: '1px solid rgba(140,80,220,0.4)', color: '#d4b3ff' }}
+             title="Identify Item">
+             <Sparkles className="w-3.5 h-3.5" />
+           </button>
+          )}
           {canEquip && (
-            <button onClick={() => onEquip(item, origIndex, slot)}
-              className="p-1.5 rounded-lg text-xs border transition-all"
-              style={isEquipped ? {
-                background: 'rgba(10,50,15,0.6)', border: '1px solid rgba(40,160,80,0.4)', color: '#86efac'
-              } : {
-                background: 'rgba(15,10,5,0.5)', border: '1px solid rgba(180,140,90,0.15)', color: 'rgba(180,140,90,0.4)'
-              }}
-              title={isEquipped ? 'Unequip' : `Equip (${EQUIP_SLOTS[slot]?.label})`}>
-              <ShieldCheck className="w-3.5 h-3.5" />
-            </button>
+           <button onClick={() => onEquip(item, origIndex, slot)}
+             className="p-1.5 rounded-lg text-xs border transition-all"
+             style={isEquipped ? {
+               background: 'rgba(10,50,15,0.6)', border: '1px solid rgba(40,160,80,0.4)', color: '#86efac'
+             } : {
+               background: 'rgba(15,10,5,0.5)', border: '1px solid rgba(180,140,90,0.15)', color: 'rgba(180,140,90,0.4)'
+             }}
+             title={isEquipped ? 'Unequip' : `Equip (${EQUIP_SLOTS[slot]?.label})`}>
+             <ShieldCheck className="w-3.5 h-3.5" />
+           </button>
           )}
           <button onClick={() => onRemove(origIndex)}
             className="p-1.5 rounded-lg transition-all"
@@ -560,14 +569,14 @@ export default function InventoryTab({ character, onUpdate }) {
         </div>
       ) : (
         <div className="space-y-1.5">
-          {sorted.map((item, i) => {
-            const origIndex = inventory.indexOf(item);
-            return (
-              <ItemRow key={i} item={item} origIndex={origIndex}
-                equipped={equipped} onEquip={handleEquipItem} onRemove={handleRemoveItem} />
-            );
-          })}
-        </div>
+           {sorted.map((item, i) => {
+             const origIndex = inventory.indexOf(item);
+             return (
+               <ItemRow key={i} item={item} origIndex={origIndex}
+                 equipped={equipped} onEquip={handleEquipItem} onRemove={handleRemoveItem} onIdentify={props.onIdentify} />
+             );
+           })}
+         </div>
       )}
     </div>
   );
