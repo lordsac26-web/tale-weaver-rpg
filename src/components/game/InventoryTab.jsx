@@ -1,0 +1,311 @@
+import React, { useState } from 'react';
+import { Plus, Trash2, Shield, Sword, Package, ArrowUpDown, Filter, ChevronDown, ChevronUp } from 'lucide-react';
+
+const ITEM_CATEGORIES = ['Weapon', 'Armor', 'Potion', 'Tool', 'Adventuring Gear', 'Magic Item', 'Ammunition', 'Currency', 'Other'];
+
+const CATEGORY_ICONS = {
+  Weapon: '⚔️', Armor: '🛡️', Potion: '🧪', Tool: '🔧',
+  'Adventuring Gear': '🎒', 'Magic Item': '✨', Ammunition: '🏹', Currency: '💰', Other: '📦'
+};
+
+const DEFAULT_ITEM = { name: '', category: 'Other', quantity: 1, weight: 0, cost: 0, cost_unit: 'gp', damage: '', armor_class: 0, attack_bonus: 0, description: '', equipped: false };
+
+function CurrencyPanel({ character, onUpdate }) {
+  const [editing, setEditing] = useState(false);
+  const [values, setValues] = useState({ gold: character.gold || 0, silver: character.silver || 0, copper: character.copper || 0 });
+
+  // Auto-convert: 100cp = 1sp, 10sp = 1gp
+  const convertAll = () => {
+    let { gold, silver, copper } = values;
+    const totalCopper = gold * 1000 + silver * 100 + copper;
+    const newGold = Math.floor(totalCopper / 1000);
+    const remainingAfterGold = totalCopper % 1000;
+    const newSilver = Math.floor(remainingAfterGold / 100);
+    const newCopper = remainingAfterGold % 100;
+    const updated = { gold: newGold, silver: newSilver, copper: newCopper };
+    setValues(updated);
+    onUpdate(updated);
+    setEditing(false);
+  };
+
+  const save = () => { onUpdate(values); setEditing(false); };
+
+  return (
+    <div className="bg-slate-800/40 border border-amber-700/20 rounded-xl p-3 mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-amber-400/80 text-xs uppercase tracking-widest">Currency</span>
+        <div className="flex gap-2">
+          {editing ? (
+            <>
+              <button onClick={convertAll} className="text-xs text-blue-400 hover:text-blue-300">Auto-convert</button>
+              <button onClick={save} className="text-xs text-green-400 hover:text-green-300">Save</button>
+              <button onClick={() => { setValues({ gold: character.gold||0, silver: character.silver||0, copper: character.copper||0 }); setEditing(false); }} className="text-xs text-slate-500 hover:text-slate-300">Cancel</button>
+            </>
+          ) : (
+            <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-300">Edit</button>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {[{ key: 'gold', label: 'Gold (GP)', color: 'text-yellow-400', bg: 'bg-yellow-900/10 border-yellow-700/30' },
+          { key: 'silver', label: 'Silver (SP)', color: 'text-slate-300', bg: 'bg-slate-700/20 border-slate-600/30' },
+          { key: 'copper', label: 'Copper (CP)', color: 'text-orange-400', bg: 'bg-orange-900/10 border-orange-700/30' }
+        ].map(({ key, label, color, bg }) => (
+          <div key={key} className={`border rounded-lg p-2 text-center ${bg}`}>
+            <div className="text-xs text-slate-500 mb-0.5">{label}</div>
+            {editing ? (
+              <input type="number" min="0" value={values[key]}
+                onChange={e => setValues(v => ({ ...v, [key]: parseInt(e.target.value) || 0 }))}
+                className="w-full text-center bg-transparent outline-none font-bold text-lg focus:ring-0"
+                style={{ color: 'inherit' }}
+              />
+            ) : (
+              <div className={`font-bold text-lg ${color}`}>{values[key] || 0}</div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 text-xs text-slate-600 text-center">
+        Total value: {Math.floor(((values.gold||0)*1000 + (values.silver||0)*100 + (values.copper||0)) / 1000)}gp {Math.floor((((values.gold||0)*1000 + (values.silver||0)*100 + (values.copper||0)) % 1000) / 100)}sp {((values.gold||0)*1000 + (values.silver||0)*100 + (values.copper||0)) % 100}cp
+      </div>
+    </div>
+  );
+}
+
+function AddItemForm({ onAdd, onCancel }) {
+  const [item, setItem] = useState({ ...DEFAULT_ITEM });
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const set = (k, v) => setItem(prev => ({ ...prev, [k]: v }));
+
+  return (
+    <div className="bg-slate-800/60 border border-amber-700/30 rounded-xl p-4 space-y-3">
+      <div className="text-sm font-medium text-amber-300 mb-2">Add Item</div>
+      <div className="grid grid-cols-2 gap-2">
+        <input placeholder="Item name *" value={item.name} onChange={e => set('name', e.target.value)}
+          className="col-span-2 bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-amber-100 placeholder-slate-500 outline-none focus:border-amber-600/60" />
+        <select value={item.category} onChange={e => set('category', e.target.value)}
+          className="bg-slate-700/50 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-amber-100 outline-none">
+          {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input type="number" placeholder="Qty" min="1" value={item.quantity} onChange={e => set('quantity', parseInt(e.target.value) || 1)}
+          className="bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-amber-100 outline-none" />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="relative">
+          <input type="number" placeholder="Weight (lb)" min="0" step="0.1" value={item.weight || ''} onChange={e => set('weight', parseFloat(e.target.value) || 0)}
+            className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-amber-100 placeholder-slate-500 outline-none" />
+        </div>
+        <input type="number" placeholder="Cost" min="0" value={item.cost || ''} onChange={e => set('cost', parseFloat(e.target.value) || 0)}
+          className="bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-amber-100 placeholder-slate-500 outline-none" />
+        <select value={item.cost_unit} onChange={e => set('cost_unit', e.target.value)}
+          className="bg-slate-700/50 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-amber-100 outline-none">
+          <option value="gp">GP</option>
+          <option value="sp">SP</option>
+          <option value="cp">CP</option>
+        </select>
+      </div>
+
+      <button onClick={() => setShowAdvanced(v => !v)} className="text-xs text-slate-400 hover:text-amber-300 flex items-center gap-1">
+        {showAdvanced ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        {item.category === 'Weapon' || item.category === 'Armor' ? 'Combat stats' : 'More details'}
+      </button>
+
+      {showAdvanced && (
+        <div className="space-y-2">
+          {(item.category === 'Weapon') && (
+            <div className="grid grid-cols-2 gap-2">
+              <input placeholder="Damage (e.g. 1d8 slashing)" value={item.damage} onChange={e => set('damage', e.target.value)}
+                className="col-span-2 bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-amber-100 placeholder-slate-500 outline-none" />
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-slate-400">Atk bonus:</span>
+                <input type="number" value={item.attack_bonus} onChange={e => set('attack_bonus', parseInt(e.target.value) || 0)}
+                  className="flex-1 bg-slate-700/50 border border-slate-600 rounded px-2 py-1 text-xs text-amber-100 outline-none" />
+              </div>
+            </div>
+          )}
+          {item.category === 'Armor' && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">AC value:</span>
+              <input type="number" min="0" value={item.armor_class} onChange={e => set('armor_class', parseInt(e.target.value) || 0)}
+                className="w-20 bg-slate-700/50 border border-slate-600 rounded px-2 py-1 text-xs text-amber-100 outline-none" />
+            </div>
+          )}
+          <textarea placeholder="Notes / description" value={item.description} onChange={e => set('description', e.target.value)} rows={2}
+            className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-amber-100 placeholder-slate-500 outline-none resize-none" />
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-1">
+        <button onClick={() => { if (item.name) onAdd(item); }} disabled={!item.name}
+          className="flex-1 py-2 bg-amber-800/60 hover:bg-amber-700 border border-amber-600/50 rounded-lg text-sm text-amber-200 disabled:opacity-40 transition-all">
+          Add to Inventory
+        </button>
+        <button onClick={onCancel} className="px-3 py-2 border border-slate-600 rounded-lg text-sm text-slate-400 hover:text-slate-200 transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function InventoryTab({ character, onUpdate }) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [sortBy, setSortBy] = useState('name');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [equippedItems, setEquippedItems] = useState(character.equipped || {});
+
+  const inventory = character.inventory || [];
+
+  const handleAddItem = (item) => {
+    const newInventory = [...inventory, item];
+    onUpdate({ inventory: newInventory });
+    setShowAddForm(false);
+  };
+
+  const handleRemoveItem = (index) => {
+    const newInventory = inventory.filter((_, i) => i !== index);
+    onUpdate({ inventory: newInventory });
+  };
+
+  const handleEquipItem = (item, index) => {
+    const slot = item.category === 'Weapon' ? 'weapon' : item.category === 'Armor' ? 'armor' : null;
+    if (!slot) return;
+
+    const newInventory = inventory.map((it, i) => {
+      if (it.category === item.category) return { ...it, equipped: false };
+      return it;
+    });
+    newInventory[index] = { ...item, equipped: !item.equipped };
+
+    const newEquipped = { ...equippedItems };
+    if (!item.equipped) {
+      newEquipped[slot] = item;
+    } else {
+      delete newEquipped[slot];
+    }
+
+    // Recalculate AC if equipping armor
+    const updates = { inventory: newInventory, equipped: newEquipped };
+    if (slot === 'armor' && !item.equipped && item.armor_class) {
+      updates.armor_class = item.armor_class;
+    }
+
+    setEquippedItems(newEquipped);
+    onUpdate(updates);
+  };
+
+  const sorted = [...inventory]
+    .filter(it => filterCategory === 'all' || it.category === filterCategory)
+    .sort((a, b) => {
+      if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
+      if (sortBy === 'weight') return (b.weight || 0) - (a.weight || 0);
+      if (sortBy === 'cost') return (b.cost || 0) - (a.cost || 0);
+      if (sortBy === 'category') return (a.category || '').localeCompare(b.category || '');
+      return 0;
+    });
+
+  const totalWeight = inventory.reduce((t, it) => t + ((it.weight || 0) * (it.quantity || 1)), 0);
+
+  return (
+    <div className="space-y-3">
+      <CurrencyPanel character={character} onUpdate={onUpdate} />
+
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button onClick={() => setShowAddForm(v => !v)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-800/40 hover:bg-amber-700/50 border border-amber-700/40 rounded-lg text-xs text-amber-300 transition-all">
+          <Plus className="w-3.5 h-3.5" /> Add Item
+        </button>
+        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+          className="bg-slate-800/50 border border-slate-700/40 rounded-lg text-xs text-slate-400 px-2 py-1.5 outline-none">
+          <option value="all">All Categories</option>
+          {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_ICONS[c]} {c}</option>)}
+        </select>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+          className="bg-slate-800/50 border border-slate-700/40 rounded-lg text-xs text-slate-400 px-2 py-1.5 outline-none">
+          <option value="name">Sort: Name</option>
+          <option value="category">Sort: Category</option>
+          <option value="weight">Sort: Weight</option>
+          <option value="cost">Sort: Cost</option>
+        </select>
+        <span className="ml-auto text-xs text-slate-500">{inventory.length} items · {totalWeight.toFixed(1)} lb</span>
+      </div>
+
+      {showAddForm && <AddItemForm onAdd={handleAddItem} onCancel={() => setShowAddForm(false)} />}
+
+      {/* Equipped summary */}
+      {(equippedItems.weapon || equippedItems.armor) && (
+        <div className="bg-green-900/10 border border-green-700/30 rounded-xl p-3">
+          <div className="text-xs text-green-400/80 uppercase tracking-widest mb-2">Equipped</div>
+          <div className="flex gap-3 flex-wrap">
+            {equippedItems.weapon && (
+              <div className="flex items-center gap-2 text-xs">
+                <span>⚔️</span>
+                <span className="text-amber-200">{equippedItems.weapon.name}</span>
+                {equippedItems.weapon.damage && <span className="text-slate-400">{equippedItems.weapon.damage}</span>}
+                {equippedItems.weapon.attack_bonus > 0 && <span className="text-green-400">+{equippedItems.weapon.attack_bonus} atk</span>}
+              </div>
+            )}
+            {equippedItems.armor && (
+              <div className="flex items-center gap-2 text-xs">
+                <span>🛡️</span>
+                <span className="text-amber-200">{equippedItems.armor.name}</span>
+                {equippedItems.armor.armor_class && <span className="text-blue-400">AC {equippedItems.armor.armor_class}</span>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Inventory list */}
+      {sorted.length === 0 ? (
+        <div className="text-slate-500 text-center py-10 flex flex-col items-center gap-2">
+          <Package className="w-10 h-10 opacity-20" />
+          <span className="text-sm">{filterCategory !== 'all' ? 'No items in this category' : 'Inventory is empty'}</span>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sorted.map((item, i) => {
+            const origIndex = inventory.indexOf(item);
+            const canEquip = item.category === 'Weapon' || item.category === 'Armor';
+            return (
+              <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${item.equipped ? 'border-green-600/50 bg-green-900/10' : 'border-slate-700/40 bg-slate-800/30 hover:border-slate-600/60'}`}>
+                <span className="text-lg flex-shrink-0">{CATEGORY_ICONS[item.category] || '📦'}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-amber-200 text-sm font-medium">{item.name}</span>
+                    {item.quantity > 1 && <span className="text-slate-400 text-xs">×{item.quantity}</span>}
+                    {item.equipped && <span className="text-xs bg-green-800/40 border border-green-700/40 text-green-300 px-1.5 py-0.5 rounded-full">Equipped</span>}
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                    <span className="text-slate-500 text-xs">{item.category}</span>
+                    {item.weight > 0 && <span className="text-slate-500 text-xs">{item.weight} lb</span>}
+                    {item.cost > 0 && <span className="text-yellow-600 text-xs">{item.cost} {item.cost_unit}</span>}
+                    {item.damage && <span className="text-red-400 text-xs">{item.damage}</span>}
+                    {item.armor_class > 0 && <span className="text-blue-400 text-xs">AC {item.armor_class}</span>}
+                    {item.attack_bonus > 0 && <span className="text-green-400 text-xs">+{item.attack_bonus} atk</span>}
+                  </div>
+                  {item.description && <div className="text-slate-600 text-xs mt-0.5 truncate">{item.description}</div>}
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {canEquip && (
+                    <button onClick={() => handleEquipItem(item, origIndex)}
+                      className={`p-1.5 rounded-lg text-xs border transition-all ${item.equipped ? 'border-green-600/50 text-green-400 bg-green-900/20' : 'border-slate-600/50 text-slate-400 hover:text-green-400 hover:border-green-700/40'}`}
+                      title={item.equipped ? 'Unequip' : 'Equip'}>
+                      {item.category === 'Weapon' ? <span className="text-xs">⚔️</span> : <span className="text-xs">🛡️</span>}
+                    </button>
+                  )}
+                  <button onClick={() => handleRemoveItem(origIndex)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 border border-transparent hover:border-red-700/30 transition-all">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
