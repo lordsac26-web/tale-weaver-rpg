@@ -64,16 +64,25 @@ Deno.serve(async (req) => {
 
     // ── CLASSES ────────────────────────────────────────────────────────────
     if (!target || target === 'classes') {
-      const raw = await (await fetch(FILE_URLS.classes)).json();
+      // Classes file has a syntax error (trailing comma), so we strip it
+      const rawText = await (await fetch(FILE_URLS.classes)).text();
+      const fixedText = rawText
+        .replace(/,(\s*[\]}])/g, '$1')  // remove trailing commas
+        .replace(/,(\s*,)/g, '$1');     // remove double commas
+      const raw = JSON.parse(fixedText);
+      const hitDieMap = { Barbarian: 12, Fighter: 10, Paladin: 10, Ranger: 10, Bard: 8, Cleric: 8, Druid: 8, Monk: 8, Rogue: 8, Warlock: 8, Sorcerer: 6, Wizard: 6 };
+      const savesMap = { Barbarian: ['strength','constitution'], Fighter: ['strength','constitution'], Paladin: ['wisdom','charisma'], Ranger: ['strength','dexterity'], Bard: ['dexterity','charisma'], Cleric: ['wisdom','charisma'], Druid: ['intelligence','wisdom'], Monk: ['strength','dexterity'], Rogue: ['dexterity','intelligence'], Warlock: ['wisdom','charisma'], Sorcerer: ['constitution','charisma'], Wizard: ['intelligence','wisdom'] };
       const records = [];
       for (const [className, classData] of Object.entries(raw)) {
         if (typeof classData !== 'object') continue;
+        const features = classData['Class Features'] || classData;
+        const desc = features.content || '';
         records.push({
           name: className,
-          description: Array.isArray(classData.content) ? classData.content[0] || '' : classData.content || '',
-          hit_die: classData['Hit Die'] ? parseInt(String(classData['Hit Die']).replace('d', '')) : 8,
-          primary_ability: classData['Primary Ability'] || '',
-          saving_throw_proficiencies: classData['Saving Throw Proficiencies'] ? [classData['Saving Throw Proficiencies']] : [],
+          description: typeof desc === 'string' ? desc : (Array.isArray(desc) ? desc[0] || '' : ''),
+          hit_die: hitDieMap[className] || 8,
+          primary_ability: '',
+          saving_throw_proficiencies: savesMap[className] || [],
           armor_proficiencies: [],
           weapon_proficiencies: [],
           skill_choices: [],
@@ -82,7 +91,7 @@ Deno.serve(async (req) => {
           features_by_level: {},
           spell_slots_by_level: {},
           spellcasting_ability: '',
-          raw_data: classData
+          raw_data: {}  // omit raw to avoid size issues
         });
       }
       if (records.length) {
