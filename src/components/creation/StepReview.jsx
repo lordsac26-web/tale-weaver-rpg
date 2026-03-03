@@ -129,6 +129,23 @@ export default function StepReview({ character }) {
             </div>
           )}
 
+          {/* Feats */}
+          {(character.feats || []).length > 0 && (
+            <div className="bg-amber-900/10 border border-amber-700/30 rounded-xl p-4">
+              <div className="text-amber-400/80 text-xs uppercase tracking-widest mb-2">Feats</div>
+              <div className="flex flex-wrap gap-1.5">
+                {(character.feats || []).map(featName => {
+                  const feat = FEATS.find(f => f.name === featName);
+                  return (
+                    <span key={featName} className={`text-xs px-2.5 py-1 rounded-full border flex items-center gap-1 ${feat ? (CATEGORY_COLORS[feat.category] || 'text-amber-300 bg-amber-900/20 border-amber-700/30') : 'text-amber-300 bg-amber-900/20 border-amber-700/30'}`}>
+                      <Star className="w-2.5 h-2.5" />{featName}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Backstory snippet */}
           {character.backstory && (
             <div className="bg-slate-800/40 border border-slate-700/40 rounded-xl p-4">
