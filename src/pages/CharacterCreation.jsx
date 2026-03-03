@@ -31,6 +31,7 @@ const STEPS = [
   { id: 'portrait', label: 'Portrait', icon: '🎨' },
   { id: 'backstory', label: 'Backstory', icon: '✍️' },
   { id: 'equipment', label: 'Equipment', icon: '🎒' },
+  { id: 'feats', label: 'Feats', icon: '⭐' },
   { id: 'review', label: 'Review', icon: '✅' },
 ];
 
