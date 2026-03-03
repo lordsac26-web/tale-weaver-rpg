@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { Loader2, Scroll } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const RISK_COLORS = {
   low: 'border-green-600/40 hover:border-green-500/80 hover:bg-green-900/20',
