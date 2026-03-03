@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
-import { User, Map, Loader2, ChevronLeft } from 'lucide-react';
+import { User, Loader2, ChevronLeft, Dices } from 'lucide-react';
 import HUD from '@/components/game/HUD';
 import StoryPanel from '@/components/game/StoryPanel';
 import CombatPanel from '@/components/game/CombatPanel';
