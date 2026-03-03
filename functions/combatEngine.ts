@@ -88,6 +88,22 @@ Deno.serve(async (req) => {
     return Response.json({ combat_id: combatLog.id, combatants, initiative_order: combatants });
   }
 
+  // Determine how many actions a character gets per turn based on features/level
+  const getActionsPerTurn = (character) => {
+    const features = (character.features || []).map(f => (typeof f === 'string' ? f : f.name || '').toLowerCase());
+    const charClass = (character.class || '').toLowerCase();
+    const level = character.level || 1;
+    let actions = 1;
+    // Extra Attack: Fighter 5+, Ranger 5+, Paladin 5+, Barbarian 5+, Monk 5+
+    if (['fighter','ranger','paladin','barbarian','monk'].includes(charClass) && level >= 5) actions = 2;
+    if (charClass === 'fighter' && level >= 11) actions = 3;
+    if (charClass === 'fighter' && level >= 20) actions = 4;
+    // Feature-based overrides
+    if (features.some(f => f.includes('extra attack'))) actions = Math.max(actions, 2);
+    // Action Surge (Fighter) — handled separately as a bonus action
+    return actions;
+  };
+
   if (action === 'player_attack') {
     const { target_id, weapon, spell } = payload;
     const logs = await base44.asServiceRole.entities.CombatLog.filter({ id: combat_id });
