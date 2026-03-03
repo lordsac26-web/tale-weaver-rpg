@@ -141,10 +141,43 @@ Deno.serve(async (req) => {
       'persuasion': statMod(character.charisma) + skillProf('persuasion'),
     };
 
-    // Look up by normalized roll type
-    if (rollModMap[normalizedRollType] !== undefined) {
-      const baseMod = rollModMap[normalizedRollType];
-      modifiersApplied.push({ source: `${normalizedRollType} (stat+skill)`, value: baseMod, type: 'base' });
+    // Look up by normalized roll type — also try common aliases and partial matches
+    const aliasMap = {
+      // Raw stat names -> check key
+      'strength': 'strength_check', 'str': 'strength_check',
+      'dexterity': 'dexterity_check', 'dex': 'dexterity_check',
+      'constitution': 'constitution_check', 'con': 'constitution_check',
+      'intelligence': 'intelligence_check', 'int': 'intelligence_check',
+      'wisdom': 'wisdom_check', 'wis': 'wisdom_check',
+      'charisma': 'charisma_check', 'cha': 'charisma_check',
+      // "X check" -> strip " check"
+      'strength_check': 'strength_check', 'dexterity_check': 'dexterity_check',
+      'constitution_check': 'constitution_check', 'intelligence_check': 'intelligence_check',
+      'wisdom_check': 'wisdom_check', 'charisma_check': 'charisma_check',
+      // Saving throws aliases
+      'strength_saving_throw': 'strength_save', 'dexterity_saving_throw': 'dexterity_save',
+      'constitution_saving_throw': 'constitution_save', 'intelligence_saving_throw': 'intelligence_save',
+      'wisdom_saving_throw': 'wisdom_save', 'charisma_saving_throw': 'charisma_save',
+    };
+
+    // Clean up common suffixes/prefixes so "Charisma Check" -> "charisma"
+    let lookupKey = normalizedRollType
+      .replace(/_check$/, '')   // "charisma_check" -> "charisma"
+      .replace(/_save$/, '_save')
+      .replace(/_saving_throw$/, '_save');
+
+    // Try direct map first, then alias, then stripped key, then partial match
+    const resolvedKey =
+      rollModMap[normalizedRollType] !== undefined ? normalizedRollType :
+      rollModMap[aliasMap[normalizedRollType]] !== undefined ? aliasMap[normalizedRollType] :
+      rollModMap[aliasMap[lookupKey]] !== undefined ? aliasMap[lookupKey] :
+      rollModMap[lookupKey] !== undefined ? lookupKey :
+      // Partial match: find first key containing the roll_type word
+      Object.keys(rollModMap).find(k => k.includes(lookupKey) || lookupKey.includes(k.replace(/_check|_save/, ''))) || null;
+
+    if (resolvedKey && rollModMap[resolvedKey] !== undefined) {
+      const baseMod = rollModMap[resolvedKey];
+      modifiersApplied.push({ source: `${resolvedKey} (stat+skill)`, value: baseMod, type: 'base' });
       modifierTotal += baseMod;
     }
 
