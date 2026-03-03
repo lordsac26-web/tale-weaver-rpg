@@ -233,40 +233,32 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[140px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
-          <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search spells..."
-            className="w-full pl-7 pr-3 py-1.5 bg-slate-800/60 border border-slate-700/40 rounded-lg text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-purple-600/50" />
+      {/* Filters (only for known/available) */}
+      {activeSection !== 'slots' && (
+        <div className="flex gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[140px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search spells..."
+              className="w-full pl-7 pr-3 py-1.5 bg-slate-800/60 border border-slate-700/40 rounded-lg text-xs text-slate-300 placeholder-slate-600 outline-none focus:border-purple-600/50" />
+          </div>
+          <select value={filterLevel} onChange={e => setFilterLevel(e.target.value)}
+            className="bg-slate-800/60 border border-slate-700/40 rounded-lg text-xs text-slate-400 px-2 py-1.5 outline-none">
+            <option value="all">All Levels</option>
+            {[0,1,2,3,4,5].map(l => <option key={l} value={l}>{LEVEL_LABELS[l]}</option>)}
+          </select>
+          <select value={filterType} onChange={e => setFilterType(e.target.value)}
+            className="bg-slate-800/60 border border-slate-700/40 rounded-lg text-xs text-slate-400 px-2 py-1.5 outline-none">
+            <option value="all">All Types</option>
+            <option value="damage">Damage</option>
+            <option value="healing">Healing</option>
+            <option value="utility">Utility</option>
+            <option value="concentration">Concentration</option>
+          </select>
         </div>
-        <select value={filterLevel} onChange={e => setFilterLevel(e.target.value)}
-          className="bg-slate-800/60 border border-slate-700/40 rounded-lg text-xs text-slate-400 px-2 py-1.5 outline-none">
-          <option value="all">All Levels</option>
-          {[0,1,2,3,4,5].map(l => <option key={l} value={l}>{LEVEL_LABELS[l]}</option>)}
-        </select>
-        <select value={filterType} onChange={e => setFilterType(e.target.value)}
-          className="bg-slate-800/60 border border-slate-700/40 rounded-lg text-xs text-slate-400 px-2 py-1.5 outline-none">
-          <option value="all">All Types</option>
-          <option value="damage">Damage</option>
-          <option value="healing">Healing</option>
-          <option value="utility">Utility</option>
-          <option value="concentration">Concentration</option>
-        </select>
-      </div>
-
-      {/* Section Tabs */}
-      <div className="flex gap-1 bg-slate-800/40 p-1 rounded-lg">
-        {[['known', `Known (${knownSpells.size})`], ['available', 'Spellbook']].map(([key, label]) => (
-          <button key={key} onClick={() => setActiveSection(key)}
-            className={`flex-1 py-1.5 text-xs rounded-md transition-all ${activeSection === key ? 'bg-purple-800/60 text-purple-200 border border-purple-700/40' : 'text-slate-400 hover:text-slate-200'}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      )}
 
       {/* Spell Lists */}
-      <div className="space-y-3">
+      {activeSection !== 'slots' && <div className="space-y-3">
         {activeSection === 'known' ? (
           knownList.length === 0 ? (
             <div className="text-center py-8 text-slate-500 text-sm">
