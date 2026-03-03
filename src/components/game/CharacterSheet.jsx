@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Shield, Heart, Zap, Star, Package, Plus, Trash2, ArrowUpDown, Filter, Coins } from 'lucide-react';
+import { X, Shield, Heart, Zap, Star } from 'lucide-react';
+import InventoryTab from './InventoryTab';
 import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS } from './gameData';
 import { base44 } from '@/api/base44Client';
 import SpellbookTab from './SpellbookTab';
