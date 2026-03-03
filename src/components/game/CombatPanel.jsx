@@ -32,6 +32,9 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const isPlayerTurn = currentCombatant?.type === 'player';
   const isCaster = SPELLCASTING_CLASSES.includes(character?.class);
   const spells = (character?.spells_known || []).filter(s => s && s.length > 0);
+  const actionsPerTurn = getActionsPerTurn(character);
+  const actionsUsed = world_state?.actions_used_this_turn || 0;
+  const actionsRemaining = Math.max(0, actionsPerTurn - actionsUsed);
 
   const handleAction = () => {
     if (!selectedTarget) return;
