@@ -191,9 +191,7 @@ export default function Game() {
       }
       setCombat(null);
     } else {
-      // Reload combat
-      await reloadCombat(combatId);
-      // Auto-process enemy turns
+      // Auto-process enemy turns (combat turn was already advanced server-side)
       await processEnemyTurns(combatId);
     }
     await loadState();
