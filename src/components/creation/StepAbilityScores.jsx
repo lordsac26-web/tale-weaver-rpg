@@ -37,6 +37,7 @@ export default function StepAbilityScores({ character, set }) {
     const val = roll4d6DropLowest();
     set(stat, val);
     setRollHistory(prev => ({ ...prev, [stat]: val }));
+    setRerollCounts(prev => ({ ...prev, [stat]: (prev[stat] || 0) + 1 }));
   };
 
   const handlePointBuyAdjust = (stat, delta) => {
