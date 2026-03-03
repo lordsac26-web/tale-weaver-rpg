@@ -24,6 +24,7 @@ export default function Game() {
   const [combatLoading, setCombatLoading] = useState(false);
   const [customInput, setCustomInput] = useState('');
   const [showCharSheet, setShowCharSheet] = useState(false);
+  const [showDiceRoller, setShowDiceRoller] = useState(false);
   const [started, setStarted] = useState(false);
 
   const loadState = useCallback(async () => {
