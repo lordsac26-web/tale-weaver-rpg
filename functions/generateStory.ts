@@ -19,6 +19,16 @@ Deno.serve(async (req) => {
   const chars = await base44.asServiceRole.entities.Character.filter({ id: session.character_id });
   const character = chars[0];
 
+  // Load game data context for the AI
+  const [monsters, conditions, magicItems] = await Promise.all([
+    base44.asServiceRole.entities.Monster.list('-created_date', 30),
+    base44.asServiceRole.entities.DnDCondition.list(),
+    base44.asServiceRole.entities.MagicItem.list('-created_date', 20)
+  ]);
+
+  const monsterNames = monsters.map(m => `${m.name} (CR ${m.challenge}, AC ${m.armor_class}, HP ${m.hit_points})`).join('; ');
+  const conditionNames = conditions.map(c => `${c.name}: ${(c.description || []).slice(0, 1).join(' ')}`).join('; ');
+
   // Build context summary
   const charSummary = character ? `
 Character: ${character.name}, Level ${character.level} ${character.race} ${character.class}
@@ -42,10 +52,16 @@ Story Seed: ${session.story_seed || 'Standard high fantasy adventure'}
   let prompt = '';
   let responseSchema = null;
 
+  const gameDataContext = `
+Available Monsters (use real names/stats when spawning enemies): ${monsterNames}
+D&D 5E Conditions (apply accurately): ${conditionNames}
+`;
+
   if (action === 'start') {
     prompt = `You are the Dungeon Master for a high fantasy RPG. Begin the adventure.
 ${charSummary}
 ${worldSummary}
+${gameDataContext}
 Story Seed: ${session.story_seed || 'A mysterious summons has drawn our hero to action...'}
 
 Write an immersive opening narrative (3-4 paragraphs) that:
@@ -86,6 +102,7 @@ Then provide exactly 4 choices the player can make. Each choice should have a di
     prompt = `You are the Dungeon Master. Continue the story based on the player's choice.
 ${charSummary}
 ${worldSummary}
+${gameDataContext}
 Recent Story:
 ${storyLog}
 
