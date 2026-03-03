@@ -77,69 +77,68 @@ function AddItemForm({ onAdd, onCancel }) {
   const set = (k, v) => setItem(prev => ({ ...prev, [k]: v }));
 
   return (
-    <div className="bg-slate-800/60 border border-amber-700/30 rounded-xl p-4 space-y-3">
-      <div className="text-sm font-medium text-amber-300 mb-2">Add Item</div>
+    <div className="rounded-xl p-4 space-y-3" style={{ background: 'rgba(15,10,4,0.8)', border: '1px solid rgba(180,140,90,0.2)' }}>
+      <div className="font-fantasy text-sm" style={{ color: '#c9a96e' }}>Add Item</div>
       <div className="grid grid-cols-2 gap-2">
         <input placeholder="Item name *" value={item.name} onChange={e => set('name', e.target.value)}
-          className="col-span-2 bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-amber-100 placeholder-slate-500 outline-none focus:border-amber-600/60" />
-        <select value={item.category} onChange={e => set('category', e.target.value)}
-          className="bg-slate-700/50 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-amber-100 outline-none">
+          className="col-span-2 rounded-lg px-3 py-1.5 text-sm input-fantasy" />
+        <select value={item.category} onChange={e => set('category', e.target.value)} className="rounded-lg px-2 py-1.5 text-sm select-fantasy">
           {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <input type="number" placeholder="Qty" min="1" value={item.quantity} onChange={e => set('quantity', parseInt(e.target.value) || 1)}
-          className="bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-amber-100 outline-none" />
+          className="rounded-lg px-3 py-1.5 text-sm input-fantasy" />
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <div className="relative">
-          <input type="number" placeholder="Weight (lb)" min="0" step="0.1" value={item.weight || ''} onChange={e => set('weight', parseFloat(e.target.value) || 0)}
-            className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-amber-100 placeholder-slate-500 outline-none" />
-        </div>
+        <input type="number" placeholder="Weight (lb)" min="0" step="0.1" value={item.weight || ''} onChange={e => set('weight', parseFloat(e.target.value) || 0)}
+          className="rounded-lg px-3 py-1.5 text-sm input-fantasy" />
         <input type="number" placeholder="Cost" min="0" value={item.cost || ''} onChange={e => set('cost', parseFloat(e.target.value) || 0)}
-          className="bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-amber-100 placeholder-slate-500 outline-none" />
-        <select value={item.cost_unit} onChange={e => set('cost_unit', e.target.value)}
-          className="bg-slate-700/50 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-amber-100 outline-none">
+          className="rounded-lg px-3 py-1.5 text-sm input-fantasy" />
+        <select value={item.cost_unit} onChange={e => set('cost_unit', e.target.value)} className="rounded-lg px-2 py-1.5 text-sm select-fantasy">
           <option value="gp">GP</option>
           <option value="sp">SP</option>
           <option value="cp">CP</option>
         </select>
       </div>
 
-      <button onClick={() => setShowAdvanced(v => !v)} className="text-xs text-slate-400 hover:text-amber-300 flex items-center gap-1">
+      <button onClick={() => setShowAdvanced(v => !v)}
+        className="text-xs font-fantasy flex items-center gap-1 transition-colors"
+        style={{ color: 'rgba(201,169,110,0.45)' }}>
         {showAdvanced ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         {item.category === 'Weapon' || item.category === 'Armor' ? 'Combat stats' : 'More details'}
       </button>
 
       {showAdvanced && (
         <div className="space-y-2">
-          {(item.category === 'Weapon') && (
+          {item.category === 'Weapon' && (
             <div className="grid grid-cols-2 gap-2">
               <input placeholder="Damage (e.g. 1d8 slashing)" value={item.damage} onChange={e => set('damage', e.target.value)}
-                className="col-span-2 bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-amber-100 placeholder-slate-500 outline-none" />
+                className="col-span-2 rounded-lg px-3 py-1.5 text-xs input-fantasy" />
               <div className="flex items-center gap-1">
-                <span className="text-xs text-slate-400">Atk bonus:</span>
+                <span className="text-xs" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>Atk+:</span>
                 <input type="number" value={item.attack_bonus} onChange={e => set('attack_bonus', parseInt(e.target.value) || 0)}
-                  className="flex-1 bg-slate-700/50 border border-slate-600 rounded px-2 py-1 text-xs text-amber-100 outline-none" />
+                  className="flex-1 rounded px-2 py-1 text-xs input-fantasy" />
               </div>
             </div>
           )}
           {item.category === 'Armor' && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">AC value:</span>
+              <span className="text-xs" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>AC value:</span>
               <input type="number" min="0" value={item.armor_class} onChange={e => set('armor_class', parseInt(e.target.value) || 0)}
-                className="w-20 bg-slate-700/50 border border-slate-600 rounded px-2 py-1 text-xs text-amber-100 outline-none" />
+                className="w-20 rounded px-2 py-1 text-xs input-fantasy" />
             </div>
           )}
           <textarea placeholder="Notes / description" value={item.description} onChange={e => set('description', e.target.value)} rows={2}
-            className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-amber-100 placeholder-slate-500 outline-none resize-none" />
+            className="w-full rounded-lg px-3 py-1.5 text-xs input-fantasy resize-none" />
         </div>
       )}
 
       <div className="flex gap-2 pt-1">
         <button onClick={() => { if (item.name) onAdd(item); }} disabled={!item.name}
-          className="flex-1 py-2 bg-amber-800/60 hover:bg-amber-700 border border-amber-600/50 rounded-lg text-sm text-amber-200 disabled:opacity-40 transition-all">
+          className="flex-1 py-2 rounded-lg text-sm btn-fantasy disabled:opacity-40">
           Add to Inventory
         </button>
-        <button onClick={onCancel} className="px-3 py-2 border border-slate-600 rounded-lg text-sm text-slate-400 hover:text-slate-200 transition-colors">
+        <button onClick={onCancel} className="px-3 py-2 rounded-lg text-sm"
+          style={{ border: '1px solid rgba(180,140,90,0.15)', color: 'rgba(201,169,110,0.4)' }}>
           Cancel
         </button>
       </div>
