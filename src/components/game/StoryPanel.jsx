@@ -142,7 +142,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
               </div>
               <AnimatePresence>
                 {choices.map((choice, i) => {
-                  const riskStyle = RISK_STYLES[choice.risk_level || 'low'];
+                  const riskStyle = RISK_STYLES[choice.risk_level] || RISK_STYLES['low'];
                   return (
                     <motion.button key={i}
                       initial={{ opacity: 0, x: -16 }}
