@@ -111,29 +111,7 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
           )}
 
           {tab === 'inventory' && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-4 mb-4 text-sm">
-                <span className="text-yellow-400 font-bold">{character.gold || 0}gp</span>
-                <span className="text-slate-300 font-bold">{character.silver || 0}sp</span>
-                <span className="text-orange-400 font-bold">{character.copper || 0}cp</span>
-              </div>
-              {(character.inventory || []).length === 0 ? (
-                <div className="text-slate-500 text-center py-8 flex flex-col items-center gap-2">
-                  <Package className="w-8 h-8 opacity-30" />
-                  <span>Inventory is empty</span>
-                </div>
-              ) : (
-                (character.inventory || []).map((item, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-slate-800/40 rounded-xl border border-slate-700/40">
-                    <div>
-                      <div className="text-amber-200 text-sm font-medium">{item.name}</div>
-                      <div className="text-slate-400 text-xs">{item.type} · {item.weight || 0}lb</div>
-                    </div>
-                    {item.equipped && <span className="text-green-400 text-xs">Equipped</span>}
-                  </div>
-                ))
-              )}
-            </div>
+            <InventoryTab character={character} onUpdate={handleUpdateCharacter} />
           )}
 
           {tab === 'conditions' && (
