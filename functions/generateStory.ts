@@ -70,7 +70,13 @@ Write an immersive opening narrative (3-4 paragraphs) that:
 - Ends with a moment of tension or decision
 ${session.adult_mode ? '- Mature/gritty tone is permitted' : '- Keep content appropriate for general audiences'}
 
-Then provide exactly 4 choices the player can make. Each choice should have a difficulty class (DC) if a skill check is required.`;
+Then provide exactly 4 choices the player can make.
+For EACH choice that involves risk or effort, include a relevant skill check and DC. Use diverse skills — not just combat ones. For example:
+- Dialogue with NPCs: Persuasion DC 12-16, Deception DC 12-18, Intimidation DC 10-16, Insight DC 13
+- Physical obstacles: Athletics DC 12-18, Acrobatics DC 10-15
+- Exploration/secrets: Perception DC 12-15, Investigation DC 13-16, Stealth DC 12-14, Survival DC 11
+- Knowledge/magic: Arcana DC 13-17, History DC 12, Religion DC 13, Medicine DC 12
+DCs should reflect actual difficulty (10=trivial, 15=moderate, 20=hard, 25=extreme). At least 2-3 of the 4 choices should have skill checks.`;
 
     responseSchema = {
       type: 'object',
