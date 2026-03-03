@@ -8,6 +8,8 @@ import {
 } from './spellData';
 
 const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
+// Classes that prepare spells from their full list vs classes that have a fixed known spells list
+const PREPARATION_CLASSES = ['Wizard', 'Cleric', 'Druid', 'Paladin'];
 const ATTACK_ICONS = {
   ranged_spell_attack: '🎯',
   melee_spell_attack: '⚔️',
