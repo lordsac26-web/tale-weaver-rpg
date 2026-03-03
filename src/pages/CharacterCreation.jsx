@@ -82,10 +82,28 @@ export default function CharacterCreation() {
     setGeneratingBackstory(false);
   };
 
+  const assignStartingSpells = (char) => {
+    const casterClasses = {
+      Wizard: { cantrips: ['Fire Bolt', 'Mage Hand', 'Minor Illusion', 'Prestidigitation'], spells: ['Magic Missile', 'Sleep', 'Mage Armor', 'Burning Hands', 'Charm Person', 'Detect Magic', 'Shield', 'Thunderwave'] },
+      Sorcerer: { cantrips: ['Fire Bolt', 'Chill Touch', 'Ray of Frost', 'Shocking Grasp'], spells: ['Burning Hands', 'Charm Person', 'Magic Missile', 'Shield', 'Thunderwave', 'Chromatic Orb'] },
+      Warlock: { cantrips: ['Eldritch Blast', 'Chill Touch', 'Minor Illusion', 'Prestidigitation'], spells: ['Hex', 'Arms of Hadar', 'Charm Person', 'Hellish Rebuke', 'Witch Bolt', 'Armor of Agathys'] },
+      Bard: { cantrips: ['Vicious Mockery', 'Minor Illusion', 'Prestidigitation'], spells: ['Healing Word', 'Thunderwave', 'Charm Person', 'Faerie Fire', 'Sleep', 'Dissonant Whispers'] },
+      Cleric: { cantrips: ['Sacred Flame', 'Guidance', 'Thaumaturgy'], spells: ['Cure Wounds', 'Guiding Bolt', 'Bless', 'Healing Word', 'Inflict Wounds', 'Shield of Faith', 'Detect Evil and Good'] },
+      Druid: { cantrips: ['Shillelagh', 'Guidance', 'Produce Flame'], spells: ['Cure Wounds', 'Entangle', 'Faerie Fire', 'Thunderwave', 'Healing Word', 'Speak with Animals'] },
+      Paladin: { cantrips: [], spells: ['Divine Smite', 'Bless', 'Cure Wounds', 'Shield of Faith', 'Thunderous Smite', 'Wrathful Smite'] },
+      Ranger: { cantrips: [], spells: ["Hunter's Mark", 'Cure Wounds', 'Fog Cloud', 'Goodberry', 'Hail of Thorns'] },
+    };
+    const classSpells = casterClasses[char.class];
+    if (!classSpells) return char; // non-caster
+    const known = [...(classSpells.cantrips || []), ...classSpells.spells.slice(0, 4 + Math.floor((char.level || 1) / 2))];
+    return { ...char, spells_known: known };
+  };
+
   const handleSave = async () => {
     setSaving(true);
     let finalChar = applyRacialBonuses(character);
     finalChar = updateDerivedStats(finalChar);
+    finalChar = assignStartingSpells(finalChar);
     const saved = await base44.entities.Character.create(finalChar);
     navigate(createPageUrl('NewGame') + `?character_id=${saved.id}`);
   };
