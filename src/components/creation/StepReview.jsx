@@ -2,6 +2,7 @@ import React from 'react';
 import { Check, Shield, Heart, Zap, Star } from 'lucide-react';
 import { calcStatMod, calcModDisplay } from '@/components/game/gameData';
 import { SPELL_DETAILS } from '@/components/game/spellData';
+import { CATEGORY_COLORS, FEATS } from '@/components/game/featData';
 
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
