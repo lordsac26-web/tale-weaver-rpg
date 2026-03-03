@@ -174,6 +174,9 @@ export default function Game() {
       success: data.hit
     }]);
 
+    // Reload combat state after player attack (backend already advanced the turn)
+    await reloadCombat(combatId);
+
     if (data.combat_ended) {
       if (data.result === 'victory') {
         setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! The battle is won. Your enemies lie defeated.' }]);
