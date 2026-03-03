@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Sword, Shield, Zap, Heart, Loader2, SkipForward, Scroll } from 'lucide-react';
+import { Sword, Heart, Loader2, SkipForward, Scroll } from 'lucide-react';
 import { calcStatMod } from './gameData';
+import CombatSpellSelector from './CombatSpellSelector';
+import { SPELL_DETAILS } from './spellData';
 
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger'];
 
@@ -22,6 +24,8 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [action, setAction] = useState('attack');
   const [selectedSpell, setSelectedSpell] = useState(null);
+  const [selectedSpellLevel, setSelectedSpellLevel] = useState(null);
+  const [selectedSpellBaseLevel, setSelectedSpellBaseLevel] = useState(null);
 
   if (!combat) return null;
 
@@ -36,10 +40,28 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const actionsUsed = world_state?.actions_used_this_turn || 0;
   const actionsRemaining = Math.max(0, actionsPerTurn - actionsUsed);
 
+  const handleSelectSpell = (spellName, baseLevel) => {
+    setSelectedSpell(spellName);
+    setSelectedSpellBaseLevel(baseLevel);
+    setSelectedSpellLevel(baseLevel); // default cast level = spell level
+  };
+
   const handleAction = () => {
     if (!selectedTarget) return;
     if (action === 'spell' && selectedSpell) {
-      onPlayerAttack(selectedTarget, 'spell', { name: selectedSpell, damage_dice: '2d6' });
+      const details = SPELL_DETAILS[selectedSpell] || {};
+      const spellPayload = {
+        name: selectedSpell,
+        damage_dice: details.damage_dice || '2d6',
+        damage_type: details.damage_type || 'force',
+        attack_type: details.attack_type || 'ranged_spell_attack',
+        save_type: details.save_type || null,
+        is_utility: details.is_utility || false,
+        heal_dice: details.heal_dice || null,
+        slot_level: selectedSpellLevel || selectedSpellBaseLevel || 1,
+        base_level: selectedSpellBaseLevel || 1,
+      };
+      onPlayerAttack(selectedTarget, 'spell', spellPayload);
     } else if (action === 'attack') {
       const weapon = character?.equipped?.weapon || { damage_dice: '1d6', attack_bonus: 0, damage_bonus: 0, type: 'melee' };
       onPlayerAttack(selectedTarget, 'attack', weapon);
@@ -164,17 +186,14 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
 
               {/* Spell selector */}
               {action === 'spell' && (
-                <div className="max-h-28 overflow-y-auto space-y-1">
-                  {spells.length === 0 ? (
-                    <div className="text-slate-500 text-xs text-center py-2">No spells known</div>
-                  ) : spells.map(spell => (
-                    <button key={spell} onClick={() => setSelectedSpell(spell)}
-                      className={`w-full text-left px-3 py-1.5 rounded-lg text-xs border transition-all ${
-                        selectedSpell === spell ? 'border-purple-500 bg-purple-900/30 text-purple-200' : 'border-slate-700/40 text-slate-300 hover:border-purple-700/50'
-                      }`}>
-                      {spell}
-                    </button>
-                  ))}
+                <div className="max-h-52 overflow-y-auto">
+                  <CombatSpellSelector
+                    character={character}
+                    onSelectSpell={handleSelectSpell}
+                    selectedSpell={selectedSpell}
+                    selectedSlotLevel={selectedSpellLevel}
+                    onSelectSlotLevel={setSelectedSpellLevel}
+                  />
                 </div>
               )}
 
