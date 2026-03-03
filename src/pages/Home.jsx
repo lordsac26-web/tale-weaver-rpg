@@ -25,102 +25,157 @@ export default function Home() {
     });
   }, []);
 
+  const containerVariants = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.1 } }
+  };
+  const itemVariants = {
+    hidden: { opacity: 0, y: 24 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } }
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-amber-100 overflow-hidden relative">
-      {/* Background atmosphere */}
+      {/* Layered background */}
       <div className="fixed inset-0 bg-gradient-to-b from-[#0a0a0f] via-[#0d0a1a] to-[#0a0a0f] pointer-events-none" />
       <div className="fixed inset-0 pointer-events-none" style={{
-        backgroundImage: 'radial-gradient(ellipse at 20% 50%, rgba(120,40,200,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(200,100,20,0.06) 0%, transparent 50%)'
+        backgroundImage: 'radial-gradient(ellipse at 20% 50%, rgba(120,40,200,0.1) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(200,100,20,0.08) 0%, transparent 50%), radial-gradient(ellipse at 60% 80%, rgba(40,80,200,0.06) 0%, transparent 50%)'
+      }} />
+      {/* Subtle grid */}
+      <div className="fixed inset-0 pointer-events-none opacity-[0.03]" style={{
+        backgroundImage: 'linear-gradient(#a78bfa 1px, transparent 1px), linear-gradient(90deg, #a78bfa 1px, transparent 1px)',
+        backgroundSize: '60px 60px'
       }} />
 
       <div className="relative z-10 max-w-6xl mx-auto px-4 py-12">
         {/* Hero */}
-        <div className="text-center mb-16">
-          <div className="flex justify-center mb-6">
-            <div className="relative">
-              <Sword className="w-16 h-16 text-amber-400" style={{ filter: 'drop-shadow(0 0 20px rgba(251,191,36,0.6))' }} />
-            </div>
-          </div>
-          <h1 className="text-6xl font-bold mb-4 tracking-tight" style={{
-            background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)',
+        <motion.div initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: 'easeOut' }} className="text-center mb-16">
+          <motion.div
+            animate={{ rotate: [0, 5, -5, 0], filter: ['drop-shadow(0 0 20px rgba(251,191,36,0.5))', 'drop-shadow(0 0 35px rgba(251,191,36,0.9))', 'drop-shadow(0 0 20px rgba(251,191,36,0.5))'] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+            className="flex justify-center mb-6"
+          >
+            <Sword className="w-16 h-16 text-amber-400" />
+          </motion.div>
+          <h1 className="text-5xl md:text-6xl font-bold mb-4 tracking-tight" style={{
+            background: 'linear-gradient(135deg, #fde68a, #fbbf24, #f59e0b, #d97706)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
           }}>
             Chronicles of the<br />Forgotten Realm
           </h1>
-          <p className="text-amber-300/70 text-xl max-w-2xl mx-auto leading-relaxed mb-2">
+          <p className="text-amber-300/70 text-xl max-w-2xl mx-auto leading-relaxed mb-3">
             An AI-driven high fantasy RPG. Every choice matters. Every roll is real.
           </p>
-          <p className="text-amber-400/50 text-sm">Powered by D&D 5E ruleset · Backend dice engine · Living world</p>
-        </div>
+          <div className="flex items-center justify-center gap-2 text-amber-400/40 text-xs">
+            <Sparkles className="w-3 h-3" />
+            <span>D&D 5E ruleset · Real dice engine · Living world</span>
+            <Sparkles className="w-3 h-3" />
+          </div>
+        </motion.div>
 
         {/* Main Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-          <Link to={createPageUrl('CharacterCreation')}>
-            <div className="group relative bg-gradient-to-br from-amber-900/20 to-amber-800/10 border border-amber-700/30 rounded-2xl p-8 hover:border-amber-500/60 transition-all duration-300 cursor-pointer hover:bg-amber-900/30 text-center">
-              <div className="mb-4 flex justify-center">
-                <Plus className="w-10 h-10 text-amber-400 group-hover:scale-110 transition-transform" />
-              </div>
-              <h3 className="text-xl font-bold text-amber-200 mb-2">New Character</h3>
-              <p className="text-amber-400/60 text-sm">Create your hero. Choose race, class, roll stats, forge your destiny.</p>
-            </div>
-          </Link>
-
-          <Link to={createPageUrl('NewGame')}>
-            <div className="group relative bg-gradient-to-br from-purple-900/20 to-purple-800/10 border border-purple-700/30 rounded-2xl p-8 hover:border-purple-500/60 transition-all duration-300 cursor-pointer hover:bg-purple-900/30 text-center">
-              <div className="mb-4 flex justify-center">
-                <BookOpen className="w-10 h-10 text-purple-400 group-hover:scale-110 transition-transform" />
-              </div>
-              <h3 className="text-xl font-bold text-purple-200 mb-2">Start Adventure</h3>
-              <p className="text-purple-400/60 text-sm">Begin a new campaign. Upload a story seed or let the AI weave your fate.</p>
-            </div>
-          </Link>
-
-          {sessions.length > 0 && (
-            <Link to={createPageUrl('Game') + `?session_id=${sessions[0].id}`}>
-              <div className="group relative bg-gradient-to-br from-green-900/20 to-green-800/10 border border-green-700/30 rounded-2xl p-8 hover:border-green-500/60 transition-all duration-300 cursor-pointer hover:bg-green-900/30 text-center">
-                <div className="mb-4 flex justify-center">
-                  <Play className="w-10 h-10 text-green-400 group-hover:scale-110 transition-transform" />
-                </div>
-                <h3 className="text-xl font-bold text-green-200 mb-2">Continue</h3>
-                <p className="text-green-400/60 text-sm">Resume your last adventure where you left off.</p>
+        <motion.div variants={containerVariants} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
+          <motion.div variants={itemVariants}>
+            <Link to={createPageUrl('CharacterCreation')}>
+              <div className="group relative overflow-hidden bg-gradient-to-br from-amber-900/20 to-amber-800/10 border border-amber-700/30 rounded-2xl p-8 hover:border-amber-500/70 transition-all duration-300 cursor-pointer hover:bg-amber-900/25 text-center">
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-600/0 to-amber-600/0 group-hover:from-amber-600/5 group-hover:to-transparent transition-all duration-500" />
+                <motion.div whileHover={{ scale: 1.15, rotate: 5 }} transition={{ type: 'spring', stiffness: 300 }} className="mb-4 flex justify-center">
+                  <div className="w-16 h-16 rounded-2xl bg-amber-900/40 border border-amber-700/40 flex items-center justify-center group-hover:border-amber-500/60 transition-all">
+                    <Plus className="w-8 h-8 text-amber-400" />
+                  </div>
+                </motion.div>
+                <h3 className="text-xl font-bold text-amber-200 mb-2">New Character</h3>
+                <p className="text-amber-400/60 text-sm leading-relaxed">Create your hero. Choose race, class, roll stats, forge your destiny.</p>
               </div>
             </Link>
-          )}
-        </div>
+          </motion.div>
+
+          <motion.div variants={itemVariants}>
+            <Link to={createPageUrl('NewGame')}>
+              <div className="group relative overflow-hidden bg-gradient-to-br from-purple-900/20 to-purple-800/10 border border-purple-700/30 rounded-2xl p-8 hover:border-purple-500/70 transition-all duration-300 cursor-pointer hover:bg-purple-900/25 text-center">
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-600/0 to-purple-600/0 group-hover:from-purple-600/5 group-hover:to-transparent transition-all duration-500" />
+                <motion.div whileHover={{ scale: 1.15, rotate: -5 }} transition={{ type: 'spring', stiffness: 300 }} className="mb-4 flex justify-center">
+                  <div className="w-16 h-16 rounded-2xl bg-purple-900/40 border border-purple-700/40 flex items-center justify-center group-hover:border-purple-500/60 transition-all">
+                    <BookOpen className="w-8 h-8 text-purple-400" />
+                  </div>
+                </motion.div>
+                <h3 className="text-xl font-bold text-purple-200 mb-2">Start Adventure</h3>
+                <p className="text-purple-400/60 text-sm leading-relaxed">Begin a new campaign. Upload a story seed or let the AI weave your fate.</p>
+              </div>
+            </Link>
+          </motion.div>
+
+          <motion.div variants={itemVariants}>
+            {sessions.length > 0 ? (
+              <Link to={createPageUrl('Game') + `?session_id=${sessions[0].id}`}>
+                <div className="group relative overflow-hidden bg-gradient-to-br from-green-900/20 to-green-800/10 border border-green-700/30 rounded-2xl p-8 hover:border-green-500/70 transition-all duration-300 cursor-pointer hover:bg-green-900/25 text-center">
+                  <div className="absolute inset-0 bg-gradient-to-br from-green-600/0 to-green-600/0 group-hover:from-green-600/5 group-hover:to-transparent transition-all duration-500" />
+                  <motion.div whileHover={{ scale: 1.15 }} transition={{ type: 'spring', stiffness: 300 }} className="mb-4 flex justify-center">
+                    <div className="w-16 h-16 rounded-2xl bg-green-900/40 border border-green-700/40 flex items-center justify-center group-hover:border-green-500/60 transition-all">
+                      <Play className="w-8 h-8 text-green-400" />
+                    </div>
+                  </motion.div>
+                  <h3 className="text-xl font-bold text-green-200 mb-2">Continue</h3>
+                  <p className="text-green-400/60 text-sm leading-relaxed">Resume your last adventure where you left off.</p>
+                </div>
+              </Link>
+            ) : (
+              <div className="relative overflow-hidden bg-gradient-to-br from-slate-900/30 to-slate-800/10 border border-slate-700/20 rounded-2xl p-8 text-center opacity-40">
+                <div className="mb-4 flex justify-center">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-800/40 border border-slate-700/40 flex items-center justify-center">
+                    <Play className="w-8 h-8 text-slate-500" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-bold text-slate-400 mb-2">Continue</h3>
+                <p className="text-slate-500 text-sm">No active sessions yet.</p>
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
 
         {/* Characters */}
-        {!loading && characters.length > 0 && (
-          <div className="mb-12">
-            <h2 className="text-2xl font-bold text-amber-300 mb-6 flex items-center gap-2">
-              <Sword className="w-5 h-5" /> Your Heroes
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {characters.map(char => (
-                <CharacterCard key={char.id} character={char} sessions={sessions} />
-              ))}
-            </div>
-          </div>
-        )}
+        <AnimatePresence>
+          {!loading && characters.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="mb-12">
+              <h2 className="text-2xl font-bold text-amber-300 mb-6 flex items-center gap-2">
+                <Sword className="w-5 h-5" /> Your Heroes
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {characters.map((char, i) => (
+                  <motion.div key={char.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.4 }}>
+                    <CharacterCard character={char} sessions={sessions} />
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Active Sessions */}
-        {!loading && sessions.length > 0 && (
-          <div>
-            <h2 className="text-2xl font-bold text-purple-300 mb-6 flex items-center gap-2">
-              <BookOpen className="w-5 h-5" /> Active Campaigns
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {sessions.map(session => (
-                <SessionCard key={session.id} session={session} characters={characters} />
-              ))}
-            </div>
-          </div>
-        )}
+        <AnimatePresence>
+          {!loading && sessions.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
+              <h2 className="text-2xl font-bold text-purple-300 mb-6 flex items-center gap-2">
+                <BookOpen className="w-5 h-5" /> Active Campaigns
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {sessions.map((session, i) => (
+                  <motion.div key={session.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.4 }}>
+                    <SessionCard session={session} characters={characters} />
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {!loading && characters.length === 0 && sessions.length === 0 && (
-          <div className="text-center py-16 text-amber-400/40">
-            <Skull className="w-16 h-16 mx-auto mb-4 opacity-30" />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="text-center py-16 text-amber-400/40">
+            <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}>
+              <Skull className="w-16 h-16 mx-auto mb-4 opacity-30" />
+            </motion.div>
             <p className="text-lg">No heroes yet. Your legend begins now.</p>
-          </div>
+          </motion.div>
         )}
       </div>
     </div>
