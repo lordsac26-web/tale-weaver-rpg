@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
         school: spell.school || spell.School || '',
         casting_time: spell.casting_time || spell['Casting Time'] || '',
         range: spell.range || spell.Range || '',
-        components: spell.components || spell.Components || '',
+        components: Array.isArray(spell.components) ? spell.components.join(', ') : (spell.components || spell.Components || ''),
         duration: spell.duration || spell.Duration || '',
         description: spell.description || spell.Description || spell.desc || '',
         classes: Array.isArray(spell.classes) ? spell.classes : (spell.classes ? [spell.classes] : []),
