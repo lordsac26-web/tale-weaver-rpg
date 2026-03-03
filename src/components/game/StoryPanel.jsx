@@ -26,49 +26,56 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   return (
     <div className="flex flex-col h-full">
       {/* Narrative Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
-        {narrative.map((entry, i) => (
-          <div key={i} className="animate-fade-in">
-            {entry.type === 'narration' && (
-              <div className="prose prose-invert max-w-none">
-                <p className="text-amber-100/90 leading-8 text-base font-serif whitespace-pre-wrap">{entry.text}</p>
-              </div>
-            )}
-            {entry.type === 'player_action' && (
-              <div className="flex justify-end">
-                <div className="bg-blue-900/30 border border-blue-700/40 rounded-xl px-4 py-2 max-w-md text-blue-200 text-sm italic">
-                  You: {entry.text}
+      <div className="flex-1 overflow-y-auto p-6 space-y-5 min-h-0">
+        <AnimatePresence initial={false}>
+          {narrative.map((entry, i) => (
+            <motion.div key={i}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}>
+              {entry.type === 'narration' && (
+                <div className="prose prose-invert max-w-none">
+                  <p className="text-amber-100/90 leading-8 text-base font-serif whitespace-pre-wrap">{entry.text}</p>
                 </div>
-              </div>
-            )}
-            {entry.type === 'roll_result' && (
-              <div className="flex justify-center">
-                <div className={`px-4 py-2 rounded-xl border text-sm font-medium ${
-                  entry.success ? 'bg-green-900/30 border-green-700/40 text-green-300' : 'bg-red-900/30 border-red-700/40 text-red-300'
-                }`}>
-                  🎲 {entry.text}
+              )}
+              {entry.type === 'player_action' && (
+                <div className="flex justify-end">
+                  <div className="bg-blue-900/30 border border-blue-700/40 rounded-xl px-4 py-2.5 max-w-md text-blue-200 text-sm italic">
+                    You: {entry.text}
+                  </div>
                 </div>
-              </div>
-            )}
-            {entry.type === 'combat_start' && (
-              <div className="text-center py-2">
-                <div className="inline-block bg-red-900/40 border border-red-700/60 text-red-300 font-bold px-6 py-2 rounded-xl text-sm tracking-widest uppercase">
-                  ⚔️ Combat Begins! ⚔️
+              )}
+              {entry.type === 'roll_result' && (
+                <div className="flex justify-center">
+                  <motion.div initial={{ scale: 0.85 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400 }}
+                    className={`px-4 py-2 rounded-xl border text-sm font-medium ${
+                      entry.success ? 'bg-green-900/30 border-green-700/40 text-green-300' : 'bg-red-900/30 border-red-700/40 text-red-300'
+                    }`}>
+                    🎲 {entry.text}
+                  </motion.div>
                 </div>
-              </div>
-            )}
-            {entry.type === 'xp_gain' && (
-              <div className="text-center">
-                <span className="text-amber-400 text-sm font-medium">✨ {entry.text}</span>
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+              {entry.type === 'combat_start' && (
+                <div className="text-center py-2">
+                  <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 300 }}
+                    className="inline-block bg-red-900/40 border border-red-700/60 text-red-300 font-bold px-6 py-2 rounded-xl text-sm tracking-widest uppercase">
+                    ⚔️ Combat Begins! ⚔️
+                  </motion.div>
+                </div>
+              )}
+              {entry.type === 'xp_gain' && (
+                <motion.div className="text-center" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+                  <span className="text-amber-400 text-sm font-medium">✨ {entry.text}</span>
+                </motion.div>
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
         {loading && (
-          <div className="flex items-center gap-3 text-amber-400/60">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3 text-amber-400/60">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span className="text-sm italic">The story unfolds...</span>
-          </div>
+          </motion.div>
         )}
         <div ref={endRef} />
       </div>
