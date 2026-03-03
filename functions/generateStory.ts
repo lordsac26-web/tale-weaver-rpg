@@ -88,9 +88,9 @@ DCs should reflect actual difficulty (10=trivial, 15=moderate, 20=hard, 25=extre
             type: 'object',
             properties: {
               text: { type: 'string' },
-              skill_check: { type: 'string' },
-              dc: { type: 'number' },
-              risk_level: { type: 'string' }
+              skill_check: { type: 'string', description: 'D&D 5e skill name e.g. Persuasion, Athletics, Perception, Deception, Stealth, Insight, Investigation, Arcana, etc.' },
+              dc: { type: 'number', description: 'Difficulty Class 10-25' },
+              risk_level: { type: 'string', enum: ['low','medium','high','extreme'] }
             }
           }
         },
