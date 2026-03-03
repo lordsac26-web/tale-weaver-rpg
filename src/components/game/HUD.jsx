@@ -1,6 +1,7 @@
 import React from 'react';
-import { Shield, Heart, Zap, Star, MapPin, Clock } from 'lucide-react';
-import { CONDITIONS, calcStatMod, calcModDisplay } from './gameData';
+import { Shield, Heart, Star, MapPin, Clock } from 'lucide-react';
+import { CONDITIONS } from './gameData';
+import { motion } from 'framer-motion';
 
 export default function HUD({ character, session }) {
   if (!character) return null;
