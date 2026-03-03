@@ -190,7 +190,8 @@ Create a context-appropriate event. Could be combat, social, environmental, or d
       timestamp: new Date().toISOString(),
       action: action,
       player_choice: custom_input || choice_index,
-      text: result.narrative
+      text: result.narrative,
+      choices: result.choices || []
     }].slice(-50); // keep last 50 entries
 
     const updateData = { story_log: updatedLog };
