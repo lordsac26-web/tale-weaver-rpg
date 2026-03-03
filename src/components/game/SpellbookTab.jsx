@@ -302,7 +302,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
             );
           })
         )}
-      </div>
+      </div>}
     </div>
   );
 }
