@@ -1,15 +1,28 @@
 import React, { useState } from 'react';
 import { X, Shield, Heart, Zap, Star, Package } from 'lucide-react';
 import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS } from './gameData';
+import { base44 } from '@/api/base44Client';
+import SpellbookTab from './SpellbookTab';
+
+const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger'];
 
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 
-export default function CharacterSheet({ character, onClose }) {
+export default function CharacterSheet({ character: initialCharacter, onClose, onCharacterUpdate }) {
   const [tab, setTab] = useState('stats');
+  const [character, setCharacter] = useState(initialCharacter);
   if (!character) return null;
 
+  const isCaster = SPELLCASTING_CLASSES.includes(character.class);
   const profBonus = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
+
+  const handleUpdateCharacter = async (updates) => {
+    const updated = { ...character, ...updates };
+    setCharacter(updated);
+    await base44.entities.Character.update(character.id, updates);
+    onCharacterUpdate?.(updated);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -42,11 +55,11 @@ export default function CharacterSheet({ character, onClose }) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-700/50">
-          {['stats', 'skills', 'inventory', 'conditions', 'features'].map(t => (
+        <div className="flex border-b border-slate-700/50 overflow-x-auto">
+          {['stats', 'skills', 'inventory', ...(isCaster ? ['spells'] : []), 'conditions', 'features'].map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-2.5 text-sm capitalize transition-colors ${tab === t ? 'text-amber-300 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-200'}`}>
-              {t}
+              className={`px-4 py-2.5 text-sm capitalize whitespace-nowrap transition-colors ${tab === t ? 'text-amber-300 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-200'}`}>
+              {t === 'spells' ? '🔮 Spells' : t}
             </button>
           ))}
         </div>
@@ -152,6 +165,10 @@ export default function CharacterSheet({ character, onClose }) {
                 </div>
               )}
             </div>
+          )}
+
+          {tab === 'spells' && (
+            <SpellbookTab character={character} onUpdateCharacter={handleUpdateCharacter} />
           )}
 
           {tab === 'features' && (
