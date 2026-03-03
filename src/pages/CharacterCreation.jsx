@@ -148,7 +148,8 @@ export default function CharacterCreation() {
       case 5: return true; // portrait is optional
       case 6: return !!character.backstory;
       case 7: return true;
-      case 8: return true;
+      case 8: return true; // feats
+      case 9: return true;
       default: return true;
     }
   };
