@@ -308,6 +308,9 @@ export default function Game() {
           <ChevronLeft className="w-5 h-5" />
         </button>
         <span className="text-slate-400 text-sm flex-1">{session?.title || 'Adventure'}</span>
+        <button onClick={() => setShowDiceRoller(v => !v)} className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-sm transition-all ${showDiceRoller ? 'bg-amber-900/40 border-amber-600/60 text-amber-300' : 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-700/50 text-amber-300'}`}>
+          <Dices className="w-3.5 h-3.5" /> Dice
+        </button>
         <button onClick={() => setShowCharSheet(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/50 rounded-lg text-sm text-amber-300 transition-all">
           <User className="w-3.5 h-3.5" /> Character
         </button>
