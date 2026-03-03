@@ -72,43 +72,47 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
         <div ref={endRef} />
       </div>
 
-      {/* Choices */}
-      {!loading && choices.length > 0 && (
+      {/* Choices + Input — always shown when not loading */}
+      {!loading && (
         <div className="border-t border-slate-700/50 p-4 space-y-2 bg-slate-900/80">
-          <div className="text-amber-400/60 text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
-            <Scroll className="w-3 h-3" /> What do you do?
-          </div>
-          {choices.map((choice, i) => (
-            <button key={i} onClick={() => onChoice(i)}
-              className={`w-full text-left p-4 rounded-xl border bg-slate-800/40 transition-all duration-200 ${RISK_COLORS[choice.risk_level || 'low']}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 flex-1">
-                  <span className="text-amber-600/70 font-bold text-sm flex-shrink-0 mt-0.5">{i + 1}.</span>
-                  <span className="text-amber-100 text-sm leading-relaxed">{choice.text}</span>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {choice.skill_check && choice.dc && (
-                    <span className={`text-xs px-2 py-1 rounded-full border border-transparent ${RISK_BADGE[choice.risk_level || 'medium']}`}>
-                      {choice.skill_check} DC {choice.dc}
-                    </span>
-                  )}
-                  {choice.risk_level && (
-                    <span className={`text-xs px-2 py-1 rounded-full ${RISK_BADGE[choice.risk_level]}`}>
-                      {choice.risk_level}
-                    </span>
-                  )}
-                </div>
+          {choices.length > 0 && (
+            <>
+              <div className="text-amber-400/60 text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
+                <Scroll className="w-3 h-3" /> What do you do?
               </div>
-            </button>
-          ))}
+              {choices.map((choice, i) => (
+                <button key={i} onClick={() => onChoice(i)}
+                  className={`w-full text-left p-4 rounded-xl border bg-slate-800/40 transition-all duration-200 ${RISK_COLORS[choice.risk_level || 'low']}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1">
+                      <span className="text-amber-600/70 font-bold text-sm flex-shrink-0 mt-0.5">{i + 1}.</span>
+                      <span className="text-amber-100 text-sm leading-relaxed">{choice.text}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {choice.skill_check && choice.dc && (
+                        <span className={`text-xs px-2 py-1 rounded-full border border-transparent ${RISK_BADGE[choice.risk_level || 'medium']}`}>
+                          {choice.skill_check} DC {choice.dc}
+                        </span>
+                      )}
+                      {choice.risk_level && (
+                        <span className={`text-xs px-2 py-1 rounded-full ${RISK_BADGE[choice.risk_level]}`}>
+                          {choice.risk_level}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </>
+          )}
 
-          {/* Custom input */}
+          {/* Custom input — always visible */}
           <div className="flex gap-2 mt-3">
             <input
               value={customInput}
               onChange={e => setCustomInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && customInput.trim() && onCustomSubmit()}
-              placeholder="Or type your own action..."
+              placeholder={choices.length > 0 ? "Or type your own action..." : "Type your action to continue..."}
               className="flex-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-amber-100 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-600/50"
             />
             <button onClick={onCustomSubmit} disabled={!customInput.trim()}
