@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 import { User, Loader2, ChevronLeft, Dices, Swords, Map, ShoppingBag } from 'lucide-react';
+import { SKILL_STAT_MAP, calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
 import { motion, AnimatePresence } from 'framer-motion';
 import HUD from '@/components/game/HUD';
 import StoryPanel from '@/components/game/StoryPanel';

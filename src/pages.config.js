@@ -50,9 +50,9 @@
 import CharacterCreation from './pages/CharacterCreation';
 import Game from './pages/Game';
 import Home from './pages/Home';
+import Market from './pages/Market';
 import NewGame from './pages/NewGame';
 import WorldMap from './pages/WorldMap';
-import Market from './pages/Market';
 import __Layout from './Layout.jsx';
 
 
@@ -60,9 +60,9 @@ export const PAGES = {
     "CharacterCreation": CharacterCreation,
     "Game": Game,
     "Home": Home,
+    "Market": Market,
     "NewGame": NewGame,
     "WorldMap": WorldMap,
-    "Market": Market,
 }
 
 export const pagesConfig = {
