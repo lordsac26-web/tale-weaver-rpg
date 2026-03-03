@@ -202,10 +202,10 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                   canAct ? 'bg-red-800/70 hover:bg-red-700 border border-red-600/50 text-red-200' : 'bg-slate-800/40 border border-slate-700/30 text-slate-500 cursor-not-allowed'
                 }`}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sword className="w-4 h-4" />}
-                {loading ? 'Attacking...' :
+                {loading ? 'Casting...' :
                   !selectedTarget ? 'Select a target' :
                   action === 'spell' && !selectedSpell ? 'Select a spell' :
-                  action === 'spell' ? `Cast ${selectedSpell}` :
+                  action === 'spell' ? `Cast ${selectedSpell}${selectedSpellLevel && selectedSpellLevel !== selectedSpellBaseLevel ? ` (${selectedSpellLevel > 0 ? selectedSpellLevel + (selectedSpellLevel === 1 ? 'st' : selectedSpellLevel === 2 ? 'nd' : selectedSpellLevel === 3 ? 'rd' : 'th') + ' lvl' : ''})` : ''}` :
                   `Attack ${combatants?.find(c => c.id === selectedTarget)?.name || ''}`}
               </button>
             </div>
