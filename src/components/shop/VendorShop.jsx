@@ -6,6 +6,8 @@ import ItemCard from './ItemCard';
 import HaggleModal from './HaggleModal';
 import TransactionToast from './TransactionToast';
 import { VENDOR_TYPE_META, BUY_BACK_CATEGORIES, TRANSACTION_FLAVOR, REST_FLAVOR, ITEM_CATEGORY_ICONS } from './vendorData';
+import VendorDialogue from './VendorDialogue';
+import StockRefreshBanner from './StockRefreshBanner';
 
 export default function VendorShop({ vendor, character, onBack, onCharacterUpdate }) {
   const [search, setSearch] = useState('');
@@ -16,6 +18,7 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
   const [haggleItem, setHaggleItem] = useState(null);
   const [showGreeting, setShowGreeting] = useState(true);
   const [filterCategory, setFilterCategory] = useState('all');
+  const [aiDialogueContext, setAiDialogueContext] = useState({ context: 'greeting', itemName: '', itemDesc: '' });
 
   const meta = VENDOR_TYPE_META[vendor.type] || VENDOR_TYPE_META.general;
   const isResting = vendor.type === 'tavern_inn' || vendor.type === 'tavern_pub';
@@ -70,6 +73,7 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
     const flavorKey = vendor.type;
     const flavor = TRANSACTION_FLAVOR.buy[flavorKey] || TRANSACTION_FLAVOR.buy.general;
     fireTransaction('buy', item.name, price, newGold, flavor);
+    setAiDialogueContext({ context: 'buy', itemName: item.name, itemDesc: item.description });
     onCharacterUpdate?.(updatedChar);
 
     // Handle rest at inn
@@ -118,6 +122,7 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
 
     const flavor = TRANSACTION_FLAVOR.sell[vendor.type] || TRANSACTION_FLAVOR.sell.general;
     fireTransaction('sell', invItem.name, salePrice, newGold, flavor);
+    setAiDialogueContext({ context: 'sell', itemName: invItem.name, itemDesc: invItem.description });
     onCharacterUpdate?.(updatedChar);
   };
 
@@ -153,17 +158,25 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
           </div>
         </div>
 
-        {/* Greeting bubble */}
-        <AnimatePresence>
-          {showGreeting && vendor.greeting && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-              className="mx-4 mb-3 px-4 py-2.5 rounded-xl italic text-sm"
-              style={{ background: 'rgba(30,20,5,0.6)', border: `1px solid ${meta.borderColor}`, color: 'rgba(232,213,183,0.65)', fontFamily: 'IM Fell English, serif', lineHeight: 1.6 }}>
-              {vendor.greeting}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* AI Dialogue bubble */}
+        <div className="mx-4 mb-3">
+          <VendorDialogue
+            key={`${aiDialogueContext.context}-${aiDialogueContext.itemName}`}
+            vendor={vendor}
+            character={char}
+            context={aiDialogueContext.context}
+            itemName={aiDialogueContext.itemName}
+            itemDescription={aiDialogueContext.itemDesc}
+            autoLoad={true}
+          />
+        </div>
+
+        {/* Stock refresh info */}
+        {vendorData.last_stock_refresh && !vendor.is_traveling && (
+          <div className="px-4 pb-2">
+            <StockRefreshBanner lastRefresh={vendorData.last_stock_refresh} refreshDays={vendorData.refresh_interval_days || 3} />
+          </div>
+        )}
 
         {/* Tabs: Buy / Sell */}
         <div className="flex gap-1 px-4 pb-3">
@@ -231,7 +244,7 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
                       {/* Haggle button overlay */}
                       {vendor.type !== 'tavern_inn' && vendor.type !== 'tavern_pub' && item.stock > 0 && (
                         <button
-                          onClick={() => setHaggleItem(item)}
+                          onClick={() => { setHaggleItem(item); setAiDialogueContext({ context: 'haggle_intro', itemName: item.name, itemDesc: String(item.base_price) }); }}
                           className="absolute right-14 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all px-2 py-1 rounded-lg text-xs font-fantasy"
                           style={{ background: 'rgba(30,20,5,0.85)', border: '1px solid rgba(180,140,90,0.2)', color: 'rgba(201,169,110,0.5)' }}>
                           Haggle
