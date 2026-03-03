@@ -14,10 +14,11 @@ const POINT_BUY_BUDGET = 27;
 // Standard array
 const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 
-export default function StepAbilityScores({ character, set, rollAll, pointBuy }) {
+export default function StepAbilityScores({ character, set }) {
   const [method, setMethod] = useState('roll');
   const [rollHistory, setRollHistory] = useState({});
   const [standardAssigned, setStandardAssigned] = useState({});
+  const [rerollCounts, setRerollCounts] = useState({});
 
   const pointsSpent = STATS.reduce((total, s) => total + (COST[character[s]] || 0), 0);
   const pointsLeft = POINT_BUY_BUDGET - pointsSpent;
