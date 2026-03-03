@@ -143,13 +143,25 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
     );
   }
 
+  const handleToggleSlot = (level, slotIndex, maxSlots) => {
+    const used = currentSlots[`level_${level}`] || 0;
+    const remaining = maxSlots - used;
+    // clicking a filled slot expends it, clicking empty slot recovers it
+    const newUsed = slotIndex < remaining ? used + 1 : Math.max(0, used - 1);
+    onUpdateCharacter({ spell_slots: { ...currentSlots, [`level_${level}`]: newUsed } });
+  };
+
   return (
     <div className="space-y-4">
       {/* Spellcasting Stats */}
-      <div className="grid grid-cols-3 gap-3 p-3 bg-purple-900/10 border border-purple-700/30 rounded-xl">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-purple-900/10 border border-purple-700/30 rounded-xl">
         <div className="text-center">
           <div className="text-xs text-slate-500 mb-0.5">Ability</div>
           <div className="text-sm font-bold text-purple-300 capitalize">{spellcastingAbility}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xs text-slate-500 mb-0.5">Score / Mod</div>
+          <div className="text-sm font-bold text-purple-300">{spellcastingAbilityScore} / {spellcastingMod >= 0 ? '+' : ''}{spellcastingMod}</div>
         </div>
         <div className="text-center">
           <div className="text-xs text-slate-500 mb-0.5">Save DC</div>
@@ -160,30 +172,64 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
           <div className="text-sm font-bold text-purple-300">+{spellAttackBonus}</div>
         </div>
       </div>
+      {isPreparation && (
+        <div className="text-xs text-purple-400/70 bg-purple-900/10 border border-purple-700/20 rounded-lg px-3 py-2">
+          📖 <strong>{charClass}</strong> prepares spells daily. Max prepared: {Math.max(1, charLevel + spellcastingMod)} spells
+        </div>
+      )}
 
-      {/* Spell Slots */}
-      {slotArray.some(s => s > 0) && (
-        <div>
-          <div className="text-xs text-slate-400 uppercase tracking-widest mb-2">Spell Slots</div>
-          <div className="flex flex-wrap gap-2">
-            {slotArray.map((maxSlots, i) => {
-              if (maxSlots === 0) return null;
-              const level = i + 1;
-              const used = currentSlots[`level_${level}`] || 0;
-              const remaining = maxSlots - used;
-              return (
-                <div key={level} className="bg-slate-800/60 border border-slate-700/40 rounded-lg px-3 py-2 text-center min-w-[52px]">
-                  <div className="text-xs text-slate-400 mb-1">{LEVEL_LABELS[level]}</div>
-                  <div className="flex gap-1 justify-center flex-wrap">
-                    {Array.from({ length: maxSlots }).map((_, j) => (
-                      <div key={j} className={`w-2.5 h-2.5 rounded-full border ${j < remaining ? 'bg-purple-400 border-purple-500' : 'bg-slate-700 border-slate-600'}`} />
-                    ))}
+      {/* Section Tabs */}
+      <div className="flex gap-1 bg-slate-800/40 p-1 rounded-lg">
+        {[['known', `${isPreparation ? 'Prepared' : 'Known'} (${knownSpells.size})`], ['available', 'Spellbook'], ['slots', 'Spell Slots']].map(([key, label]) => (
+          <button key={key} onClick={() => setActiveSection(key)}
+            className={`flex-1 py-1.5 text-xs rounded-md transition-all ${activeSection === key ? 'bg-purple-800/60 text-purple-200 border border-purple-700/40' : 'text-slate-400 hover:text-slate-200'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Spell Slots Panel */}
+      {activeSection === 'slots' && (
+        <div className="space-y-3">
+          <div className="text-xs text-slate-400">Click a slot to expend/recover it. Slots reset on long rest.</div>
+          {slotArray.some(s => s > 0) ? (
+            <div className="space-y-3">
+              {slotArray.map((maxSlots, i) => {
+                if (maxSlots === 0) return null;
+                const level = i + 1;
+                const used = currentSlots[`level_${level}`] || 0;
+                const remaining = maxSlots - used;
+                return (
+                  <div key={level} className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-sm text-purple-300 font-medium">{LEVEL_LABELS[level]} Level</div>
+                      <div className="text-xs text-slate-400">{remaining}/{maxSlots} remaining</div>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {Array.from({ length: maxSlots }).map((_, j) => (
+                        <button key={j} onClick={() => handleToggleSlot(level, j, maxSlots)}
+                          className={`w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center text-xs font-bold ${j < remaining ? 'bg-purple-500/60 border-purple-400 text-purple-100 hover:bg-purple-400/60' : 'bg-slate-700/40 border-slate-600 text-slate-500 hover:border-purple-600/40'}`}>
+                          {j + 1}
+                        </button>
+                      ))}
+                    </div>
+                    {used > 0 && (
+                      <button onClick={() => onUpdateCharacter({ spell_slots: { ...currentSlots, [`level_${level}`]: 0 } })}
+                        className="mt-2 text-xs text-slate-500 hover:text-green-400 transition-colors">
+                        ↺ Recover all {LEVEL_LABELS[level]} slots
+                      </button>
+                    )}
                   </div>
-                  <div className="text-xs text-purple-300 mt-1 font-mono">{remaining}/{maxSlots}</div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+              <button onClick={() => onUpdateCharacter({ spell_slots: {} })}
+                className="w-full py-2 border border-green-700/40 text-green-400 text-xs rounded-xl hover:bg-green-900/20 transition-all">
+                ☀️ Long Rest — Recover All Slots
+              </button>
+            </div>
+          ) : (
+            <div className="text-center text-slate-500 py-6 text-sm">No spell slots at this level/class</div>
+          )}
         </div>
       )}
 
