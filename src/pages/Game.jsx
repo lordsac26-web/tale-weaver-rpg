@@ -67,29 +67,96 @@ export default function Game() {
     setStoryLoading(false);
   };
 
+  // Compute skill check modifier from character stats + proficiency
+  const computeSkillModifier = (skillName) => {
+    if (!character) return 0;
+    const stat = SKILL_STAT_MAP[skillName];
+    const base = stat ? calcStatMod(character[stat]) : 0;
+    const prof = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
+    const skills = character.skills || {};
+    const isProficient = skills[skillName] || false;
+    const hasExpertise = skills[`${skillName}_expertise`] || false;
+    return base + (hasExpertise ? prof * 2 : isProficient ? prof : 0);
+  };
+
+  // Generate brief feedback text for a skill check result
+  const getSkillFeedback = (skill, success, roll, dc, nat) => {
+    if (nat === 20) {
+      const nat20 = {
+        Persuasion: "Your words flow with an almost magical charm — they're completely won over.",
+        Deception: "Your lie is so convincing, even you almost believe it.",
+        Intimidation: "Pure primal terror washes over them. They will not forget this.",
+        Perception: "Every detail snaps into razor focus. You miss nothing.",
+        Investigation: "The truth reveals itself as if lit by spotlight.",
+        Athletics: "Your body moves with godlike grace. No obstacle stands a chance.",
+        Stealth: "You become shadow itself.",
+        Insight: "Their soul is an open book to you.",
+        Acrobatics: "You move like water — effortless perfection.",
+      };
+      return nat20[skill] || "A perfect roll — fate itself bends in your favor.";
+    }
+    if (nat === 1) {
+      const nat1 = {
+        Persuasion: "You somehow manage to offend them worse than if you'd said nothing.",
+        Deception: "Your tells are catastrophically obvious. They see right through you.",
+        Intimidation: "You trip over your threat. They're not even slightly impressed.",
+        Perception: "You stare directly at the clue and see nothing. Embarrassing.",
+        Investigation: "You conclude confidently... and completely wrong.",
+        Athletics: "You pull something. Or trip. Possibly both.",
+        Stealth: "A cat, a child, and a sleeping guard all hear you.",
+        Insight: "You've never been more wrong about anyone in your life.",
+        Acrobatics: "Gravity wins. Comprehensively.",
+      };
+      return nat1[skill] || "Catastrophic failure. The dice gods are displeased.";
+    }
+    const margin = Math.abs(roll - dc);
+    if (success) {
+      if (margin >= 10) return `An exceptional ${skill} check — you exceeded expectations by a wide margin.`;
+      if (margin >= 5) return `A solid ${skill} check. Handled with confidence.`;
+      return `A narrow success. Your ${skill} just barely carries the day.`;
+    } else {
+      if (margin >= 10) return `A poor ${skill} roll. You were never close to meeting the challenge.`;
+      if (margin >= 5) return `Not quite enough. Your ${skill} falls measurably short.`;
+      return `Agonizingly close — your ${skill} fails by the slimmest of margins.`;
+    }
+  };
+
   const handleChoice = async (choiceIndex) => {
     const choice = choices[choiceIndex];
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
     setChoices([]);
 
+    let skillSuccess = undefined;
+
     if (choice.skill_check && choice.dc) {
       setStoryLoading(true);
-      const rollResult = await base44.functions.invoke('rollDice', {
-        session_id: sessionId, character_id: character?.id,
-        roll_type: choice.skill_check.toLowerCase().replace(/ /g, '_'),
-        dice: '1d20', dc: choice.dc, context: choice.text
-      });
-      const roll = rollResult.data;
+      const raw = Math.floor(Math.random() * 20) + 1;
+      const modifier = computeSkillModifier(choice.skill_check);
+      const final = raw + modifier;
+      const success = final >= choice.dc;
+      skillSuccess = success;
+      const feedback = getSkillFeedback(choice.skill_check, success, final, choice.dc, raw);
       setNarrative(prev => [...prev, {
-        type: 'roll_result',
-        text: `${choice.skill_check} check: rolled ${roll.raw_total} + ${roll.modifier_total} = ${roll.final_result} vs DC ${choice.dc} — ${roll.success ? 'SUCCESS!' : 'FAILURE'}`,
-        success: roll.success
+        type: 'skill_check',
+        skill: choice.skill_check,
+        dc: choice.dc,
+        raw,
+        modifier,
+        final,
+        success,
+        feedback,
+        character_name: character?.name,
       }]);
     }
 
     setStoryLoading(true);
     const result = await base44.functions.invoke('generateStory', {
-      session_id: sessionId, action: 'choice', choice_index: choiceIndex, custom_input: choice.text
+      session_id: sessionId,
+      action: 'choice',
+      choice_index: choiceIndex,
+      custom_input: choice.skill_check
+        ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}]`
+        : choice.text,
     });
     const data = result.data;
 
