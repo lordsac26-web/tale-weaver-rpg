@@ -7,6 +7,7 @@ import HUD from '@/components/game/HUD';
 import StoryPanel from '@/components/game/StoryPanel';
 import CombatPanel from '@/components/game/CombatPanel';
 import CharacterSheet from '@/components/game/CharacterSheet';
+import DiceRoller from '@/components/game/DiceRoller';
 
 export default function Game() {
   const navigate = useNavigate();
