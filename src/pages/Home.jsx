@@ -184,20 +184,39 @@ export default function Home() {
 
 function CharacterCard({ character, sessions }) {
   const session = sessions.find(s => s.character_id === character.id);
+  const hpPct = character.hp_max ? Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100)) : 100;
+  const hpColor = hpPct > 60 ? 'bg-green-500' : hpPct > 30 ? 'bg-yellow-500' : 'bg-red-500';
+  const initials = character.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+
   return (
-    <div className="bg-gradient-to-br from-slate-900/80 to-slate-800/40 border border-slate-700/50 rounded-xl p-5 hover:border-amber-600/40 transition-all">
-      <div className="flex justify-between items-start mb-3">
-        <div>
-          <h3 className="font-bold text-amber-200 text-lg">{character.name}</h3>
-          <p className="text-amber-400/60 text-sm">Level {character.level} {character.race} {character.class}</p>
+    <motion.div whileHover={{ y: -3, boxShadow: '0 0 24px rgba(251,191,36,0.1)' }} transition={{ type: 'spring', stiffness: 300 }}
+      className="group bg-gradient-to-br from-slate-900/90 to-slate-800/50 border border-slate-700/50 rounded-xl p-5 hover:border-amber-600/50 transition-colors cursor-pointer">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-700/60 to-amber-900/60 border border-amber-600/40 flex items-center justify-center text-amber-200 font-bold text-sm flex-shrink-0">
+          {initials}
         </div>
-        <Badge className="bg-amber-900/50 text-amber-300 border-amber-700/50">Lv.{character.level}</Badge>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-bold text-amber-200 text-base truncate">{character.name}</h3>
+          <p className="text-amber-400/60 text-xs">Lv.{character.level} {character.race} {character.class}</p>
+        </div>
+        <Badge className="bg-amber-900/50 text-amber-300 border-amber-700/50 text-xs">Lv.{character.level}</Badge>
       </div>
-      <div className="flex items-center gap-3 mb-4">
-        <div className="text-center">
-          <div className="text-red-400 font-bold text-sm">{character.hp_current}/{character.hp_max}</div>
-          <div className="text-slate-500 text-xs">HP</div>
+
+      {/* HP bar */}
+      <div className="mb-3">
+        <div className="flex justify-between text-xs mb-1">
+          <span className="text-slate-400">HP</span>
+          <span className={hpPct > 60 ? 'text-green-400' : hpPct > 30 ? 'text-yellow-400' : 'text-red-400'}>
+            {character.hp_current}/{character.hp_max}
+          </span>
         </div>
+        <div className="h-1.5 bg-slate-700/60 rounded-full overflow-hidden">
+          <motion.div initial={{ width: 0 }} animate={{ width: `${hpPct}%` }} transition={{ duration: 0.8, ease: 'easeOut' }}
+            className={`h-full rounded-full ${hpColor}`} />
+        </div>
+      </div>
+
+      <div className="flex gap-4 mb-4">
         <div className="text-center">
           <div className="text-blue-400 font-bold text-sm">{character.armor_class}</div>
           <div className="text-slate-500 text-xs">AC</div>
@@ -207,20 +226,21 @@ function CharacterCard({ character, sessions }) {
           <div className="text-slate-500 text-xs">XP</div>
         </div>
       </div>
+
       {session ? (
         <Link to={createPageUrl('Game') + `?session_id=${session.id}`}>
-          <Button size="sm" className="w-full bg-green-800/60 hover:bg-green-700/60 text-green-200 border border-green-700/50">
-            <Play className="w-3 h-3 mr-1" /> Resume
+          <Button size="sm" className="w-full bg-green-800/50 hover:bg-green-700/60 text-green-200 border border-green-700/40 transition-all">
+            <Play className="w-3 h-3 mr-1.5" /> Resume Campaign
           </Button>
         </Link>
       ) : (
         <Link to={createPageUrl('NewGame') + `?character_id=${character.id}`}>
-          <Button size="sm" className="w-full bg-purple-800/60 hover:bg-purple-700/60 text-purple-200 border border-purple-700/50">
-            <BookOpen className="w-3 h-3 mr-1" /> Start Quest
+          <Button size="sm" className="w-full bg-purple-800/50 hover:bg-purple-700/60 text-purple-200 border border-purple-700/40 transition-all">
+            <BookOpen className="w-3 h-3 mr-1.5" /> Start Quest
           </Button>
         </Link>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -228,17 +248,18 @@ function SessionCard({ session, characters }) {
   const char = characters.find(c => c.id === session.character_id);
   return (
     <Link to={createPageUrl('Game') + `?session_id=${session.id}`}>
-      <div className="bg-gradient-to-br from-purple-900/20 to-slate-900/40 border border-purple-800/40 rounded-xl p-5 hover:border-purple-600/60 transition-all cursor-pointer">
-        <div className="flex justify-between items-start mb-2">
-          <h3 className="font-bold text-purple-200">{session.title || 'Unnamed Campaign'}</h3>
+      <motion.div whileHover={{ y: -3, boxShadow: '0 0 24px rgba(167,139,250,0.1)' }} transition={{ type: 'spring', stiffness: 300 }}
+        className="group bg-gradient-to-br from-purple-900/20 to-slate-900/50 border border-purple-800/40 rounded-xl p-5 hover:border-purple-600/60 transition-colors cursor-pointer">
+        <div className="flex justify-between items-start mb-3">
+          <h3 className="font-bold text-purple-200 group-hover:text-purple-100 transition-colors">{session.title || 'Unnamed Campaign'}</h3>
           <Badge className={`text-xs ${session.in_combat ? 'bg-red-900/60 text-red-300 border-red-700/50' : 'bg-purple-900/50 text-purple-300 border-purple-700/50'}`}>
-            {session.in_combat ? '⚔️ In Combat' : '📖 Exploring'}
+            {session.in_combat ? '⚔️ Combat' : '📖 Exploring'}
           </Badge>
         </div>
-        <p className="text-purple-400/60 text-sm">{session.current_location || 'Unknown Location'}</p>
-        {char && <p className="text-amber-400/50 text-xs mt-1">Playing as {char.name}</p>}
+        <p className="text-purple-400/60 text-sm mb-1">{session.current_location || 'Unknown Location'}</p>
+        {char && <p className="text-amber-400/50 text-xs">Playing as <span className="text-amber-400/80">{char.name}</span></p>}
         <p className="text-slate-500 text-xs mt-2">{session.season} · {session.time_of_day}</p>
-      </div>
+      </motion.div>
     </Link>
   );
 }
