@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Coins } from 'lucide-react';
 import { HAGGLE_FLAVOR } from './vendorData';
+import VendorDialogue from './VendorDialogue';
 
 function rollD20() { return Math.floor(Math.random() * 20) + 1; }
 
@@ -95,12 +96,15 @@ export default function HaggleModal({ item, vendor, character, onAccept, onClose
             </div>
           </div>
 
-          {/* Vendor flavor */}
-          <div className="rounded-xl px-4 py-3 italic" style={{ background: 'rgba(20,14,5,0.5)', border: '1px solid rgba(180,140,90,0.1)' }}>
-            <p className="text-sm" style={{ color: 'rgba(232,213,183,0.6)', fontFamily: 'IM Fell English, serif', lineHeight: 1.6 }}>
-              {flavor[Math.floor(Math.random() * flavor.length)]}
-            </p>
-          </div>
+          {/* AI vendor dialogue for haggle */}
+          <VendorDialogue
+            vendor={vendor}
+            character={character}
+            context={phase === 'result' ? (finalPrice < item.base_price ? 'haggle_win' : 'haggle_fail') : 'haggle_intro'}
+            itemName={item.name}
+            itemDescription={String(item.base_price)}
+            autoLoad={true}
+          />
 
           {/* CHA modifier info */}
           <div className="text-center text-xs" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>
