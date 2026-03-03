@@ -73,37 +73,78 @@ Deno.serve(async (req) => {
     }
 
     // Stat-based modifiers per roll type
-    const statMod = (stat) => Math.floor((stat - 10) / 2);
+    const statMod = (stat) => Math.floor(((stat || 10) - 10) / 2);
     const profBonus = character.proficiency_bonus || 2;
 
+    // Normalize roll_type: lowercase, replace spaces with underscores
+    const normalizedRollType = roll_type.toLowerCase().replace(/\s+/g, '_');
+
+    // Determine spellcasting ability based on class
+    const spellcastingAbilityMap = {
+      wizard: 'intelligence', eldritch_knight: 'intelligence', arcane_trickster: 'intelligence',
+      cleric: 'wisdom', druid: 'wisdom', ranger: 'wisdom',
+      bard: 'charisma', paladin: 'charisma', sorcerer: 'charisma', warlock: 'charisma'
+    };
+    const charClass = (character.class || '').toLowerCase();
+    const spellcastingAbility = spellcastingAbilityMap[charClass] || 'intelligence';
+    const spellMod = statMod(character[spellcastingAbility]);
+
+    // Helper: proficiency for a skill key
+    const skillProf = (key) => {
+      const val = character.skills?.[key];
+      return val === 'expert' ? profBonus * 2 : val === 'proficient' ? profBonus : 0;
+    };
+
     const rollModMap = {
+      // Attacks
       'attack_melee': statMod(character.strength) + (character.equipped?.weapon?.attack_bonus || 0),
       'attack_ranged': statMod(character.dexterity) + (character.equipped?.weapon?.attack_bonus || 0),
-      'attack_spell': statMod(character.intelligence) + (character.equipped?.spellcasting_focus?.bonus || 0),
+      'attack_spell': spellMod + profBonus + (character.equipped?.spellcasting_focus?.bonus || 0),
+      // Initiative
       'initiative': statMod(character.dexterity),
+      // Raw ability checks
       'strength_check': statMod(character.strength),
       'dexterity_check': statMod(character.dexterity),
       'constitution_check': statMod(character.constitution),
       'intelligence_check': statMod(character.intelligence),
       'wisdom_check': statMod(character.wisdom),
       'charisma_check': statMod(character.charisma),
-      'athletics': statMod(character.strength) + (character.skills?.athletics === 'proficient' ? profBonus : character.skills?.athletics === 'expert' ? profBonus * 2 : 0),
-      'acrobatics': statMod(character.dexterity) + (character.skills?.acrobatics === 'proficient' ? profBonus : character.skills?.acrobatics === 'expert' ? profBonus * 2 : 0),
-      'stealth': statMod(character.dexterity) + (character.skills?.stealth === 'proficient' ? profBonus : character.skills?.stealth === 'expert' ? profBonus * 2 : 0),
-      'perception': statMod(character.wisdom) + (character.skills?.perception === 'proficient' ? profBonus : character.skills?.perception === 'expert' ? profBonus * 2 : 0),
-      'persuasion': statMod(character.charisma) + (character.skills?.persuasion === 'proficient' ? profBonus : 0),
-      'deception': statMod(character.charisma) + (character.skills?.deception === 'proficient' ? profBonus : 0),
-      'intimidation': statMod(character.charisma) + (character.skills?.intimidation === 'proficient' ? profBonus : 0),
-      'arcana': statMod(character.intelligence) + (character.skills?.arcana === 'proficient' ? profBonus : 0),
-      'sleight_of_hand': statMod(character.dexterity) + (character.skills?.sleight_of_hand === 'proficient' ? profBonus : 0),
-      'survival': statMod(character.wisdom) + (character.skills?.survival === 'proficient' ? profBonus : 0),
-      'investigation': statMod(character.intelligence) + (character.skills?.investigation === 'proficient' ? profBonus : 0),
-      'insight': statMod(character.wisdom) + (character.skills?.insight === 'proficient' ? profBonus : 0),
+      // Saving throws
+      'strength_save': statMod(character.strength) + (character.saving_throws?.strength ? profBonus : 0),
+      'dexterity_save': statMod(character.dexterity) + (character.saving_throws?.dexterity ? profBonus : 0),
+      'constitution_save': statMod(character.constitution) + (character.saving_throws?.constitution ? profBonus : 0),
+      'intelligence_save': statMod(character.intelligence) + (character.saving_throws?.intelligence ? profBonus : 0),
+      'wisdom_save': statMod(character.wisdom) + (character.saving_throws?.wisdom ? profBonus : 0),
+      'charisma_save': statMod(character.charisma) + (character.saving_throws?.charisma ? profBonus : 0),
+      // Skills (STR)
+      'athletics': statMod(character.strength) + skillProf('athletics'),
+      // Skills (DEX)
+      'acrobatics': statMod(character.dexterity) + skillProf('acrobatics'),
+      'sleight_of_hand': statMod(character.dexterity) + skillProf('sleight_of_hand'),
+      'stealth': statMod(character.dexterity) + skillProf('stealth'),
+      // Skills (INT)
+      'arcana': statMod(character.intelligence) + skillProf('arcana'),
+      'history': statMod(character.intelligence) + skillProf('history'),
+      'investigation': statMod(character.intelligence) + skillProf('investigation'),
+      'nature': statMod(character.intelligence) + skillProf('nature'),
+      'religion': statMod(character.intelligence) + skillProf('religion'),
+      // Skills (WIS)
+      'animal_handling': statMod(character.wisdom) + skillProf('animal_handling'),
+      'insight': statMod(character.wisdom) + skillProf('insight'),
+      'medicine': statMod(character.wisdom) + skillProf('medicine'),
+      'perception': statMod(character.wisdom) + skillProf('perception'),
+      'survival': statMod(character.wisdom) + skillProf('survival'),
+      // Skills (CHA)
+      'deception': statMod(character.charisma) + skillProf('deception'),
+      'intimidation': statMod(character.charisma) + skillProf('intimidation'),
+      'performance': statMod(character.charisma) + skillProf('performance'),
+      'persuasion': statMod(character.charisma) + skillProf('persuasion'),
     };
 
-    if (rollModMap[roll_type] !== undefined) {
-      const baseMod = rollModMap[roll_type];
-      modifiersApplied.push({ source: 'stat+skill', value: baseMod, type: 'base' });
+    // Look up by normalized roll type
+    if (rollModMap[normalizedRollType] !== undefined) {
+      const baseMod = rollModMap[normalizedRollType];
+      modifiersApplied.push({ source: `${normalizedRollType} (stat+skill)`, value: baseMod, type: 'base' });
       modifierTotal += baseMod;
     }
 
