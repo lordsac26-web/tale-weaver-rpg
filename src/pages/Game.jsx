@@ -174,8 +174,17 @@ export default function Game() {
       success: data.hit
     }]);
 
-    // Reload combat state after player attack (backend already advanced the turn)
+    // Reload combat state after player attack (backend tracks multi-action turns)
     await reloadCombat(combatId);
+
+    // Show remaining actions if the player still has more
+    if (data.actions_remaining > 0 && !data.combat_ended) {
+      setNarrative(prev => [...prev, {
+        type: 'roll_result',
+        text: `${data.actions_remaining} action${data.actions_remaining > 1 ? 's' : ''} remaining this turn.`,
+        success: true
+      }]);
+    }
 
     if (data.combat_ended) {
       if (data.result === 'victory') {
