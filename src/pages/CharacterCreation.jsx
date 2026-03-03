@@ -19,6 +19,7 @@ import StepBackground from '@/components/creation/StepBackground';
 import StepPortrait from '@/components/creation/StepPortrait';
 import StepBackstory from '@/components/creation/StepBackstory';
 import StepEquipmentSpells from '@/components/creation/StepEquipmentSpells';
+import StepFeats from '@/components/creation/StepFeats';
 import StepReview from '@/components/creation/StepReview';
 
 const STEPS = [
