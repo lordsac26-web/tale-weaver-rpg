@@ -131,6 +131,16 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
           {/* Action panel */}
           {isPlayerTurn ? (
             <div className="border-t border-slate-700/40 p-3 space-y-2.5 bg-slate-900/80 flex-shrink-0">
+              {/* Actions remaining indicator */}
+              {actionsPerTurn > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-slate-400">Actions:</span>
+                  {Array.from({ length: actionsPerTurn }).map((_, i) => (
+                    <div key={i} className={`w-3 h-3 rounded-full border ${i < actionsRemaining ? 'bg-amber-400 border-amber-500' : 'bg-slate-700 border-slate-600'}`} />
+                  ))}
+                  <span className="text-xs text-amber-300 ml-1">{actionsRemaining} left</span>
+                </div>
+              )}
               {/* Action type tabs */}
               <div className="flex gap-1.5">
                 <button onClick={() => { setAction('attack'); setSelectedSpell(null); }}
