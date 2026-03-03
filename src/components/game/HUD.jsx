@@ -39,7 +39,7 @@ export default function HUD({ character, session }) {
               <span className="text-slate-500">/{character.hp_max}</span>
             </div>
             <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-              <div className={`h-full ${hpColor} transition-all duration-500`} style={{ width: `${hpPct}%` }} />
+              <motion.div className={`h-full ${hpColor}`} animate={{ width: `${hpPct}%` }} transition={{ duration: 0.6, ease: 'easeOut' }} />
             </div>
           </div>
         </div>
@@ -53,7 +53,7 @@ export default function HUD({ character, session }) {
               <span className="text-slate-500">XP</span>
             </div>
             <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-              <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${xpPct}%` }} />
+              <motion.div className="h-full bg-amber-500" animate={{ width: `${xpPct}%` }} transition={{ duration: 0.6, ease: 'easeOut' }} />
             </div>
           </div>
         </div>
