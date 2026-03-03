@@ -93,7 +93,10 @@ Deno.serve(async (req) => {
 
     // ── SPELLS ─────────────────────────────────────────────────────────────
     if (!target || target === 'spells') {
-      const raw = await (await fetch(FILE_URLS.spells)).json();
+      // The spell file contains JS comments, so we need to strip them first
+      const rawText = await (await fetch(FILE_URLS.spells)).text();
+      const cleanText = rawText.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+      const raw = JSON.parse(cleanText);
       const spellList = Array.isArray(raw) ? raw : (raw.spells || raw.Spells || Object.values(raw)[0] || []);
       const records = spellList.map(spell => ({
         name: spell.name || spell.Name || 'Unknown Spell',
@@ -162,8 +165,8 @@ Deno.serve(async (req) => {
       const records = [];
       for (const [itemName, itemData] of Object.entries(itemsData)) {
         if (itemName === 'content' || typeof itemData !== 'object') continue;
-        const content = Array.isArray(itemData.content) ? itemData.content : [];
-        const firstLine = content[0] || '';
+        const content = Array.isArray(itemData.content) ? itemData.content : (typeof itemData.content === 'string' ? [itemData.content] : []);
+        const firstLine = typeof content[0] === 'string' ? content[0] : '';
         const rarityMatch = firstLine.match(/\*(.*?)\*/);
         const rarityStr = rarityMatch ? rarityMatch[1] : '';
         records.push({
