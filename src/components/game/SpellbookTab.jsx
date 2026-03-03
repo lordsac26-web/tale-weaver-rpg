@@ -85,7 +85,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLevel, setFilterLevel] = useState('all');
   const [filterType, setFilterType] = useState('all');
-  const [activeSection, setActiveSection] = useState('known'); // 'known' | 'available'
+  const [activeSection, setActiveSection] = useState('known'); // 'known' | 'available' | 'slots'
 
   if (!character) return null;
 
@@ -97,6 +97,10 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
   const slotArray = getSpellSlotsForLevel(charClass, charLevel);
   const currentSlots = character.spell_slots || {};
   const knownSpells = new Set(character.spells_known || []);
+  const isPreparation = PREPARATION_CLASSES.includes(charClass);
+  const profBonus = Math.ceil(charLevel / 4) + 1;
+  const spellcastingAbilityScore = character[spellcastingAbility] || 10;
+  const spellcastingMod = Math.floor((spellcastingAbilityScore - 10) / 2);
 
   const classSpells = SPELLS_BY_CLASS[charClass] || {};
   const allAvailableSpells = [];
