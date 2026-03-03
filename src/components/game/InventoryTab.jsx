@@ -211,44 +211,44 @@ export default function InventoryTab({ character, onUpdate }) {
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         <button onClick={() => setShowAddForm(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-800/40 hover:bg-amber-700/50 border border-amber-700/40 rounded-lg text-xs text-amber-300 transition-all">
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-fantasy btn-fantasy">
           <Plus className="w-3.5 h-3.5" /> Add Item
         </button>
-        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
-          className="bg-slate-800/50 border border-slate-700/40 rounded-lg text-xs text-slate-400 px-2 py-1.5 outline-none">
+        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="rounded-lg text-xs px-2 py-1.5 select-fantasy">
           <option value="all">All Categories</option>
           {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_ICONS[c]} {c}</option>)}
         </select>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-          className="bg-slate-800/50 border border-slate-700/40 rounded-lg text-xs text-slate-400 px-2 py-1.5 outline-none">
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="rounded-lg text-xs px-2 py-1.5 select-fantasy">
           <option value="name">Sort: Name</option>
-          <option value="category">Sort: Category</option>
+          <option value="category">Sort: Type</option>
           <option value="weight">Sort: Weight</option>
-          <option value="cost">Sort: Cost</option>
+          <option value="cost">Sort: Value</option>
         </select>
-        <span className="ml-auto text-xs text-slate-500">{inventory.length} items · {totalWeight.toFixed(1)} lb</span>
+        <span className="ml-auto text-xs" style={{ color: 'rgba(180,140,90,0.35)', fontFamily: 'EB Garamond, serif' }}>
+          {inventory.length} items · {totalWeight.toFixed(1)} lb
+        </span>
       </div>
 
       {showAddForm && <AddItemForm onAdd={handleAddItem} onCancel={() => setShowAddForm(false)} />}
 
       {/* Equipped summary */}
       {(equippedItems.weapon || equippedItems.armor) && (
-        <div className="bg-green-900/10 border border-green-700/30 rounded-xl p-3">
-          <div className="text-xs text-green-400/80 uppercase tracking-widest mb-2">Equipped</div>
+        <div className="rounded-xl p-3" style={{ background: 'rgba(10,30,12,0.5)', border: '1px solid rgba(40,160,80,0.2)' }}>
+          <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(86,239,172,0.5)', fontSize: '0.65rem' }}>EQUIPPED</div>
           <div className="flex gap-3 flex-wrap">
             {equippedItems.weapon && (
               <div className="flex items-center gap-2 text-xs">
                 <span>⚔️</span>
-                <span className="text-amber-200">{equippedItems.weapon.name}</span>
-                {equippedItems.weapon.damage && <span className="text-slate-400">{equippedItems.weapon.damage}</span>}
-                {equippedItems.weapon.attack_bonus > 0 && <span className="text-green-400">+{equippedItems.weapon.attack_bonus} atk</span>}
+                <span style={{ color: '#e8d5b7', fontFamily: 'EB Garamond, serif' }}>{equippedItems.weapon.name}</span>
+                {equippedItems.weapon.damage && <span style={{ color: '#fca5a5' }}>{equippedItems.weapon.damage}</span>}
+                {equippedItems.weapon.attack_bonus > 0 && <span style={{ color: '#86efac' }}>+{equippedItems.weapon.attack_bonus}</span>}
               </div>
             )}
             {equippedItems.armor && (
               <div className="flex items-center gap-2 text-xs">
                 <span>🛡️</span>
-                <span className="text-amber-200">{equippedItems.armor.name}</span>
-                {equippedItems.armor.armor_class && <span className="text-blue-400">AC {equippedItems.armor.armor_class}</span>}
+                <span style={{ color: '#e8d5b7', fontFamily: 'EB Garamond, serif' }}>{equippedItems.armor.name}</span>
+                {equippedItems.armor.armor_class && <span style={{ color: '#93c5fd' }}>AC {equippedItems.armor.armor_class}</span>}
               </div>
             )}
           </div>
@@ -257,44 +257,59 @@ export default function InventoryTab({ character, onUpdate }) {
 
       {/* Inventory list */}
       {sorted.length === 0 ? (
-        <div className="text-slate-500 text-center py-10 flex flex-col items-center gap-2">
-          <Package className="w-10 h-10 opacity-20" />
-          <span className="text-sm">{filterCategory !== 'all' ? 'No items in this category' : 'Inventory is empty'}</span>
+        <div className="text-center py-10 flex flex-col items-center gap-2">
+          <Package className="w-10 h-10 opacity-10" style={{ color: '#c9a96e' }} />
+          <span className="text-sm" style={{ color: 'rgba(180,140,90,0.3)', fontFamily: 'EB Garamond, serif' }}>
+            {filterCategory !== 'all' ? 'No items in this category' : 'Your satchel is empty'}
+          </span>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {sorted.map((item, i) => {
             const origIndex = inventory.indexOf(item);
             const canEquip = item.category === 'Weapon' || item.category === 'Armor';
             return (
-              <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${item.equipped ? 'border-green-600/50 bg-green-900/10' : 'border-slate-700/40 bg-slate-800/30 hover:border-slate-600/60'}`}>
+              <div key={i} className="flex items-center gap-3 p-3 rounded-xl transition-all fantasy-card"
+                style={item.equipped ? {
+                  background: 'rgba(10,35,12,0.6)',
+                  border: '1px solid rgba(40,160,80,0.3)',
+                } : {
+                  background: 'rgba(15,10,5,0.55)',
+                  border: '1px solid rgba(180,140,90,0.1)',
+                }}>
                 <span className="text-lg flex-shrink-0">{CATEGORY_ICONS[item.category] || '📦'}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-amber-200 text-sm font-medium">{item.name}</span>
-                    {item.quantity > 1 && <span className="text-slate-400 text-xs">×{item.quantity}</span>}
-                    {item.equipped && <span className="text-xs bg-green-800/40 border border-green-700/40 text-green-300 px-1.5 py-0.5 rounded-full">Equipped</span>}
+                    <span className="text-sm font-medium" style={{ color: '#e8d5b7', fontFamily: 'EB Garamond, serif' }}>{item.name}</span>
+                    {item.quantity > 1 && <span className="text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>×{item.quantity}</span>}
+                    {item.equipped && <span className="text-xs px-1.5 py-0.5 rounded-full badge-green">Equipped</span>}
                   </div>
                   <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    <span className="text-slate-500 text-xs">{item.category}</span>
-                    {item.weight > 0 && <span className="text-slate-500 text-xs">{item.weight} lb</span>}
-                    {item.cost > 0 && <span className="text-yellow-600 text-xs">{item.cost} {item.cost_unit}</span>}
-                    {item.damage && <span className="text-red-400 text-xs">{item.damage}</span>}
-                    {item.armor_class > 0 && <span className="text-blue-400 text-xs">AC {item.armor_class}</span>}
-                    {item.attack_bonus > 0 && <span className="text-green-400 text-xs">+{item.attack_bonus} atk</span>}
+                    <span className="text-xs" style={{ color: 'rgba(180,140,90,0.35)', fontFamily: 'EB Garamond, serif' }}>{item.category}</span>
+                    {item.weight > 0 && <span className="text-xs" style={{ color: 'rgba(180,140,90,0.35)' }}>{item.weight}lb</span>}
+                    {item.cost > 0 && <span className="text-xs" style={{ color: '#d97706' }}>{item.cost} {item.cost_unit}</span>}
+                    {item.damage && <span className="text-xs" style={{ color: '#fca5a5' }}>{item.damage}</span>}
+                    {item.armor_class > 0 && <span className="text-xs" style={{ color: '#93c5fd' }}>AC {item.armor_class}</span>}
+                    {item.attack_bonus > 0 && <span className="text-xs" style={{ color: '#86efac' }}>+{item.attack_bonus}</span>}
                   </div>
-                  {item.description && <div className="text-slate-600 text-xs mt-0.5 truncate">{item.description}</div>}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   {canEquip && (
                     <button onClick={() => handleEquipItem(item, origIndex)}
-                      className={`p-1.5 rounded-lg text-xs border transition-all ${item.equipped ? 'border-green-600/50 text-green-400 bg-green-900/20' : 'border-slate-600/50 text-slate-400 hover:text-green-400 hover:border-green-700/40'}`}
-                      title={item.equipped ? 'Unequip' : 'Equip'}>
-                      {item.category === 'Weapon' ? <span className="text-xs">⚔️</span> : <span className="text-xs">🛡️</span>}
+                      className="p-1.5 rounded-lg text-xs border transition-all"
+                      style={item.equipped ? {
+                        background: 'rgba(10,50,15,0.6)', border: '1px solid rgba(40,160,80,0.4)', color: '#86efac'
+                      } : {
+                        background: 'rgba(15,10,5,0.5)', border: '1px solid rgba(180,140,90,0.15)', color: 'rgba(180,140,90,0.4)'
+                      }}>
+                      {item.category === 'Weapon' ? '⚔️' : '🛡️'}
                     </button>
                   )}
                   <button onClick={() => handleRemoveItem(origIndex)}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 border border-transparent hover:border-red-700/30 transition-all">
+                    className="p-1.5 rounded-lg transition-all"
+                    style={{ color: 'rgba(180,60,60,0.4)', border: '1px solid transparent' }}
+                    onMouseEnter={e => { e.currentTarget.style.color = '#fca5a5'; e.currentTarget.style.background = 'rgba(80,10,10,0.3)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'rgba(180,60,60,0.4)'; e.currentTarget.style.background = 'transparent'; }}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
