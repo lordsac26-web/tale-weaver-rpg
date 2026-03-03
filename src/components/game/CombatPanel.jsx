@@ -4,6 +4,20 @@ import { calcStatMod } from './gameData';
 
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger'];
 
+// How many actions per turn based on class/level/features
+function getActionsPerTurn(character) {
+  if (!character) return 1;
+  const features = (character.features || []).map(f => (typeof f === 'string' ? f : f.name || '').toLowerCase());
+  const charClass = (character.class || '').toLowerCase();
+  const level = character.level || 1;
+  let actions = 1;
+  if (['fighter','ranger','paladin','barbarian','monk'].includes(charClass) && level >= 5) actions = 2;
+  if (charClass === 'fighter' && level >= 11) actions = 3;
+  if (charClass === 'fighter' && level >= 20) actions = 4;
+  if (features.some(f => f.includes('extra attack'))) actions = Math.max(actions, 2);
+  return actions;
+}
+
 export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onFlee, loading }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [action, setAction] = useState('attack');
@@ -11,7 +25,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
 
   if (!combat) return null;
 
-  const { combatants, initiative_order, log_entries, round, current_turn_index } = combat;
+  const { combatants, initiative_order, log_entries, round, current_turn_index, world_state } = combat;
   const enemies = (combatants || []).filter(c => c.type === 'enemy');
   const player = (combatants || []).find(c => c.type === 'player');
   const currentCombatant = combatants?.[current_turn_index];
