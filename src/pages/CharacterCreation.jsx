@@ -208,7 +208,8 @@ export default function CharacterCreation() {
               onGenerate={handleGenerateBackstory} generating={generatingBackstory} />
           )}
           {step === 7 && <StepEquipmentSpells character={character} set={set} />}
-          {step === 8 && <StepReview character={reviewChar} />}
+          {step === 8 && <StepFeats character={character} set={set} />}
+          {step === 9 && <StepReview character={reviewChar} />}
         </div>
 
         {/* Navigation */}
