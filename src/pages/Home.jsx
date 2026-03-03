@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { Link } from 'react-router-dom';
-import { Sword, Plus, Play, BookOpen, Settings, Skull } from 'lucide-react';
+import { Sword, Plus, Play, BookOpen, Skull, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Home() {
   const [characters, setCharacters] = useState([]);
