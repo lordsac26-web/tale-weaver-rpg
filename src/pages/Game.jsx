@@ -313,6 +313,14 @@ export default function Game() {
           <Dices className="w-3.5 h-3.5" /> Dice
         </button>
 
+        <button onClick={() => navigate(createPageUrl('Market') + `?session_id=${sessionId}&character_id=${character?.id}`)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
+          style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(200,150,20,0.2)', color: 'rgba(240,192,64,0.6)' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.5)'; e.currentTarget.style.color = '#f0c040'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(200,150,20,0.2)'; e.currentTarget.style.color = 'rgba(240,192,64,0.6)'; }}>
+          <ShoppingBag className="w-3.5 h-3.5" /> Market
+        </button>
+
         <button onClick={() => navigate(createPageUrl('WorldMap') + `?session_id=${sessionId}&character_id=${character?.id}`)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
           style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(140,60,220,0.2)', color: 'rgba(192,132,252,0.6)' }}
