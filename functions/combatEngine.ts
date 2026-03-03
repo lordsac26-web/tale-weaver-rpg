@@ -131,10 +131,169 @@ Deno.serve(async (req) => {
       };
       const spellAbility = spellAbilityMap[(character.class || '').toLowerCase()] || 'intelligence';
       const spellStatMod = statMod(character[spellAbility]);
-      attackMod = spellStatMod + (character.proficiency_bonus || 2);
+      const profBonus = character.proficiency_bonus || 2;
+      const spellSaveDC = 8 + spellStatMod + profBonus;
+      const spellAttackBonus = spellStatMod + profBonus;
+
+      attackMod = spellAttackBonus;
       damageDice = spell.damage_dice || '2d6';
-      damageBonus = spellStatMod;
-      attackType = 'spell';
+      damageBonus = 0;
+      attackType = spell.attack_type || 'ranged_spell_attack';
+
+      // Handle upcast damage bonus (each slot level above base adds dice)
+      const slotLevel = spell.slot_level || spell.base_level || 1;
+      const baseLevel = spell.base_level || 1;
+      const upcasting = slotLevel > baseLevel;
+
+      // Use slot on cast (track in character spell_slots)
+      if (spell.slot_level && spell.slot_level > 0) {
+        const slotsKey = `level_${spell.slot_level}`;
+        const currentUsed = (character.spell_slots || {})[slotsKey] || 0;
+        const maxSlots = (() => {
+          const SLOTS = {
+            Wizard:[2,0,0,0,0],[2,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+          };
+          return 99; // simplified: we'll track usage, DB holds max
+        })();
+        await base44.asServiceRole.entities.Character.update(character_id, {
+          spell_slots: { ...(character.spell_slots || {}), [slotsKey]: currentUsed + 1 }
+        });
+      }
+
+      // === UTILITY / BUFF spells ===
+      if (spell.is_utility) {
+        const utilEntry = {
+          round: combatLog.round, actor: character.name, action: 'spell', target: target.name,
+          hit: null, text: `${character.name} casts ${spell.name}!`,
+          spell_name: spell.name, is_utility: true
+        };
+        const updatedLog = [...(combatLog.log_entries || []), utilEntry];
+        const actionsPerTurn2 = getActionsPerTurn(character);
+        const currentActionsUsed2 = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
+        const actionsRemaining2 = actionsPerTurn2 - currentActionsUsed2;
+        let nextIndex2 = combatLog.current_turn_index;
+        let nextRound2 = combatLog.round;
+        let newWorldState2 = { ...(combatLog.world_state || {}), actions_used_this_turn: currentActionsUsed2 };
+        if (actionsRemaining2 <= 0) {
+          nextIndex2 = (combatLog.current_turn_index + 1) % combatants.length;
+          if (nextIndex2 === 0) nextRound2 += 1;
+          let safety2 = 0;
+          while (!combatants[nextIndex2]?.is_conscious && safety2 < combatants.length) {
+            nextIndex2 = (nextIndex2 + 1) % combatants.length;
+            if (nextIndex2 === 0) nextRound2 += 1;
+            safety2++;
+          }
+          newWorldState2.actions_used_this_turn = 0;
+        }
+        await base44.asServiceRole.entities.CombatLog.update(combat_id, {
+          log_entries: updatedLog, current_turn_index: nextIndex2, round: nextRound2, world_state: newWorldState2
+        });
+        return Response.json({ hit: null, damage: 0, log_entry: utilEntry, result: 'ongoing', combat_ended: false, actions_remaining: actionsRemaining2, next_turn_index: nextIndex2 });
+      }
+
+      // === HEALING spells ===
+      if (spell.attack_type === 'healing' && spell.heal_dice) {
+        const hdMatch = (spell.heal_dice || '1d8').match(/^(\d+)d(\d+)$/);
+        let healAmt = 0;
+        if (hdMatch) {
+          const numD = parseInt(hdMatch[1]);
+          const sides2 = parseInt(hdMatch[2]);
+          for (let i = 0; i < numD; i++) healAmt += rollDice(sides2);
+        }
+        healAmt += spellStatMod;
+        const player2 = combatants.find(c => c.type === 'player');
+        if (player2) {
+          player2.hp_current = Math.min(player2.hp_max, player2.hp_current + healAmt);
+          await base44.asServiceRole.entities.Character.update(character_id, { hp_current: player2.hp_current });
+        }
+        const healEntry = {
+          round: combatLog.round, actor: character.name, action: 'spell', target: character.name,
+          hit: true, text: `${character.name} casts ${spell.name}! Restores ${healAmt} HP.`,
+          spell_name: spell.name, heal_amount: healAmt
+        };
+        const updatedCombatants2 = combatants.map(c => c.type === 'player' ? player2 : c);
+        const actionsPerTurn3 = getActionsPerTurn(character);
+        const actionsUsed3 = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
+        const actionsRem3 = actionsPerTurn3 - actionsUsed3;
+        let ni3 = combatLog.current_turn_index;
+        let nr3 = combatLog.round;
+        let ws3 = { ...(combatLog.world_state || {}), actions_used_this_turn: actionsUsed3 };
+        if (actionsRem3 <= 0) {
+          ni3 = (combatLog.current_turn_index + 1) % updatedCombatants2.length;
+          if (ni3 === 0) nr3++;
+          ws3.actions_used_this_turn = 0;
+        }
+        await base44.asServiceRole.entities.CombatLog.update(combat_id, {
+          combatants: updatedCombatants2, log_entries: [...(combatLog.log_entries || []), healEntry],
+          current_turn_index: ni3, round: nr3, world_state: ws3
+        });
+        return Response.json({ hit: true, damage: 0, heal_amount: healAmt, log_entry: healEntry, result: 'ongoing', combat_ended: false, actions_remaining: actionsRem3, next_turn_index: ni3 });
+      }
+
+      // === SAVING THROW spells ===
+      if (spell.attack_type === 'saving_throw' && spell.save_type) {
+        const saveStatMap = { strength: character.strength, dexterity: target.dexterity || 10, constitution: target.constitution || 10, wisdom: target.wisdom || 10, intelligence: target.intelligence || 10, charisma: target.charisma || 10 };
+        const targetSaveStat = target[spell.save_type] || 10;
+        const targetSaveMod = statMod(targetSaveStat);
+        const saveRoll = Math.floor(Math.random() * 20) + 1;
+        const saveTotal = saveRoll + targetSaveMod;
+        const saveFailed = saveTotal < spellSaveDC;
+
+        const dMatch2 = (damageDice).match(/^(\d+)d(\d+)$/);
+        let dmg2 = 0;
+        if (dMatch2) {
+          for (let i = 0; i < parseInt(dMatch2[1]); i++) dmg2 += rollDice(parseInt(dMatch2[2]));
+        }
+        const finalDmg = saveFailed ? dmg2 : Math.floor(dmg2 / 2);
+        if (finalDmg > 0) {
+          target.hp_current = Math.max(0, target.hp_current - finalDmg);
+          if (target.hp_current === 0) target.is_conscious = false;
+        }
+
+        const saveEntry = {
+          round: combatLog.round, actor: character.name, action: 'spell', target: target.name,
+          hit: saveFailed, spell_name: spell.name,
+          text: `${character.name} casts ${spell.name}! DC${spellSaveDC} ${spell.save_type} save: ${target.name} rolled ${saveTotal} — ${saveFailed ? 'FAILED' : 'success'}. Takes ${finalDmg} ${spell.damage_type || ''} damage.${target.hp_current === 0 ? ` ${target.name} falls!` : ''}`
+        };
+
+        const updatedC = combatants.map(c => c.id === target_id ? target : c);
+        const allDead = updatedC.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
+        const playerDead2 = updatedC.find(c => c.type === 'player')?.is_conscious === false;
+        let result2 = 'ongoing';
+        if (allDead) result2 = 'victory';
+        if (playerDead2) result2 = 'defeat';
+
+        const apt = getActionsPerTurn(character);
+        const acu = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
+        const ar2 = apt - acu;
+        let ni = combatLog.current_turn_index;
+        let nr = combatLog.round;
+        let ws = { ...(combatLog.world_state || {}), actions_used_this_turn: acu };
+        if (result2 !== 'ongoing' || ar2 <= 0) {
+          if (result2 === 'ongoing') {
+            ni = (combatLog.current_turn_index + 1) % updatedC.length;
+            if (ni === 0) nr++;
+            let s = 0;
+            while (!updatedC[ni]?.is_conscious && s < updatedC.length) { ni = (ni + 1) % updatedC.length; if (ni === 0) nr++; s++; }
+          }
+          ws.actions_used_this_turn = 0;
+        }
+        await base44.asServiceRole.entities.CombatLog.update(combat_id, {
+          combatants: updatedC, log_entries: [...(combatLog.log_entries || []), saveEntry],
+          current_turn_index: ni, round: nr, world_state: ws, is_active: result2 === 'ongoing', result: result2
+        });
+        if (result2 !== 'ongoing') {
+          await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
+          if (result2 === 'victory') {
+            const totalXP2 = updatedC.filter(c => c.type === 'enemy').reduce((s2, e) => s2 + (e.xp || 0), 0);
+            const ch2 = (await base44.asServiceRole.entities.Character.filter({ id: character_id }))[0];
+            await base44.asServiceRole.entities.Character.update(character_id, { xp: (ch2.xp || 0) + totalXP2 });
+          }
+        }
+        return Response.json({ hit: saveFailed, damage: finalDmg, log_entry: saveEntry, result: result2, combat_ended: result2 !== 'ongoing', actions_remaining: Math.max(0, ar2), next_turn_index: ni });
+      }
+
+      // Fall through to normal ranged/melee spell attack
     } else if (weapon) {
       attackMod = statMod(character.strength) + character.proficiency_bonus + (weapon.attack_bonus || 0);
       damageBonus = statMod(character.strength) + (weapon.damage_bonus || 0);
