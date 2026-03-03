@@ -31,42 +31,40 @@ function CurrencyPanel({ character, onUpdate }) {
   const save = () => { onUpdate(values); setEditing(false); };
 
   return (
-    <div className="bg-slate-800/40 border border-amber-700/20 rounded-xl p-3 mb-4">
+    <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(180,140,90,0.18)' }}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-amber-400/80 text-xs uppercase tracking-widest">Currency</span>
+        <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(201,169,110,0.5)', fontSize: '0.65rem' }}>TREASURY</span>
         <div className="flex gap-2">
           {editing ? (
             <>
-              <button onClick={convertAll} className="text-xs text-blue-400 hover:text-blue-300">Auto-convert</button>
-              <button onClick={save} className="text-xs text-green-400 hover:text-green-300">Save</button>
-              <button onClick={() => { setValues({ gold: character.gold||0, silver: character.silver||0, copper: character.copper||0 }); setEditing(false); }} className="text-xs text-slate-500 hover:text-slate-300">Cancel</button>
+              <button onClick={convertAll} className="text-xs font-fantasy transition-colors" style={{ color: '#93c5fd' }}>Convert</button>
+              <button onClick={save} className="text-xs font-fantasy transition-colors" style={{ color: '#86efac' }}>Save</button>
+              <button onClick={() => { setValues({ gold: character.gold||0, silver: character.silver||0, copper: character.copper||0 }); setEditing(false); }} className="text-xs font-fantasy" style={{ color: 'rgba(180,140,90,0.4)' }}>Cancel</button>
             </>
           ) : (
-            <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-300">Edit</button>
+            <button onClick={() => setEditing(true)} className="text-xs font-fantasy transition-colors" style={{ color: 'rgba(201,169,110,0.4)' }}>Edit</button>
           )}
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        {[{ key: 'gold', label: 'Gold (GP)', color: 'text-yellow-400', bg: 'bg-yellow-900/10 border-yellow-700/30' },
-          { key: 'silver', label: 'Silver (SP)', color: 'text-slate-300', bg: 'bg-slate-700/20 border-slate-600/30' },
-          { key: 'copper', label: 'Copper (CP)', color: 'text-orange-400', bg: 'bg-orange-900/10 border-orange-700/30' }
-        ].map(({ key, label, color, bg }) => (
-          <div key={key} className={`border rounded-lg p-2 text-center ${bg}`}>
-            <div className="text-xs text-slate-500 mb-0.5">{label}</div>
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { key: 'gold', label: 'Gold', color: '#f0c040', bg: 'rgba(60,40,5,0.5)', border: 'rgba(201,169,110,0.25)' },
+          { key: 'silver', label: 'Silver', color: '#e2e8f0', bg: 'rgba(30,30,40,0.5)', border: 'rgba(150,160,180,0.2)' },
+          { key: 'copper', label: 'Copper', color: '#fb923c', bg: 'rgba(40,20,5,0.5)', border: 'rgba(180,80,30,0.25)' }
+        ].map(({ key, label, color, bg, border }) => (
+          <div key={key} className="rounded-lg p-2 text-center" style={{ background: bg, border: `1px solid ${border}` }}>
+            <div className="text-xs mb-0.5" style={{ color: 'rgba(180,150,100,0.45)', fontFamily: 'EB Garamond, serif' }}>{label}</div>
             {editing ? (
               <input type="number" min="0" value={values[key]}
                 onChange={e => setValues(v => ({ ...v, [key]: parseInt(e.target.value) || 0 }))}
-                className="w-full text-center bg-transparent outline-none font-bold text-lg focus:ring-0"
-                style={{ color: 'inherit' }}
+                className="w-full text-center bg-transparent outline-none font-fantasy font-bold text-base"
+                style={{ color }}
               />
             ) : (
-              <div className={`font-bold text-lg ${color}`}>{values[key] || 0}</div>
+              <div className="font-fantasy font-bold text-base" style={{ color }}>{values[key] || 0}</div>
             )}
           </div>
         ))}
-      </div>
-      <div className="mt-2 text-xs text-slate-600 text-center">
-        Total value: {Math.floor(((values.gold||0)*1000 + (values.silver||0)*100 + (values.copper||0)) / 1000)}gp {Math.floor((((values.gold||0)*1000 + (values.silver||0)*100 + (values.copper||0)) % 1000) / 100)}sp {((values.gold||0)*1000 + (values.silver||0)*100 + (values.copper||0)) % 100}cp
       </div>
     </div>
   );
