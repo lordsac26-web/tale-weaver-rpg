@@ -179,7 +179,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
               )}
 
               {/* Attack button */}
-              <button onClick={handleAction} disabled={!canAct || loading}
+              <button onClick={handleAction} disabled={!canAct || loading || actionsRemaining === 0}
                 className={`w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
                   canAct ? 'bg-red-800/70 hover:bg-red-700 border border-red-600/50 text-red-200' : 'bg-slate-800/40 border border-slate-700/30 text-slate-500 cursor-not-allowed'
                 }`}>
