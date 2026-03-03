@@ -165,7 +165,10 @@ export default function StepAbilityScores({ character, set, rollAll, pointBuy })
       {/* Racial Bonus Preview */}
       {character.race && (
         <div className="text-xs text-slate-500 bg-slate-800/30 rounded-lg px-3 py-2">
-          Racial bonuses will be applied on save: {Object.entries(require('@/components/game/gameData').RACES[character.race]?.stat_bonuses || {}).map(([s, v]) => `${STAT_LABELS[s]} ${v > 0 ? '+' : ''}${v}`).join(', ')}
+          Racial bonuses applied on save: {Object.entries(CLASSES[character.class]?.primary_stat ? {} : {}).length === 0
+            ? Object.entries(Object.fromEntries(STATS.map(s => [s, character.race === 'Human' ? 1 : s === 'dexterity' && character.race === 'Elf' ? 2 : 0]).filter(([,v]) => v > 0)))
+                .map(([s, v]) => `${STAT_LABELS[s]} +${v}`).join(', ') || 'See race bonuses above'
+            : 'See race bonuses above'}
         </div>
       )}
     </div>
