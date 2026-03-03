@@ -231,6 +231,15 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
               </div>
             ) : (
               <div className="space-y-2">
+                {/* Identification service for Alchemist/Scribe */}
+                {(vendor.type === 'alchemist' || vendor.type === 'scribe') && (
+                  <div className="p-3 rounded-lg mb-2" style={{ background: 'rgba(80,30,120,0.3)', border: '1px solid rgba(140,80,220,0.3)' }}>
+                    <div className="text-xs font-fantasy mb-2" style={{ color: '#d4b3ff' }}>✨ Identification Service Available</div>
+                    <div className="text-xs" style={{ color: 'rgba(201,169,110,0.6)', fontFamily: 'EB Garamond, serif' }}>
+                      Identify magic items for a fee based on rarity.
+                    </div>
+                  </div>
+                )}
                 {/* Rest option first for inns */}
                 {shopItems
                   .sort((a, b) => {
