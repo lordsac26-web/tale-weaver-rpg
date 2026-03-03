@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
-import { User, Loader2, ChevronLeft, Dices } from 'lucide-react';
+import { User, Loader2, ChevronLeft, Dices, Swords } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import HUD from '@/components/game/HUD';
 import StoryPanel from '@/components/game/StoryPanel';
 import CombatPanel from '@/components/game/CombatPanel';
@@ -37,19 +38,14 @@ export default function Game() {
     const chars = await base44.entities.Character.filter({ id: sess.character_id });
     setCharacter(chars[0] || null);
 
-    // Restore story log to narrative
     if (sess.story_log?.length > 0 && narrative.length === 0) {
       const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: e.text }));
       setNarrative(restored);
       setStarted(true);
-      // Restore the last set of choices so the player can continue
       const lastEntry = sess.story_log[sess.story_log.length - 1];
-      if (lastEntry?.choices?.length > 0) {
-        setChoices(lastEntry.choices);
-      }
+      if (lastEntry?.choices?.length > 0) setChoices(lastEntry.choices);
     }
 
-    // Load active combat
     if (sess.in_combat && sess.combat_state?.combat_id) {
       const logs = await base44.entities.CombatLog.filter({ id: sess.combat_state.combat_id });
       if (logs[0]?.is_active) setCombat(logs[0]);
@@ -75,16 +71,12 @@ export default function Game() {
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
     setChoices([]);
 
-    // If choice has a skill check, perform roll first
     if (choice.skill_check && choice.dc) {
       setStoryLoading(true);
       const rollResult = await base44.functions.invoke('rollDice', {
-        session_id: sessionId,
-        character_id: character?.id,
+        session_id: sessionId, character_id: character?.id,
         roll_type: choice.skill_check.toLowerCase().replace(/ /g, '_'),
-        dice: '1d20',
-        dc: choice.dc,
-        context: choice.text
+        dice: '1d20', dc: choice.dc, context: choice.text
       });
       const roll = rollResult.data;
       setNarrative(prev => [...prev, {
@@ -96,10 +88,7 @@ export default function Game() {
 
     setStoryLoading(true);
     const result = await base44.functions.invoke('generateStory', {
-      session_id: sessionId,
-      action: 'choice',
-      choice_index: choiceIndex,
-      custom_input: choice.text
+      session_id: sessionId, action: 'choice', choice_index: choiceIndex, custom_input: choice.text
     });
     const data = result.data;
 
@@ -125,9 +114,7 @@ export default function Game() {
     setChoices([]);
     setStoryLoading(true);
 
-    const result = await base44.functions.invoke('generateStory', {
-      session_id: sessionId, action: 'choice', custom_input: text
-    });
+    const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: text });
     const data = result.data;
     if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
     if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);
@@ -143,10 +130,7 @@ export default function Game() {
 
   const startCombat = async (enemies) => {
     const result = await base44.functions.invoke('combatEngine', {
-      action: 'start_combat',
-      session_id: sessionId,
-      character_id: character?.id,
-      payload: { enemies }
+      action: 'start_combat', session_id: sessionId, character_id: character?.id, payload: { enemies }
     });
     setCombat({ ...result.data, id: result.data.combat_id });
     await loadState();
@@ -162,24 +146,17 @@ export default function Game() {
     const spell = isSpell ? weaponOrSpell : null;
 
     const result = await base44.functions.invoke('combatEngine', {
-      action: 'player_attack',
-      session_id: sessionId,
-      combat_id: combatId,
-      character_id: character?.id,
-      payload: { target_id: targetId, weapon, spell }
+      action: 'player_attack', session_id: sessionId, combat_id: combatId,
+      character_id: character?.id, payload: { target_id: targetId, weapon, spell }
     });
 
     const data = result.data;
     setNarrative(prev => [...prev, {
-      type: 'roll_result',
-      text: data.log_entry?.text || 'Attack resolved.',
-      success: data.hit
+      type: 'roll_result', text: data.log_entry?.text || 'Attack resolved.', success: data.hit
     }]);
 
-    // Reload combat state after player attack (backend tracks multi-action turns)
     await reloadCombat(combatId);
 
-    // Show remaining actions if the player still has more
     if (data.actions_remaining > 0 && !data.combat_ended) {
       setNarrative(prev => [...prev, {
         type: 'roll_result',
@@ -202,7 +179,6 @@ export default function Game() {
       }
       setCombat(null);
     } else {
-      // Auto-process enemy turns (combat turn was already advanced server-side)
       await processEnemyTurns(combatId);
     }
     await loadState();
@@ -210,7 +186,6 @@ export default function Game() {
   };
 
   const processEnemyTurns = async (combatId) => {
-    // Process turns until it's the player's turn again
     let attempts = 0;
     while (attempts < 10) {
       attempts++;
@@ -222,19 +197,11 @@ export default function Game() {
 
       if (current?.type === 'enemy' && current?.is_conscious) {
         const result = await base44.functions.invoke('combatEngine', {
-          action: 'enemy_turn',
-          session_id: sessionId,
-          combat_id: combatId,
-          character_id: character?.id,
-          payload: {}
+          action: 'enemy_turn', session_id: sessionId, combat_id: combatId, character_id: character?.id, payload: {}
         });
         const data = result.data;
         if (data.log_entry) {
-          setNarrative(prev => [...prev, {
-            type: 'roll_result',
-            text: data.log_entry.text,
-            success: !data.log_entry.hit
-          }]);
+          setNarrative(prev => [...prev, { type: 'roll_result', text: data.log_entry.text, success: !data.log_entry.hit }]);
         }
         if (data.player_dead) {
           setNarrative(prev => [...prev, { type: 'narration', text: '💀 You have fallen in battle...' }]);
@@ -244,7 +211,7 @@ export default function Game() {
         await reloadCombat(combatId);
         await loadState();
       } else {
-        const result = await base44.functions.invoke('combatEngine', {
+        await base44.functions.invoke('combatEngine', {
           action: 'next_turn', session_id: sessionId, combat_id: combatId, character_id: character?.id, payload: {}
         });
         await reloadCombat(combatId);
@@ -290,29 +257,72 @@ export default function Game() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-      <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#0d0a07' }}>
+      <div className="text-center">
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+          style={{ border: '2px solid rgba(201,169,110,0.3)', boxShadow: '0 0 30px rgba(201,169,110,0.1)' }}>
+          <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#c9a96e' }} />
+        </div>
+        <p className="font-fantasy text-sm tracking-widest" style={{ color: 'rgba(201,169,110,0.5)' }}>Preparing your world...</p>
+      </div>
     </div>
   );
 
   const inCombat = session?.in_combat && combat;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-amber-100 flex flex-col">
+    <div className="min-h-screen flex flex-col parchment-bg" style={{ color: '#e8d5b7' }}>
       {/* HUD */}
       <HUD character={character} session={session} />
 
       {/* Toolbar */}
-      <div className="bg-slate-900/80 border-b border-slate-700/40 px-4 py-2 flex items-center gap-3">
-        <button onClick={() => navigate(createPageUrl('Home'))} className="text-slate-400 hover:text-slate-200">
+      <div className="flex items-center gap-3 px-4 py-2 flex-shrink-0"
+        style={{
+          background: 'rgba(8,5,2,0.9)',
+          borderBottom: '1px solid rgba(180,140,90,0.15)',
+          backdropFilter: 'blur(8px)',
+        }}>
+        <button onClick={() => navigate(createPageUrl('Home'))}
+          className="p-1.5 rounded-lg transition-all"
+          style={{ color: 'rgba(201,169,110,0.5)' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#c9a96e'}
+          onMouseLeave={e => e.currentTarget.style.color = 'rgba(201,169,110,0.5)'}>
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <span className="text-slate-400 text-sm flex-1">{session?.title || 'Adventure'}</span>
-        <button onClick={() => setShowDiceRoller(v => !v)} className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-sm transition-all ${showDiceRoller ? 'bg-amber-900/40 border-amber-600/60 text-amber-300' : 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-700/50 text-amber-300'}`}>
+        <span className="text-sm flex-1 italic" style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'IM Fell English, serif' }}>
+          {session?.title || 'Adventure'}
+        </span>
+
+        {inCombat && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full font-fantasy text-xs badge-blood combat-active">
+            <Swords className="w-3 h-3" /> In Combat
+          </div>
+        )}
+
+        <button onClick={() => setShowDiceRoller(v => !v)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
+          style={showDiceRoller ? {
+            background: 'rgba(80,50,10,0.7)',
+            border: '1px solid rgba(201,169,110,0.5)',
+            color: '#f0c040',
+          } : {
+            background: 'rgba(20,13,5,0.7)',
+            border: '1px solid rgba(180,140,90,0.2)',
+            color: 'rgba(201,169,110,0.6)',
+          }}>
           <Dices className="w-3.5 h-3.5" /> Dice
         </button>
-        <button onClick={() => setShowCharSheet(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/50 rounded-lg text-sm text-amber-300 transition-all">
-          <User className="w-3.5 h-3.5" /> Character
+
+        <button onClick={() => setShowCharSheet(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
+          style={{
+            background: 'rgba(20,13,5,0.7)',
+            border: '1px solid rgba(180,140,90,0.2)',
+            color: 'rgba(201,169,110,0.6)',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.45)'; e.currentTarget.style.color = '#c9a96e'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,140,90,0.2)'; e.currentTarget.style.color = 'rgba(201,169,110,0.6)'; }}>
+          <User className="w-3.5 h-3.5" /> Sheet
         </button>
       </div>
 
@@ -320,7 +330,7 @@ export default function Game() {
       <div className="flex-1 flex overflow-hidden">
         {inCombat ? (
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden">
-            <div className="overflow-hidden flex flex-col border-r border-slate-700/50">
+            <div className="overflow-hidden flex flex-col" style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
               <StoryPanel narrative={narrative} choices={[]} loading={storyLoading}
                 onChoice={() => {}} customInput={customInput}
                 setCustomInput={setCustomInput} onCustomSubmit={() => {}} />
@@ -337,38 +347,65 @@ export default function Game() {
           <div className="flex-1 overflow-hidden">
             {!started ? (
               <div className="flex items-center justify-center h-full p-8">
-                <div className="text-center max-w-lg">
-                  <div className="text-6xl mb-6">⚔️</div>
-                  <h2 className="text-3xl font-bold text-amber-300 mb-4">Your Adventure Awaits</h2>
-                  <p className="text-amber-400/60 mb-8 leading-relaxed">
+                <motion.div
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.7, ease: 'easeOut' }}
+                  className="text-center max-w-lg">
+                  <motion.div
+                    animate={{ rotate: [0, 3, -3, 0], filter: ['drop-shadow(0 0 20px rgba(201,169,110,0.4))', 'drop-shadow(0 0 40px rgba(201,169,110,0.8))', 'drop-shadow(0 0 20px rgba(201,169,110,0.4))'] }}
+                    transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+                    className="text-7xl mb-6">⚔️</motion.div>
+                  <h2 className="text-3xl font-fantasy font-bold mb-5 text-glow-gold" style={{ color: '#f0c040' }}>
+                    Your Adventure Awaits
+                  </h2>
+                  <p className="mb-8 leading-relaxed" style={{ color: 'rgba(232,213,183,0.65)', fontFamily: 'IM Fell English, serif', fontSize: '1.1rem' }}>
                     {session?.story_seed || 'The realm is full of mystery and danger. Your legend begins now.'}
                   </p>
-                  <button onClick={startAdventure} disabled={storyLoading}
-                    className="px-8 py-4 bg-gradient-to-r from-amber-700 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-white font-bold rounded-2xl text-lg transition-all flex items-center gap-3 mx-auto">
+                  <motion.button onClick={startAdventure} disabled={storyLoading}
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="px-10 py-4 rounded-2xl text-base btn-fantasy flex items-center gap-3 mx-auto disabled:opacity-50"
+                    style={{ fontSize: '1rem', letterSpacing: '0.1em' }}>
                     {storyLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>🎲</span>}
                     {storyLoading ? 'Weaving your world...' : 'Begin the Story'}
-                  </button>
-                </div>
+                  </motion.button>
+                </motion.div>
               </div>
             ) : (
               <StoryPanel narrative={narrative} choices={choices} loading={storyLoading}
-                onChoice={handleChoice}
-                customInput={customInput} setCustomInput={setCustomInput}
-                onCustomSubmit={handleCustomInput} />
+                onChoice={handleChoice} customInput={customInput}
+                setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} />
             )}
           </div>
         )}
       </div>
 
       {/* Dice Roller Side Panel */}
-      {showDiceRoller && (
-        <div className="fixed top-0 right-0 h-full w-80 z-40 shadow-2xl border-l border-slate-700/60 overflow-y-auto bg-slate-900">
-          <DiceRoller character={character} />
-        </div>
-      )}
+      <AnimatePresence>
+        {showDiceRoller && (
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className="fixed top-0 right-0 h-full w-80 z-40 shadow-2xl overflow-y-auto"
+            style={{ borderLeft: '1px solid rgba(180,140,90,0.2)', background: 'rgba(8,5,2,0.97)' }}>
+            <button onClick={() => setShowDiceRoller(false)}
+              className="absolute top-3 left-3 p-1.5 rounded-lg z-10 transition-colors"
+              style={{ color: 'rgba(201,169,110,0.4)', background: 'rgba(20,13,5,0.7)' }}>
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <DiceRoller character={character} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Character Sheet Modal */}
-      {showCharSheet && <CharacterSheet character={character} onClose={() => setShowCharSheet(false)} />}
+      {showCharSheet && (
+        <CharacterSheet character={character} onClose={() => setShowCharSheet(false)}
+          onCharacterUpdate={setCharacter} />
+      )}
     </div>
   );
 }
