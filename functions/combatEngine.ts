@@ -178,9 +178,26 @@ Deno.serve(async (req) => {
     if (allEnemiesDead) result = 'victory';
     if (playerDead) result = 'defeat';
 
+    // Advance turn after player attacks (only if combat is still ongoing)
+    let nextIndex = combatLog.current_turn_index;
+    let nextRound = combatLog.round;
+    if (result === 'ongoing') {
+      nextIndex = (combatLog.current_turn_index + 1) % updatedCombatants.length;
+      if (nextIndex === 0) nextRound += 1;
+      // Skip dead combatants
+      let safety = 0;
+      while (!updatedCombatants[nextIndex]?.is_conscious && safety < updatedCombatants.length) {
+        nextIndex = (nextIndex + 1) % updatedCombatants.length;
+        if (nextIndex === 0) nextRound += 1;
+        safety++;
+      }
+    }
+
     await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants,
       log_entries: updatedLog,
+      current_turn_index: nextIndex,
+      round: nextRound,
       is_active: result === 'ongoing',
       result
     });
@@ -195,7 +212,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return Response.json({ hit, damage, damage_rolls: damageRolls, attack_roll: totalAttack, log_entry: logEntry, target_hp: target.hp_current, result, combat_ended: result !== 'ongoing' });
+    return Response.json({ hit, damage, damage_rolls: damageRolls, attack_roll: totalAttack, log_entry: logEntry, target_hp: target.hp_current, result, combat_ended: result !== 'ongoing', next_turn_index: nextIndex });
   }
 
   if (action === 'enemy_turn') {
