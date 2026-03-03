@@ -108,9 +108,16 @@ Deno.serve(async (req) => {
     let isMiss = attackRoll === 1;
 
     if (spell) {
-      attackMod = statMod(character.intelligence) + character.proficiency_bonus;
+      const spellAbilityMap = {
+        wizard: 'intelligence', eldritch_knight: 'intelligence', arcane_trickster: 'intelligence',
+        cleric: 'wisdom', druid: 'wisdom', ranger: 'wisdom',
+        bard: 'charisma', paladin: 'charisma', sorcerer: 'charisma', warlock: 'charisma'
+      };
+      const spellAbility = spellAbilityMap[(character.class || '').toLowerCase()] || 'intelligence';
+      const spellStatMod = statMod(character[spellAbility]);
+      attackMod = spellStatMod + (character.proficiency_bonus || 2);
       damageDice = spell.damage_dice || '2d6';
-      damageBonus = statMod(character.intelligence);
+      damageBonus = spellStatMod;
       attackType = 'spell';
     } else if (weapon) {
       attackMod = statMod(character.strength) + character.proficiency_bonus + (weapon.attack_bonus || 0);
