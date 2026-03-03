@@ -360,6 +360,13 @@ export default function Game() {
         )}
       </div>
 
+      {/* Dice Roller Side Panel */}
+      {showDiceRoller && (
+        <div className="fixed top-0 right-0 h-full w-80 z-40 shadow-2xl border-l border-slate-700/60 overflow-y-auto bg-slate-900">
+          <DiceRoller character={character} />
+        </div>
+      )}
+
       {/* Character Sheet Modal */}
       {showCharSheet && <CharacterSheet character={character} onClose={() => setShowCharSheet(false)} />}
     </div>
