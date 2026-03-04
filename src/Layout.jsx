@@ -2,343 +2,383 @@ import React from 'react';
 
 export default function Layout({ children, currentPageName }) {
   return (
-    <div className="min-h-screen" style={{ background: '#0d0a07' }}>
+    <div className="min-h-screen tavern-root">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;900&family=IM+Fell+English:ital@0;1&family=Cinzel+Decorative:wght@400;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');
 
         :root {
-          --parchment: #e8d5b7;
-          --parchment-dark: #c9a96e;
-          --gold: #c9a96e;
-          --gold-bright: #f0c040;
-          --gold-glow: rgba(201,169,110,0.4);
-          --blood: #8b1a1a;
-          --blood-bright: #c0392b;
-          --arcane: #7c3aed;
-          --arcane-glow: rgba(124,58,237,0.3);
-          --dark-bg: #0d0a07;
-          --panel-bg: rgba(20,14,8,0.85);
-          --border-gold: rgba(180,140,90,0.35);
-          --border-gold-bright: rgba(201,169,110,0.6);
+          /* Tavern Palette */
+          --wood-deep:    #1a0e06;
+          --wood-dark:    #2a1608;
+          --wood-mid:     #3d2010;
+          --wood-light:   #5c3318;
+          --wood-plank:   #7a4520;
+
+          --brass:        #b87333;
+          --brass-bright: #d4955a;
+          --brass-gold:   #e8b86d;
+          --brass-shine:  #f5d08a;
+          --brass-glow:   rgba(184,115,51,0.5);
+
+          --parchment:    #f0dfc0;
+          --parchment-mid:#dcc49a;
+          --parchment-dim:#b89a72;
+
+          --ember:        #c0452a;
+          --ember-glow:   rgba(192,69,42,0.4);
+          --hearth:       #e8732a;
+
+          --arcane:       #7c3aed;
+          --arcane-glow:  rgba(124,58,237,0.35);
+
+          --text-bright:  #f5dfc8;
+          --text-mid:     #d4b896;
+          --text-dim:     #9a7a58;
         }
 
-        body {
-          background: #0d0a07;
-          color: #e8d5b7;
+        .tavern-root {
+          background-color: var(--wood-deep);
+          color: var(--text-bright);
         }
 
-        .font-fantasy { font-family: 'Cinzel', 'Georgia', serif; }
+        body { background: var(--wood-deep); color: var(--text-bright); }
+
+        /* ── Fonts ── */
+        .font-fantasy      { font-family: 'Cinzel', 'Georgia', serif; }
         .font-fantasy-deco { font-family: 'Cinzel Decorative', 'Georgia', serif; }
-        .font-serif { font-family: 'IM Fell English', 'Georgia', serif; }
-        .font-body { font-family: 'EB Garamond', 'Georgia', serif; }
+        .font-serif        { font-family: 'IM Fell English', 'Georgia', serif; }
+        .font-body         { font-family: 'EB Garamond', 'Georgia', serif; }
 
-        /* Parchment texture overlay */
+        /* ── Tavern background ── */
         .parchment-bg {
-          background-color: #0d0a07;
+          background-color: var(--wood-deep);
           background-image:
-            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E"),
-            radial-gradient(ellipse at 20% 50%, rgba(120,60,0,0.08) 0%, transparent 60%),
-            radial-gradient(ellipse at 80% 20%, rgba(160,80,0,0.06) 0%, transparent 50%),
-            radial-gradient(ellipse at 60% 80%, rgba(80,30,120,0.05) 0%, transparent 50%);
+            /* Wood grain lines */
+            repeating-linear-gradient(
+              90deg,
+              transparent,
+              transparent 38px,
+              rgba(0,0,0,0.07) 38px,
+              rgba(0,0,0,0.07) 40px
+            ),
+            repeating-linear-gradient(
+              180deg,
+              transparent,
+              transparent 90px,
+              rgba(255,160,60,0.015) 90px,
+              rgba(255,160,60,0.015) 92px
+            ),
+            radial-gradient(ellipse at 20% 50%, rgba(100,45,8,0.18) 0%, transparent 60%),
+            radial-gradient(ellipse at 80% 15%, rgba(140,65,10,0.12) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 85%, rgba(80,30,5,0.14) 0%, transparent 55%);
         }
 
-        /* Glass panels */
+        /* ── Tavern panels ── */
         .glass-panel {
-          background: rgba(20,13,6,0.82);
-          backdrop-filter: blur(14px) saturate(1.3);
-          -webkit-backdrop-filter: blur(14px) saturate(1.3);
-          border: 1px solid var(--border-gold);
+          background: linear-gradient(160deg, rgba(45,22,8,0.92), rgba(28,13,4,0.95));
+          border: 1px solid rgba(184,115,51,0.35);
           box-shadow:
-            0 0 0 1px rgba(0,0,0,0.5),
-            inset 0 1px 0 rgba(201,169,110,0.1),
-            0 8px 32px rgba(0,0,0,0.6);
+            0 0 0 1px rgba(0,0,0,0.6),
+            inset 0 1px 0 rgba(232,184,109,0.12),
+            inset 0 -1px 0 rgba(0,0,0,0.4),
+            0 8px 32px rgba(0,0,0,0.7);
         }
 
         .glass-panel-light {
-          background: rgba(30,20,10,0.72);
-          backdrop-filter: blur(12px) saturate(1.2);
-          -webkit-backdrop-filter: blur(12px) saturate(1.2);
-          border: 1px solid rgba(180,140,90,0.25);
+          background: linear-gradient(160deg, rgba(55,28,10,0.85), rgba(38,18,6,0.9));
+          border: 1px solid rgba(184,115,51,0.22);
           box-shadow:
-            0 0 0 1px rgba(0,0,0,0.4),
-            inset 0 1px 0 rgba(201,169,110,0.08),
-            0 4px 16px rgba(0,0,0,0.5);
+            0 0 0 1px rgba(0,0,0,0.5),
+            inset 0 1px 0 rgba(232,184,109,0.08),
+            0 4px 16px rgba(0,0,0,0.6);
         }
 
-        /* Gold border glow effect */
+        /* ── Brass glow border ── */
         .border-glow-gold {
-          border-color: rgba(201,169,110,0.5) !important;
-          box-shadow: 0 0 12px rgba(201,169,110,0.15), inset 0 0 8px rgba(201,169,110,0.05);
+          border-color: rgba(212,149,90,0.6) !important;
+          box-shadow: 0 0 14px rgba(184,115,51,0.25), inset 0 0 8px rgba(184,115,51,0.06);
         }
 
-        /* Rune border decoration */
-        .rune-border {
-          position: relative;
-        }
+        /* ── Engraved border (replaces rune-border) ── */
+        .rune-border { position: relative; }
         .rune-border::before {
           content: '';
           position: absolute;
           inset: 0;
           border-radius: inherit;
           padding: 1px;
-          background: linear-gradient(135deg, rgba(201,169,110,0.5), rgba(100,60,20,0.2), rgba(201,169,110,0.4), rgba(80,40,120,0.3));
+          background: linear-gradient(135deg,
+            rgba(232,184,109,0.55),
+            rgba(140,70,20,0.15),
+            rgba(212,149,90,0.45),
+            rgba(90,45,10,0.2));
           -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
           -webkit-mask-composite: destination-out;
           mask-composite: exclude;
           pointer-events: none;
         }
 
-        /* Fantasy card hover */
+        /* ── Tavern card hover ── */
         .fantasy-card {
           transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
         }
         .fantasy-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 0 24px rgba(201,169,110,0.12), 0 8px 32px rgba(0,0,0,0.6);
-          border-color: rgba(201,169,110,0.5) !important;
+          transform: translateY(-3px);
+          box-shadow: 0 0 28px rgba(184,115,51,0.18), 0 10px 36px rgba(0,0,0,0.7);
+          border-color: rgba(212,149,90,0.55) !important;
         }
 
-        /* Fantasy button */
+        /* ── Brass button ── */
         .btn-fantasy {
-          background: linear-gradient(135deg, rgba(80,50,15,0.9), rgba(50,30,8,0.95));
-          border: 1px solid rgba(201,169,110,0.45);
+          background: linear-gradient(160deg, #5c3318, #3d2010);
+          border: 1px solid rgba(212,149,90,0.5);
           color: var(--parchment);
           font-family: 'Cinzel', serif;
-          letter-spacing: 0.05em;
-          text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 8px rgba(0,0,0,0.5);
+          letter-spacing: 0.06em;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+          box-shadow:
+            inset 0 1px 0 rgba(245,208,138,0.1),
+            inset 0 -1px 0 rgba(0,0,0,0.3),
+            0 3px 10px rgba(0,0,0,0.6);
           transition: all 0.2s ease;
         }
         .btn-fantasy:hover:not(:disabled) {
-          background: linear-gradient(135deg, rgba(100,65,20,0.95), rgba(70,45,10,0.98));
-          border-color: rgba(201,169,110,0.7);
-          box-shadow: 0 0 16px rgba(201,169,110,0.2), inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 12px rgba(0,0,0,0.6);
+          background: linear-gradient(160deg, #7a4520, #5c3318);
+          border-color: rgba(232,184,109,0.75);
+          box-shadow: 0 0 18px rgba(184,115,51,0.3), inset 0 1px 0 rgba(245,208,138,0.15), 0 4px 14px rgba(0,0,0,0.7);
           transform: translateY(-1px);
+          color: var(--brass-shine);
         }
         .btn-fantasy:active:not(:disabled) {
           transform: translateY(1px);
-          box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);
+          box-shadow: inset 0 3px 8px rgba(0,0,0,0.5);
         }
 
-        /* Blood/combat button */
+        /* ── Ember/combat button ── */
         .btn-combat {
-          background: linear-gradient(135deg, rgba(100,10,10,0.9), rgba(60,5,5,0.95));
-          border: 1px solid rgba(180,30,30,0.5);
-          color: #ffb3b3;
+          background: linear-gradient(160deg, rgba(120,20,10,0.92), rgba(70,8,4,0.97));
+          border: 1px solid rgba(200,60,40,0.5);
+          color: #ffcfb0;
           font-family: 'Cinzel', serif;
-          box-shadow: inset 0 1px 0 rgba(255,80,80,0.1), 0 2px 8px rgba(0,0,0,0.5);
+          box-shadow: inset 0 1px 0 rgba(255,100,60,0.1), 0 3px 10px rgba(0,0,0,0.6);
           transition: all 0.2s ease;
         }
         .btn-combat:hover:not(:disabled) {
-          background: linear-gradient(135deg, rgba(130,15,15,0.95), rgba(80,8,8,0.98));
-          border-color: rgba(220,50,50,0.7);
-          box-shadow: 0 0 16px rgba(180,30,30,0.25), 0 4px 12px rgba(0,0,0,0.6);
+          background: linear-gradient(160deg, rgba(155,28,12,0.96), rgba(90,10,5,0.99));
+          border-color: rgba(240,80,50,0.75);
+          box-shadow: 0 0 18px rgba(200,60,30,0.3), 0 4px 14px rgba(0,0,0,0.7);
           transform: translateY(-1px);
         }
 
-        /* Arcane/spell button */
+        /* ── Arcane button ── */
         .btn-arcane {
-          background: linear-gradient(135deg, rgba(60,20,100,0.9), rgba(40,10,70,0.95));
-          border: 1px solid rgba(140,80,220,0.45);
-          color: #d4b3ff;
+          background: linear-gradient(160deg, rgba(65,22,110,0.92), rgba(38,10,75,0.97));
+          border: 1px solid rgba(150,90,230,0.45);
+          color: #dfc8ff;
           font-family: 'Cinzel', serif;
-          box-shadow: inset 0 1px 0 rgba(200,150,255,0.1), 0 2px 8px rgba(0,0,0,0.5);
+          box-shadow: inset 0 1px 0 rgba(210,160,255,0.1), 0 3px 10px rgba(0,0,0,0.6);
           transition: all 0.2s ease;
         }
         .btn-arcane:hover:not(:disabled) {
-          border-color: rgba(180,120,255,0.65);
-          box-shadow: 0 0 16px rgba(130,60,220,0.25), 0 4px 12px rgba(0,0,0,0.6);
+          border-color: rgba(190,140,255,0.7);
+          box-shadow: 0 0 18px rgba(140,70,230,0.3), 0 4px 14px rgba(0,0,0,0.7);
           transform: translateY(-1px);
         }
 
-        /* Neumorphic inset elements */
+        /* ── Inset ── */
         .neuro-inset {
-          box-shadow: inset 3px 3px 7px rgba(0,0,0,0.7), inset -2px -2px 5px rgba(80,50,15,0.1);
-          background: rgba(12,8,3,0.6);
+          box-shadow: inset 3px 3px 8px rgba(0,0,0,0.75), inset -2px -2px 5px rgba(90,45,10,0.1);
+          background: rgba(10,5,2,0.65);
         }
 
-        /* Stat box */
+        /* ── Stat box ── */
         .stat-box {
-          background: rgba(15,10,5,0.8);
-          border: 1px solid rgba(180,140,90,0.2);
-          box-shadow: inset 0 2px 8px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.3);
+          background: linear-gradient(160deg, rgba(30,15,5,0.9), rgba(20,10,3,0.95));
+          border: 1px solid rgba(184,115,51,0.22);
+          box-shadow: inset 0 2px 8px rgba(0,0,0,0.65), 0 0 0 1px rgba(0,0,0,0.4);
           transition: all 0.2s ease;
         }
         .stat-box:hover {
-          border-color: rgba(201,169,110,0.4);
-          box-shadow: inset 0 2px 8px rgba(0,0,0,0.5), 0 0 12px rgba(201,169,110,0.08);
+          border-color: rgba(212,149,90,0.45);
+          box-shadow: inset 0 2px 8px rgba(0,0,0,0.55), 0 0 14px rgba(184,115,51,0.1);
         }
 
-        /* Gold text glow */
-        .text-glow-gold {
-          text-shadow: 0 0 20px rgba(201,169,110,0.6), 0 0 40px rgba(201,169,110,0.3);
-        }
+        /* ── Text glows ── */
+        .text-glow-gold   { text-shadow: 0 0 18px rgba(212,149,90,0.7), 0 0 35px rgba(184,115,51,0.35); }
+        .text-glow-blood  { text-shadow: 0 0 16px rgba(200,65,40,0.75), 0 0 32px rgba(180,35,20,0.4); }
+        .text-glow-arcane { text-shadow: 0 0 16px rgba(170,110,255,0.65), 0 0 32px rgba(130,65,225,0.35); }
 
-        /* Blood text glow */
-        .text-glow-blood {
-          text-shadow: 0 0 16px rgba(180,30,30,0.7), 0 0 32px rgba(180,30,30,0.4);
-        }
-
-        /* Arcane text glow */
-        .text-glow-arcane {
-          text-shadow: 0 0 16px rgba(160,100,255,0.6), 0 0 32px rgba(130,60,220,0.3);
-        }
-
-        /* HP bar gradient */
+        /* ── HP bars ── */
         .hp-bar-high { background: linear-gradient(90deg, #16a34a, #22c55e); }
-        .hp-bar-mid { background: linear-gradient(90deg, #b45309, #d97706); }
-        .hp-bar-low { background: linear-gradient(90deg, #7f1d1d, #dc2626); }
+        .hp-bar-mid  { background: linear-gradient(90deg, #b45309, #e8732a); }
+        .hp-bar-low  { background: linear-gradient(90deg, #7f1d1d, #dc2626); }
 
-        /* XP bar */
-        .xp-bar { background: linear-gradient(90deg, #78350f, #d97706, #f59e0b); }
+        /* ── XP bar ── */
+        .xp-bar { background: linear-gradient(90deg, #5c3318, #b87333, #e8b86d); }
 
-        /* Section divider */
+        /* ── Divider ── */
         .divider-rune {
-          border: none;
-          height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(201,169,110,0.35) 30%, rgba(201,169,110,0.35) 70%, transparent);
+          border: none; height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(212,149,90,0.45) 25%, rgba(232,184,109,0.5) 50%, rgba(212,149,90,0.45) 75%, transparent);
           position: relative;
         }
         .divider-rune::after {
-          content: '✦';
-          position: absolute;
-          left: 50%;
-          top: 50%;
+          content: '⚜';
+          position: absolute; left: 50%; top: 50%;
           transform: translate(-50%, -50%);
-          color: rgba(201,169,110,0.5);
-          font-size: 10px;
-          padding: 0 8px;
-          background: inherit;
+          color: rgba(212,149,90,0.65); font-size: 11px;
+          padding: 0 10px; background: var(--wood-deep);
         }
 
-        /* Scrollbar styling */
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(10,6,3,0.5); }
-        ::-webkit-scrollbar-thumb { background: rgba(100,65,25,0.8); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(140,90,35,0.9); }
-        * { scrollbar-width: thin; scrollbar-color: rgba(100,65,25,0.8) rgba(10,6,3,0.5); }
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(8,4,2,0.6); }
+        ::-webkit-scrollbar-thumb { background: rgba(120,65,22,0.85); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(160,88,30,0.95); }
+        * { scrollbar-width: thin; scrollbar-color: rgba(120,65,22,0.85) rgba(8,4,2,0.6); }
 
-        /* Input fields */
+        /* ── Inputs ── */
         .input-fantasy {
-          background: rgba(10,6,3,0.7);
-          border: 1px solid rgba(180,140,90,0.2);
-          color: #e8d5b7;
+          background: rgba(8,4,1,0.75);
+          border: 1px solid rgba(184,115,51,0.25);
+          color: var(--parchment);
           font-family: 'EB Garamond', serif;
-          box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
+          box-shadow: inset 0 2px 7px rgba(0,0,0,0.6);
           transition: border-color 0.2s, box-shadow 0.2s;
         }
         .input-fantasy:focus {
           outline: none;
-          border-color: rgba(201,169,110,0.5);
-          box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 0 0 8px rgba(201,169,110,0.1);
+          border-color: rgba(212,149,90,0.6);
+          box-shadow: inset 0 2px 7px rgba(0,0,0,0.55), 0 0 10px rgba(184,115,51,0.15);
         }
-        .input-fantasy::placeholder { color: rgba(180,150,100,0.35); }
+        .input-fantasy::placeholder { color: rgba(184,155,110,0.3); }
 
-        /* Select fantasy */
         .select-fantasy {
-          background: rgba(10,6,3,0.7);
-          border: 1px solid rgba(180,140,90,0.2);
-          color: #e8d5b7;
+          background: rgba(8,4,1,0.75);
+          border: 1px solid rgba(184,115,51,0.22);
+          color: var(--parchment);
           font-family: 'EB Garamond', serif;
-          box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+          box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
         }
-        .select-fantasy:focus { outline: none; border-color: rgba(201,169,110,0.45); }
+        .select-fantasy:focus { outline: none; border-color: rgba(212,149,90,0.55); }
 
-        /* Combat glow pulse */
+        /* ── Animations ── */
         @keyframes combat-pulse {
-          0%, 100% { box-shadow: 0 0 8px rgba(180,30,30,0.3); }
-          50% { box-shadow: 0 0 20px rgba(180,30,30,0.6), 0 0 40px rgba(180,30,30,0.2); }
+          0%,100% { box-shadow: 0 0 8px rgba(192,65,40,0.3); }
+          50%      { box-shadow: 0 0 22px rgba(192,65,40,0.65), 0 0 44px rgba(192,65,40,0.22); }
         }
         .combat-active { animation: combat-pulse 2s ease-in-out infinite; }
 
-        /* Arcane shimmer */
         @keyframes arcane-shimmer {
-          0%, 100% { box-shadow: 0 0 8px rgba(130,60,220,0.3); }
-          50% { box-shadow: 0 0 20px rgba(130,60,220,0.6), 0 0 40px rgba(130,60,220,0.2); }
+          0%,100% { box-shadow: 0 0 8px rgba(130,65,220,0.3); }
+          50%      { box-shadow: 0 0 22px rgba(130,65,220,0.65), 0 0 44px rgba(130,65,220,0.22); }
         }
         .arcane-active { animation: arcane-shimmer 3s ease-in-out infinite; }
 
-        /* Gold shimmer for special items */
         @keyframes gold-shimmer {
-          0% { background-position: -200% center; }
+          0%   { background-position: -200% center; }
           100% { background-position: 200% center; }
         }
         .text-gold-shimmer {
-          background: linear-gradient(90deg, #c9a96e, #f0c040, #e8b84b, #c9a96e, #f0c040);
+          background: linear-gradient(90deg, #b87333, #e8b86d, #f5d08a, #d4955a, #b87333, #e8b86d);
           background-size: 200% auto;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
-          animation: gold-shimmer 4s linear infinite;
+          animation: gold-shimmer 5s linear infinite;
         }
 
-        /* Critical hit flash */
         @keyframes crit-flash {
-          0% { background: rgba(255,200,0,0.05); }
-          25% { background: rgba(255,200,0,0.15); }
-          50% { background: rgba(255,200,0,0.05); }
-          75% { background: rgba(255,200,0,0.12); }
-          100% { background: rgba(255,200,0,0.05); }
+          0%,100% { background: rgba(232,184,109,0.04); }
+          40%     { background: rgba(232,184,109,0.18); }
         }
-        .crit-flash { animation: crit-flash 0.8s ease-in-out; }
+        .crit-flash { animation: crit-flash 0.7s ease-in-out; }
 
-        /* Dice roll animation */
         @keyframes dice-roll {
-          0% { transform: rotate(0deg) scale(1); }
-          25% { transform: rotate(180deg) scale(1.15); }
-          75% { transform: rotate(270deg) scale(0.9); }
+          0%   { transform: rotate(0deg) scale(1); }
+          25%  { transform: rotate(180deg) scale(1.15); }
+          75%  { transform: rotate(270deg) scale(0.9); }
           100% { transform: rotate(360deg) scale(1); }
         }
         .dice-rolling { animation: dice-roll 0.45s ease-in-out; }
 
-        /* Fade up entrance */
         @keyframes fade-up {
           from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
+          to   { opacity: 1; transform: translateY(0); }
         }
         .animate-fade-up { animation: fade-up 0.4s ease-out forwards; }
 
-        /* Tab underline glow */
+        /* ── Tab glow ── */
         .tab-active-glow {
-          border-bottom: 2px solid #c9a96e;
-          text-shadow: 0 0 12px rgba(201,169,110,0.5);
+          border-bottom: 2px solid #d4955a;
+          text-shadow: 0 0 14px rgba(212,149,90,0.6);
         }
 
-        /* Badge glow */
+        /* ── Badges ── */
         .badge-gold {
-          background: rgba(100,65,15,0.7);
-          border: 1px solid rgba(201,169,110,0.35);
-          color: #e8c87a;
+          background: rgba(92,51,24,0.85);
+          border: 1px solid rgba(212,149,90,0.45);
+          color: #f0d090;
           font-family: 'Cinzel', serif;
-          font-size: 0.65rem;
-          letter-spacing: 0.05em;
+          font-size: 0.62rem;
+          letter-spacing: 0.06em;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.8);
         }
         .badge-blood {
-          background: rgba(80,10,10,0.7);
-          border: 1px solid rgba(180,30,30,0.4);
-          color: #ffaaaa;
+          background: rgba(80,12,8,0.85);
+          border: 1px solid rgba(200,65,40,0.45);
+          color: #ffbba0;
           font-family: 'Cinzel', serif;
-          font-size: 0.65rem;
+          font-size: 0.62rem;
         }
         .badge-arcane {
-          background: rgba(50,20,80,0.7);
-          border: 1px solid rgba(140,80,220,0.4);
-          color: #d4b3ff;
+          background: rgba(48,18,80,0.85);
+          border: 1px solid rgba(150,90,230,0.45);
+          color: #dfc8ff;
           font-family: 'Cinzel', serif;
-          font-size: 0.65rem;
+          font-size: 0.62rem;
         }
         .badge-green {
-          background: rgba(10,50,20,0.7);
-          border: 1px solid rgba(40,160,80,0.4);
-          color: #86efac;
-          font-size: 0.65rem;
+          background: rgba(8,45,18,0.85);
+          border: 1px solid rgba(40,170,80,0.45);
+          color: #90f4b0;
+          font-size: 0.62rem;
         }
 
-        /* Tooltip */
-        [title]:hover::after {
-          background: rgba(15,10,5,0.95);
-          border: 1px solid rgba(180,140,90,0.3);
-          color: #e8d5b7;
-          font-family: 'EB Garamond', serif;
+        /* ── Brass horizontal rule ── */
+        .brass-rule {
+          height: 2px;
+          background: linear-gradient(90deg,
+            transparent,
+            rgba(184,115,51,0.2) 10%,
+            rgba(232,184,109,0.55) 35%,
+            rgba(245,208,138,0.7) 50%,
+            rgba(232,184,109,0.55) 65%,
+            rgba(184,115,51,0.2) 90%,
+            transparent);
+          border: none;
+        }
+
+        /* ── Wood plank separator ── */
+        .plank-divider {
+          height: 4px;
+          background: repeating-linear-gradient(
+            90deg,
+            rgba(90,45,14,0.5),
+            rgba(60,28,8,0.4) 20px,
+            rgba(90,45,14,0.5) 40px
+          );
+          border-top: 1px solid rgba(212,149,90,0.2);
+          border-bottom: 1px solid rgba(0,0,0,0.4);
+        }
+
+        /* ── Tavern section header ── */
+        .tavern-section-label {
+          font-family: 'Cinzel', serif;
+          font-size: 0.6rem;
+          letter-spacing: 0.18em;
+          color: rgba(212,149,90,0.6);
+          text-transform: uppercase;
+          text-shadow: 0 0 10px rgba(184,115,51,0.2);
         }
       `}</style>
       {children}
