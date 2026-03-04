@@ -422,6 +422,7 @@ export const CLASSES = {
       { name: 'Wild Magic', desc: 'Wild Magic Surge (1% chance of chaotic effect per spell). Tides of Chaos (advantage 1/long rest). Bend Luck (2 sorcery points to change any roll ±1d4).', features: { 1: ['Wild Magic Surge', 'Tides of Chaos'], 6: ['Bend Luck'], 14: ['Controlled Chaos'], 18: ['Spell Bombardment'] } },
       { name: 'Divine Soul', desc: 'Divine Magic (access Cleric spells). Favored by the Gods (add 2d4 to failed save/attack). Empowered Healing. Otherworldly Wings. Unearthly Recovery.', features: { 1: ['Divine Magic', 'Favored by the Gods'], 6: ['Empowered Healing'], 14: ['Otherworldly Wings'], 18: ['Unearthly Recovery'] } },
       { name: 'Storm Sorcery', desc: 'Wind Speaker (Primordial + 4 elemental languages). Tempestuous Magic (fly 10 ft as bonus action). Heart of the Storm. Storm Guide. Wind Soul.', features: { 1: ['Wind Speaker', 'Tempestuous Magic'], 6: ['Heart of the Storm'], 14: ['Storm Guide'], 18: ['Wind Soul'] } },
+      { name: 'Shadow Magic', desc: 'Eyes of the Dark (Darkness spell 1/long rest; cast it using 2 sorcery points with see-through ability). Strength of the Grave (save to stay at 1 HP). Hound of Ill Omen (summon shadow mastiff). Shadow Walk. Umbral Form.', features: { 1: ['Eyes of the Dark', 'Strength of the Grave'], 6: ['Hound of Ill Omen'], 14: ['Shadow Walk'], 18: ['Umbral Form'] } },
     ],
     description: 'A spellcaster who draws on inherent magic from a gift or bloodline.',
     features: {
