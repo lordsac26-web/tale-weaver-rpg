@@ -344,6 +344,18 @@ function AddItemForm({ onAdd, onCancel }) {
         </button>
       )}
     </div>
+
+    {/* Consumable Use Modal */}
+    <AnimatePresence>
+      {consumableModal && (
+        <ConsumableUseModal
+          item={consumableModal.item}
+          character={character}
+          onUse={handleConsumableUsed}
+          onClose={() => setConsumableModal(null)}
+        />
+      )}
+    </AnimatePresence>
   );
 }
 
