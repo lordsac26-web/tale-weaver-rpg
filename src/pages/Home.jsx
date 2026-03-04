@@ -338,7 +338,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
         <button onClick={onViewSheet}
           className="flex-1 py-2 rounded-lg text-xs font-fantasy transition-all"
           style={{ background: 'rgba(40,25,5,0.6)', border: '1px solid rgba(180,140,90,0.25)', color: '#c9a96e', letterSpacing: '0.05em' }}>
-          <User className="w-3 h-3 inline mr-1.5" /> View Sheet
+          <User className="w-3 h-3 inline mr-1.5" /> Quick View
         </button>
         {session ? (
           <Link to={createPageUrl('Game') + `?session_id=${session.id}`} className="flex-1">
