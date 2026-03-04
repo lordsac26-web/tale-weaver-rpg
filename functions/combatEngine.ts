@@ -354,11 +354,13 @@ Deno.serve(async (req) => {
       logEntry.attack_roll = totalAttack;
       logEntry.damage = damage;
       logEntry.damage_rolls = damageRolls;
-      logEntry.text = `${character.name} ${isCritical ? 'CRITICALLY ' : ''}hits ${target.name} for ${damage} damage! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
+      const actionLabel = spell ? `casts ${spell.name} at` : (isCritical ? 'CRITICALLY strikes' : 'hits');
+      logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
     } else {
       logEntry.hit = false;
       logEntry.attack_roll = totalAttack;
-      logEntry.text = `${character.name} misses ${target.name}! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})`;
+      const missLabel = spell ? `${spell.name} misses` : 'misses';
+      logEntry.text = `${character.name} ${missLabel} ${target.name}! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})`;
     }
 
     const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
