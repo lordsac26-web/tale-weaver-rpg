@@ -181,7 +181,7 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
             </div>
           )}
 
-          {tab === 'inventory' && <InventoryTab character={character} onUpdate={handleUpdateCharacter} />}
+          {tab === 'inventory' && <InventoryTab character={character} onUpdate={handleUpdateCharacter} onIdentify={null} />}
 
           {tab === 'conditions' && (
             <div className="space-y-2">
