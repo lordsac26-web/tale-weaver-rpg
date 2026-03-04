@@ -348,13 +348,16 @@ function AddItemForm({ onAdd, onCancel }) {
 }
 
 // ─── Item Row ──────────────────────────────────────────────────────────────────
-function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify }) {
+const CONSUMABLE_CATEGORIES = ['Potion', 'Ammunition', 'Adventuring Gear'];
+
+function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onUseConsumable }) {
   const [expanded, setExpanded] = useState(false);
   const rarity = ITEM_RARITY[item.rarity] || ITEM_RARITY.common;
   const slot = item.equip_slot || CATEGORY_TO_SLOT[item.category];
   const canEquip = !!slot;
   const isEquipped = canEquip && Object.entries(equipped).some(([s, i]) => i && i === item);
   const isUnidentifiedMagic = item.is_magic && !item.is_identified;
+  const isConsumable = CONSUMABLE_CATEGORIES.includes(item.category);
 
   return (
     <div className="rounded-xl overflow-hidden transition-all"
