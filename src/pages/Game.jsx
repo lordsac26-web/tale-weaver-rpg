@@ -538,6 +538,49 @@ export default function Game() {
         <CharacterSheet character={character} onClose={() => setShowCharSheet(false)}
           onCharacterUpdate={setCharacter} />
       )}
+
+      {/* Scene Visualizer */}
+      <AnimatePresence>
+        {showSceneVisualizer && (
+          <SceneVisualizerModal
+            narrative={narrative}
+            session={session}
+            character={character}
+            onClose={() => setShowSceneVisualizer(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* Character Portrait Generator */}
+      <AnimatePresence>
+        {showPortraitGen && (
+          <CharacterPortraitGenerator
+            character={character}
+            onClose={() => setShowPortraitGen(false)}
+            onSavePortrait={(url) => setCharacter(prev => ({ ...prev, portrait: url }))} />
+        )}
+      </AnimatePresence>
+
+      {/* Action Proposal / DM Adjudication Modal */}
+      <AnimatePresence>
+        {pendingProposal && (
+          <ActionProposalModal
+            proposal={pendingProposal}
+            onConfirm={() => executeProposedAction(pendingProposal)}
+            onCancel={() => setPendingProposal(null)} />
+        )}
+      </AnimatePresence>
+
+      {/* Evaluating Action Spinner */}
+      <AnimatePresence>
+        {evaluatingAction && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full"
+            style={{ background: 'rgba(10,6,3,0.92)', border: '1px solid rgba(201,169,110,0.3)' }}>
+            <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#c9a96e' }} />
+            <span className="text-xs font-fantasy" style={{ color: 'rgba(201,169,110,0.7)' }}>DM is considering...</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
