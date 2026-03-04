@@ -468,7 +468,7 @@ export default function Game() {
       </div>
 
       {/* Main Game Area */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {inCombat ? (
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden">
             <div className="overflow-hidden flex flex-col" style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
