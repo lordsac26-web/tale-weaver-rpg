@@ -289,10 +289,17 @@ Deno.serve(async (req) => {
 
       // Fall through to normal ranged/melee spell attack
     } else if (weapon) {
-      attackMod = statMod(character.strength) + character.proficiency_bonus + (weapon.attack_bonus || 0);
-      damageBonus = statMod(character.strength) + (weapon.damage_bonus || 0);
+      const isRanged = weapon.type === 'ranged';
+      const isFinesse = (weapon.properties || []).includes('finesse');
+      const strMod = statMod(character.strength);
+      const dexMod = statMod(character.dexterity);
+      // Ranged weapons use DEX; finesse uses best of STR/DEX; melee uses STR
+      const abilityMod = isRanged ? dexMod : (isFinesse ? Math.max(strMod, dexMod) : strMod);
+      const profBonus = character.proficiency_bonus || 2;
+      attackMod = abilityMod + profBonus + (weapon.attack_bonus || 0);
+      damageBonus = abilityMod + (weapon.damage_bonus || 0);
       damageDice = weapon.damage_dice || '1d8';
-      attackType = weapon.type === 'ranged' ? 'ranged' : 'melee';
+      attackType = isRanged ? 'ranged' : 'melee';
     }
 
     // Apply active modifiers
