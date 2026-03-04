@@ -76,6 +76,8 @@ export default function CharacterSheetPage() {
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState(null); // 'saving' | 'saved' | null
   const [tab, setTab] = useState('stats');
+  const [exporting, setExporting] = useState(false);
+  const sheetRef = useRef(null);
 
   useEffect(() => {
     async function load() {
