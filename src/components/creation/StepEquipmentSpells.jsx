@@ -225,16 +225,23 @@ export default function StepEquipmentSpells({ character, set }) {
                 Cantrips: {cantripCount}/{maxCantrips}
               </span>
             )}
-            <span className={`px-3 py-1 rounded-lg border ${spellCount >= maxSpellsKnown ? 'border-purple-600/50 bg-purple-900/20 text-purple-300' : 'border-slate-600 text-slate-400'}`}>
-              Spells: {spellCount}/{maxSpellsKnown}
-            </span>
+            {maxSpellsKnown < 999 && (
+              <span className={`px-3 py-1 rounded-lg border ${totalSpellCount >= maxSpellsKnown ? 'border-purple-600/50 bg-purple-900/20 text-purple-300' : 'border-slate-600 text-slate-400'}`}>
+                Spells Known: {totalSpellCount}/{maxSpellsKnown}
+              </span>
+            )}
+            {character.class && ['Cleric', 'Druid', 'Paladin', 'Ranger'].includes(character.class) && (
+              <span className="px-3 py-1 rounded-lg border border-slate-600 text-slate-400 text-xs italic">
+                (Prepared caster — select spells now, prepare later)
+              </span>
+            )}
           </div>
 
           {[0,1,2,3,4,5].map(level => {
             const spells = classSpells[level === 0 ? 'cantrips' : level] || [];
             if (spells.length === 0) return null;
-            const isLevelLocked = level > 0 && spellCount >= maxSpellsKnown;
             const isCantripLocked = level === 0 && cantripCount >= maxCantrips;
+            const isSpellLevelLocked = level > 0 && totalSpellCount >= maxSpellsKnown;
 
             return (
               <div key={level}>
