@@ -87,7 +87,7 @@ export default function Home() {
         background: 'linear-gradient(90deg, transparent, rgba(201,169,110,0.4) 30%, rgba(201,169,110,0.4) 70%, transparent)'
       }} />
 
-      <div className="relative max-w-6xl mx-auto px-4 py-12">
+      <div className="relative max-w-6xl mx-auto px-4 py-12" style={{ paddingTop: characters.length > 0 ? '4rem' : '3rem' }}>
         {/* Hero */}
         <motion.div initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: 'easeOut' }}
           className="text-center mb-16">
