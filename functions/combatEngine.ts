@@ -149,12 +149,6 @@ Deno.serve(async (req) => {
       if (spell.slot_level && spell.slot_level > 0) {
         const slotsKey = `level_${spell.slot_level}`;
         const currentUsed = (character.spell_slots || {})[slotsKey] || 0;
-        const maxSlots = (() => {
-          const SLOTS = {
-            Wizard:[2,0,0,0,0],[2,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
-          };
-          return 99; // simplified: we'll track usage, DB holds max
-        })();
         await base44.asServiceRole.entities.Character.update(character_id, {
           spell_slots: { ...(character.spell_slots || {}), [slotsKey]: currentUsed + 1 }
         });
