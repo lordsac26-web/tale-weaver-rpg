@@ -67,15 +67,15 @@ async function ingestOpen5e(base44, dataType) {
     if (!dataType || dataType === 'spells') {
       console.log('Fetching spells from Open5e...');
       const spells = await fetchPaginatedData(`${BASE_URL}/spells/`, 1000);
-      const formattedSpells = spells.map(formatOpen5eSpell);
       
-      for (const spell of formattedSpells) {
+      for (const rawSpell of spells) {
         try {
+          const spell = await formatOpen5eSpell(rawSpell, base44);
           await base44.asServiceRole.entities.Spell.create(spell);
           results.imported++;
         } catch (e) {
           results.failed++;
-          results.errors.push(`Spell ${spell.name}: ${e.message}`);
+          results.errors.push(`Open5e Spell ${rawSpell.name}: ${e.message}`);
         }
       }
       console.log(`Imported ${results.imported} spells`);
@@ -141,12 +141,12 @@ async function ingestD5eAPI(base44, dataType) {
       for (const spellRef of (spellsIndex.results || []).slice(0, 300)) {
         try {
           const spell = await fetch(`${BASE_URL}${spellRef.index}`).then(r => r.json());
-          const formatted = formatD5eApiSpell(spell);
+          const formatted = await formatD5eApiSpell(spell, base44);
           await base44.asServiceRole.entities.Spell.create(formatted);
           results.imported++;
         } catch (e) {
           results.failed++;
-          results.errors.push(`Spell ${spellRef.name}: ${e.message}`);
+          results.errors.push(`D&D 5e API Spell ${spellRef.name}: ${e.message}`);
         }
       }
     }
@@ -231,7 +231,35 @@ function formatOpen5eMonster(data) {
   };
 }
 
-function formatOpen5eSpell(data) {
+async function formatOpen5eSpell(data, base44) {
+  const dmgType = data.damage?.damage_type || '';
+  
+  let visualSummary = '';
+  let effectSummary = '';
+  
+  if (data.description || data.desc) {
+    const desc = data.description || data.desc || '';
+    try {
+      const aiResponse = await base44.integrations.Core.InvokeLLM({
+        prompt: `Generate TWO brief summaries for the D&D 5e spell "${data.name}":
+1. VISUAL: Describe what this spell looks like visually when cast (1-2 sentences, vivid)
+2. EFFECT: Explain the core mechanic/what it does (1-2 sentences, clear)
+Based on: ${desc}`,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            visual: { type: "string" },
+            effect: { type: "string" }
+          }
+        }
+      });
+      visualSummary = aiResponse.visual || '';
+      effectSummary = aiResponse.effect || '';
+    } catch (e) {
+      console.warn(`Failed to generate AI summary for spell ${data.name}: ${e.message}`);
+    }
+  }
+
   return {
     name: data.name,
     level: data.level || 0,
@@ -241,11 +269,16 @@ function formatOpen5eSpell(data) {
     components: data.components ? data.components.join(', ') : '',
     duration: data.duration || 'Instantaneous',
     description: data.description || data.desc || '',
+    visual_summary: visualSummary,
+    effect_summary: effectSummary,
     classes: data.classes ? data.classes.split(', ') : [],
     ritual: data.ritual === true,
     concentration: data.concentration === true,
-    damage_type: data.damage?.damage_type || '',
+    damage_type: dmgType,
     damage_dice: data.damage?.damage_at_slot_level?.[1] || '',
+    attack_type: dmgType ? 'ranged_spell_attack' : 'utility',
+    higher_level_scaling: data.higher_levels || '',
+    conditions_caused: data.conditions ? (Array.isArray(data.conditions) ? data.conditions : [data.conditions]) : [],
     raw_data: { source: 'open5e', data }
   };
 }
@@ -295,7 +328,35 @@ function formatD5eApiMonster(data) {
   };
 }
 
-function formatD5eApiSpell(data) {
+async function formatD5eApiSpell(data, base44) {
+  const description = data.desc ? data.desc.join(' ') : '';
+  const dmgType = data.damage?.damage_type?.name || '';
+  
+  let visualSummary = '';
+  let effectSummary = '';
+  
+  if (description) {
+    try {
+      const aiResponse = await base44.integrations.Core.InvokeLLM({
+        prompt: `Generate TWO brief summaries for the D&D 5e spell "${data.name}":
+1. VISUAL: Describe what this spell looks like visually when cast (1-2 sentences, vivid)
+2. EFFECT: Explain the core mechanic/what it does (1-2 sentences, clear)
+Based on: ${description}`,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            visual: { type: "string" },
+            effect: { type: "string" }
+          }
+        }
+      });
+      visualSummary = aiResponse.visual || '';
+      effectSummary = aiResponse.effect || '';
+    } catch (e) {
+      console.warn(`Failed to generate AI summary for spell ${data.name}: ${e.message}`);
+    }
+  }
+
   return {
     name: data.name,
     level: data.level || 0,
@@ -304,11 +365,16 @@ function formatD5eApiSpell(data) {
     range: data.range || 'Self',
     components: data.components ? data.components.join(', ') : '',
     duration: data.duration || 'Instantaneous',
-    description: data.desc ? data.desc.join(' ') : '',
+    description: description,
+    visual_summary: visualSummary,
+    effect_summary: effectSummary,
     classes: data.classes ? data.classes.map(c => c.name) : [],
     ritual: data.ritual === true,
     concentration: data.concentration === true,
-    damage_type: data.damage?.damage_type?.name || '',
+    damage_type: dmgType,
+    save_type: data.damage?.save_dc?.dc_type?.name || '',
+    attack_type: dmgType ? 'ranged_spell_attack' : 'utility',
+    higher_level_scaling: data.higher_level || '',
     raw_data: { source: 'd5eapi', data }
   };
 }
