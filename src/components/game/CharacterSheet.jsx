@@ -500,12 +500,17 @@ function FeaturesTab({ character }) {
           <div className="text-center py-4 text-sm" style={{ color: 'rgba(180,140,90,0.3)', fontFamily: 'EB Garamond, serif' }}>No features recorded</div>
         ) : (
           <div className="space-y-1.5">
-            {(character.features || []).map((feat, i) => (
-              <div key={i} className="p-2.5 rounded-lg"
-                style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.1)' }}>
-                <div className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{feat}</div>
-              </div>
-            ))}
+            {(character.features || []).map((feat, i) => {
+              const featName = typeof feat === 'string' ? feat : (feat?.name || feat?.title || JSON.stringify(feat));
+              const featDesc = typeof feat === 'object' ? (feat?.desc || feat?.description || '') : '';
+              return (
+                <div key={i} className="p-2.5 rounded-lg"
+                  style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.1)' }}>
+                  <div className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{featName}</div>
+                  {featDesc && <div className="text-xs mt-1" style={{ color: 'rgba(180,150,100,0.5)', fontFamily: 'EB Garamond, serif' }}>{featDesc}</div>}
+                </div>
+              );
+            })}
           </div>
         )}
       </Section>
@@ -532,12 +537,17 @@ function FeaturesTab({ character }) {
       {(character.feats || []).length > 0 && (
         <Section title="Feats" icon="🏆">
           <div className="space-y-1.5">
-            {character.feats.map((feat, i) => (
-              <div key={i} className="p-2.5 rounded-lg"
-                style={{ background: 'rgba(30,10,50,0.4)', border: '1px solid rgba(120,60,200,0.15)' }}>
-                <div className="text-sm" style={{ color: '#c4b5fd', fontFamily: 'EB Garamond, serif' }}>{feat}</div>
-              </div>
-            ))}
+            {character.feats.map((feat, i) => {
+              const featName = typeof feat === 'string' ? feat : (feat?.name || feat?.title || JSON.stringify(feat));
+              const featDesc = typeof feat === 'object' ? (feat?.desc || feat?.description || '') : '';
+              return (
+                <div key={i} className="p-2.5 rounded-lg"
+                  style={{ background: 'rgba(30,10,50,0.4)', border: '1px solid rgba(120,60,200,0.15)' }}>
+                  <div className="text-sm" style={{ color: '#c4b5fd', fontFamily: 'EB Garamond, serif' }}>{featName}</div>
+                  {featDesc && <div className="text-xs mt-1" style={{ color: 'rgba(180,150,220,0.45)', fontFamily: 'EB Garamond, serif' }}>{featDesc}</div>}
+                </div>
+              );
+            })}
           </div>
         </Section>
       )}
