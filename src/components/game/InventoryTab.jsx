@@ -509,6 +509,24 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
     onUpdate({ equipped: newEquipped, armor_class: newAC });
   };
 
+  const handleUseConsumable = (item, index) => {
+    setConsumableModal({ item, index });
+  };
+
+  const handleConsumableUsed = (item, updates) => {
+    // Consume 1 quantity or remove entirely
+    const inventory = character.inventory || [];
+    const idx = consumableModal.index;
+    let newInventory;
+    if ((item.quantity || 1) > 1) {
+      newInventory = inventory.map((it, i) => i === idx ? { ...it, quantity: it.quantity - 1 } : it);
+    } else {
+      newInventory = inventory.filter((_, i) => i !== idx);
+    }
+    onUpdate({ ...updates, inventory: newInventory });
+    setConsumableModal(null);
+  };
+
   const handleUnequip = (slot) => {
     const newEquipped = { ...equipped };
     delete newEquipped[slot];
