@@ -52,7 +52,7 @@ export default function Home() {
 
           <h1 className="font-fantasy-deco font-bold mb-4 tracking-tight text-gold-shimmer"
             style={{ fontSize: 'clamp(2rem, 6vw, 3.5rem)', lineHeight: 1.15 }}>
-            Chronicles of the<br />Forgotten Realm
+            Tale Weaver<br />Chronicles of the Forgotten Realms
           </h1>
           <p className="max-w-2xl mx-auto leading-relaxed mb-3 text-lg"
             style={{ color: 'rgba(201,169,110,0.6)', fontFamily: 'IM Fell English, serif' }}>
