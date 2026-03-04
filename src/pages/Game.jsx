@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
-import { User, Loader2, ChevronLeft, Dices, Swords, Map, ShoppingBag } from 'lucide-react';
+import { User, Loader2, ChevronLeft, Dices, Swords, Map, ShoppingBag, Eye, Paintbrush } from 'lucide-react';
 import { SKILL_STAT_MAP, calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
 import { motion, AnimatePresence } from 'framer-motion';
 import HUD from '@/components/game/HUD';
@@ -10,6 +10,9 @@ import StoryPanel from '@/components/game/StoryPanel';
 import CombatPanel from '@/components/game/CombatPanel';
 import CharacterSheet from '@/components/game/CharacterSheet';
 import DiceRoller from '@/components/game/DiceRoller';
+import SceneVisualizerModal from '@/components/game/SceneVisualizerModal';
+import CharacterPortraitGenerator from '@/components/game/CharacterPortraitGenerator';
+import ActionProposalModal from '@/components/game/ActionProposalModal';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -28,6 +31,10 @@ export default function Game() {
   const [showCharSheet, setShowCharSheet] = useState(false);
   const [showDiceRoller, setShowDiceRoller] = useState(false);
   const [started, setStarted] = useState(false);
+  const [showSceneVisualizer, setShowSceneVisualizer] = useState(false);
+  const [showPortraitGen, setShowPortraitGen] = useState(false);
+  const [pendingProposal, setPendingProposal] = useState(null);
+  const [evaluatingAction, setEvaluatingAction] = useState(false);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate(createPageUrl('Home')); return; }
