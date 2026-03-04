@@ -98,6 +98,43 @@ export default function CharacterSheetPage() {
     setTimeout(() => setSaveStatus(null), 1800);
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleExportPDF = async () => {
+    if (!sheetRef.current || exporting) return;
+    setExporting(true);
+    try {
+      const element = sheetRef.current;
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        backgroundColor: '#0a0502',
+        useCORS: true,
+        allowTaint: true,
+      });
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = 210; // A4 width
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= 297;
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= 297;
+      }
+      pdf.save(`${character.name || 'Character'}-Sheet.pdf`);
+    } catch (error) {
+      console.error('PDF export failed:', error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center parchment-bg">
       <div className="font-fantasy text-sm tracking-widest" style={{ color: 'rgba(201,169,110,0.5)' }}>Loading character...</div>
