@@ -18,7 +18,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   }, [narrative, loading]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Narrative Area */}
       <div className="flex-1 overflow-y-auto p-5 md:p-7 space-y-5 min-h-0" style={{ background: 'transparent' }}>
         <AnimatePresence initial={false}>
