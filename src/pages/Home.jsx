@@ -28,7 +28,55 @@ export default function Home() {
   const item = { hidden: { opacity: 0, y: 24 }, show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } };
 
   return (
-    <div className="min-h-screen parchment-bg" style={{ color: '#e8d5b7' }}>
+    <div className="min-h-screen parchment-bg" style={{ color: '#e8d5b7' }} onClick={() => setShowCharMenu(false)}>
+      {/* Top Nav Bar */}
+      {characters.length > 0 && (
+        <div className="fixed top-0 left-0 right-0 z-30 flex items-center justify-end px-4 py-2"
+          style={{ background: 'rgba(8,5,2,0.92)', borderBottom: '1px solid rgba(180,140,90,0.15)', backdropFilter: 'blur(8px)' }}>
+          <div className="relative" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setShowCharMenu(v => !v)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg font-fantasy text-sm transition-all"
+              style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(180,140,90,0.2)', color: 'rgba(201,169,110,0.7)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.5)'; e.currentTarget.style.color = '#c9a96e'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,140,90,0.2)'; e.currentTarget.style.color = 'rgba(201,169,110,0.7)'; }}>
+              <User className="w-3.5 h-3.5" />
+              Heroes
+              <ChevronDown className="w-3 h-3" style={{ transform: showCharMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            </button>
+            <AnimatePresence>
+              {showCharMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-full mt-1 rounded-xl overflow-hidden shadow-2xl"
+                  style={{ background: 'rgba(12,8,4,0.98)', border: '1px solid rgba(180,140,90,0.25)', minWidth: '200px' }}>
+                  {characters.map(char => (
+                    <button key={char.id}
+                      onClick={() => { setSelectedCharacter(char); setShowCharMenu(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left transition-all"
+                      style={{ borderBottom: '1px solid rgba(180,140,90,0.08)' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(40,25,8,0.5)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center font-fantasy font-bold text-xs flex-shrink-0"
+                        style={{ background: 'rgba(60,40,8,0.8)', border: '1px solid rgba(201,169,110,0.25)', color: '#f0c040' }}>
+                        {char.name?.slice(0,2).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-fantasy truncate" style={{ color: '#e8d5b7' }}>{char.name}</div>
+                        <div className="text-xs" style={{ color: 'rgba(201,169,110,0.4)', fontFamily: 'EB Garamond, serif' }}>Lv.{char.level} {char.class}</div>
+                      </div>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      )}
+
       {/* Atmospheric overlays */}
       <div className="fixed inset-0 pointer-events-none" style={{
         backgroundImage: 'radial-gradient(ellipse at 15% 40%, rgba(140,50,10,0.07) 0%, transparent 55%), radial-gradient(ellipse at 85% 20%, rgba(100,50,150,0.06) 0%, transparent 50%)',
