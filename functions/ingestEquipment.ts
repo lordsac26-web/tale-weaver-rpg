@@ -40,13 +40,13 @@ Deno.serve(async (req) => {
     // Transform to Equipment entity schema
     const transformed = equipment.map(e => ({
       name: e.name,
-      category: e.equipment_category?.name || 'Misc',
-      cost: parseCost(e.cost?.quantity) || 0,
-      weight: e.weight || 0,
-      damage: e.damage?.dice || '',
+      category: e.equipment_category?.name || (e.armor_category ? 'Armor' : 'Weapon'),
+      cost: String(e.cost?.quantity || 0) + ' ' + (e.cost?.unit || 'gp'),
+      weight: String(e.weight || '0'),
+      damage: e.damage?.dice_notation || e.damage?.damage_dice || e.damage?.dice || '',
       damage_type: e.damage_type?.name || '',
-      armor_class: e.armor_class?.base || 0,
-      properties: e.properties?.map(p => p.name) || [],
+      armor_class: String(e.armor_class?.base || e.base_ac || 0),
+      properties: (e.properties || []).map(p => p?.name || p).filter(Boolean),
       description: e.description || '',
       raw_data: e
     }));

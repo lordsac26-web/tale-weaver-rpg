@@ -28,10 +28,10 @@ Deno.serve(async (req) => {
     // Transform to Monster entity schema
     const transformed = monsters.map(m => ({
       name: m.name,
-      meta: m.meta || '',
-      armor_class: String(m.armor_class) || '10',
+      meta: m.meta || (m.size ? `${m.size} ${m.type || ''}, ${m.alignment || ''}`.trim() : ''),
+      armor_class: String(Array.isArray(m.armor_class) ? m.armor_class[0]?.value || m.armor_class[0] : m.armor_class) || '10',
       hit_points: String(m.hit_points) || '1',
-      speed: m.speed || '',
+      speed: typeof m.speed === 'object' ? Object.entries(m.speed).map(([k, v]) => `${k} ${v}ft`).join(', ') : String(m.speed || ''),
       str: String(m.strength) || '10',
       str_mod: String(calcMod(m.strength)) || '0',
       dex: String(m.dexterity) || '10',

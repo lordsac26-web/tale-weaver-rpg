@@ -26,21 +26,22 @@ Deno.serve(async (req) => {
     }
 
     // Transform to Spell entity schema
+    // Note: Open5e v2 returns some fields as objects, not strings
     const transformed = spells.map(s => ({
       name: s.name,
       level: s.level || 0,
-      school: s.school || 'Evocation',
+      school: s.school?.name || (typeof s.school === 'string' ? s.school : 'Evocation'),
       casting_time: s.casting_time || '1 action',
-      range: s.range || 'Self',
-      components: (s.components || []).join(', '),
+      range: typeof s.range === 'object' ? (s.range?.feet ? `${s.range.feet} feet` : String(s.range?.type || 'Self')) : String(s.range || 'Self'),
+      components: Array.isArray(s.components) ? s.components.join(', ') : (s.components || ''),
       duration: s.duration || 'Instantaneous',
       description: s.description || '',
-      classes: s.classes || [],
+      classes: Array.isArray(s.classes) ? s.classes.map(c => c?.name || c) : [],
       ritual: s.ritual || false,
       concentration: s.concentration || false,
-      damage_type: s.damage_type || '',
+      damage_type: s.damage_type?.name || s.damage_type || '',
       damage_dice: s.damage_dice || '',
-      save_type: s.save_type || '',
+      save_type: s.save_type?.name || s.save_type || '',
       raw_data: s
     }));
 
