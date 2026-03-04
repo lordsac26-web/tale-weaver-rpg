@@ -76,11 +76,12 @@ Deno.serve(async (req) => {
       session_id,
       round: 1,
       combatants,
-      initiative_order: combatants.map(c => ({ id: c.id, name: c.name, initiative: c.initiative_total })),
+      initiative_order: combatants.map(c => ({ id: c.id, name: c.name, initiative_value: c.initiative_total, initiative: c.initiative_total })),
       current_turn_index: 0,
-      log_entries: [{ round: 1, text: `Combat begins! Initiative order: ${combatants.map(c => `${c.name} (${c.initiative_total})`).join(', ')}` }],
+      log_entries: [{ round: 1, text: `⚔️ Combat begins! Initiative: ${combatants.map(c => `${c.name} (${c.initiative_total})`).join(' → ')}` }],
       is_active: true,
-      result: 'ongoing'
+      result: 'ongoing',
+      world_state: { actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false }
     });
 
     await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: combatLog.id } });
