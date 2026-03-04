@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CharacterSheet from '@/components/game/CharacterSheet';
+import BackgroundEffects from '@/components/home/BackgroundEffects';
 
 export default function Home() {
   const [characters, setCharacters] = useState([]);
