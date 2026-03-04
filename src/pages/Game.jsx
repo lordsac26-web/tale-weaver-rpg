@@ -13,7 +13,7 @@ import DiceRoller from '@/components/game/DiceRoller';
 import SceneVisualizerModal from '@/components/game/SceneVisualizerModal';
 import CharacterPortraitGenerator from '@/components/game/CharacterPortraitGenerator';
 import ActionProposalModal from '@/components/game/ActionProposalModal';
-import Dice3DModal from '@/components/dice/Dice3DModal';
+import Dice3DModal from '@/components/dice/Dice3DModal.jsx';
 
 export default function Game() {
   const navigate = useNavigate();
