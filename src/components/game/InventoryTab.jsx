@@ -449,12 +449,13 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
 }
 
 // ─── Main InventoryTab ─────────────────────────────────────────────────────────
-export default function InventoryTab({ character, onUpdate }) {
+export default function InventoryTab({ character, onUpdate, onIdentify }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [sortBy, setSortBy] = useState('name');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterRarity, setFilterRarity] = useState('all');
   const [equipped, setEquipped] = useState(character.equipped || {});
+  const [consumableModal, setConsumableModal] = useState(null); // { item, index }
 
   const inventory = character.inventory || [];
 
