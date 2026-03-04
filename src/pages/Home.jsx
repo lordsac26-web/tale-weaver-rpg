@@ -341,6 +341,14 @@ function CharacterCard({ character, sessions, onViewSheet }) {
           style={{ background: 'rgba(40,25,5,0.6)', border: '1px solid rgba(180,140,90,0.25)', color: '#c9a96e', letterSpacing: '0.05em' }}>
           <User className="w-3 h-3 inline mr-1.5" /> Quick View
         </button>
+        <button onClick={() => navigate(createPageUrl('CharacterSheetPage') + `?character_id=${character.id}`)}
+          className="py-2 px-2.5 rounded-lg text-xs font-fantasy transition-all"
+          title="Full Character Sheet"
+          style={{ background: 'rgba(30,10,50,0.4)', border: '1px solid rgba(120,60,200,0.2)', color: 'rgba(180,140,255,0.6)' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,120,255,0.45)'; e.currentTarget.style.color = '#c4b5fd'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(120,60,200,0.2)'; e.currentTarget.style.color = 'rgba(180,140,255,0.6)'; }}>
+          <Scroll className="w-3 h-3 inline" />
+        </button>
         {session ? (
           <Link to={createPageUrl('Game') + `?session_id=${session.id}`} className="flex-1">
             <button className="w-full py-2 rounded-lg text-xs font-fantasy transition-all"
