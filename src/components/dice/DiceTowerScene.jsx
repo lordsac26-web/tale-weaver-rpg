@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Physics } from '@react-three/cannon';
@@ -5,46 +6,66 @@ import { OrbitControls, Environment, Sparkles, Stars } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Die, Floor, TowerWall } from './DicePhysics';
 
-const TOWER_CONFIGS = {
+export const TOWER_CONFIGS = {
   wooden: {
     name: 'Tavern Box',
     emoji: '🪵',
-    color: '#8B4513',
-    wallColor: '#5C3317',
     dieColor: '#c9a96e',
-    ambientColor: '#ff8844',
-    description: 'A classic tavern dice box',
+    ambientColor: '#ff9944',
+    fogColor: '#1a0a02',
+    description: 'A battered tavern dice box',
+    sparkles: null,
     unlocked: true,
   },
   arcane: {
     name: 'Arcane Tower',
     emoji: '🔮',
-    color: '#4B0082',
-    wallColor: '#2d1654',
-    dieColor: '#9b59b6',
+    dieColor: '#b084fc',
     ambientColor: '#8844ff',
-    description: 'Pulsing with magical energy',
+    fogColor: '#0e0020',
+    description: 'Pulsing with arcane energy',
+    sparkles: { color: '#aa66ff', count: 60, size: 2, speed: 0.4 },
     unlocked: true,
   },
   infernal: {
     name: 'Infernal Forge',
     emoji: '🔥',
-    color: '#8B0000',
-    wallColor: '#3d0a0a',
-    dieColor: '#e74c3c',
+    dieColor: '#ff6644',
     ambientColor: '#ff2200',
+    fogColor: '#1a0000',
     description: 'Forged in hellfire',
-    unlocked: false,
+    sparkles: { color: '#ff4400', count: 50, size: 3, speed: 0.9 },
+    unlocked: true,
   },
   crystal: {
     name: 'Crystal Vault',
     emoji: '💎',
-    color: '#005580',
-    wallColor: '#0d2a4a',
-    dieColor: '#3498db',
+    dieColor: '#60c8ff',
     ambientColor: '#00aaff',
-    description: 'Carved from ancient crystal',
-    unlocked: false,
+    fogColor: '#000e1a',
+    description: 'Carved from glacial crystal',
+    sparkles: { color: '#00ccff', count: 70, size: 1.5, speed: 0.2 },
+    unlocked: true,
+  },
+  elven: {
+    name: 'Elven Glade',
+    emoji: '🌿',
+    dieColor: '#86efac',
+    ambientColor: '#22c55e',
+    fogColor: '#010e01',
+    description: 'Woven from living wood',
+    sparkles: { color: '#88ff44', count: 40, size: 1.5, speed: 0.3 },
+    unlocked: true,
+  },
+  shadow: {
+    name: 'Shadow Realm',
+    emoji: '🌑',
+    dieColor: '#888',
+    ambientColor: '#6633cc',
+    fogColor: '#020005',
+    description: 'From the void between worlds',
+    sparkles: { color: '#9933ff', count: 80, size: 1, speed: 0.6 },
+    unlocked: true,
   },
 };
 
@@ -64,9 +85,15 @@ function TowerScene({ towerType, dice, onDieSettle }) {
       <pointLight position={[0, 6, 0]} intensity={1.5} color={cfg.ambientColor} castShadow />
       <pointLight position={[0, -1, 0]} intensity={0.8} color="#ffffff" />
 
-      {towerType === 'arcane' && <Sparkles count={40} scale={6} size={2} speed={0.4} color="#aa66ff" />}
-      {towerType === 'infernal' && <Sparkles count={30} scale={6} size={3} speed={0.8} color="#ff4400" />}
-      {towerType === 'crystal' && <Sparkles count={50} scale={6} size={1.5} speed={0.2} color="#00ccff" />}
+      {cfg.sparkles && (
+        <Sparkles
+          count={cfg.sparkles.count}
+          scale={6}
+          size={cfg.sparkles.size}
+          speed={cfg.sparkles.speed}
+          color={cfg.sparkles.color}
+        />
+      )}
 
       <Stars radius={30} depth={10} count={300} factor={2} fade />
 
@@ -134,4 +161,4 @@ export default function DiceTowerScene({ towerType, onRollComplete }) {
   return { dice, settled, rolling, setRolling, rollDice, handleSettle };
 }
 
-export { TowerScene, TOWER_CONFIGS };
+export { TowerScene };
