@@ -47,7 +47,7 @@ export default function Home() {
             }}
             transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
             className="flex justify-center mb-6">
-            <img src="https://base44.com/logo_v2.svg" alt="Logo" className="w-16 h-16" style={{ filter: 'sepia(1) saturate(3) hue-rotate(5deg) brightness(0.85)' }} />
+            <img src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69a4e1720142630debaad046/abefd431f_06863a1f-51ae-4803-b0d7-34cb172e244a.jpg" alt="Tale Weaver Logo" className="w-24 h-24 rounded-2xl object-cover" style={{ boxShadow: '0 0 40px rgba(201,169,110,0.4)' }} />
           </motion.div>
 
           <h1 className="font-fantasy-deco font-bold mb-4 tracking-tight text-gold-shimmer"
