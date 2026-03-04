@@ -330,21 +330,28 @@ function CharacterCard({ character, sessions, onViewSheet }) {
         </div>
       </div>
 
-      {session ? (
-        <Link to={createPageUrl('Game') + `?session_id=${session.id}`} onClick={e => e.stopPropagation()}>
-          <button className="w-full py-2 rounded-lg text-xs font-fantasy transition-all"
-            style={{ background: 'rgba(10,40,15,0.6)', border: '1px solid rgba(40,160,80,0.3)', color: '#86efac', letterSpacing: '0.05em' }}>
-            <Play className="w-3 h-3 inline mr-1.5" /> Resume Campaign
-          </button>
-        </Link>
-      ) : (
-        <Link to={createPageUrl('NewGame') + `?character_id=${character.id}`} onClick={e => e.stopPropagation()}>
-          <button className="w-full py-2 rounded-lg text-xs font-fantasy transition-all"
-            style={{ background: 'rgba(30,10,50,0.6)', border: '1px solid rgba(120,60,200,0.3)', color: '#c4b5fd', letterSpacing: '0.05em' }}>
-            <BookOpen className="w-3 h-3 inline mr-1.5" /> Start Quest
-          </button>
-        </Link>
-      )}
+      <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+        <button onClick={onViewSheet}
+          className="flex-1 py-2 rounded-lg text-xs font-fantasy transition-all"
+          style={{ background: 'rgba(40,25,5,0.6)', border: '1px solid rgba(180,140,90,0.25)', color: '#c9a96e', letterSpacing: '0.05em' }}>
+          <User className="w-3 h-3 inline mr-1.5" /> View Sheet
+        </button>
+        {session ? (
+          <Link to={createPageUrl('Game') + `?session_id=${session.id}`} className="flex-1">
+            <button className="w-full py-2 rounded-lg text-xs font-fantasy transition-all"
+              style={{ background: 'rgba(10,40,15,0.6)', border: '1px solid rgba(40,160,80,0.3)', color: '#86efac', letterSpacing: '0.05em' }}>
+              <Play className="w-3 h-3 inline mr-1.5" /> Resume
+            </button>
+          </Link>
+        ) : (
+          <Link to={createPageUrl('NewGame') + `?character_id=${character.id}`} className="flex-1">
+            <button className="w-full py-2 rounded-lg text-xs font-fantasy transition-all"
+              style={{ background: 'rgba(30,10,50,0.6)', border: '1px solid rgba(120,60,200,0.3)', color: '#c4b5fd', letterSpacing: '0.05em' }}>
+              <BookOpen className="w-3 h-3 inline mr-1.5" /> Quest
+            </button>
+          </Link>
+        )}
+      </div>
     </motion.div>
   );
 }
