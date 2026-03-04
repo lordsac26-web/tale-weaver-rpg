@@ -154,7 +154,8 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
               {Object.entries(SKILL_STAT_MAP).map(([skill, stat]) => {
                 const statMod = calcStatMod(character[stat] || 10);
                 const profLevel = character.skills?.[skill];
-                const bonus = profLevel === 'expert' ? profBonus * 2 : profLevel === 'proficient' ? profBonus : 0;
+                // Support boolean true (legacy), 'proficient', and 'expert'
+                const bonus = profLevel === 'expert' ? profBonus * 2 : (profLevel === 'proficient' || profLevel === true) ? profBonus : 0;
                 const total = statMod + bonus;
                 return (
                   <div key={skill}
