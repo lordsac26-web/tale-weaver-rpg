@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
-import { ChevronLeft, Save, Edit2, Check, X, RefreshCw, Scroll } from 'lucide-react';
+import { ChevronLeft, Save, Edit2, Check, X, RefreshCw, Scroll, Printer, Download, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS } from '@/components/game/gameData';
 import InventoryTab from '@/components/game/InventoryTab';
 import SpellbookTab from '@/components/game/SpellbookTab';
