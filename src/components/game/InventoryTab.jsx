@@ -397,6 +397,14 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
              <Sparkles className="w-3.5 h-3.5" />
            </button>
           )}
+          {isConsumable && (
+           <button onClick={() => onUseConsumable?.(item, origIndex)}
+             className="p-1.5 rounded-lg text-xs border transition-all"
+             style={{ background: 'rgba(10,40,15,0.5)', border: '1px solid rgba(40,160,80,0.3)', color: '#86efac' }}
+             title="Use Item">
+             <FlaskConical className="w-3.5 h-3.5" />
+           </button>
+          )}
           {canEquip && (
            <button onClick={() => onEquip(item, origIndex, slot)}
              className="p-1.5 rounded-lg text-xs border transition-all"
