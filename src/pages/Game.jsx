@@ -181,15 +181,42 @@ export default function Game() {
     setStoryLoading(false);
   };
 
+  // Intercept custom input — send to DM for adjudication first
   const handleCustomInput = async () => {
     if (!customInput.trim()) return;
     const text = customInput;
     setCustomInput('');
-    setNarrative(prev => [...prev, { type: 'player_action', text }]);
-    setChoices([]);
-    setStoryLoading(true);
+    setEvaluatingAction(true);
 
-    const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: text });
+    const result = await base44.functions.invoke('evaluatePlayerAction', {
+      action: text,
+      character,
+      session_context: `${session?.current_location || ''} — ${narrative.filter(e => e.type === 'narration').slice(-1)[0]?.text?.slice(0, 200) || ''}`
+    });
+    setEvaluatingAction(false);
+    setPendingProposal({ ...result.data, action: text });
+  };
+
+  const executeProposedAction = async (proposal) => {
+    setPendingProposal(null);
+    const { action, requires_check, skill, dc } = proposal;
+
+    setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
+    setChoices([]);
+
+    let checkResult = '';
+    if (requires_check && skill && dc) {
+      const raw = Math.floor(Math.random() * 20) + 1;
+      const modifier = computeSkillModifier(skill);
+      const final = raw + modifier;
+      const success = final >= dc;
+      const feedback = getSkillFeedback(skill, success, final, dc, raw);
+      setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, modifier, final, success, feedback, character_name: character?.name }]);
+      checkResult = ` [Skill Check: ${skill} DC${dc} — ${success ? 'SUCCESS' : 'FAILURE'} (rolled ${final})]`;
+    }
+
+    setStoryLoading(true);
+    const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: action + checkResult });
     const data = result.data;
     if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
     if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);
