@@ -416,6 +416,13 @@ export default function Game() {
           }}>
           <Dices className="w-3.5 h-3.5" /> Dice
         </button>
+        <button onClick={() => setShow3DDice(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
+          style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(201,169,110,0.3)', color: 'rgba(240,192,64,0.7)' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(240,192,64,0.6)'; e.currentTarget.style.color = '#f0c040'; e.currentTarget.style.boxShadow = '0 0 12px rgba(240,192,64,0.2)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.3)'; e.currentTarget.style.color = 'rgba(240,192,64,0.7)'; e.currentTarget.style.boxShadow = 'none'; }}>
+          🎲 3D Tower
+        </button>
 
         <button onClick={() => navigate(createPageUrl('Market') + `?session_id=${sessionId}&character_id=${character?.id}`)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
