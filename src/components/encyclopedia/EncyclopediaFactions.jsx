@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Users, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import LoreEntryModal from './LoreEntryModal';
-import { LoadingState, EmptyState, SectionHeader, EntryActions } from './EncyclopediaLocations';
+import LoreEntryModal from './LoreEntryModal.jsx';
+import { LoadingState, EmptyState, SectionHeader, EntryActions } from './EncyclopediaLocations.jsx';
 
 const ALIGNMENT_COLORS = {
   'Lawful Good':    '#86efac', 'Neutral Good': '#4ade80', 'Chaotic Good': '#a3e635',
