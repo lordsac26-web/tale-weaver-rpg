@@ -112,20 +112,28 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         <div className="flex flex-col w-1/2 overflow-hidden" style={{ borderRight: '1px solid rgba(180,50,50,0.2)' }}>
 
           {/* Initiative strip */}
-          <div className="px-3 py-2 flex-shrink-0" style={{ borderBottom: '1px solid rgba(180,50,50,0.15)', background: 'rgba(15,5,5,0.5)' }}>
+          <div className="px-3 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(180,50,50,0.15)', background: 'rgba(15,5,5,0.5)' }}>
+            <div className="text-xs font-fantasy tracking-widest mb-1.5" style={{ color: 'rgba(180,100,100,0.4)', fontSize: '0.6rem' }}>INITIATIVE ORDER</div>
             <div className="flex gap-1.5 flex-wrap">
               {(initiative_order || []).map((c, i) => {
                 const combatant = combatants?.find(cb => cb.id === c.id);
                 const isActive = i === current_turn_index;
                 const isDead = combatant && !combatant.is_conscious;
                 return (
-                  <div key={c.id} className="px-2 py-0.5 rounded text-xs font-fantasy transition-all"
-                    style={isDead ? { opacity: 0.3, textDecoration: 'line-through', color: '#6b7280' } :
-                      isActive ? { background: 'rgba(100,65,5,0.7)', border: '1px solid rgba(201,169,110,0.5)', color: '#f0c040', boxShadow: '0 0 8px rgba(201,169,110,0.2)' } :
-                      combatant?.type === 'player' ? { background: 'rgba(10,30,70,0.5)', border: '1px solid rgba(60,100,220,0.3)', color: '#93c5fd' } :
-                      { background: 'rgba(50,5,5,0.4)', border: '1px solid rgba(180,30,30,0.25)', color: '#fca5a5' }}>
+                  <motion.div key={c.id}
+                    animate={isActive ? { scale: [1, 1.05, 1] } : { scale: 1 }}
+                    transition={{ repeat: isActive ? Infinity : 0, duration: 2 }}
+                    className="px-2.5 py-1 rounded-lg text-xs font-fantasy transition-all flex items-center gap-1"
+                    style={isDead ? { opacity: 0.25, textDecoration: 'line-through', color: '#6b7280', background: 'rgba(10,5,5,0.3)', border: '1px solid rgba(60,60,60,0.2)' } :
+                      isActive ? { background: 'rgba(100,65,5,0.75)', border: '1px solid rgba(201,169,110,0.6)', color: '#f0c040', boxShadow: '0 0 10px rgba(201,169,110,0.25)' } :
+                      combatant?.type === 'player' ? { background: 'rgba(10,30,70,0.55)', border: '1px solid rgba(60,100,220,0.3)', color: '#93c5fd' } :
+                      { background: 'rgba(50,5,5,0.45)', border: '1px solid rgba(180,30,30,0.2)', color: '#fca5a5' }}>
+                    {isActive && <span style={{ fontSize: '0.6rem' }}>▶</span>}
                     {c.name}
-                  </div>
+                    {c.initiative_value !== undefined && (
+                      <span style={{ opacity: 0.5, fontSize: '0.6rem' }}>({c.initiative_value})</span>
+                    )}
+                  </motion.div>
                 );
               })}
             </div>
