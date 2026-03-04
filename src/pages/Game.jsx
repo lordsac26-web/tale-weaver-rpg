@@ -569,6 +569,13 @@ export default function Game() {
         )}
       </AnimatePresence>
 
+      {/* 3D Dice Tower Modal */}
+      <AnimatePresence>
+        {show3DDice && (
+          <Dice3DModal character={character} onClose={() => setShow3DDice(false)} />
+        )}
+      </AnimatePresence>
+
       {/* Action Proposal / DM Adjudication Modal */}
       <AnimatePresence>
         {pendingProposal && (
