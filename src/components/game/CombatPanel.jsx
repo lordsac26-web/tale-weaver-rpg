@@ -259,6 +259,26 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                 </div>
               )}
 
+              {/* Inline dice roller toggle */}
+              <div className="flex items-center justify-between">
+                <button onClick={() => setShowDice(v => !v)}
+                  className="flex items-center gap-1.5 text-xs font-fantasy transition-all px-2 py-1 rounded-lg"
+                  style={showDice ? {
+                    background: 'rgba(60,40,8,0.6)', border: '1px solid rgba(201,169,110,0.4)', color: '#c9a96e'
+                  } : {
+                    color: 'rgba(180,140,90,0.35)', border: '1px solid transparent'
+                  }}>
+                  <Dices className="w-3 h-3" /> {showDice ? 'Hide Dice' : 'Roll Dice'}
+                </button>
+              </div>
+              <AnimatePresence>
+                {showDice && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                    <CombatDiceRoller modifier={attackMod} label="Attack Roll" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Action button */}
               <motion.button onClick={handleAction} disabled={!canAct || loading || actionsRemaining === 0}
                 whileTap={{ scale: 0.97 }}
