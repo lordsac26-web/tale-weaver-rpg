@@ -189,7 +189,7 @@ function AddItemForm({ onAdd, onCancel }) {
       {/* SRD Presets */}
       {tab === 'srd' && (
         <div className="space-y-1.5 max-h-64 overflow-y-auto">
-          {SRD_MAGIC_ITEMS.map((srdItem, i) => {
+          {SRD_MAGIC_ITEMS.filter(it => it.category !== 'Potion').concat(SRD_MAGIC_ITEMS.filter(it => it.category === 'Potion')).map((srdItem, i) => {
             const r = ITEM_RARITY[srdItem.rarity] || ITEM_RARITY.common;
             return (
               <button key={i} onClick={() => selectSRDItem(srdItem)}
