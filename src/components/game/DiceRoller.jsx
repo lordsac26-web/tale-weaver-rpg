@@ -23,9 +23,10 @@ const SAVING_THROWS = [
   { label: 'CHA Save', key: 'charisma_save', stat: 'charisma' },
 ];
 
+// Keys match the exact skill name stored in character.skills (e.g. "Insight", "Animal Handling")
 const SKILLS = Object.entries(SKILL_STAT_MAP).map(([skill, stat]) => ({
   label: skill,
-  key: skill.toLowerCase().replace(/ /g, '_'),
+  key: skill,  // keep exact name — character.skills uses the exact skill name as key
   stat
 }));
 
