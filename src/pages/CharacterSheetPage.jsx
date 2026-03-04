@@ -169,7 +169,19 @@ export default function CharacterSheetPage() {
           <span className="font-fantasy font-bold text-sm" style={{ color: '#f0c040' }}>Character Sheet</span>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-fantasy" style={{ minWidth: 80, justifyContent: 'flex-end' }}>
+        <div className="flex items-center gap-2 text-xs font-fantasy">
+          <button onClick={handlePrint} title="Print character sheet"
+            className="p-1.5 rounded transition-all" style={{ color: 'rgba(201,169,110,0.5)' }}
+            onMouseEnter={e => e.currentTarget.style.color = '#c9a96e'}
+            onMouseLeave={e => e.currentTarget.style.color = 'rgba(201,169,110,0.5)'}>
+            <Printer className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={handleExportPDF} disabled={exporting} title="Export as PDF"
+            className="p-1.5 rounded transition-all" style={{ color: exporting ? 'rgba(180,140,90,0.3)' : 'rgba(201,169,110,0.5)' }}
+            onMouseEnter={e => !exporting && (e.currentTarget.style.color = '#c9a96e')}
+            onMouseLeave={e => e.currentTarget.style.color = 'rgba(201,169,110,0.5)'}>
+            {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+          </button>
           <AnimatePresence mode="wait">
             {saveStatus === 'saving' && (
               <motion.span key="saving" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
