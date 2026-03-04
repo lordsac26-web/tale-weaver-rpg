@@ -247,13 +247,14 @@ export default function StepEquipmentSpells({ character, set }) {
               <div key={level}>
                 <div className="text-xs text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
                   <span>{LEVEL_LABELS[level]} {level > 0 ? 'Level' : ''}</span>
-                  {level > 0 && <span className="text-purple-400">(choose freely)</span>}
+                  {level > 0 && maxSpellsKnown < 999 && <span className="text-purple-400">(limited by spells known)</span>}
+                  {level > 0 && maxSpellsKnown >= 999 && <span className="text-blue-400">(choose freely)</span>}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                   {spells.map(name => {
                     const details = SPELL_DETAILS[name];
                     const isSelected = selectedSpells.has(name);
-                    const locked = !isSelected && (level === 0 ? isCantripLocked : isLevelLocked);
+                    const locked = !isSelected && (level === 0 ? isCantripLocked : isSpellLevelLocked);
                     const dmgColor = DAMAGE_TYPE_COLORS[details?.damage_type] || 'text-amber-300';
 
                     return (
