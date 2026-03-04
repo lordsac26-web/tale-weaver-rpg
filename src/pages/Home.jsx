@@ -245,6 +245,19 @@ export default function Home() {
           )}
         </AnimatePresence>
 
+      {/* Character Sheet Modal */}
+      <AnimatePresence>
+        {selectedCharacter && (
+          <CharacterSheet
+            character={selectedCharacter}
+            onClose={() => setSelectedCharacter(null)}
+            onCharacterUpdate={(updated) => {
+              setCharacters(prev => prev.map(c => c.id === updated.id ? updated : c));
+              setSelectedCharacter(updated);
+            }} />
+        )}
+      </AnimatePresence>
+
         {!loading && characters.length === 0 && sessions.length === 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
             className="text-center py-20">
