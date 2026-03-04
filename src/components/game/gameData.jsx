@@ -215,6 +215,8 @@ export const CLASSES = {
       { name: 'Assassin', desc: 'Assassinate (advantage + auto-crit on surprised), Infiltration Expertise, Impostor.', features: { 3: ['Assassinate', 'Bonus Proficiencies'], 9: ['Infiltration Expertise'], 13: ['Impostor'] } },
       { name: 'Swashbuckler', desc: 'Fancy Footwork (no opportunity attacks after melee), Rakish Audacity (Sneak Attack with no ally nearby).', features: { 3: ['Fancy Footwork', 'Rakish Audacity'], 9: ['Panache'], 13: ['Elegant Maneuver'] } },
       { name: 'Inquisitive', desc: 'Ear for Deceit, Eye for Detail, Insightful Fighting (Sneak Attack without ally if Insight contest won).', features: { 3: ['Ear for Deceit', 'Eye for Detail', 'Insightful Fighting'] } },
+      { name: 'Scout', desc: 'Skirmisher (move half speed as reaction when enemy ends turn next to you). Survivalist (Nature + Survival proficiency and expertise). Superior Mobility. Ambush Master. Sudden Strike.', features: { 3: ['Skirmisher', 'Survivalist'], 9: ['Superior Mobility'], 13: ['Ambush Master'], 17: ['Sudden Strike'] } },
+      { name: 'Mastermind', desc: 'Master of Intrigue (disguise kit + forgery kit + gaming set proficiency; mimic accents). Master of Tactics (Help as bonus action, 30 ft range). Misdirection. Soul of Deceit.', features: { 3: ['Master of Intrigue', 'Master of Tactics'], 9: ['Misdirection'], 13: ['Soul of Deceit'] } },
     ],
     description: 'A scoundrel who uses stealth and trickery to overcome obstacles.',
     features: {
