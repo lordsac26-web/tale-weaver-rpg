@@ -3,8 +3,8 @@ import { base44 } from '@/api/base44Client';
 import { Skull } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import LoreEntryModal from './LoreEntryModal';
-import { LoadingState, EmptyState, SectionHeader, EntryActions } from './EncyclopediaLocations';
+import LoreEntryModal from './LoreEntryModal.jsx';
+import { LoadingState, EmptyState, SectionHeader, EntryActions } from './EncyclopediaLocations.jsx';
 
 const DANGER_COLORS = {
   Harmless: { bg: 'rgba(20,80,30,0.5)',  border: 'rgba(40,180,80,0.3)',  text: '#86efac' },
