@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Star, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import LoreEntryModal from './LoreEntryModal';
-import { LoadingState, EmptyState, SectionHeader, EntryActions } from './EncyclopediaLocations';
+import LoreEntryModal from './LoreEntryModal.jsx';
+import { LoadingState, EmptyState, SectionHeader, EntryActions } from './EncyclopediaLocations.jsx';
 
 const STATUS_STYLES = {
   Alive:     { color: '#4ade80', emoji: '💚' },
