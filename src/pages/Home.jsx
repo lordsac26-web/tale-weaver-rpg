@@ -124,6 +124,28 @@ export default function Home() {
         <motion.div variants={container} initial="hidden" animate="show"
           className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
 
+          {/* Encyclopedia */}
+          <motion.div variants={item}>
+            <Link to={createPageUrl('Encyclopedia')}>
+              <div className="group relative overflow-hidden rounded-2xl p-8 text-center cursor-pointer fantasy-card rune-border"
+                style={{ background: 'rgba(15,10,20,0.75)', border: '1px solid rgba(201,169,110,0.2)' }}>
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                  style={{ background: 'radial-gradient(ellipse at center top, rgba(201,169,110,0.06) 0%, transparent 70%)' }} />
+                <motion.div whileHover={{ scale: 1.1, rotate: -5 }} transition={{ type: 'spring', stiffness: 300 }}
+                  className="mb-5 flex justify-center">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                    style={{ background: 'rgba(30,20,8,0.8)', border: '1px solid rgba(201,169,110,0.25)', boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.6)' }}>
+                    <Library className="w-8 h-8" style={{ color: '#c9a96e' }} />
+                  </div>
+                </motion.div>
+                <h3 className="font-fantasy font-bold text-xl mb-2" style={{ color: '#f0c040' }}>Lore Archives</h3>
+                <p className="text-sm leading-relaxed" style={{ color: 'rgba(201,169,110,0.45)', fontFamily: 'EB Garamond, serif', fontSize: '0.95rem' }}>
+                  Explore the realm's history, factions, figures, locations, and your personal adventurer's logbook.
+                </p>
+              </div>
+            </Link>
+          </motion.div>
+
           {/* New Character */}
           <motion.div variants={item}>
             <Link to={createPageUrl('CharacterCreation')}>
