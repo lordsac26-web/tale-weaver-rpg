@@ -520,6 +520,8 @@ export const PROFICIENCY_BY_LEVEL = [2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5
 
 export const calcStatMod = (stat) => Math.floor(((stat || 10) - 10) / 2);
 export const calcModDisplay = (mod) => mod >= 0 ? `+${mod}` : `${mod}`;
+export const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Artificer'];
+
 export const calcHP = (charClass, level, conMod) => {
   const hd = CLASSES[charClass]?.hit_die || 8;
   return hd + conMod + (level - 1) * (Math.floor(hd / 2) + 1 + conMod);
