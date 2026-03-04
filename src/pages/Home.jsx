@@ -285,7 +285,8 @@ function CharacterCard({ character, sessions, onViewSheet }) {
   return (
     <motion.div whileHover={{ y: -3 }} transition={{ type: 'spring', stiffness: 300 }}
       className="rounded-xl p-5 cursor-pointer fantasy-card rune-border"
-      style={{ background: 'rgba(16,11,5,0.85)', border: '1px solid rgba(180,140,90,0.15)' }}>
+      style={{ background: 'rgba(16,11,5,0.85)', border: '1px solid rgba(180,140,90,0.15)' }}
+      onClick={onViewSheet}>
       <div className="flex items-start gap-3 mb-4">
         <div className="w-11 h-11 rounded-xl flex items-center justify-center font-fantasy font-bold text-sm flex-shrink-0"
           style={{
