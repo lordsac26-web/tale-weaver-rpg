@@ -137,13 +137,21 @@ Deno.serve(async (req) => {
 
       attackMod = spellAttackBonus;
       damageDice = spell.damage_dice || '2d6';
-      damageBonus = 0;
+      damageBonus = 0; // spell damage doesn't add ability mod (unless explicit, like Hex)
       attackType = spell.attack_type || 'ranged_spell_attack';
 
-      // Handle upcast damage bonus (each slot level above base adds dice)
+      // Handle upcast: scale damage dice if upcasting
       const slotLevel = spell.slot_level || spell.base_level || 1;
       const baseLevel = spell.base_level || 1;
       const upcasting = slotLevel > baseLevel;
+      if (upcasting && damageDice && damageDice !== '0') {
+        const dMatch0 = damageDice.match(/^(\d+)d(\d+)$/);
+        if (dMatch0) {
+          const extraLevels = slotLevel - baseLevel;
+          const newNumDice = parseInt(dMatch0[1]) + extraLevels;
+          damageDice = `${newNumDice}d${dMatch0[2]}`;
+        }
+      }
 
       // Use slot on cast (track in character spell_slots)
       if (spell.slot_level && spell.slot_level > 0) {
