@@ -82,10 +82,11 @@ export default function Game() {
     const stat = SKILL_STAT_MAP[skillName];
     const base = stat ? calcStatMod(character[stat]) : 0;
     const prof = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
-    const skills = character.skills || {};
-    const isProficient = skills[skillName] || false;
-    const hasExpertise = skills[`${skillName}_expertise`] || false;
-    return base + (hasExpertise ? prof * 2 : isProficient ? prof : 0);
+    // character.skills stores exact skill name as key, value is 'proficient', 'expert', or true (legacy)
+    const skillVal = (character.skills || {})[skillName];
+    const isProficient = skillVal === 'proficient' || skillVal === true;
+    const isExpert = skillVal === 'expert';
+    return base + (isExpert ? prof * 2 : isProficient ? prof : 0);
   };
 
   // Generate brief feedback text for a skill check result
