@@ -295,7 +295,8 @@ Deno.serve(async (req) => {
         return Response.json({ hit: saveFailed, damage: finalDmg, log_entry: saveEntry, result: result2, combat_ended: result2 !== 'ongoing', actions_remaining: Math.max(0, ar2), next_turn_index: ni });
       }
 
-      // Fall through to normal ranged/melee spell attack
+      // Fall through: ranged/melee spell attacks use spellAttackBonus already set above.
+      // damageBonus stays 0 for spell attacks (no ability mod added to spell damage by default).
     } else if (weapon) {
       const isRanged = weapon.type === 'ranged';
       const isFinesse = (weapon.properties || []).includes('finesse');
