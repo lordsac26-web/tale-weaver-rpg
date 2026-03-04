@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Package, ChevronDown, ChevronUp, Search, Sparkles, ShieldCheck, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Trash2, Package, ChevronDown, ChevronUp, Search, Sparkles, ShieldCheck, X, FlaskConical } from 'lucide-react';
+import ConsumableUseModal from './ConsumableUseModal';
 import {
   ITEM_RARITY, EQUIP_SLOTS, CATEGORY_TO_SLOT, ALL_ITEM_CATEGORIES, CATEGORY_ICONS,
   MAGIC_PROPERTIES, SRD_MAGIC_ITEMS, getEquipConstraints, computeAC
