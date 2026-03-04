@@ -458,6 +458,36 @@ export const CLASSES = {
   },
 };
 
+  Artificer: {
+    hit_die: 8, primary_stat: 'intelligence', saves: ['constitution', 'intelligence'],
+    armor_prof: ['light armor', 'medium armor', 'shields'], weapon_prof: ['simple weapons', 'hand crossbows', 'heavy crossbows'],
+    tools: ["thieves' tools", "tinker's tools", "one type of artisan's tools"],
+    skills: ['Arcana', 'History', 'Investigation', 'Medicine', 'Nature', 'Perception', 'Sleight of Hand'],
+    skill_count: 2,
+    subclasses: [
+      { name: 'Alchemist', desc: 'Experimental Elixir (create magical elixirs: healing, swiftness, resilience, boldness, flight, transformation). Alchemical Savant. Restorative Reagents. Chemical Mastery.', features: { 3: ['Tools Required', 'Experimental Elixir'], 5: ['Alchemical Savant'], 9: ['Restorative Reagents'], 15: ['Chemical Mastery'] } },
+      { name: 'Armorer', desc: 'Arcane Armor (donned armor becomes magical, don/doff as action). Armor Model (Guardian or Infiltrator). Extra Attack. Armor Modifications. Perfected Armor.', features: { 3: ['Tools Required', 'Arcane Armor', 'Armor Model'], 5: ['Extra Attack'], 9: ['Armor Modifications'], 15: ['Perfected Armor'] } },
+      { name: 'Artillerist', desc: 'Eldritch Cannon (force ballista, flamethrower, or protector). Arcane Firearm (+1d8 to spell damage). Explosive Cannon. Fortified Position.', features: { 3: ['Tools Required', 'Eldritch Cannon'], 5: ['Arcane Firearm'], 9: ['Explosive Cannon'], 15: ['Fortified Position'] } },
+      { name: 'Battle Smith', desc: 'Battle Ready (use INT for weapon attacks). Steel Defender (mechanical beast companion). Extra Attack. Arcane Jolt (+2d6 force damage or heal an ally). Improved Defender.', features: { 3: ['Tools Required', 'Battle Ready', 'Steel Defender'], 5: ['Extra Attack'], 9: ['Arcane Jolt'], 15: ['Improved Defender'] } },
+    ],
+    description: 'A master of magical invention who uses tools and ingenuity to craft weapons, armor, and wondrous items.',
+    features: {
+      1: ['Magical Tinkering (infuse tiny objects with minor magical effects)', 'Spellcasting (INT, uses tools as spellcasting focus)'],
+      2: ['Infuse Item (imbue items with magical infusions; number = level)', 'Infusions Known: Enhanced Defense, Enhanced Weapon, Replicate Magic Item, Returning Weapon'],
+      3: ['Artificer Specialist', 'The Right Tool for the Job (craft tools with tinker\'s tools)'],
+      4: ['Ability Score Improvement'],
+      5: ['Arcane Jolt (+2d6 force damage 1/turn)', 'Tool Expertise (double proficiency on tool checks)'],
+      6: ['Tool Expertise'],
+      7: ['Flash of Genius (add INT to failed check/save as reaction, CHA times/long rest)'],
+      10: ['Magic Item Adept (attune to 4 items; craft common/uncommon in half time at half cost)'],
+      11: ['Spell-Storing Item (store a 1st or 2nd level spell in an item, CHA uses/long rest)'],
+      14: ['Magic Item Savant (attune to 5 items, ignore requirements)'],
+      18: ['Magic Item Master (attune to 6 items)'],
+      20: ['Soul of Artifice (+1 to all saves per attunement; avoid being reduced to 0 HP as reaction)'],
+    },
+  },
+};
+
 export const BACKGROUNDS = [
   { name: 'Acolyte', skills: ['Insight', 'Religion'], feature: 'Shelter of the Faithful', equipment: ['Holy symbol', 'Prayer book', '15 gp'], tool_profs: [], languages: 2 },
   { name: 'Criminal', skills: ['Deception', 'Stealth'], feature: 'Criminal Contact', equipment: ["Crowbar", "Dark clothes", '15 gp'], tool_profs: ["Thieves' tools", 'one gaming set'] },
