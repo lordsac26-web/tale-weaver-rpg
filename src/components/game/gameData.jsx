@@ -466,8 +466,6 @@ export const CLASSES = {
       'Misty Visions (Silent Image at will)', 'One with Shadows (invisible in dim/dark)', 'Sculptor of Flesh (Polymorph 1/long rest)',
     ],
   },
-};
-
   Artificer: {
     hit_die: 8, primary_stat: 'intelligence', saves: ['constitution', 'intelligence'],
     armor_prof: ['light armor', 'medium armor', 'shields'], weapon_prof: ['simple weapons', 'hand crossbows', 'heavy crossbows'],
