@@ -4,12 +4,12 @@ import { createPageUrl } from '@/utils';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, Search, BookOpen, MapPin, Skull, Scroll, Users, Star, StickyNote, Plus, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import EncyclopediaLocations from '@/components/encyclopedia/EncyclopediaLocations';
-import EncyclopediaCreatures from '@/components/encyclopedia/EncyclopediaCreatures';
-import EncyclopediaHistory from '@/components/encyclopedia/EncyclopediaHistory';
-import EncyclopediaFactions from '@/components/encyclopedia/EncyclopediaFactions';
-import EncyclopediaFigures from '@/components/encyclopedia/EncyclopediaFigures';
-import PlayerNotes from '@/components/encyclopedia/PlayerNotes';
+import EncyclopediaLocations from '@/components/encyclopedia/EncyclopediaLocations.jsx';
+import EncyclopediaCreatures from '@/components/encyclopedia/EncyclopediaCreatures.jsx';
+import EncyclopediaHistory from '@/components/encyclopedia/EncyclopediaHistory.jsx';
+import EncyclopediaFactions from '@/components/encyclopedia/EncyclopediaFactions.jsx';
+import EncyclopediaFigures from '@/components/encyclopedia/EncyclopediaFigures.jsx';
+import PlayerNotes from '@/components/encyclopedia/PlayerNotes.jsx';
 
 const TABS = [
   { id: 'locations',  label: 'Locations',  icon: MapPin,    color: '#4ade80' },
