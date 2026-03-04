@@ -331,7 +331,8 @@ Deno.serve(async (req) => {
 
     let damage = 0;
     let damageRolls = [];
-    const logEntry = { round: combatLog.round, actor: character.name, action: 'attack', target: target.name };
+    const isSpellAttack = !!spell;
+    const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, spell_name: spell?.name || null };
 
     if (hit) {
       const dMatch = damageDice.match(/^(\d+)d(\d+)$/);
