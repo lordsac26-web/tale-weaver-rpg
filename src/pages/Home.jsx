@@ -31,6 +31,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen parchment-bg" style={{ color: '#e8d5b7' }} onClick={() => setShowCharMenu(false)}>
+      <BackgroundEffects enabled={fxEnabled} onToggle={() => setFxEnabled(v => { const next = !v; localStorage.setItem('homeFx', next ? 'on' : 'off'); return next; })} />
       {/* Top Nav Bar */}
       {characters.length > 0 && (
         <div className="fixed top-0 left-0 right-0 z-30 flex items-center justify-end px-4 py-2"
