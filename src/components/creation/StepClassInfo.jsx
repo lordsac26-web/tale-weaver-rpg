@@ -82,12 +82,15 @@ export default function StepClassInfo({ character, set }) {
           <div>
             <label className="text-amber-400/80 text-xs uppercase tracking-widest mb-2 block">Subclass (optional)</label>
             <div className="flex flex-wrap gap-2">
-              {selectedClass.subclasses.map(sub => (
-                <button key={sub} onClick={() => set('subclass', character.subclass === sub ? '' : sub)}
-                  className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${character.subclass === sub ? 'border-amber-500 bg-amber-900/30 text-amber-200' : 'border-slate-700/50 text-slate-400 hover:border-amber-700/50'}`}>
-                  {sub}
-                </button>
-              ))}
+              {selectedClass.subclasses.map((sub, i) => {
+                const subName = typeof sub === 'string' ? sub : sub.name;
+                return (
+                  <button key={subName || i} onClick={() => set('subclass', character.subclass === subName ? '' : subName)}
+                    className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${character.subclass === subName ? 'border-amber-500 bg-amber-900/30 text-amber-200' : 'border-slate-700/50 text-slate-400 hover:border-amber-700/50'}`}>
+                    {subName}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
