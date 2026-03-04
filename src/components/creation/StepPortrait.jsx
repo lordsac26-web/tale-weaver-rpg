@@ -128,10 +128,12 @@ export default function StepPortrait({ character, set }) {
 
           {generatedUrl && !generating && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-4 flex gap-2">
-              <Button onClick={handleDownload} variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-800 text-sm gap-2">
+              <Button onClick={handleDownload} variant="outline" className="text-sm gap-2"
+                style={{ background: 'rgba(45,30,10,0.85)', border: '1px solid rgba(184,115,51,0.55)', color: '#f0d090' }}>
                 <Download className="w-4 h-4" /> Download
               </Button>
-              <Button onClick={handleGenerate} variant="outline" className="border-purple-700/50 text-purple-300 hover:bg-purple-900/20 text-sm gap-2">
+              <Button onClick={handleGenerate} variant="outline" className="text-sm gap-2"
+                style={{ background: 'rgba(50,18,85,0.85)', border: '1px solid rgba(150,90,230,0.55)', color: '#dfc8ff' }}>
                 <RefreshCw className="w-4 h-4" /> Regenerate
               </Button>
             </motion.div>
