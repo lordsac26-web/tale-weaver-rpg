@@ -27,6 +27,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const [selectedSpell, setSelectedSpell] = useState(null);
   const [selectedSpellLevel, setSelectedSpellLevel] = useState(null);
   const [selectedSpellBaseLevel, setSelectedSpellBaseLevel] = useState(null);
+  const [showDice, setShowDice] = useState(false);
 
   if (!combat) return null;
 
