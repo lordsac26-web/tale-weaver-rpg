@@ -199,7 +199,7 @@ export default function CharacterSheetPage() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto p-4 pb-12 space-y-4">
+      <div className="max-w-3xl mx-auto p-4 pb-12 space-y-4" ref={sheetRef}>
         {/* Hero header */}
         <div className="rounded-2xl p-5 rune-border" style={{
           background: 'rgba(15,10,5,0.85)',
