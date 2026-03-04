@@ -430,6 +430,21 @@ export default function CharacterSheetPage() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Print styles */}
+      <style>{`
+        @media print {
+          body { background: white; color: black; }
+          .parchment-bg { background: white !important; }
+          [style*="background: rgba"] { background: white !important; }
+          [style*="color: rgba"] { color: black !important; }
+          [style*="color: #"] { color: black !important; }
+          .stat-box { border: 1px solid #ccc !important; background: white !important; }
+          * { box-shadow: none !important; }
+          .sticky { position: static; }
+          button { display: none; }
+        }
+      `}</style>
     </div>
   );
 }
