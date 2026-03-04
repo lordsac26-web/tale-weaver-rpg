@@ -107,32 +107,74 @@ export default function StepEquipmentSpells({ character, set }) {
     set('gold', STARTING_GOLD[character.class] || 50);
   }
 
-  // Spell selection
+  // Spell selection with proper 5e limits
   const charLevel = character.level || 1;
   const classSpells = SPELLS_BY_CLASS[character.class] || {};
-  const maxCantrips = CANTRIPS_KNOWN[character.class]?.[charLevel - 1] || 0;
-  const maxSpellsKnown = character.class === 'Wizard' ? 6 + charLevel : (charLevel <= 4 ? 4 : charLevel <= 8 ? 6 : 8);
   const selectedSpells = new Set(character.spells_known || []);
 
+  // Cantrips known (from spellData)
+  const maxCantrips = CANTRIPS_KNOWN[character.class]?.[charLevel - 1] || 0;
+
+  // Spells known limits per 5e PHB (only for classes that "know" spells)
+  // Full casters that KNOW spells: Wizard, Sorcerer, Bard
+  // Full casters that PREPARE spells: Cleric, Druid, Paladin (half), Ranger (half)
+  // Warlock: Special - knows spells but has pact slots
+  const getMaxSpellsKnown = () => {
+    const class_ = character.class;
+    if (class_ === 'Wizard') return 6 + charLevel; // PHB p114
+    if (class_ === 'Sorcerer') return Math.ceil(charLevel / 2) + charLevel; // PHB p102
+    if (class_ === 'Bard') return Math.ceil(charLevel / 2) + charLevel; // PHB p54
+    if (class_ === 'Warlock') return Math.ceil(charLevel / 2) + 1; // PHB p107 (Invocations + spells known)
+    // Prepared casters (Cleric, Druid, Paladin, Ranger) don't have a "spells known" limit
+    // They prepare from entire class list - allow free selection
+    return 999; // No practical limit for prepared casters
+  };
+
+  const maxSpellsKnown = getMaxSpellsKnown();
+
+  // Count selected spells by level
+  const getCantripCount = () => [...selectedSpells].filter(s => {
+    const spell = SPELL_DETAILS[s];
+    return spell && spell.level === 0;
+  }).length;
+
+  const getSpellCountByLevel = (spellLevel) => [...selectedSpells].filter(s => {
+    const spell = SPELL_DETAILS[s];
+    return spell && spell.level === spellLevel;
+  }).length;
+
+  const getTotalSpellCount = () => [...selectedSpells].filter(s => {
+    const spell = SPELL_DETAILS[s];
+    return spell && spell.level > 0;
+  }).length;
+
+  const cantripCount = getCantripCount();
+  const totalSpellCount = getTotalSpellCount();
+
   const toggleSpell = (name, level) => {
+    const spell = SPELL_DETAILS[name];
+    if (!spell) return; // Safety check
+
     const updated = new Set(selectedSpells);
     if (updated.has(name)) {
       updated.delete(name);
     } else {
+      // Check cantrip limit
       if (level === 0) {
-        const cantripCount = [...updated].filter(s => (SPELL_DETAILS[s]?.level || 0) === 0).length;
-        if (cantripCount >= maxCantrips && maxCantrips > 0) return;
+        const currentCantripCount = [...updated].filter(s => SPELL_DETAILS[s]?.level === 0).length;
+        if (currentCantripCount >= maxCantrips && maxCantrips > 0) return;
       } else {
-        const spellCount = [...updated].filter(s => (SPELL_DETAILS[s]?.level || 0) > 0).length;
-        if (spellCount >= maxSpellsKnown) return;
+        // Check spell-known limit (only for classes that have it)
+        const currentSpellCount = [...updated].filter(s => {
+          const sp = SPELL_DETAILS[s];
+          return sp && sp.level > 0;
+        }).length;
+        if (currentSpellCount >= maxSpellsKnown) return;
       }
       updated.add(name);
     }
     set('spells_known', [...updated]);
   };
-
-  const cantripCount = [...selectedSpells].filter(s => (SPELL_DETAILS[s]?.level || 0) === 0).length;
-  const spellCount = [...selectedSpells].filter(s => (SPELL_DETAILS[s]?.level || 0) > 0).length;
 
   return (
     <div className="space-y-4">
