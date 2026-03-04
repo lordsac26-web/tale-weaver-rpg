@@ -226,8 +226,8 @@ Deno.serve(async (req) => {
 
       // === SAVING THROW spells ===
       if (spell.attack_type === 'saving_throw' && spell.save_type) {
-        const saveStatMap = { strength: character.strength, dexterity: target.dexterity || 10, constitution: target.constitution || 10, wisdom: target.wisdom || 10, intelligence: target.intelligence || 10, charisma: target.charisma || 10 };
-        const targetSaveStat = target[spell.save_type] || 10;
+        // Target's save ability — use what we have on the combatant (may have been set at start), else default
+        const targetSaveStat = target[spell.save_type] || target.save_stats?.[spell.save_type] || 10;
         const targetSaveMod = statMod(targetSaveStat);
         const saveRoll = Math.floor(Math.random() * 20) + 1;
         const saveTotal = saveRoll + targetSaveMod;
