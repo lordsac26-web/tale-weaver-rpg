@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Sword, Heart, Loader2, SkipForward, Scroll, Swords, Shield, Zap } from 'lucide-react';
+import { Heart, Loader2, SkipForward, Scroll, Swords, Shield, Dices } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { calcStatMod } from './gameData';
+import { calcStatMod, PROFICIENCY_BY_LEVEL } from './gameData';
 import CombatSpellSelector from './CombatSpellSelector';
 import { SPELL_DETAILS } from './spellData';
+import CombatDiceRoller from './CombatDiceRoller';
 
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger'];
 
