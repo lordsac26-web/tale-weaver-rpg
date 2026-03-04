@@ -432,7 +432,6 @@ Deno.serve(async (req) => {
     const logs = await base44.asServiceRole.entities.CombatLog.filter({ id: combat_id });
     const combatLog = logs[0];
     const combatants = [...combatLog.combatants];
-    const logEntries = [];
 
     // Find current enemy turn
     const currentCombatant = combatants[combatLog.current_turn_index];
@@ -444,44 +443,143 @@ Deno.serve(async (req) => {
     const player = combatants.find(c => c.type === 'player' && c.is_conscious);
     if (!player) return Response.json({ no_target: true });
 
-    const attackRoll = rollD20();
-    const totalAttack = attackRoll + (currentCombatant.attack_bonus || 3);
-    const hit = attackRoll !== 1 && (attackRoll === 20 || totalAttack >= player.ac);
-    let damage = 0;
+    // === AI Strategy System ===
+    const enemyHpPct = currentCombatant.hp_max ? currentCombatant.hp_current / currentCombatant.hp_max : 1;
+    const playerHpPct = player.hp_max ? player.hp_current / player.hp_max : 1;
+    const cr = currentCombatant.cr || 1;
+    const isBoss = cr >= 5;
+    const isElite = cr >= 3;
 
-    const logEntry = { round: combatLog.round, actor: currentCombatant.name, action: 'attack', target: player.name };
+    // Determine AI strategy based on enemy state
+    let strategy = 'attack'; // default
+    let strategyDesc = null;
 
-    if (hit) {
-      const dMatch = (currentCombatant.damage_dice || '1d6').match(/^(\d+)d(\d+)$/);
-      const numDice = attackRoll === 20 ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1]);
-      const sides = parseInt(dMatch[2]);
-      for (let i = 0; i < numDice; i++) damage += rollDice(sides);
-      damage += (currentCombatant.damage_bonus || 0);
-      damage = Math.max(1, damage);
-      player.hp_current = Math.max(0, player.hp_current - damage);
-      if (player.hp_current === 0) player.is_conscious = false;
-      logEntry.hit = true;
-      logEntry.damage = damage;
-      logEntry.text = `${currentCombatant.name} hits ${player.name} for ${damage} damage! (${player.hp_current}/${player.hp_max} HP)`;
-
-      // Update actual character HP in DB
-      await base44.asServiceRole.entities.Character.update(player.id, { hp_current: player.hp_current });
-    } else {
-      logEntry.hit = false;
-      logEntry.text = `${currentCombatant.name} misses ${player.name}!`;
+    if (enemyHpPct < 0.25 && !currentCombatant.has_fled_attempt) {
+      // Low HP: desperate behavior
+      if (isBoss) {
+        strategy = 'multiattack'; // bosses fight to the death with fury
+        strategyDesc = 'fights with desperate fury!';
+      } else if (cr < 2 && Math.random() < 0.4) {
+        strategy = 'retreat';
+        strategyDesc = 'attempts to retreat!';
+      } else {
+        strategy = 'reckless_attack';
+        strategyDesc = 'attacks recklessly in desperation!';
+      }
+    } else if (playerHpPct < 0.3) {
+      strategy = 'press_advantage';
+      strategyDesc = 'presses the advantage against the weakened hero!';
+    } else if (isBoss && combatLog.round <= 1) {
+      strategy = 'intimidate_then_attack';
+      strategyDesc = 'sizes up the hero with cold calculation...';
+    } else if (isElite && Math.random() < 0.3) {
+      strategy = 'tactical_strike';
+      strategyDesc = 'uses a tactical strike!';
+    } else if (Math.random() < 0.15) {
+      strategy = 'defensive_stance';
+      strategyDesc = 'takes a defensive stance before attacking!';
     }
 
+    let attackBonus = currentCombatant.attack_bonus || 3;
+    let targetAC = player.ac;
+    let numAttacks = 1;
+    let bonusDamage = 0;
+
+    // Apply strategy effects
+    if (strategy === 'reckless_attack') {
+      attackBonus += 3; // advantage-like bonus
+      bonusDamage += 2;
+    } else if (strategy === 'press_advantage') {
+      attackBonus += 2;
+      bonusDamage += 1;
+    } else if (strategy === 'multiattack') {
+      numAttacks = isBoss ? 3 : 2;
+    } else if (strategy === 'tactical_strike') {
+      attackBonus += 1;
+      bonusDamage += Math.floor(cr);
+    } else if (strategy === 'defensive_stance') {
+      attackBonus -= 2; // trades accuracy for positioning
+    }
+
+    let totalDamage = 0;
+    let anyHit = false;
+    let isCritical = false;
+    const attackLogs = [];
+
+    for (let atk = 0; atk < numAttacks; atk++) {
+      const attackRoll = rollD20();
+      const totalAttack = attackRoll + attackBonus;
+      const isCrit = attackRoll === 20;
+      const isFumble = attackRoll === 1;
+      const hit = !isFumble && (isCrit || totalAttack >= targetAC);
+
+      if (isCrit) isCritical = true;
+
+      if (hit) {
+        anyHit = true;
+        const dMatch = (currentCombatant.damage_dice || '1d6').match(/^(\d+)d(\d+)$/);
+        if (dMatch) {
+          const numDice = isCrit ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1]);
+          const sides = parseInt(dMatch[2]);
+          let dmg = 0;
+          for (let i = 0; i < numDice; i++) dmg += rollDice(sides);
+          dmg += (currentCombatant.damage_bonus || 0) + bonusDamage;
+          dmg = Math.max(1, dmg);
+          totalDamage += dmg;
+          attackLogs.push(`${isCrit ? '💥 CRITICAL! ' : ''}${currentCombatant.name} hits for ${dmg} dmg (${attackRoll}+${attackBonus}=${totalAttack} vs AC ${targetAC})`);
+        }
+      } else {
+        attackLogs.push(`${currentCombatant.name} misses (${attackRoll}+${attackBonus}=${totalAttack} vs AC ${targetAC})`);
+      }
+    }
+
+    // Apply total damage to player
+    if (totalDamage > 0) {
+      player.hp_current = Math.max(0, player.hp_current - totalDamage);
+      if (player.hp_current === 0) player.is_conscious = false;
+      await base44.asServiceRole.entities.Character.update(player.id, { hp_current: player.hp_current });
+    }
+
+    // Build log entry
+    let logText = '';
+    if (strategyDesc) logText += `[${currentCombatant.name} ${strategyDesc}] `;
+    if (anyHit) {
+      logText += attackLogs.join('; ') + `. ${player.name} takes ${totalDamage} total damage! (${player.hp_current}/${player.hp_max} HP)`;
+      if (!player.is_conscious) logText += ` ${player.name} falls!`;
+    } else {
+      logText = `${strategyDesc ? `[${currentCombatant.name} ${strategyDesc}] ` : ''}${currentCombatant.name} attacks but misses ${player.name}! (${attackLogs.join('; ')})`;
+    }
+
+    const logEntry = {
+      round: combatLog.round,
+      actor: currentCombatant.name,
+      action: strategy,
+      target: player.name,
+      hit: anyHit,
+      critical: isCritical,
+      damage: totalDamage,
+      ai_strategy: strategyDesc,
+      text: logText
+    };
+
     // Advance turn
-    const nextIndex = (combatLog.current_turn_index + 1) % combatants.length;
+    let nextIndex = (combatLog.current_turn_index + 1) % combatants.length;
     let round = combatLog.round;
-    if (nextIndex === 0) round += 1;
+    // Skip dead combatants
+    let safety = 0;
+    while (!combatants[nextIndex]?.is_conscious && safety < combatants.length) {
+      nextIndex = (nextIndex + 1) % combatants.length;
+      safety++;
+    }
+    if (nextIndex <= combatLog.current_turn_index) round += 1;
 
     const updatedCombatants = combatants.map(c => c.id === player.id ? player : c);
     await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants,
       log_entries: [...(combatLog.log_entries || []), logEntry],
       current_turn_index: nextIndex,
-      round
+      round,
+      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0 }
     });
 
     const playerDead = !player.is_conscious;
@@ -490,7 +588,7 @@ Deno.serve(async (req) => {
       await base44.asServiceRole.entities.CombatLog.update(combat_id, { is_active: false, result: 'defeat' });
     }
 
-    return Response.json({ log_entry: logEntry, player_hp: player.hp_current, player_dead: playerDead, next_turn_index: nextIndex, round });
+    return Response.json({ log_entry: logEntry, player_hp: player.hp_current, player_dead: playerDead, next_turn_index: nextIndex, round, ai_strategy: strategy });
   }
 
   if (action === 'next_turn') {
