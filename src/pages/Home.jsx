@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { Link } from 'react-router-dom';
-import { Sword, Plus, Play, BookOpen, Skull, Sparkles, Swords } from 'lucide-react';
+import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import CharacterSheet from '@/components/game/CharacterSheet';
 
 export default function Home() {
   const [characters, setCharacters] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showCharMenu, setShowCharMenu] = useState(false);
+  const [selectedCharacter, setSelectedCharacter] = useState(null);
 
   useEffect(() => {
     Promise.all([
