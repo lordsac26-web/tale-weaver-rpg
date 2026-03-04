@@ -47,7 +47,7 @@ export default function Home() {
             }}
             transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
             className="flex justify-center mb-6">
-            <Swords className="w-16 h-16" style={{ color: '#c9a96e' }} />
+            <img src="https://base44.com/logo_v2.svg" alt="Logo" className="w-16 h-16" style={{ filter: 'sepia(1) saturate(3) hue-rotate(5deg) brightness(0.85)' }} />
           </motion.div>
 
           <h1 className="font-fantasy-deco font-bold mb-4 tracking-tight text-gold-shimmer"
