@@ -33,7 +33,6 @@ function TowerScene({ towerType, dice, onDieSettle }) {
 
   return (
     <>
-      <fog attach="fog" args={[cfg.fogColor, 12, 30]} />
       <ambientLight intensity={0.55} color={cfg.ambientColor} />
       <pointLight position={[0, 8, 0]} intensity={2.5} color={cfg.ambientColor} castShadow />
       <pointLight position={[0, -1, 2]} intensity={0.7} color="#ffffff" />
