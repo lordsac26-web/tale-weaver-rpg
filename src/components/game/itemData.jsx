@@ -173,6 +173,23 @@ export const SRD_MAGIC_ITEMS = [
   { name: 'Pearl of Power', category: 'Wondrous Item', equip_slot: 'trinket', rarity: 'uncommon', requires_attunement: true, attunement_class: ['Cleric', 'Druid', 'Paladin', 'Ranger', 'Warlock', 'Wizard', 'Sorcerer', 'Bard'], weight: 0, cost: 0, cost_unit: 'gp', magic_properties: ['spellcasting_plus1'], description: 'While this pearl is on your person, you can use an action to speak its command word and regain one expended spell slot of up to 3rd level. Once you use the pearl, it can\'t be used again until the next dawn.', quantity: 1 },
 ];
 
+// ─── SRD Potions / Consumables ───────────────────────────────────────────────
+export const SRD_CONSUMABLES = [
+  { name: 'Potion of Healing', category: 'Potion', rarity: 'common', weight: 0.5, cost: 50, cost_unit: 'gp', quantity: 1, description: 'You regain 2d4+2 hit points when you drink this potion. The potion\'s red liquid glimmers when agitated.', magic_properties: [], is_magic: true },
+  { name: 'Potion of Greater Healing', category: 'Potion', rarity: 'uncommon', weight: 0.5, cost: 150, cost_unit: 'gp', quantity: 1, description: 'You regain 4d4+4 hit points when you drink this potion.', magic_properties: [], is_magic: true },
+  { name: 'Potion of Superior Healing', category: 'Potion', rarity: 'rare', weight: 0.5, cost: 500, cost_unit: 'gp', quantity: 1, description: 'You regain 8d4+8 hit points when you drink this potion.', magic_properties: [], is_magic: true },
+  { name: 'Potion of Supreme Healing', category: 'Potion', rarity: 'epic', weight: 0.5, cost: 1350, cost_unit: 'gp', quantity: 1, description: 'You regain 10d4+20 hit points when you drink this potion.', magic_properties: [], is_magic: true },
+  { name: 'Potion of Speed', category: 'Potion', rarity: 'rare', weight: 0.5, cost: 500, cost_unit: 'gp', quantity: 1, description: 'When you drink this potion, you gain the effect of the haste spell for 1 minute. Your speed increases by 15 ft.', magic_properties: [], is_magic: true },
+  { name: 'Potion of Strength', category: 'Potion', rarity: 'uncommon', weight: 0.5, cost: 200, cost_unit: 'gp', quantity: 1, description: 'When you drink this potion, your Strength score changes to 21 for 1 hour.', magic_properties: [], is_magic: true },
+  { name: 'Potion of Invisibility', category: 'Potion', rarity: 'epic', weight: 0.5, cost: 180, cost_unit: 'gp', quantity: 1, description: 'This potion\'s container looks empty but feels as though it holds liquid. When you drink it, you become invisible for 1 hour.', magic_properties: [], is_magic: true },
+  { name: 'Potion of Fire Resistance', category: 'Potion', rarity: 'uncommon', weight: 0.5, cost: 300, cost_unit: 'gp', quantity: 1, description: 'When you drink this potion, you gain resistance to fire damage for 1 hour.', magic_properties: [], is_magic: true },
+  { name: 'Antitoxin', category: 'Potion', rarity: 'common', weight: 0.5, cost: 50, cost_unit: 'gp', quantity: 1, description: 'A creature that drinks this vial of liquid gains advantage on saving throws against poison for 1 hour. It also cures the poisoned condition.', magic_properties: [], is_magic: false },
+  { name: 'Potion of Mana Restoration', category: 'Potion', rarity: 'rare', weight: 0.5, cost: 250, cost_unit: 'gp', quantity: 1, description: 'When you drink this potion, you regain one expended spell slot of up to 3rd level.', magic_properties: [], is_magic: true },
+];
+
+// Merge consumables into SRD_MAGIC_ITEMS export (append)
+SRD_MAGIC_ITEMS.push(...SRD_CONSUMABLES);
+
 // ─── Equipment Constraint Rules (D&D 5E) ──────────────────────────────────────
 export function getEquipConstraints(equipped, newItem) {
   const slot = newItem.equip_slot || CATEGORY_TO_SLOT[newItem.category];
