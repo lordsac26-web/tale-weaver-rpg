@@ -485,7 +485,7 @@ export default function Game() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden min-h-0">
             {!started ? (
               <div className="flex items-center justify-center h-full p-8">
                 <motion.div
