@@ -31,6 +31,7 @@ export default function Game() {
   const [customInput, setCustomInput] = useState('');
   const [showCharSheet, setShowCharSheet] = useState(false);
   const [showDiceRoller, setShowDiceRoller] = useState(false);
+  const [show3DDice, setShow3DDice] = useState(false);
   const [started, setStarted] = useState(false);
   const [showSceneVisualizer, setShowSceneVisualizer] = useState(false);
   const [showPortraitGen, setShowPortraitGen] = useState(false);
