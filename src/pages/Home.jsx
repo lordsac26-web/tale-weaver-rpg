@@ -13,6 +13,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [showCharMenu, setShowCharMenu] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
+  const [fxEnabled, setFxEnabled] = useState(() => localStorage.getItem('homeFx') !== 'off');
 
   useEffect(() => {
     Promise.all([
