@@ -349,6 +349,7 @@ export const CLASSES = {
       { name: 'College of Valor', desc: 'Bonus Proficiencies (medium armor, shields, martial weapons). Combat Inspiration (Bardic die to weapon damage/AC). Extra Attack. Battle Magic.', features: { 3: ['Bonus Proficiencies', 'Combat Inspiration'], 6: ['Extra Attack'], 14: ['Battle Magic'] } },
       { name: 'College of Glamour', desc: 'Mantle of Inspiration (move + temp HP), Enthralling Performance (charm), Mantle of Majesty (Command each turn), Unbreakable Majesty.', features: { 3: ['Mantle of Inspiration', 'Enthralling Performance'], 6: ['Mantle of Majesty'], 14: ['Unbreakable Majesty'] } },
       { name: 'College of Swords', desc: 'Bonus Proficiencies (medium armor, scimitars). Fighting Style. Blade Flourish (3 options using Inspiration dice). Extra Attack. Master\'s Flourish.', features: { 3: ['Bonus Proficiency', 'Fighting Style', 'Blade Flourish'], 6: ['Extra Attack'], 14: ["Master's Flourish"] } },
+      { name: 'College of Whispers', desc: 'Psychic Blades (extra 2d6 psychic on Sneak Attack). Words of Terror (frighten creature with conversation). Mantle of Whispers (steal shadow/identity of dying humanoid). Shadow Lore.', features: { 3: ['Psychic Blades', 'Words of Terror'], 6: ['Mantle of Whispers'], 14: ['Shadow Lore'] } },
     ],
     description: 'An inspiring magician whose power echoes the music of creation.',
     features: {
