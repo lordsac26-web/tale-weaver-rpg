@@ -21,10 +21,14 @@ const ATTACK_ICONS = {
 
 function SpellCard({ spell, spellName, character, isKnown, onToggleKnown, compact = false }) {
   const [showDetail, setShowDetail] = useState(false);
-  const details = SPELL_DETAILS[spellName] || {};
+  const details = SPELL_DETAILS[spellName] || spell || {};
   const schoolColor = SCHOOL_COLORS[details.school] || 'text-slate-400';
   const dmgColor = DAMAGE_TYPE_COLORS[details.damage_type] || 'text-amber-300';
   const attackIcon = ATTACK_ICONS[details.attack_type || 'utility'];
+  
+  // Check for concentration and ritual from multiple sources
+  const isConcentration = details.requires_concentration || details.concentration;
+  const isRitual = details.is_reaction || details.ritual;
 
   return (
     <div className={`rounded-xl border transition-all ${isKnown ? 'border-amber-600/50 bg-amber-900/10' : 'border-slate-700/40 bg-slate-800/30'}`}>
@@ -34,15 +38,16 @@ function SpellCard({ spell, spellName, character, isKnown, onToggleKnown, compac
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-sm font-medium ${isKnown ? 'text-amber-200' : 'text-slate-300'}`}>{spellName}</span>
             {details.school && <span className={`text-xs ${schoolColor} opacity-70`}>{details.school}</span>}
-            {details.requires_concentration && <span className="text-xs text-blue-400 opacity-70">Conc.</span>}
-            {details.is_reaction && <span className="text-xs text-yellow-400 opacity-70">Reaction</span>}
+            {isConcentration && <span className="text-xs text-blue-400 opacity-70">Conc.</span>}
+            {isRitual && <span className="text-xs text-yellow-400 opacity-70">Ritual</span>}
+            {details.damage_type && <span className={`text-xs ${dmgColor} opacity-70`}>{details.damage_type}</span>}
           </div>
           {!compact && (
             <div className="flex items-center gap-3 mt-1 flex-wrap">
               {details.casting_time && <span className="text-xs text-slate-500">{details.casting_time}</span>}
               {details.range && <span className="text-xs text-slate-500">📍 {details.range}</span>}
               {details.damage_dice && details.damage_dice !== '0' && (
-                <span className={`text-xs font-mono ${dmgColor}`}>{details.damage_dice} {details.damage_type}</span>
+                <span className={`text-xs font-mono ${dmgColor}`}>{details.damage_dice}</span>
               )}
               {details.attack_type === 'healing' && details.heal_dice && (
                 <span className="text-xs font-mono text-green-400">{details.heal_dice} heal</span>
@@ -68,12 +73,21 @@ function SpellCard({ spell, spellName, character, isKnown, onToggleKnown, compac
         {showDetail && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden border-t border-slate-700/30 px-3 pb-3 pt-2">
+            {details.visual_summary && (
+              <p className="text-xs text-purple-400/80 leading-relaxed italic mb-2">✨ {details.visual_summary}</p>
+            )}
+            {details.effect_summary && (
+              <p className="text-xs text-blue-300/80 leading-relaxed font-medium mb-2">⚡ {details.effect_summary}</p>
+            )}
             <p className="text-xs text-slate-400 leading-relaxed">{details.description || 'No description available.'}</p>
-            {details.higher_levels && (
-              <p className="text-xs text-amber-400/70 mt-1.5 italic">At higher levels: {details.higher_levels}</p>
+            {details.higher_level_scaling && (
+              <p className="text-xs text-amber-400/70 mt-1.5 italic">At higher levels: {details.higher_level_scaling}</p>
             )}
             {details.components && <p className="text-xs text-slate-500 mt-1">Components: {details.components}</p>}
             {details.duration && <p className="text-xs text-slate-500">Duration: {details.duration}</p>}
+            {details.conditions_caused && details.conditions_caused.length > 0 && (
+              <p className="text-xs text-red-400/70 mt-1">Conditions: {details.conditions_caused.join(', ')}</p>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
