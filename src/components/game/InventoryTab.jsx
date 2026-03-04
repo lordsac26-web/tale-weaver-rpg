@@ -604,7 +604,8 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
              const origIndex = inventory.indexOf(item);
              return (
                <ItemRow key={i} item={item} origIndex={origIndex}
-                 equipped={equipped} onEquip={handleEquipItem} onRemove={handleRemoveItem} onIdentify={props.onIdentify} />
+                 equipped={equipped} onEquip={handleEquipItem} onRemove={handleRemoveItem}
+                 onIdentify={onIdentify} onUseConsumable={handleUseConsumable} />
              );
            })}
          </div>
