@@ -41,6 +41,15 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const actionsUsed = world_state?.actions_used_this_turn || 0;
   const actionsRemaining = Math.max(0, actionsPerTurn - actionsUsed);
 
+  // Derive a useful attack modifier for the dice roller display
+  const charLevel = character?.level || 1;
+  const profBonus = PROFICIENCY_BY_LEVEL[(charLevel - 1)] || 2;
+  const strMod = calcStatMod(character?.strength || 10);
+  const dexMod = calcStatMod(character?.dexterity || 10);
+  const equippedWeapon = character?.equipped?.weapon || null;
+  const isRanged = equippedWeapon?.type === 'ranged';
+  const attackMod = (isRanged ? dexMod : strMod) + profBonus + (equippedWeapon?.attack_bonus || 0);
+
   const handleSelectSpell = (spellName, baseLevel) => {
     setSelectedSpell(spellName);
     setSelectedSpellBaseLevel(baseLevel);
