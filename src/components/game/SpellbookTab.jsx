@@ -98,7 +98,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
   const currentSlots = character.spell_slots || {};
   const knownSpells = new Set(character.spells_known || []);
   const isPreparation = PREPARATION_CLASSES.includes(charClass);
-  const profBonus = Math.ceil(charLevel / 4) + 1;
+  const profBonus = Math.floor((charLevel - 1) / 4) + 2;
   const spellcastingAbilityScore = character[spellcastingAbility] || 10;
   const spellcastingMod = Math.floor((spellcastingAbilityScore - 10) / 2);
 
