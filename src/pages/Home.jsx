@@ -279,6 +279,7 @@ export default function Home() {
 }
 
 function CharacterCard({ character, sessions, onViewSheet }) {
+  const navigate = useNavigate();
   const session = sessions.find(s => s.character_id === character.id);
   const hpPct = character.hp_max ? Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100)) : 100;
   const hpBarStyle = hpPct > 60 ? { background: 'linear-gradient(90deg, #16a34a, #22c55e)' } :
