@@ -40,9 +40,13 @@ function computeModifier(character, rollKey) {
   if (!character) return 0;
   const statMod = (s) => calcStatMod(character[s] || 10);
   const profBonus = character.proficiency_bonus || 2;
-  const skillProf = (key) => {
-    const val = character.skills?.[key];
-    return val === 'expert' ? profBonus * 2 : val === 'proficient' ? profBonus : 0;
+  const skillProf = (skillName) => {
+    // character.skills stores proficiency keyed by exact skill name (e.g. "Insight", "Animal Handling")
+    const val = character.skills?.[skillName];
+    // Support both boolean true (legacy) and string 'proficient'/'expert'
+    if (val === 'expert') return profBonus * 2;
+    if (val === 'proficient' || val === true) return profBonus;
+    return 0;
   };
   const abilityCheck = ABILITY_CHECKS.find(a => a.key === rollKey);
   if (abilityCheck) return statMod(abilityCheck.stat);
