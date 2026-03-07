@@ -124,12 +124,10 @@ export function Floor({ towerType }) {
     shadow: '#050505',
   };
 
-  return (
-    <mesh ref={ref} receiveShadow>
-      <planeGeometry args={[20, 20]} />
-      <meshStandardMaterial color={colors[towerType] || '#111'} roughness={0.95} metalness={0.05} />
-    </mesh>
-  );
+  const geo = useMemo(() => new THREE.PlaneGeometry(20, 20), []);
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: colors[towerType] || '#111', roughness: 0.95, metalness: 0.05 }), [towerType]);
+
+  return <mesh ref={ref} geometry={geo} material={mat} receiveShadow />;
 }
 
 // ─── Tower Wall ───────────────────────────────────────────────────────────────
