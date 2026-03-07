@@ -144,7 +144,7 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
     controls.minDistance = 5;
     controls.maxDistance = 16;
     controls.maxPolarAngle = Math.PI / 2.1;
-    controls.target.set(0, 0.5, 0.8);
+    controls.target.set(0, 1.0, 0.5);
     controls.update();
     controlsRef.current = controls;
 
