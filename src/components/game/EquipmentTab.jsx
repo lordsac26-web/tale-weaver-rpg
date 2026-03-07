@@ -52,7 +52,7 @@ function ItemCard({ item, isEquipped, onCompare, onEquip, onUnequip, onDrop }) {
             )}
           </div>
           {item.category && (
-            <span className="text-xs capitalize" style={{ color: 'rgba(184,115,51,0.4)', fontFamily: 'EB Garamond, serif' }}>
+            <span className="text-xs capitalize" style={{ color: 'rgba(212,168,100,0.65)', fontFamily: 'EB Garamond, serif' }}>
               {item.category}
               {item.requires_attunement ? ' · Attunement' : ''}
             </span>
