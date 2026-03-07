@@ -46,10 +46,10 @@ function StatRow({ stat, newVal, equippedVal }) {
     <div className="flex items-center gap-2 py-1.5 px-2 rounded-lg"
       style={{ background: 'rgba(20,10,4,0.5)', borderBottom: '1px solid rgba(184,115,51,0.08)' }}>
       <span className="w-5 text-center flex-shrink-0 text-sm">{stat.icon}</span>
-      <span className="flex-1 text-xs font-body" style={{ color: 'rgba(212,180,120,0.7)' }}>{stat.label}</span>
+      <span className="flex-1 text-xs font-body" style={{ color: 'rgba(220,190,140,0.85)' }}>{stat.label}</span>
 
       {/* Equipped value */}
-      <span className="text-xs font-fantasy w-10 text-right" style={{ color: 'rgba(212,149,90,0.45)' }}>
+      <span className="text-xs font-fantasy w-10 text-right" style={{ color: 'rgba(212,168,100,0.7)' }}>
         {hasEquipped ? equippedVal : '—'}
       </span>
 
