@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { createDieMesh, getDieRadius } from './DiceGeometry';
 import { buildTavernTower, buildSceneLights } from './TowerBuilder';
+import { createPhysicsBody, stepPhysics, collideDice } from './TowerPhysics';
 
 // ─── Pure vanilla Three.js dice scene — no R3F ───────────────────────────────
 
