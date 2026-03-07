@@ -649,10 +649,10 @@ export default function Game() {
             enemies={defeatedEnemies}
             character={character}
             onClose={() => setShowLootModal(false)}
-            onCollect={(updates) => {
+            onCollect={async (updates, lootSnapshot) => {
               setCharacter(prev => ({ ...prev, ...updates }));
               const coinParts = [];
-              if (updates.gold   > character.gold)   coinParts.push(`+${updates.gold   - character.gold}   gp`);
+              if (updates.gold   > character.gold)   coinParts.push(`+${updates.gold   - character.gold} gp`);
               if (updates.silver > character.silver) coinParts.push(`+${updates.silver - character.silver} sp`);
               if (updates.copper > character.copper) coinParts.push(`+${updates.copper - character.copper} cp`);
               if ((updates.inventory?.length || 0) > (character.inventory?.length || 0)) {
@@ -661,6 +661,12 @@ export default function Game() {
               }
               if (coinParts.length > 0) {
                 setNarrative(prev => [...prev, { type: 'xp_gain', text: `💰 Looted: ${coinParts.join(' · ')}` }]);
+              }
+              // Persist loot snapshot to combat history record
+              if (lootSnapshot && session?.combat_state?.combat_id) {
+                await base44.entities.CombatLog.update(session.combat_state.combat_id, {
+                  loot_collected: lootSnapshot,
+                });
               }
             }}
           />
