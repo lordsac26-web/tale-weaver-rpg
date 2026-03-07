@@ -86,7 +86,7 @@ function CoinRow({ gold, silver, copper }) {
             <div className="font-fantasy font-bold text-2xl" style={{ color: c.color, textShadow: `0 0 12px ${c.color}55` }}>
               {c.amount}
             </div>
-            <div className="text-xs font-body" style={{ color: 'rgba(180,140,90,0.5)' }}>{c.label}</div>
+            <div className="text-xs font-fantasy" style={{ color: 'rgba(212,180,110,0.8)' }}>{c.label}</div>
           </motion.div>
         ))}
       </div>
