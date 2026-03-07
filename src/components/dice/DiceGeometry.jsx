@@ -56,7 +56,7 @@ function createIvoryMaterial(isCrit, isFail) {
 
 // ─── Crit/fail glow sphere ────────────────────────────────────────────────────
 function addCritGlow(mesh, isCrit) {
-  const glowGeo = new THREE.SphereGeometry(0.8, 16, 16);
+  const glowGeo = new THREE.SphereGeometry(0.4, 16, 16);
   const glowMat = new THREE.MeshBasicMaterial({
     color: isCrit ? '#f0c040' : '#ff2200',
     transparent: true,
@@ -226,17 +226,16 @@ export function createDieMesh(sides, result, dieColor) {
     case 12:  return createD12(result, isCrit, isFail);
     case 20:  return createD20(result, isCrit, isFail);
     case 100: {
-      // D100 = two D10s (tens + units)
       const tens = Math.floor((result - 1) / 10) * 10;
       const units = ((result - 1) % 10) + 1;
       const group = new THREE.Group();
       const d1 = createD10(tens === 0 ? '00' : tens, false, false);
-      d1.position.set(-0.4, 0, 0);
+      d1.position.set(-0.22, 0, 0);
       const d2 = createD10(units, false, false);
-      d2.position.set(0.4, 0, 0);
+      d2.position.set(0.22, 0, 0);
       group.add(d1);
       group.add(d2);
-      group.userData.dieRadius = 0.7;
+      group.userData.dieRadius = 0.7 * DICE_SCALE;
       return group;
     }
     default:  return createD20(result, isCrit, isFail);
@@ -246,13 +245,13 @@ export function createDieMesh(sides, result, dieColor) {
 // ─── Get physics radius for a die type ────────────────────────────────────────
 export function getDieRadius(sides) {
   switch (sides) {
-    case 4: return 0.65;
-    case 6: return 0.55;
-    case 8: return 0.6;
-    case 10: return 0.55;
-    case 12: return 0.6;
-    case 20: return 0.6;
-    case 100: return 0.7;
-    default: return 0.6;
+    case 4: return 0.65 * DICE_SCALE;
+    case 6: return 0.55 * DICE_SCALE;
+    case 8: return 0.6 * DICE_SCALE;
+    case 10: return 0.55 * DICE_SCALE;
+    case 12: return 0.6 * DICE_SCALE;
+    case 20: return 0.6 * DICE_SCALE;
+    case 100: return 0.7 * DICE_SCALE;
+    default: return 0.6 * DICE_SCALE;
   }
 }
