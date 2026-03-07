@@ -9,6 +9,8 @@ import * as THREE from 'three';
 
 // Texture URLs from uploaded images
 const WALL_TEXTURE_URL = 'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69a4e1720142630debaad046/979b57267_ChatGPTImageMar7202604_36_21AM.png';
+const TOP_TEXTURE_URL = 'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69a4e1720142630debaad046/ed47f85cd_ChatGPTImageMar7202605_20_55AM.png';
+const FRONT_TEXTURE_URL = 'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69a4e1720142630debaad046/fcb33eac7_ChatGPTImageMar7202605_19_51AM.png';
 
 const textureLoader = new THREE.TextureLoader();
 let wallTexLoaded = null;
@@ -134,27 +136,45 @@ export function buildTavernTower(scene, towerType, towerConfig) {
   // Right wall
   addBox(group, [wallThick, towerH, towerD], [towerW / 2 - wallThick / 2, towerBaseY + towerH / 2, 0], towerMat);
 
-  // Top cap (where dice enter — bowl-like opening)
-  const capGeo = new THREE.BoxGeometry(towerW, 0.12, towerD);
-  const cap = new THREE.Mesh(capGeo, isWooden ? createWoodMaterial() : createThemedWall(towerType));
-  cap.position.set(0, towerBaseY + towerH, 0);
-  cap.receiveShadow = true;
-  group.add(cap);
+  // Top cap — replaced with textured plane showing the bowl/hole image
+  if (isWooden) {
+    const topPlaneGeo = new THREE.PlaneGeometry(towerW + 0.1, towerD + 0.1);
+    const topMat = new THREE.MeshStandardMaterial({
+      color: '#ffffff',
+      roughness: 0.7,
+      metalness: 0.05,
+    });
+    textureLoader.load(TOP_TEXTURE_URL, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      topMat.map = tex;
+      topMat.needsUpdate = true;
+    });
+    const topPlane = new THREE.Mesh(topPlaneGeo, topMat);
+    topPlane.rotation.x = -Math.PI / 2;
+    topPlane.position.set(0, towerBaseY + towerH + 0.08, 0);
+    topPlane.receiveShadow = true;
+    group.add(topPlane);
+  } else {
+    // Non-wooden towers keep original cap
+    const capGeo = new THREE.BoxGeometry(towerW, 0.12, towerD);
+    const cap = new THREE.Mesh(capGeo, createThemedWall(towerType));
+    cap.position.set(0, towerBaseY + towerH, 0);
+    cap.receiveShadow = true;
+    group.add(cap);
 
-  // Opening hole in cap (visual — a dark circle on top)
-  const holeGeo = new THREE.CircleGeometry(0.8, 24);
-  const holeMat = new THREE.MeshBasicMaterial({ color: '#0a0502' });
-  const hole = new THREE.Mesh(holeGeo, holeMat);
-  hole.rotation.x = -Math.PI / 2;
-  hole.position.set(0, towerBaseY + towerH + 0.07, 0);
-  group.add(hole);
+    const holeGeo = new THREE.CircleGeometry(0.8, 24);
+    const holeMat = new THREE.MeshBasicMaterial({ color: '#0a0502' });
+    const hole = new THREE.Mesh(holeGeo, holeMat);
+    hole.rotation.x = -Math.PI / 2;
+    hole.position.set(0, towerBaseY + towerH + 0.07, 0);
+    group.add(hole);
 
-  // Bowl rim on top
-  const rimGeo = new THREE.TorusGeometry(0.85, 0.08, 8, 24);
-  const rim = new THREE.Mesh(rimGeo, createBrassMaterial());
-  rim.rotation.x = -Math.PI / 2;
-  rim.position.set(0, towerBaseY + towerH + 0.1, 0);
-  group.add(rim);
+    const rimGeo = new THREE.TorusGeometry(0.85, 0.08, 8, 24);
+    const rim = new THREE.Mesh(rimGeo, createBrassMaterial());
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.set(0, towerBaseY + towerH + 0.1, 0);
+    group.add(rim);
+  }
 
   // ── Brass corner brackets ───────────────────────────────────────────────────
   const brassMat = createBrassMaterial();
@@ -227,6 +247,27 @@ export function buildTavernTower(scene, towerType, towerConfig) {
       lLight.userData.isTowerElement = true;
       scene.add(lLight);
     });
+  }
+
+  // ── Front portcullis texture (where dice exit the tower into the tray) ──────
+  if (isWooden) {
+    const frontH = towerH * 0.55;  // covers lower portion of tower front
+    const frontPlaneGeo = new THREE.PlaneGeometry(towerW, frontH);
+    const frontMat = new THREE.MeshStandardMaterial({
+      color: '#ffffff',
+      roughness: 0.7,
+      metalness: 0.05,
+      transparent: false,
+    });
+    textureLoader.load(FRONT_TEXTURE_URL, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      frontMat.map = tex;
+      frontMat.needsUpdate = true;
+    });
+    const frontPlane = new THREE.Mesh(frontPlaneGeo, frontMat);
+    frontPlane.position.set(0, towerBaseY + frontH / 2, towerD / 2 - wallThick + 0.01);
+    frontPlane.receiveShadow = true;
+    group.add(frontPlane);
   }
 
   // ── Internal baffles (angled shelves inside tower for dice to bounce) ───────
