@@ -130,16 +130,7 @@ export function Die({ position, velocity, angularVelocity, color, onSettle, resu
       </mesh>
       {[1, 2, 3, 4, 5, 6].map((face, i) => (
         <group key={face} position={facePositions[i]} rotation={faceRotations[i]}>
-          <Text
-            fontSize={0.26}
-            color={isCrit ? '#1a0a00' : 'white'}
-            anchorX="center"
-            anchorY="middle"
-            depthOffset={-1}
-            fontWeight="bold"
-          >
-            {face}
-          </Text>
+          <DieNumber value={face} color={isCrit ? '#1a0a00' : 'white'} />
         </group>
       ))}
     </group>
