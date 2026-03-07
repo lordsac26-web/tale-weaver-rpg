@@ -79,19 +79,18 @@ function createD4(result, isCrit, isFail) {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
 
-  // Place number sprite at center — D4 reads number at bottom
-  const sprite = createFaceSprite(result, isCrit, isFail, 0.5);
-  sprite.position.set(0, -0.15, 0);
+  const sprite = createFaceSprite(result, isCrit, isFail, 0.3);
+  sprite.position.set(0, -0.08, 0);
   mesh.add(sprite);
 
   if (isCrit || isFail) addCritGlow(mesh, isCrit);
-  mesh.userData.dieRadius = 0.65;
+  mesh.userData.dieRadius = 0.65 * DICE_SCALE;
   return mesh;
 }
 
 // ─── D6 (Cube) ───────────────────────────────────────────────────────────────
 function createD6(result, isCrit, isFail) {
-  const size = 0.55;
+  const size = 0.55 * DICE_SCALE;
   // Create 6 face materials with numbers baked in
   const materials = [];
   const faceValues = [1, 6, 2, 5, 3, 4]; // Three.js cube face order
@@ -118,69 +117,66 @@ function createD6(result, isCrit, isFail) {
 
 // ─── D8 (Octahedron) ─────────────────────────────────────────────────────────
 function createD8(result, isCrit, isFail) {
-  const geo = new THREE.OctahedronGeometry(0.6, 0);
+  const geo = new THREE.OctahedronGeometry(0.6 * DICE_SCALE, 0);
   const mat = createIvoryMaterial(isCrit, isFail);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
 
-  const sprite = createFaceSprite(result, isCrit, isFail, 0.45);
-  sprite.position.set(0, 0.15, 0.25);
+  const sprite = createFaceSprite(result, isCrit, isFail, 0.28);
+  sprite.position.set(0, 0.08, 0.12);
   mesh.add(sprite);
 
   if (isCrit || isFail) addCritGlow(mesh, isCrit);
-  mesh.userData.dieRadius = 0.6;
+  mesh.userData.dieRadius = 0.6 * DICE_SCALE;
   return mesh;
 }
 
 // ─── D10 (Pentagonal trapezohedron approx — using lathe) ──────────────────────
 function createD10(result, isCrit, isFail) {
-  // Approximate D10 as a bipyramid with 10 faces
-  const geo = new THREE.DodecahedronGeometry(0.55, 0);
-  // Scale vertically to get more D10-like shape
+  const geo = new THREE.DodecahedronGeometry(0.55 * DICE_SCALE, 0);
   geo.scale(0.85, 1.1, 0.85);
   const mat = createIvoryMaterial(isCrit, isFail);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
 
-  const sprite = createFaceSprite(result, isCrit, isFail, 0.42);
-  sprite.position.set(0, 0.15, 0.3);
+  const sprite = createFaceSprite(result, isCrit, isFail, 0.25);
+  sprite.position.set(0, 0.08, 0.15);
   mesh.add(sprite);
 
   if (isCrit || isFail) addCritGlow(mesh, isCrit);
-  mesh.userData.dieRadius = 0.55;
+  mesh.userData.dieRadius = 0.55 * DICE_SCALE;
   return mesh;
 }
 
 // ─── D12 (Dodecahedron) ──────────────────────────────────────────────────────
 function createD12(result, isCrit, isFail) {
-  const geo = new THREE.DodecahedronGeometry(0.6, 0);
+  const geo = new THREE.DodecahedronGeometry(0.6 * DICE_SCALE, 0);
   const mat = createIvoryMaterial(isCrit, isFail);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
 
-  const sprite = createFaceSprite(result, isCrit, isFail, 0.4);
-  sprite.position.set(0, 0.18, 0.28);
+  const sprite = createFaceSprite(result, isCrit, isFail, 0.25);
+  sprite.position.set(0, 0.09, 0.14);
   mesh.add(sprite);
 
   if (isCrit || isFail) addCritGlow(mesh, isCrit);
-  mesh.userData.dieRadius = 0.6;
+  mesh.userData.dieRadius = 0.6 * DICE_SCALE;
   return mesh;
 }
 
 // ─── D20 (Icosahedron) ───────────────────────────────────────────────────────
 function createD20(result, isCrit, isFail) {
-  const geo = new THREE.IcosahedronGeometry(0.6, 0);
+  const geo = new THREE.IcosahedronGeometry(0.6 * DICE_SCALE, 0);
   const mat = createIvoryMaterial(isCrit, isFail);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
 
-  // Large centered result number
-  const sprite = createFaceSprite(result, isCrit, isFail, 0.48);
-  sprite.position.set(0, 0.18, 0.3);
+  const sprite = createFaceSprite(result, isCrit, isFail, 0.3);
+  sprite.position.set(0, 0.09, 0.15);
   mesh.add(sprite);
 
   if (isCrit || isFail) addCritGlow(mesh, isCrit);
-  mesh.userData.dieRadius = 0.6;
+  mesh.userData.dieRadius = 0.6 * DICE_SCALE;
   return mesh;
 }
 
