@@ -313,9 +313,17 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
       c.traverse?.(o => { o.geometry?.dispose(); o.material?.dispose?.(); });
     });
 
-    // Build new tower
+    // Build new tower + lights
     buildTavernTower(scene, towerType, towerConfig);
-    buildSceneLights(scene, towerConfig);
+    const lights = buildSceneLights(scene, towerConfig);
+
+    // Store light refs for ambience updates
+    lights.forEach(l => {
+      if (l.isAmbientLight) lightsRef.current.ambient = l;
+      else if (l.userData?.lightRole === 'main') lightsRef.current.main = l;
+      else if (l.userData?.lightRole === 'fill') lightsRef.current.fill = l;
+      else if (l.userData?.lightRole === 'rim') lightsRef.current.rim = l;
+    });
 
     // Sparkles for non-wooden towers
     if (towerConfig?.sparkles) {
@@ -327,6 +335,31 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
       sparklesRef.current = null;
     }
   }, [towerType, towerConfig]);
+
+  // Apply ambience changes
+  useEffect(() => {
+    ambienceRef.current = ambience;
+    const scene = sceneRef.current;
+    const renderer = rendererRef.current;
+    if (!scene || !renderer) return;
+
+    const preset = AMBIENCE_PRESETS[ambience] || AMBIENCE_PRESETS.dusk;
+
+    scene.background = new THREE.Color(preset.bgColor);
+    scene.fog = new THREE.FogExp2(preset.fogColor, preset.fogDensity);
+    renderer.toneMappingExposure = preset.exposure;
+
+    const { ambient, main, fill, rim } = lightsRef.current;
+    if (ambient) { ambient.color.set(preset.ambientColor); ambient.intensity = preset.ambientIntensity; }
+    if (main)    { main.color.set(preset.mainLightColor); main.intensity = preset.mainLightIntensity; }
+    if (fill)    { fill.color.set(preset.fillColor); fill.intensity = preset.fillIntensity; }
+    if (rim)     { rim.color.set(preset.rimColor); rim.intensity = preset.rimIntensity; }
+
+    // Update star visibility
+    if (starsRef.current) {
+      starsRef.current.material.opacity = preset.starOpacity;
+    }
+  }, [ambience]);
 
   // Update dice when they change
   useEffect(() => {
