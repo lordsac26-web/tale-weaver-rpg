@@ -1,8 +1,32 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useBox, usePlane } from '@react-three/cannon';
-import { Text } from '@react-three/drei';
 import * as THREE from 'three';
+
+// Canvas-based text sprite to replace drei's <Text> (which crashes applyProps)
+function DieNumber({ value, color = 'white' }) {
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, 128, 128);
+    ctx.fillStyle = color;
+    ctx.font = 'bold 72px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(value), 64, 68);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+  }, [value, color]);
+
+  return (
+    <sprite scale={[0.4, 0.4, 0.4]}>
+      <spriteMaterial map={texture} transparent depthOffset={-1} />
+    </sprite>
+  );
+}
 
 // ─── Settle Detection ────────────────────────────────────────────────────────
 
