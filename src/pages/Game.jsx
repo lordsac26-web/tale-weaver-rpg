@@ -260,6 +260,17 @@ export default function Game() {
     });
 
     const data = result.data;
+
+    // Emit floating combat text event
+    if (data.log_entry) {
+      setLastCombatEvent({
+        key: Date.now(),
+        hit: data.hit,
+        critical: data.log_entry.critical,
+        damage: data.damage || 0,
+      });
+    }
+
     setNarrative(prev => [...prev, {
       type: 'roll_result', text: data.log_entry?.text || 'Attack resolved.', success: data.hit
     }]);
@@ -276,6 +287,9 @@ export default function Game() {
 
     if (data.combat_ended) {
       if (data.result === 'victory') {
+        const victoriousEnemies = (combat?.combatants || []).filter(c => c.type === 'enemy');
+        setDefeatedEnemies(victoriousEnemies);
+        setShowLootModal(true);
         setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! The battle is won. Your enemies lie defeated.' }]);
         const storyResult = await base44.functions.invoke('generateStory', {
           session_id: sessionId, action: 'choice', custom_input: 'The combat has ended in victory.'
