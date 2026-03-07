@@ -4,6 +4,7 @@ import { X, Dices, ChevronDown, ChevronUp, RotateCcw, Sun, Moon, Sunset } from '
 import { TOWER_CONFIGS } from './DiceTowerScene';
 import CriticalEffect from './CriticalEffect';
 import VanillaThreeScene from './VanillaThreeScene';
+import { getSpawnPosition, getSpawnVelocity, getSpawnAngularVelocity } from './TowerPhysics';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
