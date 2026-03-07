@@ -280,8 +280,8 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
             </div>
           ) : isEmpty ? (
             <div className="flex flex-col items-center py-12 gap-2">
-              <Package className="w-10 h-10 opacity-20" style={{ color: '#c9a96e' }} />
-              <p className="text-sm font-body italic" style={{ color: 'rgba(180,140,90,0.4)' }}>Nothing of value remains.</p>
+              <Package className="w-10 h-10 opacity-30" style={{ color: '#c9a96e' }} />
+              <p className="text-sm font-body italic" style={{ color: 'rgba(212,180,110,0.7)' }}>Nothing of value remains.</p>
             </div>
           ) : (
             <>
