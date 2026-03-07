@@ -140,10 +140,10 @@ function EquippedSlot({ slot, item }) {
         minHeight: '72px',
       }}>
       <div className="text-xl mb-0.5">{item ? item.icon : slot.icon}</div>
-      <p className="text-xs font-fantasy truncate" style={{ color: item ? r.color : 'rgba(184,115,51,0.25)' }}>
+      <p className="text-xs font-fantasy truncate" style={{ color: item ? r.color : 'rgba(180,140,80,0.5)' }}>
         {item ? item.name : slot.fallback}
       </p>
-      <p className="text-xs" style={{ color: 'rgba(184,115,51,0.3)', fontSize: '0.6rem' }}>{slot.label}</p>
+      <p className="text-xs" style={{ color: 'rgba(180,140,80,0.55)', fontSize: '0.65rem' }}>{slot.label}</p>
     </div>
   );
 }
