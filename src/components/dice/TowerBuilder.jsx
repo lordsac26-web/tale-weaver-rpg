@@ -115,7 +115,7 @@ export function buildTavernTower(scene, towerType, towerConfig) {
   group.add(trayFloor);
 
   // Tray walls (low lip)
-  const lipMat = isWooden ? createWoodMaterial(1.5, 0.3) : createThemedWall(towerType);
+  const lipMat = isWooden ? createWoodMaterial() : createThemedWall(towerType);
   // Left lip
   addBox(group, [wallThick, trayH, trayD], [-trayW / 2 + wallThick / 2, trayFloorY + trayH / 2, trayD / 2 - 0.3], lipMat);
   // Right lip
@@ -124,7 +124,7 @@ export function buildTavernTower(scene, towerType, towerConfig) {
   addBox(group, [trayW, trayH, wallThick], [0, trayFloorY + trayH / 2, trayD - 0.3 - wallThick / 2 + 0.05], lipMat);
 
   // ── Tower body (back section rising up) ─────────────────────────────────────
-  const towerMat = isWooden ? createWoodMaterial(1, 2) : createThemedWall(towerType);
+  const towerMat = isWooden ? createWoodMaterial() : createThemedWall(towerType);
   const towerBaseY = trayFloorY;
 
   // Back wall
@@ -136,7 +136,7 @@ export function buildTavernTower(scene, towerType, towerConfig) {
 
   // Top cap (where dice enter — bowl-like opening)
   const capGeo = new THREE.BoxGeometry(towerW, 0.12, towerD);
-  const cap = new THREE.Mesh(capGeo, isWooden ? createWoodMaterial(1, 1) : createThemedWall(towerType));
+  const cap = new THREE.Mesh(capGeo, isWooden ? createWoodMaterial() : createThemedWall(towerType));
   cap.position.set(0, towerBaseY + towerH, 0);
   cap.receiveShadow = true;
   group.add(cap);
@@ -230,7 +230,7 @@ export function buildTavernTower(scene, towerType, towerConfig) {
   }
 
   // ── Internal baffles (angled shelves inside tower for dice to bounce) ───────
-  const baffleMat = isWooden ? createWoodMaterial(0.8, 0.3) : createThemedWall(towerType);
+  const baffleMat = isWooden ? createWoodMaterial() : createThemedWall(towerType);
   // Baffle 1 — angled left
   const b1 = new THREE.Mesh(new THREE.BoxGeometry(towerW * 0.7, 0.1, towerD * 0.5), baffleMat);
   b1.position.set(0.3, towerBaseY + towerH * 0.65, 0);
