@@ -1,8 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Physics } from '@react-three/cannon';
-import { OrbitControls, Stars, Sparkles } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Dices, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { Die, Floor, TowerWall } from './DicePhysics';
