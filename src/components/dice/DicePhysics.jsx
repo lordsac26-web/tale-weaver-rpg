@@ -3,9 +3,11 @@ import { useFrame } from '@react-three/fiber';
 import { useBox, usePlane } from '@react-three/cannon';
 import * as THREE from 'three';
 
-// Canvas-based text sprite to replace drei's <Text> (which crashes applyProps)
+// Fully imperative sprite to avoid applyProps reconciler crashes
 function DieNumber({ value, color = 'white' }) {
-  const texture = useMemo(() => {
+  const spriteRef = useRef();
+
+  const material = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 128;
@@ -17,15 +19,18 @@ function DieNumber({ value, color = 'white' }) {
     ctx.textBaseline = 'middle';
     ctx.fillText(String(value), 64, 68);
     const tex = new THREE.CanvasTexture(canvas);
-    tex.needsUpdate = true;
-    return tex;
+    return new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
   }, [value, color]);
 
-  return (
-    <sprite scale={[0.4, 0.4, 0.4]}>
-      <spriteMaterial map={texture} transparent depthOffset={-1} />
-    </sprite>
-  );
+  useEffect(() => {
+    if (spriteRef.current) {
+      spriteRef.current.material = material;
+      spriteRef.current.scale.set(0.4, 0.4, 0.4);
+    }
+  }, [material]);
+
+  // Render a bare <sprite> with no child material — material set imperatively
+  return <primitive ref={spriteRef} object={new THREE.Sprite()} />;
 }
 
 // ─── Settle Detection ────────────────────────────────────────────────────────
