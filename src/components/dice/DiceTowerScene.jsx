@@ -69,9 +69,43 @@ export const TOWER_CONFIGS = {
   },
 };
 
+// Imperative light helper
+function ImperativeLight({ type = 'point', intensity = 1, position, castShadow = false, color = '#ffffff' }) {
+  const light = useMemo(() => {
+    let l;
+    if (type === 'ambient') {
+      l = new THREE.AmbientLight(color, intensity);
+    } else {
+      l = new THREE.PointLight(color, intensity);
+      l.castShadow = castShadow;
+    }
+    if (position) l.position.set(...position);
+    return l;
+  }, [type, intensity, color, castShadow]);
+  return <primitive object={light} />;
+}
+
+// Imperative OrbitControls
+function ImperativeOrbitControls({ enablePan = false, minDistance = 5, maxDistance = 14, maxPolarAngle, target }) {
+  const { camera, gl } = useThree();
+  const controlsRef = useRef();
+  React.useEffect(() => {
+    const controls = new ThreeOrbitControls(camera, gl.domElement);
+    controls.enablePan = enablePan;
+    controls.minDistance = minDistance;
+    controls.maxDistance = maxDistance;
+    if (maxPolarAngle !== undefined) controls.maxPolarAngle = maxPolarAngle;
+    if (target) controls.target.set(...target);
+    controls.update();
+    controlsRef.current = controls;
+    return () => controls.dispose();
+  }, [camera, gl]);
+  useFrame(() => { if (controlsRef.current) controlsRef.current.update(); });
+  return null;
+}
+
 function TowerScene({ towerType, dice, onDieSettle }) {
   const cfg = TOWER_CONFIGS[towerType];
-  // Box walls: back, front-left, front-right, base
   const walls = [
     { pos: [0, 2, -2.5], rot: [0, 0, 0], size: [5, 8, 0.3] },
     { pos: [-2.5, 2, 0], rot: [0, 0, 0], size: [0.3, 8, 5] },
@@ -81,9 +115,9 @@ function TowerScene({ towerType, dice, onDieSettle }) {
 
   return (
     <>
-      <ambientLight intensity={0.4} color={cfg.ambientColor} />
-      <pointLight position={[0, 6, 0]} intensity={1.5} color={cfg.ambientColor} castShadow />
-      <pointLight position={[0, -1, 0]} intensity={0.8} color="#ffffff" />
+      <ImperativeLight type="ambient" intensity={0.4} color={cfg.ambientColor} />
+      <ImperativeLight position={[0, 6, 0]} intensity={1.5} color={cfg.ambientColor} castShadow />
+      <ImperativeLight position={[0, -1, 0]} intensity={0.8} />
 
       {cfg.sparkles && (
         <SimpleSparkles
@@ -115,7 +149,7 @@ function TowerScene({ towerType, dice, onDieSettle }) {
         ))}
       </Physics>
 
-      <OrbitControls
+      <ImperativeOrbitControls
         enablePan={false}
         minDistance={5}
         maxDistance={14}
