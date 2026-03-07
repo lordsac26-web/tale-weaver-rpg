@@ -188,7 +188,7 @@ export default function EquipmentComparePanel({ newItem, equipped, onEquip, onKe
         {/* Description */}
         {newItem.description && (
           <div className="px-3 py-2 rounded-lg" style={{ background: 'rgba(15,8,3,0.6)', border: '1px solid rgba(184,115,51,0.1)' }}>
-            <p className="text-xs font-serif italic leading-relaxed" style={{ color: 'rgba(212,180,120,0.65)' }}>
+            <p className="text-xs font-serif italic leading-relaxed" style={{ color: 'rgba(220,190,140,0.85)' }}>
               {newItem.description}
             </p>
           </div>
