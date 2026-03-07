@@ -481,6 +481,14 @@ export default function Game() {
           🎲 3D Tower
         </button>
 
+        <button onClick={() => navigate(createPageUrl('CombatHistory'))}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
+          style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(180,60,40,0.2)', color: 'rgba(252,165,165,0.55)' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(220,80,60,0.45)'; e.currentTarget.style.color = '#fca5a5'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,60,40,0.2)'; e.currentTarget.style.color = 'rgba(252,165,165,0.55)'; }}>
+          <BookMarked className="w-3.5 h-3.5" /> History
+        </button>
+
         <button onClick={() => navigate(createPageUrl('Market') + `?session_id=${sessionId}&character_id=${character?.id}`)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
           style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(200,150,20,0.2)', color: 'rgba(240,192,64,0.6)' }}
