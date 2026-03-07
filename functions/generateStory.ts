@@ -29,13 +29,24 @@ Deno.serve(async (req) => {
   const monsterNames = monsters.map(m => `${m.name} (CR ${m.challenge}, AC ${m.armor_class}, HP ${m.hit_points})`).join('; ');
   const conditionNames = conditions.map(c => `${c.name}: ${(c.description || []).slice(0, 1).join(' ')}`).join('; ');
 
+  // Alignment axis helper
+  const getAlignmentLabel = (lc, ge) => {
+    const lawChaos = lc >= 4 ? 'Lawful' : lc <= -4 ? 'Chaotic' : 'Neutral';
+    const goodEvil = ge >= 4 ? 'Good' : ge <= -4 ? 'Evil' : 'Neutral';
+    if (lawChaos === 'Neutral' && goodEvil === 'Neutral') return 'True Neutral';
+    return `${lawChaos} ${goodEvil}`;
+  };
+  const lcScore = character?.alignment_law_chaos || 0;
+  const geScore = character?.alignment_good_evil || 0;
+  const currentAlignment = getAlignmentLabel(lcScore, geScore);
+
   // Build context summary
   const charSummary = character ? `
 Character: ${character.name}, Level ${character.level} ${character.race} ${character.class}
 HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class}
 Active Conditions: ${(character.conditions || []).map(c => c.name || c).join(', ') || 'None'}
 Background: ${character.backstory || 'Unknown'}
-Alignment: ${character.alignment || 'Neutral'}
+Alignment: ${currentAlignment} (Law/Chaos score: ${lcScore}, Good/Evil score: ${geScore})
   ` : '';
 
   const worldSummary = `
