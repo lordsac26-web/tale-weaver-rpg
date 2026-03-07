@@ -25,6 +25,30 @@ const DICE_TYPES = [
 
 // ─── 3D Tower Scene (inside Canvas) ──────────────────────────────────────────
 
+// Imperative OrbitControls to bypass applyProps
+function ImperativeOrbitControls({ enablePan = false, minDistance = 6, maxDistance = 18, maxPolarAngle, target }) {
+  const { camera, gl } = useThree();
+  const controlsRef = useRef();
+
+  useEffect(() => {
+    const controls = new ThreeOrbitControls(camera, gl.domElement);
+    controls.enablePan = enablePan;
+    controls.minDistance = minDistance;
+    controls.maxDistance = maxDistance;
+    if (maxPolarAngle !== undefined) controls.maxPolarAngle = maxPolarAngle;
+    if (target) controls.target.set(...target);
+    controls.update();
+    controlsRef.current = controls;
+    return () => controls.dispose();
+  }, [camera, gl]);
+
+  useFrame(() => {
+    if (controlsRef.current) controlsRef.current.update();
+  });
+
+  return null;
+}
+
 // Imperative light to bypass applyProps
 function ImperativeLight({ type = 'point', intensity = 1, position, castShadow = false, color = '#ffffff' }) {
   const light = useMemo(() => {
@@ -88,7 +112,7 @@ function TowerScene({ towerType, dice, onDieSettle }) {
         ))}
       </Physics>
 
-      <OrbitControls
+      <ImperativeOrbitControls
         enablePan={false}
         minDistance={6}
         maxDistance={18}
