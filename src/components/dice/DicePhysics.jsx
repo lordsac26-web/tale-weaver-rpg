@@ -159,16 +159,14 @@ export function TowerWall({ position, rotation, size, towerType }) {
     wooden: '#000000',
   };
 
-  return (
-    <mesh ref={ref} castShadow receiveShadow>
-      <boxGeometry args={size} />
-      <meshStandardMaterial
-        color={colors[towerType] || '#222'}
-        roughness={0.75}
-        metalness={towerType === 'crystal' ? 0.5 : 0.15}
-        emissive={emissives[towerType] || '#000'}
-        emissiveIntensity={0.3}
-      />
-    </mesh>
-  );
+  const geo = useMemo(() => new THREE.BoxGeometry(...size), [size[0], size[1], size[2]]);
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({
+    color: colors[towerType] || '#222',
+    roughness: 0.75,
+    metalness: towerType === 'crystal' ? 0.5 : 0.15,
+    emissive: new THREE.Color(emissives[towerType] || '#000'),
+    emissiveIntensity: 0.3,
+  }), [towerType]);
+
+  return <mesh ref={ref} geometry={geo} material={mat} castShadow receiveShadow />;
 }
