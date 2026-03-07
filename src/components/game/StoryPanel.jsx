@@ -114,6 +114,34 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                   </span>
                 </motion.div>
               )}
+
+              {entry.type === 'alignment_shift' && (
+                <motion.div className="text-center py-2"
+                  initial={{ scale: 0.7, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 18 }}>
+                  <div className="inline-block px-6 py-3 rounded-xl"
+                    style={{
+                      background: 'rgba(40,15,60,0.7)',
+                      border: '1px solid rgba(160,100,240,0.45)',
+                      boxShadow: '0 0 20px rgba(140,70,230,0.15)',
+                    }}>
+                    <div className="font-fantasy text-xs tracking-widest uppercase mb-1"
+                      style={{ color: 'rgba(192,132,252,0.7)' }}>
+                      Alignment Shift
+                    </div>
+                    <div className="font-fantasy text-sm font-bold"
+                      style={{ color: '#d8b4fe', textShadow: '0 0 12px rgba(160,100,240,0.5)' }}>
+                      {entry.text}
+                    </div>
+                    {entry.details && (
+                      <div className="text-xs mt-1" style={{ color: 'rgba(192,132,252,0.5)', fontFamily: 'EB Garamond, serif' }}>
+                        {entry.details}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
             </motion.div>
           ))}
         </AnimatePresence>
