@@ -101,7 +101,7 @@ function ItemCard({ item, isEquipped, onCompare, onEquip, onUnequip, onDrop }) {
             className="overflow-hidden">
             <div className="px-3 pb-3 space-y-2" style={{ borderTop: '1px solid rgba(184,115,51,0.1)' }}>
               {item.description && (
-                <p className="text-xs font-serif italic leading-relaxed pt-2" style={{ color: 'rgba(212,180,120,0.6)' }}>
+                <p className="text-xs font-serif italic leading-relaxed pt-2" style={{ color: 'rgba(220,190,140,0.85)' }}>
                   {item.description}
                 </p>
               )}
