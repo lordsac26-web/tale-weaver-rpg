@@ -86,7 +86,8 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const canAct = isPlayerTurn && selectedTarget && (action !== 'spell' || selectedSpell);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden" style={{ background: 'rgba(8,3,3,0.95)' }}>
+    <div className="flex flex-col h-full overflow-hidden relative" style={{ background: 'rgba(8,3,3,0.95)' }}>
+      <CombatFloatingText event={lastCombatEvent} />
       {/* Header — Combat Banner */}
       <div className="flex items-center justify-between px-4 py-2.5 flex-shrink-0 combat-active"
         style={{
