@@ -360,6 +360,26 @@ export default function Game() {
     }
   };
 
+  // Saves a completed encounter snapshot to the CombatLog for history tracking
+  const saveCombatHistory = async (combatId, result, enemies) => {
+    if (!combatId) return;
+    const enemySnapshot = enemies.map(e => ({
+      name: e.name,
+      max_hp: e.max_hp || e.hp,
+      cr: e.cr || null,
+    }));
+    await base44.entities.CombatLog.update(combatId, {
+      result,
+      is_active: false,
+      enemies_faced: enemySnapshot,
+      session_title: session?.title || 'Unknown Campaign',
+      character_name: character?.name || '',
+      location: session?.current_location || '',
+      total_rounds: combat?.round || 0,
+      encounter_date: new Date().toISOString(),
+    });
+  };
+
   const reloadCombat = async (combatId) => {
     const logs = await base44.entities.CombatLog.filter({ id: combatId });
     if (logs[0]) setCombat(logs[0]);
