@@ -164,7 +164,7 @@ export const GENERIC_LOOT = {
 
 // Rarity display config — matches existing itemData patterns
 export const LOOT_RARITY = {
-  common:    { label: 'Common',    color: '#9ca3af', border: 'rgba(156,163,175,0.25)', bg: 'rgba(50,50,60,0.5)',  glow: '' },
+  common:    { label: 'Common',    color: '#d1d5db', border: 'rgba(209,213,219,0.3)',  bg: 'rgba(50,50,60,0.5)',  glow: '' },
   uncommon:  { label: 'Uncommon',  color: '#4ade80', border: 'rgba(74,222,128,0.3)',  bg: 'rgba(15,45,20,0.5)',  glow: '0 0 10px rgba(74,222,128,0.15)' },
   rare:      { label: 'Rare',      color: '#60a5fa', border: 'rgba(96,165,250,0.35)', bg: 'rgba(10,30,55,0.55)', glow: '0 0 12px rgba(96,165,250,0.18)' },
   very_rare: { label: 'Very Rare', color: '#c084fc', border: 'rgba(192,132,252,0.4)', bg: 'rgba(40,10,70,0.55)', glow: '0 0 14px rgba(192,132,252,0.22)' },
