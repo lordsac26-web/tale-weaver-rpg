@@ -49,12 +49,10 @@ function CritGlow({ type }) {
     meshRef.current.scale.setScalar(1.5 + 0.1 * Math.sin(t * 6));
   });
   const color = type === 'crit' ? '#f0c040' : '#ff2200';
-  return (
-    <mesh ref={meshRef}>
-      <sphereGeometry args={[0.9, 16, 16]} />
-      <meshBasicMaterial color={color} transparent opacity={0.15} side={THREE.BackSide} />
-    </mesh>
-  );
+  const geo = useMemo(() => new THREE.SphereGeometry(0.9, 16, 16), []);
+  const mat = useMemo(() => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.15, side: THREE.BackSide }), [color]);
+
+  return <mesh ref={meshRef} geometry={geo} material={mat} />;
 }
 
 // ─── D6 Die ───────────────────────────────────────────────────────────────────
