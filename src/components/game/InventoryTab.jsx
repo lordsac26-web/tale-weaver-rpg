@@ -23,7 +23,7 @@ function CurrencyPanel({ character, onUpdate }) {
   // Derive live values from character prop so loot updates are immediately reflected
   const [values, setValues] = useState({ gold: character.gold || 0, silver: character.silver || 0, copper: character.copper || 0 });
   // Sync if character prop changes (e.g. after looting)
-  React.useEffect(() => {
+  useEffect(() => {
     if (!editing) {
       setValues({ gold: character.gold || 0, silver: character.silver || 0, copper: character.copper || 0 });
     }
