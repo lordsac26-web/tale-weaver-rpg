@@ -265,11 +265,37 @@ Create a context-appropriate event. Could be combat, social, environmental, or d
 
     await base44.asServiceRole.entities.GameSession.update(session_id, updateData);
 
-    // Award XP
-    if (result.xp_earned && character) {
-      await base44.asServiceRole.entities.Character.update(character.id, {
-        xp: (character.xp || 0) + result.xp_earned
-      });
+    // Award XP and apply alignment shifts
+    if (character) {
+      const charUpdates = {};
+      if (result.xp_earned) charUpdates.xp = (character.xp || 0) + result.xp_earned;
+
+      // Apply alignment shifts
+      if (result.alignment_shift) {
+        const lcShift = result.alignment_shift.law_chaos_shift || 0;
+        const geShift = result.alignment_shift.good_evil_shift || 0;
+        if (lcShift !== 0 || geShift !== 0) {
+          const oldLC = character.alignment_law_chaos || 0;
+          const oldGE = character.alignment_good_evil || 0;
+          const newLC = Math.max(-10, Math.min(10, oldLC + lcShift));
+          const newGE = Math.max(-10, Math.min(10, oldGE + geShift));
+          charUpdates.alignment_law_chaos = newLC;
+          charUpdates.alignment_good_evil = newGE;
+
+          // Compute new label and update alignment string
+          const getLbl = (lc, ge) => {
+            const a = lc >= 4 ? 'Lawful' : lc <= -4 ? 'Chaotic' : 'Neutral';
+            const b = ge >= 4 ? 'Good' : ge <= -4 ? 'Evil' : 'Neutral';
+            if (a === 'Neutral' && b === 'Neutral') return 'True Neutral';
+            return `${a} ${b}`;
+          };
+          charUpdates.alignment = getLbl(newLC, newGE);
+        }
+      }
+
+      if (Object.keys(charUpdates).length > 0) {
+        await base44.asServiceRole.entities.Character.update(character.id, charUpdates);
+      }
     }
   }
 
