@@ -57,7 +57,13 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
       ],
     };
     await base44.entities.Character.update(character.id, updates);
-    onCollect(updates);
+    // Pass loot snapshot back so Game.jsx can store it in combat history
+    onCollect(updates, {
+      gold: loot.gold || 0,
+      silver: loot.silver || 0,
+      copper: loot.copper || 0,
+      items: (loot.items || []).map(it => ({ name: it.name, icon: it.icon, rarity: it.rarity })),
+    });
     setSaving(false);
     onClose();
   };
