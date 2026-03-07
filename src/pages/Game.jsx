@@ -618,6 +618,31 @@ export default function Game() {
         )}
       </AnimatePresence>
 
+      {/* Loot Modal — shown after victory */}
+      <AnimatePresence>
+        {showLootModal && character && (
+          <LootModal
+            enemies={defeatedEnemies}
+            character={character}
+            onClose={() => setShowLootModal(false)}
+            onCollect={(updates) => {
+              setCharacter(prev => ({ ...prev, ...updates }));
+              const coinParts = [];
+              if (updates.gold   > character.gold)   coinParts.push(`+${updates.gold   - character.gold}   gp`);
+              if (updates.silver > character.silver) coinParts.push(`+${updates.silver - character.silver} sp`);
+              if (updates.copper > character.copper) coinParts.push(`+${updates.copper - character.copper} cp`);
+              if ((updates.inventory?.length || 0) > (character.inventory?.length || 0)) {
+                const newCount = (updates.inventory?.length || 0) - (character.inventory?.length || 0);
+                coinParts.push(`${newCount} item${newCount > 1 ? 's' : ''} added`);
+              }
+              if (coinParts.length > 0) {
+                setNarrative(prev => [...prev, { type: 'xp_gain', text: `💰 Looted: ${coinParts.join(' · ')}` }]);
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Action Proposal / DM Adjudication Modal */}
       <AnimatePresence>
         {pendingProposal && (
