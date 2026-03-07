@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Dices, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { X, Dices, ChevronDown, ChevronUp, RotateCcw, Sun, Moon, Sunset } from 'lucide-react';
 import { TOWER_CONFIGS } from './DiceTowerScene';
 import CriticalEffect from './CriticalEffect';
 import VanillaThreeScene from './VanillaThreeScene';
@@ -17,6 +17,12 @@ const DICE_TYPES = [
   { label: 'D100', sides: 100 },
 ];
 
+const AMBIENCE_OPTIONS = [
+  { key: 'night', label: 'Night', icon: Moon, color: '#6688cc' },
+  { key: 'dusk',  label: 'Dusk',  icon: Sunset, color: '#e8a040' },
+  { key: 'day',   label: 'Day',   icon: Sun, color: '#ffd080' },
+];
+
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
 export default function Dice3DModal({ onClose, character }) {
@@ -29,6 +35,7 @@ export default function Dice3DModal({ onClose, character }) {
   const [critEffect, setCritEffect]       = useState(null);
   const [rollHistory, setRollHistory]     = useState([]);
   const [showTowerPicker, setShowTowerPicker] = useState(false);
+  const [ambience, setAmbience] = useState('dusk');
   const idRef = useRef(0);
 
   const diceType = DICE_TYPES.find(d => d.label === selectedDice) || DICE_TYPES[5];
@@ -151,6 +158,7 @@ export default function Dice3DModal({ onClose, character }) {
               towerConfig={cfg}
               dice={dice}
               diceSides={diceType.sides}
+              ambience={ambience}
             />
 
             {/* Roll Result Overlay */}
@@ -240,6 +248,33 @@ export default function Dice3DModal({ onClose, character }) {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </div>
+
+            <div className="h-px flex-shrink-0" style={{ background: 'rgba(201,169,110,0.1)' }} />
+
+            {/* Ambience / Time of Day */}
+            <div>
+              <div className="text-xs mb-2 font-fantasy" style={{ color: 'rgba(201,169,110,0.45)', letterSpacing: '0.12em' }}>AMBIENCE</div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {AMBIENCE_OPTIONS.map(a => {
+                  const Icon = a.icon;
+                  const active = ambience === a.key;
+                  return (
+                    <button key={a.key}
+                      onClick={() => setAmbience(a.key)}
+                      className="flex flex-col items-center gap-1 py-2 rounded-lg text-xs font-fantasy transition-all"
+                      style={{
+                        background: active ? `${a.color}22` : 'rgba(12,7,2,0.6)',
+                        border: `1px solid ${active ? a.color + '77' : 'rgba(80,50,10,0.2)'}`,
+                        color: active ? a.color : 'rgba(201,169,110,0.4)',
+                        boxShadow: active ? `0 0 12px ${a.color}22` : 'none',
+                      }}>
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{a.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="h-px flex-shrink-0" style={{ background: 'rgba(201,169,110,0.1)' }} />
