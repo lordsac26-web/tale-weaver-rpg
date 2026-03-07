@@ -14,6 +14,7 @@ import SceneVisualizerModal from '@/components/game/SceneVisualizerModal';
 import CharacterPortraitGenerator from '@/components/game/CharacterPortraitGenerator';
 import ActionProposalModal from '@/components/game/ActionProposalModal';
 import Dice3DModal from '@/components/dice/Dice3DModal.jsx';
+import LootModal from '@/components/game/LootModal.jsx';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -37,6 +38,9 @@ export default function Game() {
   const [showPortraitGen, setShowPortraitGen] = useState(false);
   const [pendingProposal, setPendingProposal] = useState(null);
   const [evaluatingAction, setEvaluatingAction] = useState(false);
+  const [lastCombatEvent, setLastCombatEvent] = useState(null);
+  const [showLootModal, setShowLootModal] = useState(false);
+  const [defeatedEnemies, setDefeatedEnemies] = useState([]);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate(createPageUrl('Home')); return; }
