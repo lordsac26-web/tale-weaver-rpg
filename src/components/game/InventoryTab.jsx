@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Package, ChevronDown, ChevronUp, Search, Sparkles, ShieldCheck, X, FlaskConical } from 'lucide-react';
 import ConsumableUseModal from './ConsumableUseModal';
 import {
