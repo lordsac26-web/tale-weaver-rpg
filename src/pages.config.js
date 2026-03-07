@@ -49,26 +49,26 @@
  */
 import CharacterCreation from './pages/CharacterCreation';
 import CharacterSheetPage from './pages/CharacterSheetPage';
+import CombatHistory from './pages/CombatHistory';
 import Encyclopedia from './pages/Encyclopedia';
 import Game from './pages/Game';
 import Home from './pages/Home';
 import Market from './pages/Market';
 import NewGame from './pages/NewGame';
 import WorldMap from './pages/WorldMap';
-import CombatHistory from './pages/CombatHistory';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
     "CharacterCreation": CharacterCreation,
     "CharacterSheetPage": CharacterSheetPage,
+    "CombatHistory": CombatHistory,
     "Encyclopedia": Encyclopedia,
     "Game": Game,
     "Home": Home,
     "Market": Market,
     "NewGame": NewGame,
     "WorldMap": WorldMap,
-    "CombatHistory": CombatHistory,
 }
 
 export const pagesConfig = {

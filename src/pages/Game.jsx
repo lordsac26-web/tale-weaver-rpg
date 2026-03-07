@@ -4,6 +4,7 @@ import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 import { User, Loader2, ChevronLeft, Dices, Swords, Map, ShoppingBag, Eye, Paintbrush, Scroll, BookMarked } from 'lucide-react';
 import { SKILL_STAT_MAP, calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
+import { getAlignmentLabel } from '@/components/game/AlignmentBadge';
 import { motion, AnimatePresence } from 'framer-motion';
 import HUD from '@/components/game/HUD';
 import StoryPanel from '@/components/game/StoryPanel';
