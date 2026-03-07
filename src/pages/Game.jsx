@@ -331,8 +331,15 @@ export default function Game() {
         });
         const data = result.data;
         if (data.log_entry) {
-          setNarrative(prev => [...prev, { type: 'roll_result', text: data.log_entry.text, success: !data.log_entry.hit }]);
-        }
+            setNarrative(prev => [...prev, { type: 'roll_result', text: data.log_entry.text, success: !data.log_entry.hit }]);
+            // Floating text for enemy attacks on player
+            setLastCombatEvent({
+              key: Date.now(),
+              hit: data.log_entry.hit,
+              critical: data.log_entry.critical,
+              damage: data.log_entry.damage || 0,
+            });
+          }
         if (data.player_dead) {
           setNarrative(prev => [...prev, { type: 'narration', text: '💀 You have fallen in battle...' }]);
           setCombat(null);
