@@ -126,7 +126,7 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 120);
-    camera.position.set(0, 5.5, 8.5);
+    camera.position.set(3.5, 5, 9);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
