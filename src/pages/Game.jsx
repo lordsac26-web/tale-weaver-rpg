@@ -522,7 +522,8 @@ export default function Game() {
                 onPlayerAttack={handlePlayerAttack}
                 onNextTurn={handleNextTurn}
                 onFlee={handleFlee}
-                loading={combatLoading} />
+                loading={combatLoading}
+                lastCombatEvent={lastCombatEvent} />
             </div>
           </div>
         ) : (
