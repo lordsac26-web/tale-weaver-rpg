@@ -274,15 +274,41 @@ export default function Dice3DModal({ onClose, character }) {
 
           {/* 3D Canvas */}
           <div className="flex-1 relative overflow-hidden" style={{ minHeight: '360px', minWidth: 0 }}>
-            <Suspense fallback={
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="font-fantasy text-sm" style={{ color: 'rgba(201,169,110,0.5)' }}>Loading 3D scene...</span>
+            <Canvas3DErrorBoundary fallback={
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-6"
+                style={{ background: 'radial-gradient(ellipse at center, rgba(30,15,5,0.95), rgba(8,4,1,0.99))' }}>
+                {/* 2D Fallback dice display */}
+                {latestRoll ? (
+                  <>
+                    <div className="font-fantasy text-xs" style={{ color: 'rgba(201,169,110,0.5)', letterSpacing: '0.12em' }}>{latestRoll.dice}</div>
+                    <div className="font-fantasy-deco font-bold" style={{ fontSize: '5rem', lineHeight: 1, color: resultColor, textShadow: resultGlow }}>
+                      {latestRoll.total}
+                    </div>
+                    {resultLabel && <div className="font-fantasy text-sm" style={{ color: resultColor }}>{resultLabel}</div>}
+                    {latestRoll.results.length > 1 && (
+                      <div className="text-sm" style={{ color: 'rgba(201,169,110,0.4)', fontFamily: 'EB Garamond, serif' }}>
+                        [{latestRoll.results.join(' + ')}]
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center">
+                    <div className="text-4xl mb-3">🎲</div>
+                    <div className="font-fantasy text-sm" style={{ color: 'rgba(201,169,110,0.5)' }}>Roll the dice!</div>
+                  </div>
+                )}
               </div>
             }>
-              <Canvas shadows camera={{ position: [0, 7, 11], fov: 48 }}>
-                <TowerScene towerType={selectedTower} dice={dice} onDieSettle={handleDieSettle} />
-              </Canvas>
-            </Suspense>
+              <Suspense fallback={
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="font-fantasy text-sm" style={{ color: 'rgba(201,169,110,0.5)' }}>Loading 3D scene...</span>
+                </div>
+              }>
+                <Canvas shadows camera={{ position: [0, 7, 11], fov: 48 }}>
+                  <TowerScene towerType={selectedTower} dice={dice} onDieSettle={handleDieSettle} />
+                </Canvas>
+              </Suspense>
+            </Canvas3DErrorBoundary>
 
             {/* Roll Result Overlay */}
             <AnimatePresence>
