@@ -157,7 +157,7 @@ export default function EquipmentComparePanel({ newItem, equipped, onEquip, onKe
             ) : (
               <div className="h-full flex flex-col items-center justify-center py-2 gap-1">
                 <Shield className="w-6 h-6 opacity-20" style={{ color: '#c9a96e' }} />
-                <p className="text-xs" style={{ color: 'rgba(184,115,51,0.3)' }}>Empty slot</p>
+                <p className="text-xs" style={{ color: 'rgba(180,140,80,0.6)' }}>Empty slot</p>
               </div>
             )}
           </div>
