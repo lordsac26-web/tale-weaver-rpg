@@ -149,6 +149,7 @@ export default function Dice3DModal({ onClose, character }) {
               towerType={selectedTower}
               towerConfig={cfg}
               dice={dice}
+              diceSides={diceType.sides}
             />
 
             {/* Roll Result Overlay */}
