@@ -47,7 +47,7 @@ function TowerScene({ towerType, dice, onDieSettle }) {
           scale={7}
           size={cfg.sparkles.size}
           speed={cfg.sparkles.speed}
-          color={cfg.sparkles.color}
+          color={new THREE.Color(cfg.sparkles.color)}
         />
       )}
 
