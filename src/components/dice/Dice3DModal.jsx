@@ -46,15 +46,16 @@ export default function Dice3DModal({ onClose, character }) {
     const count   = Math.min(diceCount, 6);
     const results = Array.from({ length: count }, () => Math.floor(Math.random() * diceType.sides) + 1);
 
+    // Dice spawn from the top bowl of the tower, fall through baffles to catch tray
     const newDice = results.map((result, i) => ({
       id: idRef.current++,
       result,
-      position: [(Math.random() - 0.5) * 2, 6 + i * 1.3, (Math.random() - 0.5) * 2],
-      velocity: [(Math.random() - 0.5) * 6, -5, (Math.random() - 0.5) * 6],
+      position: [(Math.random() - 0.5) * 0.6, 4 + i * 1.0, (Math.random() - 0.5) * 0.6],
+      velocity: [(Math.random() - 0.5) * 3, -8, (Math.random() - 0.5) * 2 + 1.5],
       angularVelocity: [
-        (Math.random() - 0.5) * 28,
-        (Math.random() - 0.5) * 28,
-        (Math.random() - 0.5) * 28,
+        (Math.random() - 0.5) * 22,
+        (Math.random() - 0.5) * 22,
+        (Math.random() - 0.5) * 22,
       ],
     }));
 
