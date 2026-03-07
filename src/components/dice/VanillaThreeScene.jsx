@@ -42,10 +42,6 @@ function createSparkles(count, scale, color, size) {
   return new THREE.Points(geo, mat);
 }
 
-// Physics engine imported from TowerPhysics.jsx
-
-// ─── Main Scene Component ─────────────────────────────────────────────────────
-
 // ─── Ambience presets ─────────────────────────────────────────────────────────
 const AMBIENCE_PRESETS = {
   night: {
