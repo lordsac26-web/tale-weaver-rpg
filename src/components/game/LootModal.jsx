@@ -259,7 +259,7 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
             <h2 className="font-fantasy-deco font-bold text-xl text-glow-gold" style={{ color: '#f0c040' }}>
               ⚔️ Victory Spoils
             </h2>
-            <p className="text-xs font-body mt-0.5" style={{ color: 'rgba(201,169,110,0.45)' }}>
+            <p className="text-xs font-body mt-0.5" style={{ color: 'rgba(212,180,110,0.75)' }}>
               {loading ? 'Searching the fallen...' : isEmpty ? 'Nothing of value found.' : `${loot.items.length} item${loot.items.length !== 1 ? 's' : ''} found — tap ↔ to compare before equipping`}
             </p>
           </div>
