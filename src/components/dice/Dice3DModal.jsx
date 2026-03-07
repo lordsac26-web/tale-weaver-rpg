@@ -1,8 +1,7 @@
-import React, { useState, useRef, useCallback, useEffect, Suspense, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { useState, useRef, useCallback, useEffect, Suspense, useMemo, Component } from 'react';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { Physics } from '@react-three/cannon';
 import { OrbitControls as ThreeOrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Dices, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
