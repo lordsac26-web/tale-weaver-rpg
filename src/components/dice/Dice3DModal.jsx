@@ -24,6 +24,23 @@ const DICE_TYPES = [
 
 // ─── 3D Tower Scene (inside Canvas) ──────────────────────────────────────────
 
+// Imperative light to bypass applyProps
+function ImperativeLight({ type = 'point', intensity = 1, position, castShadow = false, color = '#ffffff' }) {
+  const light = useMemo(() => {
+    let l;
+    if (type === 'ambient') {
+      l = new THREE.AmbientLight(color, intensity);
+    } else {
+      l = new THREE.PointLight(color, intensity);
+      l.castShadow = castShadow;
+    }
+    if (position) l.position.set(...position);
+    return l;
+  }, [type, intensity, color, castShadow]);
+
+  return <primitive object={light} />;
+}
+
 function TowerScene({ towerType, dice, onDieSettle }) {
   const cfg = TOWER_CONFIGS[towerType];
   const walls = [
@@ -35,11 +52,11 @@ function TowerScene({ towerType, dice, onDieSettle }) {
 
   return (
     <>
-      <ambientLight intensity={1.5} />
-      <pointLight position={[0, 8, 0]} intensity={3.5} castShadow />
-      <pointLight position={[0, -1, 2]} intensity={1.8} />
-      <pointLight position={[3, 4, 3]} intensity={1.2} />
-      <pointLight position={[-3, 4, -3]} intensity={1.0} />
+      <ImperativeLight type="ambient" intensity={1.5} />
+      <ImperativeLight position={[0, 8, 0]} intensity={3.5} castShadow />
+      <ImperativeLight position={[0, -1, 2]} intensity={1.8} />
+      <ImperativeLight position={[3, 4, 3]} intensity={1.2} />
+      <ImperativeLight position={[-3, 4, -3]} intensity={1.0} />
       <SimpleStars count={250} radius={35} />
       {cfg.sparkles && (
         <SimpleSparkles
