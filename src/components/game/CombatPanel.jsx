@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Loader2, SkipForward, Swords, Dices } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { calcStatMod, PROFICIENCY_BY_LEVEL } from './gameData';
@@ -8,6 +8,7 @@ import CombatDiceRoller from './CombatDiceRoller';
 import CombatLog from './CombatLog';
 import InitiativeTracker from './InitiativeTracker';
 import ActionPointBar from './ActionPointBar';
+import CombatFloatingText from './CombatFloatingText';
 
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger'];
 
@@ -24,7 +25,7 @@ function getActionsPerTurn(character) {
   return actions;
 }
 
-export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onFlee, loading }) {
+export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onFlee, loading, lastCombatEvent }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [action, setAction] = useState('attack');
   const [selectedSpell, setSelectedSpell] = useState(null);
