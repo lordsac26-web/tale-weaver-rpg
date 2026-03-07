@@ -160,9 +160,11 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                     <>
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-2 rounded-full overflow-hidden neuro-inset">
-                          <div className="h-full rounded-full transition-all"
+                          <motion.div
+                            className="h-full rounded-full"
+                            animate={{ width: `${hpPct}%` }}
+                            transition={{ duration: 0.5, ease: 'easeOut' }}
                             style={{
-                              width: `${hpPct}%`,
                               background: hpPct > 50 ? 'linear-gradient(90deg, #16a34a, #22c55e)' :
                                 hpPct > 25 ? 'linear-gradient(90deg, #b45309, #d97706)' :
                                 'linear-gradient(90deg, #7f1d1d, #dc2626)'

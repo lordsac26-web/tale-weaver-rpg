@@ -291,12 +291,19 @@ export default function Game() {
   };
 
   const processEnemyTurns = async (combatId) => {
+    // Record the starting round — enemies should only act once per round.
+    // When the round advances (turn wraps around), stop and let the player go next.
+    const initialLogs = await base44.entities.CombatLog.filter({ id: combatId });
+    const startRound = initialLogs[0]?.round || 1;
+
     let attempts = 0;
     while (attempts < 10) {
       attempts++;
       const logs = await base44.entities.CombatLog.filter({ id: combatId });
       const log = logs[0];
       if (!log || !log.is_active) break;
+      // Stop when a new round has begun — prevents enemies from acting twice
+      if (log.round > startRound) break;
       const current = log.combatants[log.current_turn_index];
       if (current?.type === 'player') break;
 
