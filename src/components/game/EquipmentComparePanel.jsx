@@ -169,11 +169,11 @@ export default function EquipmentComparePanel({ newItem, equipped, onEquip, onKe
             <p className="tavern-section-label mb-2">Stat Comparison</p>
             <div className="flex items-center gap-2 px-2 pb-1 text-xs" style={{ color: 'rgba(184,115,51,0.35)' }}>
               <span className="w-5 flex-shrink-0" />
-              <span className="flex-1">Stat</span>
-              <span className="w-10 text-right">Equipped</span>
+              <span className="flex-1" style={{ color: 'rgba(212,168,100,0.65)' }}>Stat</span>
+              <span className="w-10 text-right" style={{ color: 'rgba(212,168,100,0.65)' }}>Equipped</span>
               <span className="w-3" />
-              <span className="w-10 text-right">New</span>
-              <span className="w-8 text-right">Δ</span>
+              <span className="w-10 text-right" style={{ color: 'rgba(212,168,100,0.65)' }}>New</span>
+              <span className="w-8 text-right" style={{ color: 'rgba(212,168,100,0.65)' }}>Δ</span>
             </div>
             {relevantStats.map(stat => (
               <StatRow key={stat.key} stat={stat} newVal={newMods[stat.key]} equippedVal={eqMods[stat.key]} />
