@@ -39,12 +39,12 @@ function LootItemCard({ item, index, onCompare, selected, onSelect }) {
           )}
         </div>
         {item.source_enemy && (
-          <p className="text-xs mt-0.5" style={{ color: 'rgba(184,115,51,0.35)', fontFamily: 'EB Garamond, serif' }}>
+          <p className="text-xs mt-0.5" style={{ color: 'rgba(212,168,100,0.65)', fontFamily: 'EB Garamond, serif' }}>
             from {item.source_enemy}
           </p>
         )}
         {item.description && (
-          <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'rgba(212,180,120,0.5)', fontFamily: 'EB Garamond, serif' }}>
+          <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'rgba(220,190,140,0.8)', fontFamily: 'EB Garamond, serif' }}>
             {item.description}
           </p>
         )}
