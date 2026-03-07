@@ -241,10 +241,12 @@ export function buildTavernTower(scene, towerType, towerConfig) {
       lGlow.userData.isLantern = true;
       group.add(lGlow);
 
-      // Lantern point light
+      // Lantern point light — tagged for flickering
       const lLight = new THREE.PointLight('#ff8822', 1.5, 4);
       lLight.position.set(pos[0], pos[1], pos[2]);
       lLight.userData.isTowerElement = true;
+      lLight.userData.isLanternLight = true;
+      lLight.userData.baseIntensity = 1.5;
       scene.add(lLight);
     });
   }
@@ -347,6 +349,7 @@ export function buildSceneLights(scene, towerConfig) {
   main.shadow.mapSize.width = 1024;
   main.shadow.mapSize.height = 1024;
   main.userData.isTowerElement = true;
+  main.userData.lightRole = 'main';
   scene.add(main);
   lights.push(main);
 
@@ -354,6 +357,7 @@ export function buildSceneLights(scene, towerConfig) {
   const fill = new THREE.PointLight('#ffa855', 1.5);
   fill.position.set(0, 0, 5);
   fill.userData.isTowerElement = true;
+  fill.userData.lightRole = 'fill';
   scene.add(fill);
   lights.push(fill);
 
@@ -361,6 +365,7 @@ export function buildSceneLights(scene, towerConfig) {
   const rim = new THREE.PointLight('#8888ff', 0.4);
   rim.position.set(-4, 4, -4);
   rim.userData.isTowerElement = true;
+  rim.userData.lightRole = 'rim';
   scene.add(rim);
   lights.push(rim);
 
