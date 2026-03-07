@@ -1,9 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
+import { useThree, useFrame } from '@react-three/fiber';
 import { Physics } from '@react-three/cannon';
-import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { motion, AnimatePresence } from 'framer-motion';
+import { OrbitControls as ThreeOrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { Die, Floor, TowerWall } from './DicePhysics';
 import { SimpleStars, SimpleSparkles } from './SceneParticles';
 
