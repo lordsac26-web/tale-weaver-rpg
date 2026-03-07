@@ -181,7 +181,7 @@ export default function EquipmentComparePanel({ newItem, equipped, onEquip, onKe
           </div>
         ) : (
           <div className="text-center py-2">
-            <p className="text-xs font-body italic" style={{ color: 'rgba(184,115,51,0.4)' }}>No direct stat comparison available.</p>
+            <p className="text-xs font-body italic" style={{ color: 'rgba(212,168,100,0.65)' }}>No direct stat comparison available.</p>
           </div>
         )}
 
