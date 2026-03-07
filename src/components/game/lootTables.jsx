@@ -107,7 +107,7 @@ export const ENEMY_TYPE_LOOT = {
       { name: "Adamantine Plating", icon: "🛡️", category: "material", rarity: "uncommon", description: "Near-indestructible metal plates. Can be attached to armor for +1 AC vs. bludgeoning.", base_price: 80, modifiers: { armor_class: 1 } },
       { name: "Golem Fist Gauntlet", icon: "🥊", category: "armor", rarity: "uncommon", description: "A massive mechanical gauntlet. Unarmed strikes deal 1d8 bludgeoning.", base_price: 120, modifiers: { damage_dice: "1d8" } },
       { name: "Arcane Turret Module", icon: "🔫", category: "weapon", rarity: "rare", description: "+1 heavy crossbow. Can fire twice per turn. Requires attunement.", base_price: 400, modifiers: { attack_bonus: 1 }, requires_attunement: true },
-      { name: "Guardian Automaton Eye", icon: "👁️", category:="magical", rarity: "rare", description: "Truesight 30ft. Can detect invisible creatures and illusions. Implant or mount.", base_price: 550, requires_attunement: true },
+      { name: "Guardian Automaton Eye", icon: "👁️", category: "magical", rarity: "rare", description: "Truesight 30ft. Can detect invisible creatures and illusions. Implant or mount.", base_price: 550, requires_attunement: true },
       { name: "Apparatus Core: Invincibility Mode", icon: "🤖", category: "magical", rarity: "legendary", description: "When your HP drops to 0, this core activates: you regain 50 HP. 1/week.", base_price: 5000, requires_attunement: true },
     ],
     weights: [30, 25, 20, 12, 8, 4, 1],
