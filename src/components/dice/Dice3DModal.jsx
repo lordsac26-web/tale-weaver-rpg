@@ -270,8 +270,8 @@ export default function Dice3DModal({ onClose, character }) {
           </div>
 
           {/* ── Controls ── */}
-          <div className="w-64 flex flex-col flex-shrink-0 overflow-y-auto"
-            style={{ borderLeft: `1px solid ${cfg.ambientColor}22`, background: 'rgba(6,3,1,0.7)', padding: '1rem', gap: '1rem', display: 'flex', flexDirection: 'column' }}>
+          <div className="flex flex-col flex-shrink-0 overflow-y-auto"
+            style={{ width: '240px', minWidth: '200px', maxWidth: '260px', borderLeft: `1px solid ${cfg.ambientColor}22`, background: 'rgba(6,3,1,0.7)', padding: '1rem', gap: '1rem', display: 'flex', flexDirection: 'column' }}>
 
             {/* Tower Picker */}
             <div>
