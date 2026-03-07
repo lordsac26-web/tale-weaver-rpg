@@ -274,19 +274,43 @@ export function buildTavernTower(scene, towerType, towerConfig) {
 
   // ── Internal baffles (angled shelves inside tower for dice to bounce) ───────
   const baffleMat = isWooden ? createWoodMaterial() : createThemedWall(towerType);
-  // Baffle 1 — angled left
-  const b1 = new THREE.Mesh(new THREE.BoxGeometry(towerW * 0.7, 0.1, towerD * 0.5), baffleMat);
+  
+  // Baffle 1 — upper, angled right-to-left (dice hit this first)
+  const b1 = new THREE.Mesh(new THREE.BoxGeometry(towerW * 0.7, 0.12, towerD * 0.5), baffleMat);
   b1.position.set(0.3, towerBaseY + towerH * 0.65, 0);
   b1.rotation.z = 0.35;
   b1.rotation.x = -0.15;
+  b1.castShadow = true;
+  b1.receiveShadow = true;
   group.add(b1);
 
-  // Baffle 2 — angled right
-  const b2 = new THREE.Mesh(new THREE.BoxGeometry(towerW * 0.7, 0.1, towerD * 0.5), baffleMat);
+  // Baffle 2 — middle, angled left-to-right
+  const b2 = new THREE.Mesh(new THREE.BoxGeometry(towerW * 0.7, 0.12, towerD * 0.5), baffleMat);
   b2.position.set(-0.3, towerBaseY + towerH * 0.35, 0);
   b2.rotation.z = -0.35;
   b2.rotation.x = 0.1;
+  b2.castShadow = true;
+  b2.receiveShadow = true;
   group.add(b2);
+
+  // Baffle 3 — low exit ramp, angled forward to direct dice out the archway
+  const b3 = new THREE.Mesh(new THREE.BoxGeometry(towerW * 0.8, 0.10, towerD * 0.55), baffleMat);
+  b3.position.set(0, towerBaseY + towerH * 0.12, 0.4);
+  b3.rotation.x = -0.25; // tilted forward
+  b3.castShadow = true;
+  b3.receiveShadow = true;
+  group.add(b3);
+
+  // ── Archway frame (decorative) ──────────────────────────────────────────────
+  // Brass archway trim around the exit opening
+  const archHeight = towerH * 0.38;
+  const archBrass = createBrassMaterial();
+  // Arch top beam
+  addBox(group, [towerW + 0.08, 0.12, 0.12], [0, towerBaseY + archHeight, towerD / 2 + 0.01], archBrass);
+  // Arch left pillar
+  addBox(group, [0.1, archHeight, 0.1], [-towerW / 2 + 0.05, towerBaseY + archHeight / 2, towerD / 2 + 0.01], archBrass);
+  // Arch right pillar
+  addBox(group, [0.1, archHeight, 0.1], [towerW / 2 - 0.05, towerBaseY + archHeight / 2, towerD / 2 + 0.01], archBrass);
 
   scene.add(group);
   return group;
