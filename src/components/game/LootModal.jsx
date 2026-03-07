@@ -276,7 +276,7 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
               <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#c9a96e' }} />
-              <span className="text-xs font-fantasy" style={{ color: 'rgba(201,169,110,0.45)' }}>Searching bodies...</span>
+              <span className="text-xs font-fantasy" style={{ color: 'rgba(212,180,110,0.75)' }}>Searching bodies...</span>
             </div>
           ) : isEmpty ? (
             <div className="flex flex-col items-center py-12 gap-2">
