@@ -207,10 +207,10 @@ export default function Dice3DModal({ onClose, character }) {
         </div>
 
         {/* ── Body ── */}
-        <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+        <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0, minWidth: 0 }}>
 
           {/* 3D Canvas */}
-          <div className="flex-1 relative" style={{ minHeight: '360px' }}>
+          <div className="flex-1 relative overflow-hidden" style={{ minHeight: '360px', minWidth: 0 }}>
             <Suspense fallback={
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="font-fantasy text-sm" style={{ color: 'rgba(201,169,110,0.5)' }}>Loading 3D scene...</span>
