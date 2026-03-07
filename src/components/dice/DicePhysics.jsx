@@ -117,12 +117,12 @@ export function Floor({ towerType }) {
   }));
 
   const colors = {
-    wooden: '#2a1505',
-    arcane: '#0e0520',
-    infernal: '#1a0303',
-    crystal: '#060e1a',
-    elven: '#050e05',
-    shadow: '#050505',
+    wooden: '#5c3010',
+    arcane: '#1e0a40',
+    infernal: '#3a0808',
+    crystal: '#0e2040',
+    elven: '#0a2810',
+    shadow: '#181818',
   };
 
   const geo = useMemo(() => new THREE.PlaneGeometry(20, 20), []);
