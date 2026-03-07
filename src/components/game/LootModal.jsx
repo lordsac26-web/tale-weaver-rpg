@@ -327,9 +327,9 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
             )}
             <button onClick={onClose}
               className="flex-1 py-2.5 rounded-xl text-sm font-fantasy transition-all"
-              style={{ border: '1px solid rgba(180,140,90,0.18)', color: 'rgba(180,140,90,0.5)' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.4)'; e.currentTarget.style.color = '#c9a96e'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,140,90,0.18)'; e.currentTarget.style.color = 'rgba(180,140,90,0.5)'; }}>
+              style={{ border: '1px solid rgba(180,140,90,0.35)', color: 'rgba(212,180,110,0.75)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.55)'; e.currentTarget.style.color = '#c9a96e'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,140,90,0.35)'; e.currentTarget.style.color = 'rgba(212,180,110,0.75)'; }}>
               {allCollected ? '✓ Done' : 'Leave'}
             </button>
           </div>
