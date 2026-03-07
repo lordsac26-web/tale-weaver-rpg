@@ -1,8 +1,8 @@
-import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react';
+import React, { useState, useRef, useCallback, useEffect, Suspense, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Physics } from '@react-three/cannon';
 import { OrbitControls } from '@react-three/drei';
-import * as THREE from 'three'; // v0.160 compat
+import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Dices, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { Die, Floor, TowerWall } from './DicePhysics';
