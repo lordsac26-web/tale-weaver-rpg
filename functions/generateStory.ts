@@ -87,7 +87,12 @@ For EACH choice that involves risk or effort, include a relevant skill check and
 - Physical obstacles: Athletics DC 12-18, Acrobatics DC 10-15
 - Exploration/secrets: Perception DC 12-15, Investigation DC 13-16, Stealth DC 12-14, Survival DC 11
 - Knowledge/magic: Arcana DC 13-17, History DC 12, Religion DC 13, Medicine DC 12
-DCs should reflect actual difficulty (10=trivial, 15=moderate, 20=hard, 25=extreme). At least 2-3 of the 4 choices should have skill checks.`;
+DCs should reflect actual difficulty (10=trivial, 15=moderate, 20=hard, 25=extreme). At least 2-3 of the 4 choices should have skill checks.
+
+Begin your narrative with this exact header format (using actual character data):
+**HP: ${character?.hp_current || '?'}/${character?.hp_max || '?'} | AC: ${character?.armor_class || '?'} | Level: ${character?.level || '?'} | Alignment: ${currentAlignment} (L/C: ${lcScore}, G/E: ${geScore}) | ${session.current_location || 'Unknown'} | ${session.time_of_day || 'Morning'}**
+
+Then continue with your scene description and story.`;
 
     responseSchema = {
       type: 'object',
