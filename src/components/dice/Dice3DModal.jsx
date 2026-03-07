@@ -49,6 +49,9 @@ export default function Dice3DModal({ onClose, character }) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
+  // Store pending roll data so we can finalize when dice settle
+  const pendingRollRef = useRef(null);
+
   const handleRoll = useCallback(() => {
     if (rolling) return;
     const count   = Math.min(diceCount, 6);
@@ -63,26 +66,37 @@ export default function Dice3DModal({ onClose, character }) {
       angularVelocity: getSpawnAngularVelocity(),
     }));
 
+    // Store roll info for when dice settle
+    const total = results.reduce((s, r) => s + r, 0) + modifier;
+    pendingRollRef.current = { count, results, total, sides: diceType.sides, label: diceType.label };
+
     setDice(newDice);
     setRolling(true);
+  }, [rolling, diceCount, diceType, modifier]);
 
-    // Crit effects for d20 (delayed for tower travel time)
-    if (diceType.sides === 20 && count === 1) {
-      if (results[0] === 20) setTimeout(() => setCritEffect('crit'), 4000);
-      if (results[0] === 1)  setTimeout(() => setCritEffect('fail'), 4000);
-    }
+  // Called by VanillaThreeScene when all dice physics bodies have settled
+  const handleDiceSettled = useCallback(() => {
+    const pending = pendingRollRef.current;
+    if (!pending) return;
+    pendingRollRef.current = null;
 
-    const total = results.reduce((s, r) => s + r, 0) + modifier;
+    // Record to history
     setRollHistory(prev => [{
-      dice: `${count}${diceType.label}${modifier !== 0 ? (modifier > 0 ? `+${modifier}` : modifier) : ''}`,
-      results,
-      total,
-      sides: diceType.sides,
+      dice: `${pending.count}${pending.label}${modifier !== 0 ? (modifier > 0 ? `+${modifier}` : modifier) : ''}`,
+      results: pending.results,
+      total: pending.total,
+      sides: pending.sides,
       ts: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     }, ...prev.slice(0, 11)]);
 
-    setTimeout(() => setRolling(false), 5500);
-  }, [rolling, diceCount, diceType, modifier]);
+    // Crit effects for d20
+    if (pending.sides === 20 && pending.count === 1) {
+      if (pending.results[0] === 20) setCritEffect('crit');
+      if (pending.results[0] === 1)  setCritEffect('fail');
+    }
+
+    setRolling(false);
+  }, [modifier]);
 
   const handleClear = () => { setDice([]); };
 
