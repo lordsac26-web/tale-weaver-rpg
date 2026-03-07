@@ -2,6 +2,7 @@ import React from 'react';
 import { Shield, Heart, Star, MapPin, Clock, Swords } from 'lucide-react';
 import { CONDITIONS } from './gameData';
 import { motion } from 'framer-motion';
+import AlignmentBadge from './AlignmentBadge';
 
 export default function HUD({ character, session }) {
   if (!character) return null;
@@ -102,6 +103,9 @@ export default function HUD({ character, session }) {
           <span className="font-bold text-sm font-fantasy" style={{ color: '#93c5fd' }}>{character.armor_class}</span>
           <span className="text-xs" style={{ color: 'rgba(147,197,253,0.5)', fontFamily: 'EB Garamond, serif' }}>AC</span>
         </div>
+
+        {/* Alignment Badge */}
+        <AlignmentBadge character={character} />
 
         {/* Location & Time */}
         {session && (
