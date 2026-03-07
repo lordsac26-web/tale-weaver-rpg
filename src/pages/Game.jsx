@@ -267,6 +267,7 @@ export default function Game() {
     const data = result.data;
     if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
     if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);
+    processAlignmentShift(data);
     if (data.combat_trigger && data.enemies?.length > 0) {
       setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
       await startCombat(data.enemies);
