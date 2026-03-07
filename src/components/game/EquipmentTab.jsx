@@ -276,8 +276,8 @@ export default function EquipmentTab({ character, onCharacterUpdate }) {
 
         {displayItems.length === 0 ? (
           <div className="text-center py-12">
-            <Package className="w-10 h-10 mx-auto mb-2 opacity-15" style={{ color: '#c9a96e' }} />
-            <p className="text-sm font-body italic" style={{ color: 'rgba(184,115,51,0.35)' }}>
+            <Package className="w-10 h-10 mx-auto mb-2 opacity-30" style={{ color: '#c9a96e' }} />
+            <p className="text-sm font-body italic" style={{ color: 'rgba(212,168,100,0.6)' }}>
               {equippableItems.length === 0
                 ? 'No equipment in your inventory yet.'
                 : 'No items in this category.'}
