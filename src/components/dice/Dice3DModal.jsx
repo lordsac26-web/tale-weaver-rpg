@@ -66,10 +66,10 @@ export default function Dice3DModal({ onClose, character }) {
     setDice(newDice);
     setRolling(true);
 
-    // Crit effects for d20
+    // Crit effects for d20 (delayed for tower travel time)
     if (diceType.sides === 20 && count === 1) {
-      if (results[0] === 20) setTimeout(() => setCritEffect('crit'), 2400);
-      if (results[0] === 1)  setTimeout(() => setCritEffect('fail'), 2400);
+      if (results[0] === 20) setTimeout(() => setCritEffect('crit'), 4000);
+      if (results[0] === 1)  setTimeout(() => setCritEffect('fail'), 4000);
     }
 
     const total = results.reduce((s, r) => s + r, 0) + modifier;
@@ -81,7 +81,7 @@ export default function Dice3DModal({ onClose, character }) {
       ts: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     }, ...prev.slice(0, 11)]);
 
-    setTimeout(() => setRolling(false), 3800);
+    setTimeout(() => setRolling(false), 5500);
   }, [rolling, diceCount, diceType, modifier]);
 
   const handleClear = () => { setDice([]); };
