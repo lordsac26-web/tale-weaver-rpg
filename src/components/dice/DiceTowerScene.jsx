@@ -1,8 +1,8 @@
-
 import React, { useState, useRef, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Physics } from '@react-three/cannon';
-import { OrbitControls, Environment, Sparkles, Stars } from '@react-three/drei';
+import { OrbitControls, Sparkles, Stars } from '@react-three/drei';
+import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Die, Floor, TowerWall } from './DicePhysics';
 
