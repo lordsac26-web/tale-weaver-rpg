@@ -35,12 +35,11 @@ function TowerScene({ towerType, dice, onDieSettle }) {
 
   return (
     <>
-      <ambientLight intensity={1.2} color="#ffffff" />
-      <ambientLight intensity={0.6} color={cfg.ambientColor} />
-      <pointLight position={[0, 8, 0]} intensity={3.5} color={cfg.ambientColor} castShadow />
-      <pointLight position={[0, -1, 2]} intensity={1.8} color="#ffffff" />
-      <pointLight position={[3, 4, 3]} intensity={1.2} color="#ffffff" />
-      <pointLight position={[-3, 4, -3]} intensity={1.0} color="#ffffff" />
+      <ambientLight intensity={1.5} />
+      <pointLight position={[0, 8, 0]} intensity={3.5} castShadow />
+      <pointLight position={[0, -1, 2]} intensity={1.8} />
+      <pointLight position={[3, 4, 3]} intensity={1.2} />
+      <pointLight position={[-3, 4, -3]} intensity={1.0} />
       <SimpleStars count={250} radius={35} />
       {cfg.sparkles && (
         <SimpleSparkles
