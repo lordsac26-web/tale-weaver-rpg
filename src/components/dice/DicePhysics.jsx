@@ -166,7 +166,7 @@ export function TowerWall({ position, rotation, size, towerType }) {
     roughness: 0.75,
     metalness: towerType === 'crystal' ? 0.5 : 0.15,
     emissive: new THREE.Color(emissives[towerType] || '#000'),
-    emissiveIntensity: 0.3,
+    emissiveIntensity: 0.55,
   }), [towerType]);
 
   return <mesh ref={ref} geometry={geo} material={mat} castShadow receiveShadow />;
