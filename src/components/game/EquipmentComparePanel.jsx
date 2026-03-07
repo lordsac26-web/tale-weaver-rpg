@@ -202,9 +202,9 @@ export default function EquipmentComparePanel({ newItem, equipped, onEquip, onKe
           </button>
           <button onClick={onKeepBag}
             className="flex-1 py-2.5 rounded-xl text-sm font-fantasy transition-all"
-            style={{ background: 'rgba(20,10,4,0.7)', border: '1px solid rgba(184,115,51,0.2)', color: 'rgba(212,149,90,0.6)' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(212,149,90,0.4)'; e.currentTarget.style.color = '#c9a96e'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(184,115,51,0.2)'; e.currentTarget.style.color = 'rgba(212,149,90,0.6)'; }}>
+            style={{ background: 'rgba(20,10,4,0.7)', border: '1px solid rgba(184,115,51,0.35)', color: 'rgba(212,168,100,0.8)' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(212,149,90,0.55)'; e.currentTarget.style.color = '#c9a96e'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(184,115,51,0.35)'; e.currentTarget.style.color = 'rgba(212,168,100,0.8)'; }}>
             🎒 Keep in Bag
           </button>
         </div>
