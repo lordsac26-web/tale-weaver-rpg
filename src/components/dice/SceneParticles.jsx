@@ -1,12 +1,10 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 
-// Simple star field replacement for drei's <Stars>
+// Fully imperative star field — uses <primitive> to bypass applyProps
 export function SimpleStars({ count = 250, radius = 35 }) {
-  const ref = useRef();
-
-  const geometry = useMemo(() => {
+  const points = useMemo(() => {
     const geo = new THREE.BufferGeometry();
     const positions = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
@@ -18,27 +16,24 @@ export function SimpleStars({ count = 250, radius = 35 }) {
       positions[i * 3 + 2] = r * Math.cos(phi);
     }
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    return geo;
-  }, [count, radius]);
-
-  const material = useMemo(() => {
-    return new THREE.PointsMaterial({
+    const mat = new THREE.PointsMaterial({
       color: '#ffffff',
       size: 0.3,
       sizeAttenuation: true,
       transparent: true,
       opacity: 0.7,
     });
-  }, []);
+    return new THREE.Points(geo, mat);
+  }, [count, radius]);
 
-  return <points ref={ref} geometry={geometry} material={material} />;
+  return <primitive object={points} />;
 }
 
-// Simple sparkle replacement for drei's <Sparkles>
+// Fully imperative sparkles — uses <primitive> to bypass applyProps
 export function SimpleSparkles({ count = 50, scale = 6, color = '#ffffff', size = 2, speed = 0.4 }) {
   const ref = useRef();
 
-  const { geometry, offsets } = useMemo(() => {
+  const { pointsObj, offsets } = useMemo(() => {
     const geo = new THREE.BufferGeometry();
     const positions = new Float32Array(count * 3);
     const off = new Float32Array(count);
@@ -49,11 +44,7 @@ export function SimpleSparkles({ count = 50, scale = 6, color = '#ffffff', size 
       off[i] = Math.random() * Math.PI * 2;
     }
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    return { geometry: geo, offsets: off };
-  }, [count, scale]);
-
-  const material = useMemo(() => {
-    return new THREE.PointsMaterial({
+    const mat = new THREE.PointsMaterial({
       color: new THREE.Color(color),
       size: size * 0.05,
       sizeAttenuation: true,
@@ -62,7 +53,9 @@ export function SimpleSparkles({ count = 50, scale = 6, color = '#ffffff', size 
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-  }, [color, size]);
+    const obj = new THREE.Points(geo, mat);
+    return { pointsObj: obj, offsets: off };
+  }, [count, scale, color, size]);
 
   useFrame(({ clock }) => {
     if (!ref.current) return;
@@ -74,5 +67,5 @@ export function SimpleSparkles({ count = 50, scale = 6, color = '#ffffff', size 
     ref.current.geometry.attributes.position.needsUpdate = true;
   });
 
-  return <points ref={ref} geometry={geometry} material={material} />;
+  return <primitive ref={ref} object={pointsObj} />;
 }
