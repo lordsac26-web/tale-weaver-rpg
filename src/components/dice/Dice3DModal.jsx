@@ -1,32 +1,9 @@
-import React, { useState, useRef, useCallback, useEffect, Suspense, useMemo, Component } from 'react';
-import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { Physics } from '@react-three/cannon';
-import { OrbitControls as ThreeOrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import * as THREE from 'three';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Dices, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
-import { Die, Floor, TowerWall } from './DicePhysics';
 import { TOWER_CONFIGS } from './DiceTowerScene';
 import CriticalEffect from './CriticalEffect';
-import { SimpleStars, SimpleSparkles } from './SceneParticles';
-
-// ─── Error Boundary for 3D Canvas ────────────────────────────────────────────
-
-class Canvas3DErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback || null;
-    }
-    return this.props.children;
-  }
-}
+import VanillaThreeScene from './VanillaThreeScene';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -40,106 +17,6 @@ const DICE_TYPES = [
   { label: 'D100', sides: 100 },
 ];
 
-// ─── 3D Tower Scene (inside Canvas) ──────────────────────────────────────────
-
-// Imperative OrbitControls to bypass applyProps
-function ImperativeOrbitControls({ enablePan = false, minDistance = 6, maxDistance = 18, maxPolarAngle, target }) {
-  const { camera, gl } = useThree();
-  const controlsRef = useRef();
-
-  useEffect(() => {
-    const controls = new ThreeOrbitControls(camera, gl.domElement);
-    controls.enablePan = enablePan;
-    controls.minDistance = minDistance;
-    controls.maxDistance = maxDistance;
-    if (maxPolarAngle !== undefined) controls.maxPolarAngle = maxPolarAngle;
-    if (target) controls.target.set(...target);
-    controls.update();
-    controlsRef.current = controls;
-    return () => controls.dispose();
-  }, [camera, gl]);
-
-  useFrame(() => {
-    if (controlsRef.current) controlsRef.current.update();
-  });
-
-  return null;
-}
-
-// Imperative light to bypass applyProps
-function ImperativeLight({ type = 'point', intensity = 1, position, castShadow = false, color = '#ffffff' }) {
-  const light = useMemo(() => {
-    let l;
-    if (type === 'ambient') {
-      l = new THREE.AmbientLight(color, intensity);
-    } else {
-      l = new THREE.PointLight(color, intensity);
-      l.castShadow = castShadow;
-    }
-    if (position) l.position.set(...position);
-    return l;
-  }, [type, intensity, color, castShadow]);
-
-  return <primitive object={light} />;
-}
-
-function TowerScene({ towerType, dice, onDieSettle }) {
-  const cfg = TOWER_CONFIGS[towerType];
-  const walls = [
-    { pos: [0, 2, -2.6],  size: [5.2, 9, 0.3] },
-    { pos: [-2.6, 2, 0],  size: [0.3, 9, 5.2] },
-    { pos: [2.6, 2, 0],   size: [0.3, 9, 5.2] },
-    { pos: [0, 2, 2.6],   size: [5.2, 9, 0.3] },
-  ];
-
-  return (
-    <>
-      <ImperativeLight type="ambient" intensity={1.5} />
-      <ImperativeLight position={[0, 8, 0]} intensity={3.5} castShadow />
-      <ImperativeLight position={[0, -1, 2]} intensity={1.8} />
-      <ImperativeLight position={[3, 4, 3]} intensity={1.2} />
-      <ImperativeLight position={[-3, 4, -3]} intensity={1.0} />
-      <SimpleStars count={250} radius={35} />
-      {cfg.sparkles && (
-        <SimpleSparkles
-          count={cfg.sparkles.count}
-          scale={7}
-          size={cfg.sparkles.size}
-          speed={cfg.sparkles.speed}
-          color={cfg.sparkles.color}
-        />
-      )}
-
-      <Physics gravity={[0, -28, 0]}>
-        <Floor towerType={towerType} />
-        {walls.map((w, i) => (
-          <TowerWall key={i} position={w.pos} rotation={[0,0,0]} size={w.size} towerType={towerType} />
-        ))}
-        {dice.map((d) => (
-          <Die
-            key={d.id}
-            position={d.position}
-            velocity={d.velocity}
-            angularVelocity={d.angularVelocity}
-            color={cfg.dieColor}
-            resultValue={d.result}
-            critType={d.result === 20 ? 'crit' : d.result === 1 ? 'fail' : null}
-            onSettle={(val) => onDieSettle(d.id, val)}
-          />
-        ))}
-      </Physics>
-
-      <ImperativeOrbitControls
-        enablePan={false}
-        minDistance={6}
-        maxDistance={18}
-        maxPolarAngle={Math.PI / 2.05}
-        target={[0, -0.5, 0]}
-      />
-    </>
-  );
-}
-
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
 export default function Dice3DModal({ onClose, character }) {
@@ -148,7 +25,6 @@ export default function Dice3DModal({ onClose, character }) {
   const [diceCount, setDiceCount]         = useState(1);
   const [modifier, setModifier]           = useState(0);
   const [dice, setDice]                   = useState([]);
-  const [settled, setSettled]             = useState({});
   const [rolling, setRolling]             = useState(false);
   const [critEffect, setCritEffect]       = useState(null);
   const [rollHistory, setRollHistory]     = useState([]);
@@ -183,7 +59,6 @@ export default function Dice3DModal({ onClose, character }) {
     }));
 
     setDice(newDice);
-    setSettled({});
     setRolling(true);
 
     // Crit effects for d20
@@ -204,11 +79,7 @@ export default function Dice3DModal({ onClose, character }) {
     setTimeout(() => setRolling(false), 3800);
   }, [rolling, diceCount, diceType, modifier]);
 
-  const handleDieSettle = useCallback((id, val) => {
-    setSettled(prev => ({ ...prev, [id]: val }));
-  }, []);
-
-  const handleClear = () => { setDice([]); setSettled({}); };
+  const handleClear = () => { setDice([]); };
 
   const latestRoll = rollHistory[0];
   const isCrit     = latestRoll?.results.length === 1 && latestRoll.results[0] === 20 && latestRoll.sides === 20;
@@ -272,43 +143,13 @@ export default function Dice3DModal({ onClose, character }) {
         {/* ── Body ── */}
         <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0, minWidth: 0 }}>
 
-          {/* 3D Canvas */}
+          {/* 3D Canvas — pure vanilla Three.js, no R3F */}
           <div className="flex-1 relative overflow-hidden" style={{ minHeight: '360px', minWidth: 0 }}>
-            <Canvas3DErrorBoundary fallback={
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-6"
-                style={{ background: 'radial-gradient(ellipse at center, rgba(30,15,5,0.95), rgba(8,4,1,0.99))' }}>
-                {/* 2D Fallback dice display */}
-                {latestRoll ? (
-                  <>
-                    <div className="font-fantasy text-xs" style={{ color: 'rgba(201,169,110,0.5)', letterSpacing: '0.12em' }}>{latestRoll.dice}</div>
-                    <div className="font-fantasy-deco font-bold" style={{ fontSize: '5rem', lineHeight: 1, color: resultColor, textShadow: resultGlow }}>
-                      {latestRoll.total}
-                    </div>
-                    {resultLabel && <div className="font-fantasy text-sm" style={{ color: resultColor }}>{resultLabel}</div>}
-                    {latestRoll.results.length > 1 && (
-                      <div className="text-sm" style={{ color: 'rgba(201,169,110,0.4)', fontFamily: 'EB Garamond, serif' }}>
-                        [{latestRoll.results.join(' + ')}]
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="text-center">
-                    <div className="text-4xl mb-3">🎲</div>
-                    <div className="font-fantasy text-sm" style={{ color: 'rgba(201,169,110,0.5)' }}>Roll the dice!</div>
-                  </div>
-                )}
-              </div>
-            }>
-              <Suspense fallback={
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="font-fantasy text-sm" style={{ color: 'rgba(201,169,110,0.5)' }}>Loading 3D scene...</span>
-                </div>
-              }>
-                <Canvas shadows camera={{ position: [0, 7, 11], fov: 48 }}>
-                  <TowerScene towerType={selectedTower} dice={dice} onDieSettle={handleDieSettle} />
-                </Canvas>
-              </Suspense>
-            </Canvas3DErrorBoundary>
+            <VanillaThreeScene
+              towerType={selectedTower}
+              towerConfig={cfg}
+              dice={dice}
+            />
 
             {/* Roll Result Overlay */}
             <AnimatePresence>
