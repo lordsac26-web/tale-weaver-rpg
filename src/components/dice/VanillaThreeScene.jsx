@@ -91,7 +91,7 @@ const AMBIENCE_PRESETS = {
   },
 };
 
-export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSides, ambience = 'dusk' }) {
+export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSides, ambience = 'dusk', onAllSettled }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
@@ -107,6 +107,10 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
   const lightsRef = useRef({ ambient: null, main: null, fill: null, rim: null, lanterns: [] });
   const starsRef = useRef(null);
   const ambienceRef = useRef(ambience);
+  const onAllSettledRef = useRef(onAllSettled);
+
+  // Keep callback ref current without re-creating animation loop
+  useEffect(() => { onAllSettledRef.current = onAllSettled; }, [onAllSettled]);
 
   // Track sides for physics
   useEffect(() => { sidesRef.current = diceSides || 20; }, [diceSides]);
@@ -194,6 +198,15 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
         mesh.rotation.x += body.angularVelocity.x * dt;
         mesh.rotation.y += body.angularVelocity.y * dt;
         mesh.rotation.z += body.angularVelocity.z * dt;
+      }
+
+      // Check if all dice have settled
+      if (bodies.length > 0 && !settledRef.current) {
+        const allSettled = bodies.every(b => b.settled);
+        if (allSettled) {
+          settledRef.current = true;
+          onAllSettledRef.current?.();
+        }
       }
 
       // Animate glows, lanterns with realistic flickering
