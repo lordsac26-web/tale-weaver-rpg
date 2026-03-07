@@ -94,7 +94,56 @@ function stepPhysics(body, dt, dieRadius) {
 
 // ─── Main Scene Component ─────────────────────────────────────────────────────
 
-export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSides }) {
+// ─── Ambience presets ─────────────────────────────────────────────────────────
+const AMBIENCE_PRESETS = {
+  night: {
+    bgColor: '#0a0502',
+    fogColor: '#0a0502',
+    fogDensity: 0.035,
+    ambientColor: '#ffeed8',
+    ambientIntensity: 0.5,
+    mainLightColor: '#ffaa55',
+    mainLightIntensity: 2.5,
+    fillColor: '#ff8833',
+    fillIntensity: 1.0,
+    rimColor: '#4444aa',
+    rimIntensity: 0.3,
+    exposure: 0.9,
+    starOpacity: 0.7,
+  },
+  dusk: {
+    bgColor: '#120806',
+    fogColor: '#120806',
+    fogDensity: 0.028,
+    ambientColor: '#fff0d8',
+    ambientIntensity: 0.8,
+    mainLightColor: '#ffcc88',
+    mainLightIntensity: 3.0,
+    fillColor: '#ffa855',
+    fillIntensity: 1.5,
+    rimColor: '#8866cc',
+    rimIntensity: 0.5,
+    exposure: 1.1,
+    starOpacity: 0.35,
+  },
+  day: {
+    bgColor: '#1c150e',
+    fogColor: '#1c150e',
+    fogDensity: 0.02,
+    ambientColor: '#fffaf0',
+    ambientIntensity: 1.4,
+    mainLightColor: '#ffe8c0',
+    mainLightIntensity: 4.0,
+    fillColor: '#ffd0a0',
+    fillIntensity: 2.2,
+    rimColor: '#aabbdd',
+    rimIntensity: 0.8,
+    exposure: 1.5,
+    starOpacity: 0.0,
+  },
+};
+
+export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSides, ambience = 'dusk' }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
@@ -107,6 +156,9 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
   const settledRef = useRef(false);
   const sparklesRef = useRef(null);
   const sidesRef = useRef(20);
+  const lightsRef = useRef({ ambient: null, main: null, fill: null, rim: null, lanterns: [] });
+  const starsRef = useRef(null);
+  const ambienceRef = useRef(ambience);
 
   // Track sides for physics
   useEffect(() => { sidesRef.current = diceSides || 20; }, [diceSides]);
@@ -150,7 +202,9 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
     diceGroupRef.current = diceGroup;
 
     // Stars
-    scene.add(createStars(200, 40));
+    const stars = createStars(200, 40);
+    scene.add(stars);
+    starsRef.current = stars;
 
     // Resize handler
     const onResize = () => {
@@ -185,15 +239,37 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
         }
       }
 
-      // Animate glows and lanterns
+      // Animate glows, lanterns with realistic flickering
       scene.traverse(obj => {
         if (obj.userData?.isGlow) {
           obj.material.opacity = 0.18 + 0.1 * Math.sin(elapsed * 4);
           obj.scale.setScalar(1.6 + 0.1 * Math.sin(elapsed * 6));
         }
         if (obj.userData?.isLantern) {
-          obj.material.opacity = 0.75 + 0.2 * Math.sin(elapsed * 3 + obj.position.x);
-          obj.scale.setScalar(1 + 0.15 * Math.sin(elapsed * 2.5 + obj.position.x * 2));
+          // Multi-frequency flicker for realism
+          const seed = obj.position.x * 13.7 + obj.position.z * 7.3;
+          const flicker = 
+            0.6 +
+            0.15 * Math.sin(elapsed * 8.3 + seed) +
+            0.1 * Math.sin(elapsed * 13.7 + seed * 2.1) +
+            0.08 * Math.sin(elapsed * 23.1 + seed * 0.7) +
+            0.05 * (Math.random() - 0.5); // random jitter
+          obj.material.opacity = Math.max(0.4, Math.min(1.0, flicker));
+          obj.scale.setScalar(0.8 + flicker * 0.35);
+          // Shift color slightly for warmth variation
+          const warmth = 0.95 + 0.05 * Math.sin(elapsed * 5.5 + seed);
+          obj.material.color.setRGB(1.0, warmth * 0.6, warmth * 0.2);
+        }
+        // Flicker lantern point lights too
+        if (obj.isLight && obj.userData?.isLanternLight) {
+          const seed = obj.position.x * 11.3 + obj.position.z * 5.7;
+          const flicker = 
+            1.0 +
+            0.2 * Math.sin(elapsed * 8.3 + seed) +
+            0.15 * Math.sin(elapsed * 13.7 + seed * 2.1) +
+            0.1 * Math.sin(elapsed * 23.1 + seed * 0.7) +
+            0.08 * (Math.random() - 0.5);
+          obj.intensity = obj.userData.baseIntensity * Math.max(0.5, flicker);
         }
       });
 
