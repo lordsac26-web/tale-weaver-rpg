@@ -42,56 +42,7 @@ function createSparkles(count, scale, color, size) {
   return new THREE.Points(geo, mat);
 }
 
-// ─── Simple physics ───────────────────────────────────────────────────────────
-
-function createPhysicsDie(pos, vel, angVel) {
-  return {
-    position: new THREE.Vector3(...pos),
-    velocity: new THREE.Vector3(...vel),
-    angularVelocity: new THREE.Euler(...angVel),
-    settled: false,
-    settleCount: 0,
-  };
-}
-
-function stepPhysics(body, dt, dieRadius) {
-  const gravity = -28;
-  body.velocity.y += gravity * dt;
-  body.velocity.multiplyScalar(0.995);
-  body.angularVelocity.x *= 0.99;
-  body.angularVelocity.y *= 0.99;
-  body.angularVelocity.z *= 0.99;
-  body.position.add(body.velocity.clone().multiplyScalar(dt));
-
-  // Floor collision (tray floor at y = -2, die rests at -2 + radius)
-  const floorY = -2 + (dieRadius || 0.5);
-  if (body.position.y < floorY) {
-    body.position.y = floorY;
-    body.velocity.y = -body.velocity.y * 0.3;
-    body.velocity.x *= 0.82;
-    body.velocity.z *= 0.82;
-    body.angularVelocity.x *= 0.75;
-    body.angularVelocity.z *= 0.75;
-  }
-
-  // Wall collisions — tray boundaries
-  const wallX = 1.4;
-  const wallZBack = -1.1;
-  const wallZFront = 2.0;
-  if (body.position.x < -wallX) { body.position.x = -wallX; body.velocity.x = Math.abs(body.velocity.x) * 0.3; }
-  if (body.position.x > wallX)  { body.position.x = wallX;  body.velocity.x = -Math.abs(body.velocity.x) * 0.3; }
-  if (body.position.z < wallZBack)  { body.position.z = wallZBack;  body.velocity.z = Math.abs(body.velocity.z) * 0.3; }
-  if (body.position.z > wallZFront) { body.position.z = wallZFront; body.velocity.z = -Math.abs(body.velocity.z) * 0.3; }
-
-  const speed = body.velocity.length();
-  const angSpeed = Math.abs(body.angularVelocity.x) + Math.abs(body.angularVelocity.y) + Math.abs(body.angularVelocity.z);
-  if (speed < 0.08 && angSpeed < 0.08) {
-    body.settleCount++;
-    if (body.settleCount > 40) body.settled = true;
-  } else {
-    body.settleCount = 0;
-  }
-}
+// Physics engine imported from TowerPhysics.jsx
 
 // ─── Main Scene Component ─────────────────────────────────────────────────────
 
