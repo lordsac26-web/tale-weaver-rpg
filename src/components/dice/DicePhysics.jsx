@@ -3,11 +3,25 @@ import { useFrame } from '@react-three/fiber';
 import { useBox, usePlane } from '@react-three/cannon';
 import * as THREE from 'three';
 
-// Fully imperative sprite to avoid applyProps reconciler crashes
-function DieNumber({ value, color = 'white' }) {
-  const spriteRef = useRef();
+// ─── Imperative Mesh Helper ──────────────────────────────────────────────────
+// Creates a THREE.Mesh imperatively to bypass R3F applyProps reconciler crashes
 
-  const material = useMemo(() => {
+function ImperativeMesh({ geometry, materialProps, castShadow, receiveShadow, meshRef }) {
+  const mesh = useMemo(() => {
+    const mat = new THREE.MeshStandardMaterial(materialProps);
+    const m = new THREE.Mesh(geometry, mat);
+    m.castShadow = !!castShadow;
+    m.receiveShadow = !!receiveShadow;
+    return m;
+  }, [geometry, materialProps, castShadow, receiveShadow]);
+
+  return <primitive ref={meshRef} object={mesh} />;
+}
+
+// ─── Imperative Sprite for Die Numbers ───────────────────────────────────────
+
+function DieNumber({ value, color = 'white' }) {
+  const sprite = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 128;
@@ -19,24 +33,18 @@ function DieNumber({ value, color = 'white' }) {
     ctx.textBaseline = 'middle';
     ctx.fillText(String(value), 64, 68);
     const tex = new THREE.CanvasTexture(canvas);
-    return new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+    const s = new THREE.Sprite(mat);
+    s.scale.set(0.4, 0.4, 0.4);
+    return s;
   }, [value, color]);
 
-  useEffect(() => {
-    if (spriteRef.current) {
-      spriteRef.current.material = material;
-      spriteRef.current.scale.set(0.4, 0.4, 0.4);
-    }
-  }, [material]);
-
-  // Render a bare <sprite> with no child material — material set imperatively
-  return <primitive ref={spriteRef} object={new THREE.Sprite()} />;
+  return <primitive object={sprite} />;
 }
 
 // ─── Settle Detection ────────────────────────────────────────────────────────
 
 function useSettle(api, onSettle, resultValue) {
-  const posRef = useRef([0, 0, 0]);
   const velRef = useRef([0, 0, 0]);
   const angVelRef = useRef([0, 0, 0]);
   const settledRef = useRef(false);
@@ -44,7 +52,6 @@ function useSettle(api, onSettle, resultValue) {
 
   useEffect(() => {
     const unsubs = [
-      api.position.subscribe(v => { posRef.current = v; }),
       api.velocity.subscribe(v => { velRef.current = v; }),
       api.angularVelocity.subscribe(v => { angVelRef.current = v; }),
     ];
@@ -70,24 +77,32 @@ function useSettle(api, onSettle, resultValue) {
 // ─── Crit Glow Effect ─────────────────────────────────────────────────────────
 
 function CritGlow({ type }) {
-  const meshRef = useRef();
-  useFrame(({ clock }) => {
-    if (!meshRef.current) return;
-    const t = clock.getElapsedTime();
-    meshRef.current.material.opacity = 0.15 + 0.1 * Math.sin(t * 4);
-    meshRef.current.scale.setScalar(1.5 + 0.1 * Math.sin(t * 6));
-  });
-  const color = type === 'crit' ? '#f0c040' : '#ff2200';
+  const glowColor = type === 'crit' ? '#f0c040' : '#ff2200';
 
-  return (
-    <mesh ref={meshRef}>
-      <sphereGeometry args={[0.9, 16, 16]} />
-      <meshBasicMaterial color={color} transparent opacity={0.15} side={THREE.BackSide} />
-    </mesh>
-  );
+  const mesh = useMemo(() => {
+    const geo = new THREE.SphereGeometry(0.9, 16, 16);
+    const mat = new THREE.MeshBasicMaterial({
+      color: glowColor,
+      transparent: true,
+      opacity: 0.15,
+      side: THREE.BackSide,
+    });
+    return new THREE.Mesh(geo, mat);
+  }, [glowColor]);
+
+  useFrame(({ clock }) => {
+    if (!mesh) return;
+    const t = clock.getElapsedTime();
+    mesh.material.opacity = 0.15 + 0.1 * Math.sin(t * 4);
+    mesh.scale.setScalar(1.5 + 0.1 * Math.sin(t * 6));
+  });
+
+  return <primitive object={mesh} />;
 }
 
 // ─── D6 Die ───────────────────────────────────────────────────────────────────
+
+const boxGeo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
 
 export function Die({ position, velocity, angularVelocity, color, onSettle, resultValue }) {
   const [ref, api] = useBox(() => ({
@@ -120,19 +135,23 @@ export function Die({ position, velocity, angularVelocity, color, onSettle, resu
   const emissiveColor = isCrit ? '#c9a96e' : isFail ? '#440000' : '#000000';
   const emissiveIntensity = isCrit ? 0.4 : isFail ? 0.5 : 0;
 
+  const dieMesh = useMemo(() => {
+    const mat = new THREE.MeshStandardMaterial({
+      color: dieColor,
+      roughness: 0.25,
+      metalness: 0.5,
+      emissive: emissiveColor,
+      emissiveIntensity,
+    });
+    const m = new THREE.Mesh(boxGeo, mat);
+    m.castShadow = true;
+    return m;
+  }, [dieColor, emissiveColor, emissiveIntensity]);
+
   return (
     <group ref={ref}>
       {(isCrit || isFail) && <CritGlow type={isCrit ? 'crit' : 'fail'} />}
-      <mesh castShadow>
-        <boxGeometry args={[0.95, 0.95, 0.95]} />
-        <meshStandardMaterial
-          color={dieColor}
-          roughness={0.25}
-          metalness={0.5}
-          emissive={emissiveColor}
-          emissiveIntensity={emissiveIntensity}
-        />
-      </mesh>
+      <primitive object={dieMesh} />
       {[1, 2, 3, 4, 5, 6].map((face, i) => (
         <group key={face} position={facePositions[i]} rotation={faceRotations[i]}>
           <DieNumber value={face} color={isCrit ? '#1a0a00' : 'white'} />
@@ -153,6 +172,8 @@ const FLOOR_COLORS = {
   shadow: '#181818',
 };
 
+const floorGeo = new THREE.PlaneGeometry(20, 20);
+
 export function Floor({ towerType }) {
   const [ref] = usePlane(() => ({
     rotation: [-Math.PI / 2, 0, 0],
@@ -160,15 +181,21 @@ export function Floor({ towerType }) {
     material: { restitution: 0.2, friction: 0.95 },
   }));
 
+  const mesh = useMemo(() => {
+    const mat = new THREE.MeshStandardMaterial({
+      color: FLOOR_COLORS[towerType] || '#111',
+      roughness: 0.95,
+      metalness: 0.05,
+    });
+    const m = new THREE.Mesh(floorGeo, mat);
+    m.receiveShadow = true;
+    return m;
+  }, [towerType]);
+
   return (
-    <mesh ref={ref} receiveShadow>
-      <planeGeometry args={[20, 20]} />
-      <meshStandardMaterial
-        color={FLOOR_COLORS[towerType] || '#111'}
-        roughness={0.95}
-        metalness={0.05}
-      />
-    </mesh>
+    <group ref={ref}>
+      <primitive object={mesh} />
+    </group>
   );
 }
 
@@ -201,16 +228,24 @@ export function TowerWall({ position, rotation, size, towerType }) {
     material: { restitution: 0.2, friction: 0.7 },
   }));
 
+  const mesh = useMemo(() => {
+    const geo = new THREE.BoxGeometry(...size);
+    const mat = new THREE.MeshStandardMaterial({
+      color: WALL_COLORS[towerType] || '#222',
+      roughness: 0.75,
+      metalness: towerType === 'crystal' ? 0.5 : 0.15,
+      emissive: WALL_EMISSIVES[towerType] || '#000',
+      emissiveIntensity: 0.55,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    return m;
+  }, [size, towerType]);
+
   return (
-    <mesh ref={ref} castShadow receiveShadow>
-      <boxGeometry args={size} />
-      <meshStandardMaterial
-        color={WALL_COLORS[towerType] || '#222'}
-        roughness={0.75}
-        metalness={towerType === 'crystal' ? 0.5 : 0.15}
-        emissive={WALL_EMISSIVES[towerType] || '#000'}
-        emissiveIntensity={0.55}
-      />
-    </mesh>
+    <group ref={ref}>
+      <primitive object={mesh} />
+    </group>
   );
 }
