@@ -90,9 +90,13 @@ export function Die({ position, velocity, angularVelocity, color, onSettle, resu
   return (
     <group ref={ref}>
       {(isCrit || isFail) && <CritGlow type={isCrit ? 'crit' : 'fail'} />}
-      <RoundedBox args={[0.95, 0.95, 0.95]} radius={0.07} smoothness={3}>
-        <meshStandardMaterial color={dieColor} roughness={0.25} metalness={0.5} emissive={emissive} emissiveIntensity={isCrit ? 0.4 : isFail ? 0.5 : 0} />
-      </RoundedBox>
+      <RoundedBox args={[0.95, 0.95, 0.95]} radius={0.07} smoothness={3}
+        material={useMemo(() => new THREE.MeshStandardMaterial({
+          color: dieColor, roughness: 0.25, metalness: 0.5,
+          emissive: new THREE.Color(emissive),
+          emissiveIntensity: isCrit ? 0.4 : isFail ? 0.5 : 0,
+        }), [dieColor, emissive, isCrit, isFail])}
+      />
       {[1, 2, 3, 4, 5, 6].map((face, i) => (
         <group key={face} position={facePositions[i]} rotation={faceRotations[i]}>
           <Text fontSize={0.26} color={isCrit ? '#1a0a00' : 'white'} anchorX="center" anchorY="middle" depthOffset={-1} fontWeight="bold">
