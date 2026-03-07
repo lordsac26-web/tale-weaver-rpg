@@ -116,7 +116,7 @@ function ItemCard({ item, isEquipped, onCompare, onEquip, onUnequip, onDrop }) {
                 </div>
               )}
               {item.base_price > 0 && (
-                <p className="text-xs" style={{ color: 'rgba(184,115,51,0.4)', fontFamily: 'EB Garamond, serif' }}>
+                <p className="text-xs" style={{ color: 'rgba(212,168,100,0.65)', fontFamily: 'EB Garamond, serif' }}>
                   Value: ~{item.base_price} gp
                 </p>
               )}
