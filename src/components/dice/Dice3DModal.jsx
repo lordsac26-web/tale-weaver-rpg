@@ -10,6 +10,7 @@ import { X, Dices, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { Die, Floor, TowerWall } from './DicePhysics';
 import { TOWER_CONFIGS } from './DiceTowerScene';
 import CriticalEffect from './CriticalEffect';
+import { SimpleStars, SimpleSparkles } from './SceneParticles';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -42,14 +43,14 @@ function TowerScene({ towerType, dice, onDieSettle }) {
       <pointLight position={[0, -1, 2]} intensity={1.8} color="#ffffff" />
       <pointLight position={[3, 4, 3]} intensity={1.2} color="#ffffff" />
       <pointLight position={[-3, 4, -3]} intensity={1.0} color="#ffffff" />
-      <Stars radius={35} depth={12} count={250} factor={2.5} fade />
+      <SimpleStars count={250} radius={35} />
       {cfg.sparkles && (
-        <Sparkles
+        <SimpleSparkles
           count={cfg.sparkles.count}
           scale={7}
           size={cfg.sparkles.size}
           speed={cfg.sparkles.speed}
-          color={new THREE.Color(cfg.sparkles.color)}
+          color={cfg.sparkles.color}
         />
       )}
 

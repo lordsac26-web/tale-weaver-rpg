@@ -7,6 +7,7 @@ import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Die, Floor, TowerWall } from './DicePhysics';
+import { SimpleStars, SimpleSparkles } from './SceneParticles';
 
 export const TOWER_CONFIGS = {
   wooden: {
@@ -88,16 +89,16 @@ function TowerScene({ towerType, dice, onDieSettle }) {
       <pointLight position={[0, -1, 0]} intensity={0.8} color="#ffffff" />
 
       {cfg.sparkles && (
-        <Sparkles
+        <SimpleSparkles
           count={cfg.sparkles.count}
           scale={6}
           size={cfg.sparkles.size}
           speed={cfg.sparkles.speed}
-          color={new THREE.Color(cfg.sparkles.color)}
+          color={cfg.sparkles.color}
         />
       )}
 
-      <Stars radius={30} depth={10} count={300} factor={2} fade />
+      <SimpleStars count={300} radius={30} />
 
       <Physics gravity={[0, -20, 0]}>
         <Floor towerType={towerType} />
