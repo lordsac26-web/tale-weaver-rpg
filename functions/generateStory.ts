@@ -125,7 +125,7 @@ Then continue with your scene description and story.`;
       ? `IMPORTANT: The player attempted a skill check. The outcome is embedded in their action text (SUCCESS or FAILURE). Reflect this outcome DIRECTLY in your narrative — do not contradict it. On SUCCESS: describe how the character overcomes the challenge with vivid detail. On FAILURE: describe a setback, complication, or consequence. Keep it immersive and reactive.`
       : '';
 
-    prompt = `You are the Dungeon Master. Continue the story based on the player's choice.
+    prompt = `You are the Dungeon Master for a dark-fantasy, narrative-heavy RPG. Continue the story based on the player's choice.
 ${charSummary}
 ${worldSummary}
 ${gameDataContext}
@@ -135,14 +135,41 @@ ${storyLog}
 Player Action: ${selectedChoice}
 ${skillCheckNote}
 
+=== ALIGNMENT TRACKING (CRITICAL — enforce consistently) ===
+The player's current alignment scores are: Law/Chaos axis = ${lcScore} (positive = Lawful, negative = Chaotic), Good/Evil axis = ${geScore} (positive = Good, negative = Evil).
+Current alignment label: ${currentAlignment}.
+
+After EVERY morally or philosophically significant decision, you MUST return alignment_shift values:
+- law_chaos_shift: integer from -5 to +5. Positive = more Lawful, negative = more Chaotic.
+- good_evil_shift: integer from -5 to +5. Positive = more Good, negative = more Evil.
+- Set both to 0 if the action is morally neutral.
+
+Examples of shifts:
+• Torturing a prisoner → good_evil_shift: -5
+• Keeping a sworn oath despite cost → law_chaos_shift: +4
+• Freeing slaves by force → law_chaos_shift: -3, good_evil_shift: +4
+• Ignoring suffering → good_evil_shift: -3
+• Risking life to save innocents → good_evil_shift: +5
+
+If the new score crosses a threshold (|score| crosses from <8 to >=8 on either axis), include a dramatic alignment shift narration in your narrative, like:
+"A cold certainty settles in your soul..." or "You feel the stain of what you've done..."
+
+Alignment has soft narrative effects: certain NPCs, factions, gods, and magic items react to alignment. Clerics/paladins may suffer divine consequences for major drift.
+
+=== END ALIGNMENT ===
+
+Begin your narrative response with this header:
+**HP: ${character?.hp_current || '?'}/${character?.hp_max || '?'} | AC: ${character?.armor_class || '?'} | Level: ${character?.level || '?'} | Alignment: ${currentAlignment} (L/C: ${lcScore}, G/E: ${geScore}) | ${session.current_location || 'Unknown'} | ${session.time_of_day || 'Morning'}**
+
 Write the consequence narrative (2-3 paragraphs) that directly reacts to the player's action and any skill check outcome. Then provide 4 new choices.
 Consider:
 - Character's active conditions and how they affect outcomes
-- Reputation/alignment impact if morally significant
+- Alignment impact if morally significant (return shift values!)
 - Environmental conditions (${session.season}, ${session.time_of_day})
 - Make skill check consequences feel meaningful and permanent
-${session.adult_mode ? '- Mature content permitted' : ''}
-- If combat should trigger, flag it`;
+${session.adult_mode ? '- Mature/gritty content permitted' : ''}
+- If combat should trigger, flag it
+- Never decide the player's emotions, thoughts or words — only describe the world and consequences`;
 
     responseSchema = {
       type: 'object',
@@ -168,7 +195,15 @@ ${session.adult_mode ? '- Mature content permitted' : ''}
         location_update: { type: 'string' },
         quest_update: { type: 'object' },
         new_condition: { type: 'string' },
-        plot_flag: { type: 'string' }
+        plot_flag: { type: 'string' },
+        alignment_shift: {
+          type: 'object',
+          description: 'Alignment axis shifts from this action. law_chaos_shift: -5 to +5 (positive=Lawful). good_evil_shift: -5 to +5 (positive=Good). Set to 0 if morally neutral.',
+          properties: {
+            law_chaos_shift: { type: 'number' },
+            good_evil_shift: { type: 'number' }
+          }
+        }
       }
     };
   } else if (action === 'combat_narrate') {
