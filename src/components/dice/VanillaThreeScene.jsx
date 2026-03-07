@@ -337,7 +337,7 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
     settledRef.current = false;
     const sides = diceSides || 20;
 
-    const bodies = dice.map(d => createPhysicsDie(d.position, d.velocity, d.angularVelocity));
+    const bodies = dice.map(d => createPhysicsBody(d.position, d.velocity, d.angularVelocity));
     dieBodiesRef.current = bodies;
 
     dice.forEach(d => {
