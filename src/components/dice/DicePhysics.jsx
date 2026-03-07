@@ -143,21 +143,21 @@ export function TowerWall({ position, rotation, size, towerType }) {
   }));
 
   const colors = {
-    wooden: '#3d1f08',
-    arcane: '#1e0d40',
-    infernal: '#3d0808',
-    crystal: '#0a1e38',
-    elven: '#0a2010',
-    shadow: '#0a0a0a',
+    wooden: '#7a4520',
+    arcane: '#2e1560',
+    infernal: '#5a1010',
+    crystal: '#122848',
+    elven: '#103818',
+    shadow: '#282828',
   };
 
   const emissives = {
-    arcane: '#220055',
-    infernal: '#220000',
-    crystal: '#001133',
-    elven: '#001100',
-    shadow: '#000000',
-    wooden: '#000000',
+    arcane: '#3d0088',
+    infernal: '#440000',
+    crystal: '#002255',
+    elven: '#003300',
+    shadow: '#110011',
+    wooden: '#1a0800',
   };
 
   const geo = useMemo(() => new THREE.BoxGeometry(...size), [size[0], size[1], size[2]]);
