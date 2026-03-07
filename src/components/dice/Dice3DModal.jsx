@@ -170,6 +170,7 @@ export default function Dice3DModal({ onClose, character }) {
               dice={dice}
               diceSides={diceType.sides}
               ambience={ambience}
+              onAllSettled={handleDiceSettled}
             />
 
             {/* Roll Result Overlay */}
