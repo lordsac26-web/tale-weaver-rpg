@@ -251,10 +251,12 @@ export function buildTavernTower(scene, towerType, towerConfig) {
     });
   }
 
-  // ── Front portcullis texture (where dice exit the tower into the tray) ──────
+  // ── Front wall — upper portion only (above the archway opening) ──────────
+  // The archway takes up the lower ~38% of the front, so the wall covers top ~62%
+  const archTopY = towerBaseY + towerH * 0.38;
+  const upperFrontH = towerH - towerH * 0.38;
   if (isWooden) {
-    const frontH = towerH * 0.55;  // covers lower portion of tower front
-    const frontPlaneGeo = new THREE.PlaneGeometry(towerW, frontH);
+    const frontPlaneGeo = new THREE.PlaneGeometry(towerW, upperFrontH);
     const frontMat = new THREE.MeshStandardMaterial({
       color: '#ffffff',
       roughness: 0.7,
@@ -267,9 +269,12 @@ export function buildTavernTower(scene, towerType, towerConfig) {
       frontMat.needsUpdate = true;
     });
     const frontPlane = new THREE.Mesh(frontPlaneGeo, frontMat);
-    frontPlane.position.set(0, towerBaseY + frontH / 2, towerD / 2 - wallThick + 0.01);
+    frontPlane.position.set(0, archTopY + upperFrontH / 2, towerD / 2 - wallThick + 0.01);
     frontPlane.receiveShadow = true;
     group.add(frontPlane);
+  } else {
+    // Non-wooden: solid upper front wall
+    addBox(group, [towerW, upperFrontH, wallThick], [0, archTopY + upperFrontH / 2, towerD / 2 - wallThick / 2], towerMat);
   }
 
   // ── Internal baffles (angled shelves inside tower for dice to bounce) ───────
