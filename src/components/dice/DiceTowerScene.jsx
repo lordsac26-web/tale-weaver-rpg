@@ -3,8 +3,6 @@ import { Canvas } from '@react-three/fiber';
 import { Physics } from '@react-three/cannon';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Die, Floor, TowerWall } from './DicePhysics';
 import { SimpleStars, SimpleSparkles } from './SceneParticles';
