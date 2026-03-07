@@ -136,6 +136,44 @@ export default function Game() {
     }
   };
 
+  // Process alignment shifts from AI response and emit narrative events
+  const processAlignmentShift = (data) => {
+    if (!data.alignment_shift || !character) return;
+    const lcShift = data.alignment_shift.law_chaos_shift || 0;
+    const geShift = data.alignment_shift.good_evil_shift || 0;
+    if (lcShift === 0 && geShift === 0) return;
+
+    const oldLC = character.alignment_law_chaos || 0;
+    const oldGE = character.alignment_good_evil || 0;
+    const newLC = Math.max(-10, Math.min(10, oldLC + lcShift));
+    const newGE = Math.max(-10, Math.min(10, oldGE + geShift));
+    const oldLabel = getAlignmentLabel(oldLC, oldGE);
+    const newLabel = getAlignmentLabel(newLC, newGE);
+
+    const parts = [];
+    if (lcShift > 0) parts.push(`⚖️ +${lcShift} Lawful`);
+    if (lcShift < 0) parts.push(`🌊 ${lcShift} Chaotic`);
+    if (geShift > 0) parts.push(`💚 +${geShift} Good`);
+    if (geShift < 0) parts.push(`💀 ${geShift} Evil`);
+
+    if (oldLabel !== newLabel) {
+      setNarrative(prev => [...prev, {
+        type: 'alignment_shift',
+        text: `${oldLabel} → ${newLabel}`,
+        details: parts.join(' · '),
+      }]);
+    } else if (Math.abs(lcShift) >= 2 || Math.abs(geShift) >= 2) {
+      setNarrative(prev => [...prev, {
+        type: 'alignment_shift',
+        text: parts.join(' · '),
+        details: `Alignment: ${newLabel} (L/C: ${newLC}, G/E: ${newGE})`,
+      }]);
+    }
+
+    // Update local character state immediately
+    setCharacter(prev => prev ? { ...prev, alignment_law_chaos: newLC, alignment_good_evil: newGE, alignment: newLabel } : prev);
+  };
+
   const handleChoice = async (choiceIndex) => {
     const choice = choices[choiceIndex];
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
