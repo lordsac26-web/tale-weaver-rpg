@@ -178,17 +178,26 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
       const meshes = diceGroupRef.current?.children || [];
       const radius = getDieRadius(sidesRef.current);
 
+      // Sub-step physics for stability (3 sub-steps per frame)
+      const subSteps = 3;
+      const subDt = dt / subSteps;
+      for (let s = 0; s < subSteps; s++) {
+        for (let i = 0; i < bodies.length; i++) {
+          if (!bodies[i] || bodies[i].settled) continue;
+          stepPhysics(bodies[i], subDt, radius);
+        }
+        if (bodies.length > 1) collideDice(bodies, radius);
+      }
+
+      // Sync meshes to physics
       for (let i = 0; i < bodies.length; i++) {
         const body = bodies[i];
-        if (!body || body.settled) continue;
-        stepPhysics(body, dt, radius);
         const mesh = meshes[i];
-        if (mesh) {
-          mesh.position.copy(body.position);
-          mesh.rotation.x += body.angularVelocity.x * dt;
-          mesh.rotation.y += body.angularVelocity.y * dt;
-          mesh.rotation.z += body.angularVelocity.z * dt;
-        }
+        if (!body || !mesh) continue;
+        mesh.position.copy(body.position);
+        mesh.rotation.x += body.angularVelocity.x * dt;
+        mesh.rotation.y += body.angularVelocity.y * dt;
+        mesh.rotation.z += body.angularVelocity.z * dt;
       }
 
       // Animate glows, lanterns with realistic flickering
