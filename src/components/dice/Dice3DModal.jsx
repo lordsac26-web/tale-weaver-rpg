@@ -174,6 +174,7 @@ export default function Dice3DModal({ onClose, character }) {
           border: `1px solid ${cfg.ambientColor}55`,
           boxShadow: `0 0 80px ${cfg.ambientColor}22, 0 0 140px rgba(0,0,0,0.9)`,
           maxHeight: '93vh',
+          minWidth: 0,
         }}
       >
         {/* ── Header ── */}
