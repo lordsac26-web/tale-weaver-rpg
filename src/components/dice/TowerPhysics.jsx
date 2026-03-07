@@ -75,11 +75,11 @@ function createBaffleColliders() {
 }
 
 const BAFFLES = createBaffleColliders();
-const GRAVITY = -22;
-const DAMPING = 0.996;
-const ANG_DAMPING = 0.992;
-const BOUNCE_RESTITUTION = 0.35;
-const FRICTION = 0.78;
+const GRAVITY = -38;
+const DAMPING = 0.994;
+const ANG_DAMPING = 0.990;
+const BOUNCE_RESTITUTION = 0.32;
+const FRICTION = 0.75;
 
 // ─── Physics body factory ─────────────────────────────────────────────────────
 export function createPhysicsBody(pos, vel, angVel) {
@@ -315,16 +315,16 @@ export function getSpawnPosition(index) {
 
 export function getSpawnVelocity() {
   return [
-    (Math.random() - 0.5) * 2,    // slight x scatter
-    -3 - Math.random() * 2,        // downward (gentle initial drop)
-    (Math.random() - 0.5) * 1.5,   // slight z scatter
+    (Math.random() - 0.5) * 3,    // x scatter
+    -8 - Math.random() * 4,        // strong downward drop
+    (Math.random() - 0.5) * 2,     // z scatter
   ];
 }
 
 export function getSpawnAngularVelocity() {
   return [
-    (Math.random() - 0.5) * 15,
-    (Math.random() - 0.5) * 15,
-    (Math.random() - 0.5) * 15,
+    (Math.random() - 0.5) * 25,
+    (Math.random() - 0.5) * 25,
+    (Math.random() - 0.5) * 25,
   ];
 }
