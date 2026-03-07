@@ -69,9 +69,12 @@ function addCritGlow(mesh, isCrit) {
   mesh.add(glow);
 }
 
+// ─── Global scale for all dice (smaller to fit in tower tray) ─────────────────
+const DICE_SCALE = 0.45;
+
 // ─── D4 (Tetrahedron) ────────────────────────────────────────────────────────
 function createD4(result, isCrit, isFail) {
-  const geo = new THREE.TetrahedronGeometry(0.65, 0);
+  const geo = new THREE.TetrahedronGeometry(0.65 * DICE_SCALE, 0);
   const mat = createIvoryMaterial(isCrit, isFail);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;

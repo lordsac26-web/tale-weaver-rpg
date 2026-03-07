@@ -11,29 +11,44 @@ import * as THREE from 'three';
 const WALL_TEXTURE_URL = 'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69a4e1720142630debaad046/979b57267_ChatGPTImageMar7202604_36_21AM.png';
 
 const textureLoader = new THREE.TextureLoader();
-let wallTexCache = null;
+let wallTexLoaded = null;
+let wallTexPromise = null;
 
-function getWallTexture() {
-  if (wallTexCache) return wallTexCache;
-  wallTexCache = textureLoader.load(WALL_TEXTURE_URL);
-  wallTexCache.wrapS = THREE.RepeatWrapping;
-  wallTexCache.wrapT = THREE.RepeatWrapping;
-  wallTexCache.colorSpace = THREE.SRGBColorSpace;
-  return wallTexCache;
+// Load texture once, reuse everywhere — no cloning to avoid "no image data" warnings
+function loadWallTexture() {
+  if (wallTexLoaded) return wallTexLoaded;
+  if (!wallTexPromise) {
+    wallTexPromise = new Promise((resolve) => {
+      textureLoader.load(WALL_TEXTURE_URL, (tex) => {
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        wallTexLoaded = tex;
+        resolve(tex);
+      });
+    });
+  }
+  return null;
 }
 
 // ─── Materials ────────────────────────────────────────────────────────────────
+// Use solid wood colors; texture applied once loaded via callback
 
-function createWoodMaterial(repeatX = 1, repeatY = 1) {
-  const tex = getWallTexture().clone();
-  tex.needsUpdate = true;
-  tex.repeat.set(repeatX, repeatY);
-  return new THREE.MeshStandardMaterial({
-    map: tex,
+function createWoodMaterial() {
+  const mat = new THREE.MeshStandardMaterial({
+    color: '#6a4225',
     roughness: 0.82,
     metalness: 0.05,
-    color: '#9a7050',
   });
+  // Apply texture when loaded
+  const tex = loadWallTexture();
+  if (tex) {
+    mat.map = tex;
+    mat.needsUpdate = true;
+  } else if (wallTexPromise) {
+    wallTexPromise.then(t => { mat.map = t; mat.needsUpdate = true; });
+  }
+  return mat;
 }
 
 function createBrassMaterial() {
@@ -47,16 +62,19 @@ function createBrassMaterial() {
 }
 
 function createFloorMaterial() {
-  const tex = getWallTexture().clone();
-  tex.needsUpdate = true;
-  tex.repeat.set(2, 2);
-  tex.rotation = Math.PI / 2;
-  return new THREE.MeshStandardMaterial({
-    map: tex,
+  const mat = new THREE.MeshStandardMaterial({
+    color: '#5a3820',
     roughness: 0.9,
     metalness: 0.02,
-    color: '#6a4830',
   });
+  const tex = loadWallTexture();
+  if (tex) {
+    mat.map = tex;
+    mat.needsUpdate = true;
+  } else if (wallTexPromise) {
+    wallTexPromise.then(t => { mat.map = t; mat.needsUpdate = true; });
+  }
+  return mat;
 }
 
 // ─── Build tower geometry ─────────────────────────────────────────────────────
