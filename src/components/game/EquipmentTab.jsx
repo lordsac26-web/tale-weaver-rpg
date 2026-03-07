@@ -266,7 +266,7 @@ export default function EquipmentTab({ character, onCharacterUpdate }) {
                 style={{
                   background: filterCategory === cat ? 'rgba(92,51,24,0.7)' : 'rgba(20,10,4,0.6)',
                   border: `1px solid ${filterCategory === cat ? 'rgba(212,149,90,0.5)' : 'rgba(184,115,51,0.15)'}`,
-                  color: filterCategory === cat ? 'var(--brass-gold)' : 'rgba(212,149,90,0.5)',
+                  color: filterCategory === cat ? 'var(--brass-gold)' : 'rgba(212,168,100,0.7)',
                 }}>
                 {cat}
               </button>
