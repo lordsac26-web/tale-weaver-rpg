@@ -1,7 +1,7 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useBox, usePlane } from '@react-three/cannon';
-import { Text, RoundedBox, Sphere } from '@react-three/drei';
+import { Text, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 
 // ─── Settle Detection ────────────────────────────────────────────────────────
