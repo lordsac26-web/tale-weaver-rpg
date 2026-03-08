@@ -296,6 +296,25 @@ export default function Dice3DModal({ onClose, character }) {
 
             <div className="h-px flex-shrink-0" style={{ background: 'rgba(201,169,110,0.1)' }} />
 
+            {/* Custom Models */}
+            <div className="space-y-2">
+              <div className="text-xs font-fantasy" style={{ color: 'rgba(201,169,110,0.45)', letterSpacing: '0.12em' }}>CUSTOM MODELS</div>
+              <ModelUploader
+                label="Tower Model (.glb)"
+                currentUrl={customTowerUrl}
+                onUrlChange={setCustomTowerUrl}
+                accentColor={cfg.ambientColor}
+              />
+              <ModelUploader
+                label="Dice Model (.glb)"
+                currentUrl={customDiceUrl}
+                onUrlChange={setCustomDiceUrl}
+                accentColor={cfg.ambientColor}
+              />
+            </div>
+
+            <div className="h-px flex-shrink-0" style={{ background: 'rgba(201,169,110,0.1)' }} />
+
             {/* Dice Type */}
             <div>
               <div className="text-xs mb-2 font-fantasy" style={{ color: 'rgba(201,169,110,0.45)', letterSpacing: '0.12em' }}>DICE TYPE</div>
