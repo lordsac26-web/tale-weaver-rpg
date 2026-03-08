@@ -271,7 +271,7 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
     };
   }, []);
 
-  // Update tower theme
+  // Update tower theme (procedural or custom GLB)
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
@@ -285,18 +285,29 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
       scene.remove(c);
       c.traverse?.(o => { o.geometry?.dispose(); o.material?.dispose?.(); });
     });
+    customTowerRef.current = null;
 
-    // Build new tower + lights
-    buildTavernTower(scene, towerType, towerConfig);
+    // Always build lights (needed for any tower)
     const lights = buildSceneLights(scene, towerConfig);
-
-    // Store light refs for ambience updates
     lights.forEach(l => {
       if (l.isAmbientLight) lightsRef.current.ambient = l;
       else if (l.userData?.lightRole === 'main') lightsRef.current.main = l;
       else if (l.userData?.lightRole === 'fill') lightsRef.current.fill = l;
       else if (l.userData?.lightRole === 'rim') lightsRef.current.rim = l;
     });
+
+    if (customTowerUrl) {
+      // Load custom GLB tower model
+      loadGLTFModel(customTowerUrl).then(model => {
+        if (!model || !sceneRef.current) return;
+        const prepared = prepareTowerModel(model, { scale: 1, position: [0, -2, 0] });
+        sceneRef.current.add(prepared);
+        customTowerRef.current = prepared;
+      });
+    } else {
+      // Use procedural tower
+      buildTavernTower(scene, towerType, towerConfig);
+    }
 
     // Sparkles for non-wooden towers
     if (towerConfig?.sparkles) {
@@ -307,7 +318,7 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
     } else {
       sparklesRef.current = null;
     }
-  }, [towerType, towerConfig]);
+  }, [towerType, towerConfig, customTowerUrl]);
 
   // Apply ambience changes
   useEffect(() => {
@@ -334,6 +345,9 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
     }
   }, [ambience]);
 
+  // Track custom dice URL
+  useEffect(() => { customDiceUrlRef.current = customDiceUrl; }, [customDiceUrl]);
+
   // Update dice when they change
   useEffect(() => {
     const group = diceGroupRef.current;
@@ -352,12 +366,26 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
     const bodies = dice.map(d => createPhysicsBody(d.position, d.velocity, d.angularVelocity));
     dieBodiesRef.current = bodies;
 
-    dice.forEach(d => {
-      const mesh = createDieMesh(sides, d.result, towerConfig?.dieColor || '#e8dcc8');
-      mesh.position.set(...d.position);
-      group.add(mesh);
-    });
-  }, [dice, towerConfig, diceSides]);
+    if (customDiceUrl && dice.length > 0) {
+      // Load custom GLB die models
+      dice.forEach((d, i) => {
+        loadGLTFModel(customDiceUrl).then(model => {
+          if (!model || !diceGroupRef.current) return;
+          const prepared = prepareDieModel(model, { scale: 0.45 });
+          prepared.position.set(...d.position);
+          prepared.userData.dieRadius = getDieRadius(sides);
+          diceGroupRef.current.add(prepared);
+        });
+      });
+    } else {
+      // Use procedural dice
+      dice.forEach(d => {
+        const mesh = createDieMesh(sides, d.result, towerConfig?.dieColor || '#e8dcc8');
+        mesh.position.set(...d.position);
+        group.add(mesh);
+      });
+    }
+  }, [dice, towerConfig, diceSides, customDiceUrl]);
 
   return (
     <div ref={containerRef} className="absolute inset-0" style={{ background: '#0a0502' }} />
