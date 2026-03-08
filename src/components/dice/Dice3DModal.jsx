@@ -4,6 +4,7 @@ import { X, Dices, ChevronDown, ChevronUp, RotateCcw, Sun, Moon, Sunset } from '
 import { TOWER_CONFIGS } from './DiceTowerScene';
 import CriticalEffect from './CriticalEffect';
 import VanillaThreeScene from './VanillaThreeScene';
+import ModelUploader from './ModelUploader';
 import { getSpawnPosition, getSpawnVelocity, getSpawnAngularVelocity } from './TowerPhysics';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -37,6 +38,8 @@ export default function Dice3DModal({ onClose, character }) {
   const [rollHistory, setRollHistory]     = useState([]);
   const [showTowerPicker, setShowTowerPicker] = useState(false);
   const [ambience, setAmbience] = useState('dusk');
+  const [customTowerUrl, setCustomTowerUrl] = useState(null);
+  const [customDiceUrl, setCustomDiceUrl] = useState(null);
   const idRef = useRef(0);
 
   const diceType = DICE_TYPES.find(d => d.label === selectedDice) || DICE_TYPES[5];
@@ -171,6 +174,8 @@ export default function Dice3DModal({ onClose, character }) {
               diceSides={diceType.sides}
               ambience={ambience}
               onAllSettled={handleDiceSettled}
+              customTowerUrl={customTowerUrl}
+              customDiceUrl={customDiceUrl}
             />
 
             {/* Roll Result Overlay */}
