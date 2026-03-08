@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { createDieMesh, getDieRadius } from './DiceGeometry';
 import { buildTavernTower, buildSceneLights } from './TowerBuilder';
 import { createPhysicsBody, stepPhysics, collideDice } from './TowerPhysics';
+import { loadGLTFModel, prepareTowerModel, prepareDieModel } from './GLTFModelLoader';
 
 // ─── Pure vanilla Three.js dice scene — no R3F ───────────────────────────────
 
@@ -91,7 +92,7 @@ const AMBIENCE_PRESETS = {
   },
 };
 
-export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSides, ambience = 'dusk', onAllSettled }) {
+export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSides, ambience = 'dusk', onAllSettled, customTowerUrl = null, customDiceUrl = null }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
@@ -108,6 +109,8 @@ export default function VanillaThreeScene({ towerType, towerConfig, dice, diceSi
   const starsRef = useRef(null);
   const ambienceRef = useRef(ambience);
   const onAllSettledRef = useRef(onAllSettled);
+  const customTowerRef = useRef(null);
+  const customDiceUrlRef = useRef(null);
 
   // Keep callback ref current without re-creating animation loop
   useEffect(() => { onAllSettledRef.current = onAllSettled; }, [onAllSettled]);
