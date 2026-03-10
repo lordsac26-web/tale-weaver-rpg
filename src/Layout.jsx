@@ -245,11 +245,11 @@ export default function Layout({ children, currentPageName }) {
 
         /* ── Inputs ── */
         .input-fantasy {
-          background: rgba(8,4,1,0.75);
-          border: 1px solid rgba(184,115,51,0.25);
+          background: rgba(12,6,2,0.75);
+          border: 1px solid rgba(184,115,51,0.3);
           color: var(--parchment);
           font-family: 'EB Garamond', serif;
-          box-shadow: inset 0 2px 7px rgba(0,0,0,0.6);
+          box-shadow: inset 0 2px 7px rgba(0,0,0,0.5);
           transition: border-color 0.2s, box-shadow 0.2s;
         }
         .input-fantasy:focus {
@@ -257,7 +257,7 @@ export default function Layout({ children, currentPageName }) {
           border-color: rgba(212,149,90,0.6);
           box-shadow: inset 0 2px 7px rgba(0,0,0,0.55), 0 0 10px rgba(184,115,51,0.15);
         }
-        .input-fantasy::placeholder { color: rgba(184,155,110,0.3); }
+        .input-fantasy::placeholder { color: rgba(200,175,130,0.4); }
 
         .select-fantasy {
           background: rgba(8,4,1,0.75);
@@ -382,7 +382,7 @@ export default function Layout({ children, currentPageName }) {
           font-family: 'Cinzel', serif;
           font-size: 0.6rem;
           letter-spacing: 0.18em;
-          color: rgba(212,149,90,0.6);
+          color: rgba(220,165,100,0.72);
           text-transform: uppercase;
           text-shadow: 0 0 10px rgba(184,115,51,0.2);
         }
