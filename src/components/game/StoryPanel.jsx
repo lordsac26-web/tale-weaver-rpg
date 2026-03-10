@@ -40,6 +40,16 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                     }}>
                     {entry.text}
                   </p>
+                  {narrationEnabled && i === narrative.filter(e => e.type === 'narration').length - 1 && (
+                    <div className="mt-2">
+                      <NarrationPlayer
+                        text={entry.text}
+                        setting={sessionSetting}
+                        autoPlay={false}
+                        enabled={narrationEnabled}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
