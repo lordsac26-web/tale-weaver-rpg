@@ -20,9 +20,9 @@ export default function Layout({ children, currentPageName }) {
           --brass-shine:  #f5d08a;
           --brass-glow:   rgba(184,115,51,0.5);
 
-          --parchment:    #f0dfc0;
-          --parchment-mid:#dcc49a;
-          --parchment-dim:#b89a72;
+          --parchment:    #f5e8d0;
+          --parchment-mid:#e4d0a8;
+          --parchment-dim:#c8a880;
 
           --ember:        #c0452a;
           --ember-glow:   rgba(192,69,42,0.4);
@@ -31,9 +31,9 @@ export default function Layout({ children, currentPageName }) {
           --arcane:       #7c3aed;
           --arcane-glow:  rgba(124,58,237,0.35);
 
-          --text-bright:  #f5dfc8;
-          --text-mid:     #d4b896;
-          --text-dim:     #9a7a58;
+          --text-bright:  #faecd8;
+          --text-mid:     #e0c8a4;
+          --text-dim:     #b89a72;
         }
 
         .tavern-root {
@@ -42,6 +42,12 @@ export default function Layout({ children, currentPageName }) {
         }
 
         body { background: var(--wood-deep); color: var(--text-bright); }
+
+        /* Global text brightness boost */
+        .tavern-root p, .tavern-root span, .tavern-root div, .tavern-root li {
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
 
         /* ── Fonts ── */
         .font-fantasy      { font-family: 'Cinzel', 'Georgia', serif; }
