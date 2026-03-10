@@ -833,6 +833,28 @@ export default function Game() {
         )}
       </AnimatePresence>
 
+      {/* Rest Modal */}
+      <AnimatePresence>
+        {showRestModal && character && (
+          <RestModal
+            character={character}
+            session={session}
+            onClose={() => setShowRestModal(false)}
+            onRestComplete={async (type, results) => {
+              await loadState();
+              const restLabel = type === 'short' ? 'Short Rest' : 'Long Rest';
+              const hpMsg = results.healing > 0 ? ` Recovered ${results.healing} HP.` : '';
+              setNarrative(prev => [...prev, {
+                type: 'narration',
+                text: type === 'long'
+                  ? `🌙 *${character.name} takes a long rest.* The night passes peacefully. You awaken fully refreshed and prepared.${hpMsg}`
+                  : `☕ *${character.name} takes a short rest.* A brief respite to catch your breath and tend to wounds.${hpMsg}`,
+              }]);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Evaluating Action Spinner */}
       <AnimatePresence>
         {evaluatingAction && (
