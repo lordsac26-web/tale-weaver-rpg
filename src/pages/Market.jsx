@@ -124,7 +124,7 @@ export default function Market() {
             placeholder="Search vendors..."
             className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs input-fantasy" />
         </div>
-        {['all', 'alchemist', 'blacksmith', 'armorer', 'general', 'tavern_inn', 'traveling'].map(type => {
+        {['all', 'alchemist', 'blacksmith', 'armorer', 'general', 'tavern_inn', 'traveling', 'black_market'].map(type => {
           const m = VENDOR_TYPE_META[type];
           return (
             <button key={type} onClick={() => setFilterType(type)}
