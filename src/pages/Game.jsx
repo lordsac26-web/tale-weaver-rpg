@@ -779,6 +779,20 @@ export default function Game() {
         )}
       </AnimatePresence>
 
+      {/* After-Action Report Modal */}
+      <AnimatePresence>
+        {showAAR && (
+          <AfterActionReport
+            aar={aarData}
+            loading={aarLoading}
+            onClose={() => { setShowAAR(false); setAarData(null); }}
+            onNarrativeContinue={(bridge) => {
+              setNarrative(prev => [...prev, { type: 'narration', text: bridge }]);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Evaluating Action Spinner */}
       <AnimatePresence>
         {evaluatingAction && (
