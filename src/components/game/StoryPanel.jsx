@@ -33,9 +33,9 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                 <div className="relative">
                   <p className="leading-8 text-base md:text-lg whitespace-pre-wrap"
                     style={{
-                      color: 'rgba(232,213,183,0.92)',
+                      color: '#efe0c8',
                       fontFamily: 'IM Fell English, Georgia, serif',
-                      textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.5)',
                       lineHeight: '1.9'
                     }}>
                     {entry.text}
@@ -58,12 +58,12 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                   <div className="rounded-xl px-4 py-3 max-w-md text-sm italic"
                     style={{
                       background: 'rgba(20,40,80,0.45)',
-                      border: '1px solid rgba(80,120,220,0.3)',
-                      color: '#93c5fd',
+                      border: '1px solid rgba(80,120,220,0.35)',
+                      color: '#a8d4ff',
                       fontFamily: 'EB Garamond, serif',
                       boxShadow: '0 0 16px rgba(60,100,220,0.08), inset 0 1px 0 rgba(100,150,255,0.1)',
                     }}>
-                    <span style={{ color: 'rgba(147,197,253,0.5)', marginRight: '0.5em' }}>You:</span>
+                    <span style={{ color: 'rgba(168,212,255,0.6)', marginRight: '0.5em' }}>You:</span>
                     {entry.text}
                   </div>
                 </div>
@@ -161,7 +161,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className="flex items-center gap-3 py-2">
             <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'rgba(201,169,110,0.6)' }} />
-            <span className="text-sm italic" style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'IM Fell English, serif' }}>
+            <span className="text-sm italic" style={{ color: 'rgba(220,190,130,0.6)', fontFamily: 'IM Fell English, serif' }}>
               The story unfolds...
             </span>
           </motion.div>
@@ -180,7 +180,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
           }}>
           {choices.length > 0 && (
             <>
-              <div className="flex items-center gap-2 mb-2" style={{ color: 'rgba(201,169,110,0.5)' }}>
+              <div className="flex items-center gap-2 mb-2" style={{ color: 'rgba(220,190,130,0.65)' }}>
                 <Scroll className="w-3 h-3" />
                 <span className="font-fantasy text-xs tracking-widest uppercase">What do you do?</span>
               </div>
@@ -203,9 +203,9 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 flex-1">
                           <span className="font-fantasy font-bold text-sm flex-shrink-0 mt-0.5"
-                            style={{ color: 'rgba(201,169,110,0.6)' }}>{i + 1}.</span>
+                            style={{ color: 'rgba(220,190,130,0.75)' }}>{i + 1}.</span>
                           <span className="text-sm leading-relaxed"
-                            style={{ color: 'rgba(232,213,183,0.9)', fontFamily: 'EB Garamond, serif', fontSize: '1rem' }}>
+                            style={{ color: '#efe0c8', fontFamily: 'EB Garamond, serif', fontSize: '1rem' }}>
                             {choice.text}
                           </span>
                         </div>
