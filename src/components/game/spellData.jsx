@@ -15,6 +15,9 @@ export const SPELL_SLOTS_BY_CLASS_LEVEL = {
   Ranger:   { 1:[0,0,0,0,0,0,0,0,0], 2:[2,0,0,0,0,0,0,0,0], 3:[3,0,0,0,0,0,0,0,0], 4:[3,0,0,0,0,0,0,0,0], 5:[4,2,0,0,0,0,0,0,0], 6:[4,2,0,0,0,0,0,0,0], 7:[4,3,0,0,0,0,0,0,0], 8:[4,3,0,0,0,0,0,0,0], 9:[4,3,2,0,0,0,0,0,0], 10:[4,3,2,0,0,0,0,0,0], 11:[4,3,3,0,0,0,0,0,0], 12:[4,3,3,0,0,0,0,0,0], 13:[4,3,3,1,0,0,0,0,0], 14:[4,3,3,1,0,0,0,0,0], 15:[4,3,3,2,0,0,0,0,0], 16:[4,3,3,2,0,0,0,0,0], 17:[4,3,3,3,1,0,0,0,0], 18:[4,3,3,3,1,0,0,0,0], 19:[4,3,3,3,2,0,0,0,0], 20:[4,3,3,3,2,0,0,0,0] },
   // Pact magic (Warlock)
   Warlock:  { 1:[1,0,0,0,0,0,0,0,0], 2:[2,0,0,0,0,0,0,0,0], 3:[0,2,0,0,0,0,0,0,0], 4:[0,2,0,0,0,0,0,0,0], 5:[0,0,2,0,0,0,0,0,0], 6:[0,0,2,0,0,0,0,0,0], 7:[0,0,0,2,0,0,0,0,0], 8:[0,0,0,2,0,0,0,0,0], 9:[0,0,0,0,2,0,0,0,0], 10:[0,0,0,0,2,0,0,0,0], 11:[0,0,0,0,3,0,0,0,0], 12:[0,0,0,0,3,0,0,0,0], 13:[0,0,0,0,3,0,0,0,0], 14:[0,0,0,0,3,0,0,0,0], 15:[0,0,0,0,3,0,0,0,0], 16:[0,0,0,0,3,0,0,0,0], 17:[0,0,0,0,4,0,0,0,0], 18:[0,0,0,0,4,0,0,0,0], 19:[0,0,0,0,4,0,0,0,0], 20:[0,0,0,0,4,0,0,0,0] },
+  // Full casters — Oracle (divine, CHA) and Witch (INT, patron tradition)
+  Oracle:   { 1:[2,0,0,0,0,0,0,0,0], 2:[3,0,0,0,0,0,0,0,0], 3:[4,2,0,0,0,0,0,0,0], 4:[4,3,0,0,0,0,0,0,0], 5:[4,3,2,0,0,0,0,0,0], 6:[4,3,3,0,0,0,0,0,0], 7:[4,3,3,1,0,0,0,0,0], 8:[4,3,3,2,0,0,0,0,0], 9:[4,3,3,3,1,0,0,0,0], 10:[4,3,3,3,2,0,0,0,0], 11:[4,3,3,3,2,1,0,0,0], 12:[4,3,3,3,2,1,0,0,0], 13:[4,3,3,3,2,1,1,0,0], 14:[4,3,3,3,2,1,1,0,0], 15:[4,3,3,3,2,1,1,1,0], 16:[4,3,3,3,2,1,1,1,0], 17:[4,3,3,3,2,1,1,1,1], 18:[4,3,3,3,3,1,1,1,1], 19:[4,3,3,3,3,2,1,1,1], 20:[4,3,3,3,3,2,2,1,1] },
+  Witch:    { 1:[2,0,0,0,0,0,0,0,0], 2:[3,0,0,0,0,0,0,0,0], 3:[4,2,0,0,0,0,0,0,0], 4:[4,3,0,0,0,0,0,0,0], 5:[4,3,2,0,0,0,0,0,0], 6:[4,3,3,0,0,0,0,0,0], 7:[4,3,3,1,0,0,0,0,0], 8:[4,3,3,2,0,0,0,0,0], 9:[4,3,3,3,1,0,0,0,0], 10:[4,3,3,3,2,0,0,0,0], 11:[4,3,3,3,2,1,0,0,0], 12:[4,3,3,3,2,1,0,0,0], 13:[4,3,3,3,2,1,1,0,0], 14:[4,3,3,3,2,1,1,0,0], 15:[4,3,3,3,2,1,1,1,0], 16:[4,3,3,3,2,1,1,1,0], 17:[4,3,3,3,2,1,1,1,1], 18:[4,3,3,3,3,1,1,1,1], 19:[4,3,3,3,3,2,1,1,1], 20:[4,3,3,3,3,2,2,1,1] },
 };
 
 export const SPELLCASTING_ABILITY = {
@@ -28,6 +31,8 @@ export const SPELLCASTING_ABILITY = {
   Ranger: 'wisdom',
   'Eldritch Knight': 'intelligence',
   'Arcane Trickster': 'intelligence',
+  Oracle: 'charisma',
+  Witch: 'intelligence',
 };
 
 // Cantrips per class
@@ -40,6 +45,8 @@ export const CANTRIPS_KNOWN = {
   Druid: [2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4],
   Paladin: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
   Ranger: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  Oracle: [3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5],
+  Witch: [3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5],
 };
 
 export const SPELLS_BY_CLASS = {
@@ -106,6 +113,22 @@ export const SPELLS_BY_CLASS = {
     3: ['Conjure Animals', 'Conjure Barrage', 'Daylight', 'Nondetection', 'Plant Growth', 'Protection from Energy', 'Speak with Plants', 'Water Breathing', 'Water Walk', 'Wind Wall'],
     4: ['Conjure Woodland Beings', 'Freedom of Movement', 'Grasping Vine', 'Locate Creature', 'Stoneskin'],
     5: ['Conjure Volley', 'Greater Restoration', 'Swift Quiver', 'Tree Stride'],
+  },
+  Oracle: {
+    cantrips: ['Sacred Flame', 'Guidance', 'Spare the Dying', 'Toll the Dead', 'Light', 'Thaumaturgy', 'Resistance', 'Stardust Bolt'],
+    1: ['Cure Wounds', 'Healing Word', 'Bless', 'Guiding Bolt', 'Inflict Wounds', 'Shield of Faith', 'Command', 'Detect Magic', 'Sanctuary', 'Oracle\'s Burden'],
+    2: ['Spiritual Weapon', 'Hold Person', 'Prayer of Healing', 'Aid', 'Augury', 'Blindness/Deafness', 'Calm Emotions', 'Silence', 'Curse of Agony'],
+    3: ['Spirit Guardians', 'Revivify', 'Dispel Magic', 'Mass Healing Word', 'Bestow Curse', 'Clairvoyance', 'Daylight', 'Curse Escalation'],
+    4: ['Banishment', 'Death Ward', 'Divination', 'Freedom of Movement', 'Guardian of Faith', 'Mystery Revelation'],
+    5: ['Flame Strike', 'Greater Restoration', 'Mass Cure Wounds', 'Raise Dead', 'Scrying', 'Final Revelation'],
+  },
+  Witch: {
+    cantrips: ['Chill Touch', 'Minor Illusion', 'Poison Spray', 'Mage Hand', 'Prestidigitation', 'Guidance', 'Evil Eye', 'Witch Bolt Cantrip'],
+    1: ['Hex', 'Charm Person', 'Sleep', 'Detect Magic', 'Find Familiar', 'Ray of Sickness', 'Witch\'s Hex', 'Bane', 'Cause Fear', 'Unseen Servant'],
+    2: ['Hold Person', 'Misty Step', 'Invisibility', 'Web', 'Crown of Madness', 'Darkness', 'Blindness/Deafness', 'Suggestion', 'Phantasmal Force'],
+    3: ['Bestow Curse', 'Counterspell', 'Fly', 'Dispel Magic', 'Hypnotic Pattern', 'Fear', 'Vampiric Touch', 'Animate Dead', 'Hex Escalation'],
+    4: ['Blight', 'Polymorph', 'Banishment', 'Greater Invisibility', 'Confusion', 'Phantasmal Killer'],
+    5: ['Dominate Person', 'Hold Monster', 'Scrying', 'Contact Other Plane', 'Cloudkill', 'Contagion', 'Geas'],
   },
 };
 
