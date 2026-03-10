@@ -57,6 +57,7 @@ import Market from './pages/Market';
 import NewGame from './pages/NewGame';
 import WorldMap from './pages/WorldMap';
 import ImageCreator from './pages/ImageCreator';
+import BattleMap from './pages/BattleMap';
 import __Layout from './Layout.jsx';
 
 
@@ -71,6 +72,7 @@ export const PAGES = {
     "NewGame": NewGame,
     "WorldMap": WorldMap,
     "ImageCreator": ImageCreator,
+    "BattleMap": BattleMap,
 }
 
 export const pagesConfig = {
