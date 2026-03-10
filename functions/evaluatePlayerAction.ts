@@ -44,6 +44,7 @@ Return a JSON object with these fields only:
 
     return Response.json({ ...result, action });
   } catch (error) {
+    console.error('evaluatePlayerAction error:', error.message);
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
