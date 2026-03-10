@@ -26,6 +26,7 @@ export default function NewGame() {
   const [storySeedFileUrl, setStorySeedFileUrl] = useState('');
   const [season, setSeason] = useState('Spring');
   const [timeOfDay, setTimeOfDay] = useState('Morning');
+  const [gameSystem, setGameSystem] = useState('dnd5e');
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
