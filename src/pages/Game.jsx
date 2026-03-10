@@ -632,7 +632,8 @@ export default function Game() {
             <div className="overflow-hidden flex flex-col min-h-0" style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
               <StoryPanel narrative={narrative} choices={[]} loading={storyLoading}
                 onChoice={() => {}} customInput={customInput}
-                setCustomInput={setCustomInput} onCustomSubmit={() => {}} />
+                setCustomInput={setCustomInput} onCustomSubmit={() => {}}
+                sessionSetting={session?.setting} />
             </div>
             <div className="overflow-hidden">
               <CombatPanel combat={combat} character={character}
@@ -680,7 +681,8 @@ export default function Game() {
             ) : (
               <StoryPanel narrative={narrative} choices={choices} loading={storyLoading}
                 onChoice={handleChoice} customInput={customInput}
-                setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} />
+                setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput}
+                sessionSetting={session?.setting} />
             )}
           </div>
         )}
