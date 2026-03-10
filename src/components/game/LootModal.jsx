@@ -145,11 +145,39 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
     setLoading(false);
   };
 
+  // Map a loot item to inventory-compatible format
+  const toInventoryItem = (it) => {
+    const LOOT_TO_INV_CATEGORY = {
+      weapon: 'Weapon', armor: 'Armor', accessory: 'Wondrous Item',
+      clothing: 'Other', material: 'Other', gem: 'Other', magical: 'Wondrous Item',
+      consumable: 'Potion', document: 'Other', general: 'Adventuring Gear',
+    };
+    return {
+      name: it.name,
+      category: LOOT_TO_INV_CATEGORY[it.category] || it.category || 'Other',
+      rarity: it.rarity || 'common',
+      quantity: it.quantity || 1,
+      weight: it.weight || 0,
+      cost: it.base_price || it.cost || 0,
+      cost_unit: it.cost_unit || 'gp',
+      damage: it.modifiers?.damage_dice || it.damage || '',
+      damage_type: it.damage_type || '',
+      armor_class: it.modifiers?.armor_class || it.armor_class || 0,
+      attack_bonus: it.modifiers?.attack_bonus || it.attack_bonus || 0,
+      description: it.description || '',
+      requires_attunement: it.requires_attunement || false,
+      is_magic: it.is_magic || (it.rarity && it.rarity !== 'common') || false,
+      magic_properties: [],
+      equip_slot: null,
+      source_enemy: it.source_enemy || null,
+    };
+  };
+
   // Collect all at once — adds everything to inventory + coin purse
   const handleTakeAll = async () => {
     if (!loot) return;
     setSaving(true);
-    const newItems = loot.items.map(it => ({ ...it, magic_properties: [] }));
+    const newItems = loot.items.map(toInventoryItem);
     const updates = {
       gold:      (character.gold   || 0) + (loot.gold   || 0),
       silver:    (character.silver || 0) + (loot.silver || 0),
@@ -170,30 +198,28 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
   const handleEquipItem = async (item) => {
     if (!item) return;
     setSaving(true);
+    const invItem = toInventoryItem(item);
     const equipped = { ...(character.equipped || {}) };
-    const slot = item.category === 'weapon' ? 'weapon' : item.category === 'armor' ? 'armor' : item.category === 'accessory' ? 'accessory' : null;
-    if (slot) equipped[slot] = item;
+    const slot = item.category === 'weapon' ? 'mainhand' : item.category === 'armor' ? 'armor' : null;
+    if (slot) equipped[slot] = invItem;
 
-    const newInventory = [...(character.inventory || []), { ...item, magic_properties: [] }];
-    const updates = {
-      inventory: newInventory,
-      equipped,
-    };
+    const newInventory = [...(character.inventory || []), invItem];
+    const updates = { inventory: newInventory, equipped };
     await base44.entities.Character.update(character.id, updates);
 
-    // Mark as collected
     setCollectedItems(prev => new Set([...prev, item.name]));
     setCompareItem(null);
     setSelectedItem(null);
     setSaving(false);
-    onCollect({ ...character, ...updates }, null);
+    onCollect(updates, null);
   };
 
   // Keep in bag only — add to inventory without equipping
   const handleKeepInBag = async (item) => {
     if (!item) return;
     setSaving(true);
-    const newInventory = [...(character.inventory || []), { ...item, magic_properties: [] }];
+    const invItem = toInventoryItem(item);
+    const newInventory = [...(character.inventory || []), invItem];
     const updates = { inventory: newInventory };
     await base44.entities.Character.update(character.id, updates);
 
@@ -201,7 +227,7 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
     setCompareItem(null);
     setSelectedItem(null);
     setSaving(false);
-    onCollect({ ...character, ...updates }, null);
+    onCollect(updates, null);
   };
 
   // Get the currently equipped item in the same category for comparison
