@@ -66,8 +66,12 @@ export default function Game() {
       // Strip embedded choice text (numbered lists like "1. ...\n2. ...") from restored narration
       const stripChoices = (text) => {
         if (!text) return text;
-        // Remove trailing numbered choice blocks (e.g. "\n1. Do something\n2. Do another thing")
-        return text.replace(/(\n\s*\d+\.\s+.+){2,}$/g, '').trim();
+        // Remove trailing numbered choice blocks (e.g. "\n1. **Do something**\n   - Skill Check...\n2. ...")
+        // First strip any "choices loomed:" intro line
+        let cleaned = text.replace(/\n[^\n]*(?:choices?\s+(?:loomed|are|were|remain)):?\s*$/im, '');
+        // Then strip numbered choice blocks (multi-line with sub-bullets)
+        cleaned = cleaned.replace(/(\n\s*\d+\.\s+.+(?:\n\s+[-–—*].+)*){2,}$/gs, '').trim();
+        return cleaned;
       };
       const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: stripChoices(e.text) }));
       setNarrative(restored);
