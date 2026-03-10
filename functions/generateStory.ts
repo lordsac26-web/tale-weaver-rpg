@@ -81,7 +81,8 @@ Write an immersive opening narrative (3-4 paragraphs) that:
 - Ends with a moment of tension or decision
 ${session.adult_mode ? '- Mature/gritty tone is permitted' : '- Keep content appropriate for general audiences'}
 
-Then provide exactly 4 choices the player can make.
+Then provide exactly 4 choices the player can make in the "choices" JSON array.
+CRITICAL: Choices MUST go in the "choices" array of the JSON response — NEVER embed them as numbered lists inside the "narrative" string. The narrative should end before any choices.
 For EACH choice that involves risk or effort, include a relevant skill check and DC. Use diverse skills — not just combat ones. For example:
 - Dialogue with NPCs: Persuasion DC 12-16, Deception DC 12-18, Intimidation DC 10-16, Insight DC 13
 - Physical obstacles: Athletics DC 12-18, Acrobatics DC 10-15
@@ -161,7 +162,8 @@ Alignment has soft narrative effects: certain NPCs, factions, gods, and magic it
 Begin your narrative response with this header:
 **HP: ${character?.hp_current || '?'}/${character?.hp_max || '?'} | AC: ${character?.armor_class || '?'} | Level: ${character?.level || '?'} | Alignment: ${currentAlignment} (L/C: ${lcScore}, G/E: ${geScore}) | ${session.current_location || 'Unknown'} | ${session.time_of_day || 'Morning'}**
 
-Write the consequence narrative (2-3 paragraphs) that directly reacts to the player's action and any skill check outcome. Then provide 4 new choices.
+Write the consequence narrative (2-3 paragraphs) that directly reacts to the player's action and any skill check outcome. Then provide 4 new choices in the "choices" JSON array.
+CRITICAL: The "narrative" field must contain ONLY the story text — NEVER include numbered choice lists or option menus in the narrative. Choices MUST go exclusively in the "choices" array.
 Consider:
 - Character's active conditions and how they affect outcomes
 - Alignment impact if morally significant (return shift values!)
