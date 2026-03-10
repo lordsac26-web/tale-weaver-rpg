@@ -534,7 +534,7 @@ export default function Game() {
           onMouseLeave={e => e.currentTarget.style.color = 'rgba(201,169,110,0.5)'}>
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <span className="text-sm flex-1 italic" style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'IM Fell English, serif' }}>
+        <span className="text-sm flex-1 italic" style={{ color: 'rgba(220,190,130,0.65)', fontFamily: 'IM Fell English, serif' }}>
           {session?.title || 'Adventure'}
         </span>
 
@@ -676,7 +676,7 @@ export default function Game() {
                   <h2 className="text-3xl font-fantasy font-bold mb-5 text-glow-gold" style={{ color: '#f0c040' }}>
                     Your Adventure Awaits
                   </h2>
-                  <p className="mb-8 leading-relaxed" style={{ color: 'rgba(232,213,183,0.65)', fontFamily: 'IM Fell English, serif', fontSize: '1.1rem' }}>
+                  <p className="mb-8 leading-relaxed" style={{ color: 'rgba(240,225,200,0.78)', fontFamily: 'IM Fell English, serif', fontSize: '1.1rem' }}>
                     {session?.story_seed || 'The realm is full of mystery and danger. Your legend begins now.'}
                   </p>
                   <motion.button onClick={startAdventure} disabled={storyLoading}
