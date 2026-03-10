@@ -428,6 +428,23 @@ export default function Game() {
     });
   };
 
+  const generateAAR = async (combatId) => {
+    setAarLoading(true);
+    setShowAAR(true);
+    try {
+      const result = await base44.functions.invoke('generateAfterActionReport', {
+        combat_id: combatId,
+        session_id: sessionId,
+        character_id: character?.id,
+      });
+      setAarData(result.data);
+    } catch (e) {
+      console.error('AAR generation failed:', e);
+      setAarData(null);
+    }
+    setAarLoading(false);
+  };
+
   const reloadCombat = async (combatId) => {
     const logs = await base44.entities.CombatLog.filter({ id: combatId });
     if (logs[0]) setCombat(logs[0]);
