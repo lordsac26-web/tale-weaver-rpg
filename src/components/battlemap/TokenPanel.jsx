@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Trash2, RotateCcw, Heart, Shield, Zap } from 'lucide-react';
 import { CONDITIONS } from '../game/gameData';
 import { TOKEN_COLORS } from './mapUtils';
+import { getTokenIcon } from './tokenIcons';
 
 const TOKEN_TYPES = [
   { value: 'player', label: 'Player', emoji: '🟢' },
@@ -99,9 +100,14 @@ export default function TokenPanel({ tokens, selectedTokenId, onAddToken, onRemo
                 opacity: isDead ? 0.4 : 1,
               }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ background: colors.bg, border: `1px solid ${colors.border}`, color: colors.text, fontSize: '0.55rem' }}>
-                  {token.name?.slice(0, 2)}
+                <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
+                  style={{ background: colors.bg, border: `1px solid ${colors.border}` }}>
+                  <img src={getTokenIcon({ name: token.name, type: token.type, characterClass: token.characterClass, race: token.race })}
+                    alt="" className="w-3.5 h-3.5"
+                    onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                  <span style={{ display: 'none', color: colors.text, fontSize: '0.55rem', fontWeight: 700 }}>
+                    {token.name?.slice(0, 2)}
+                  </span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-fantasy truncate" style={{ color: isSelected ? 'var(--parchment)' : 'rgba(201,169,110,0.7)' }}>
