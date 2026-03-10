@@ -351,17 +351,6 @@ function AddItemForm({ onAdd, onCancel }) {
         </button>
       )}
 
-      {/* Consumable Use Modal */}
-      <AnimatePresence>
-        {consumableModal && (
-          <ConsumableUseModal
-            item={consumableModal.item}
-            character={character}
-            onUse={handleConsumableUsed}
-            onClose={() => setConsumableModal(null)}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -475,6 +464,11 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
   const [filterRarity, setFilterRarity] = useState('all');
   const [equipped, setEquipped] = useState(character.equipped || {});
   const [consumableModal, setConsumableModal] = useState(null); // { item, index }
+
+  // Sync equipped state when character prop changes (e.g. after loot collection)
+  useEffect(() => {
+    setEquipped(character.equipped || {});
+  }, [character.equipped]);
 
   const inventory = character.inventory || [];
 
