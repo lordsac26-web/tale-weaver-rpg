@@ -56,6 +56,7 @@ import Home from './pages/Home';
 import Market from './pages/Market';
 import NewGame from './pages/NewGame';
 import WorldMap from './pages/WorldMap';
+import ImageCreator from './pages/ImageCreator';
 import __Layout from './Layout.jsx';
 
 
@@ -69,6 +70,7 @@ export const PAGES = {
     "Market": Market,
     "NewGame": NewGame,
     "WorldMap": WorldMap,
+    "ImageCreator": ImageCreator,
 }
 
 export const pagesConfig = {
