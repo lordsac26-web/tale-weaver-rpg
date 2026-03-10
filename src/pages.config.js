@@ -47,32 +47,32 @@
  *
  * The mainPage value must match a key in the PAGES object exactly.
  */
+import BattleMap from './pages/BattleMap';
 import CharacterCreation from './pages/CharacterCreation';
 import CharacterSheetPage from './pages/CharacterSheetPage';
 import CombatHistory from './pages/CombatHistory';
 import Encyclopedia from './pages/Encyclopedia';
 import Game from './pages/Game';
 import Home from './pages/Home';
+import ImageCreator from './pages/ImageCreator';
 import Market from './pages/Market';
 import NewGame from './pages/NewGame';
 import WorldMap from './pages/WorldMap';
-import ImageCreator from './pages/ImageCreator';
-import BattleMap from './pages/BattleMap';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
+    "BattleMap": BattleMap,
     "CharacterCreation": CharacterCreation,
     "CharacterSheetPage": CharacterSheetPage,
     "CombatHistory": CombatHistory,
     "Encyclopedia": Encyclopedia,
     "Game": Game,
     "Home": Home,
+    "ImageCreator": ImageCreator,
     "Market": Market,
     "NewGame": NewGame,
     "WorldMap": WorldMap,
-    "ImageCreator": ImageCreator,
-    "BattleMap": BattleMap,
 }
 
 export const pagesConfig = {

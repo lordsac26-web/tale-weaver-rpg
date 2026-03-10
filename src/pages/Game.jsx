@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
-import { User, Loader2, ChevronLeft, Dices, Swords, Map, ShoppingBag, Eye, Paintbrush, Scroll, BookMarked } from 'lucide-react';
+import { User, Loader2, ChevronLeft, Dices, Swords, Map, ShoppingBag, Eye, Paintbrush, Scroll, BookMarked, Grid3X3 } from 'lucide-react';
 import { SKILL_STAT_MAP, calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
 import { getAlignmentLabel } from '@/components/game/AlignmentBadge';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,6 +16,7 @@ import CharacterPortraitGenerator from '@/components/game/CharacterPortraitGener
 import ActionProposalModal from '@/components/game/ActionProposalModal';
 import Dice3DModal from '@/components/dice/Dice3DModal.jsx';
 import LootModal from '@/components/game/LootModal.jsx';
+import CombatBattleMap from '@/components/battlemap/CombatBattleMap';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -42,6 +43,7 @@ export default function Game() {
   const [lastCombatEvent, setLastCombatEvent] = useState(null);
   const [showLootModal, setShowLootModal] = useState(false);
   const [defeatedEnemies, setDefeatedEnemies] = useState([]);
+  const [showBattleMap, setShowBattleMap] = useState(false);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate(createPageUrl('Home')); return; }
