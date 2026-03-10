@@ -17,6 +17,7 @@ import ActionProposalModal from '@/components/game/ActionProposalModal';
 import Dice3DModal from '@/components/dice/Dice3DModal.jsx';
 import LootModal from '@/components/game/LootModal.jsx';
 import CombatBattleMap from '@/components/battlemap/CombatBattleMap';
+import AfterActionReport from '@/components/game/AfterActionReport';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -44,6 +45,9 @@ export default function Game() {
   const [showLootModal, setShowLootModal] = useState(false);
   const [defeatedEnemies, setDefeatedEnemies] = useState([]);
   const [showBattleMap, setShowBattleMap] = useState(false);
+  const [aarData, setAarData] = useState(null);
+  const [aarLoading, setAarLoading] = useState(false);
+  const [showAAR, setShowAAR] = useState(false);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate(createPageUrl('Home')); return; }
