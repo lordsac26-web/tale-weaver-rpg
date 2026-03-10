@@ -224,4 +224,33 @@ export const VENDOR_SEED = [
       { name: "Spyglass", category: "Tool", rarity: "uncommon", base_price: 1000, stock: 1, weight: 1, description: "Objects viewed through this lens appear magnified to twice their size.", effect: "2× magnification", icon: "🔧" },
     ]
   },
+  {
+    name: "The Rat's Whisper",
+    type: "black_market",
+    location: "Sewers — Beneath the Docks",
+    description: "A damp alcove hidden behind a false wall in the sewer tunnels. The air reeks of brine and old blood. A hooded figure sits behind a table of suspiciously fine goods, each tagged with a symbol you don't recognize — but the quality is undeniable.",
+    greeting: '"You found this place, so you already know the rules. No names. No questions. Gold talks, everything else walks."',
+    personality: "Cold, calculating fence who speaks in clipped sentences. Knows everything about everyone. Shows zero emotion unless you try to cheat them.",
+    portrait_emoji: "🐀",
+    gold_reserve: 800,
+    reputation_modifier: -15,
+    is_traveling: false,
+    is_active: true,
+    items: [
+      { name: "Bag of Holding", category: "Trinket", rarity: "rare", base_price: 400, stock: 1, weight: 0.5, description: "This bag's interior is far larger than its outside dimensions suggest. Holds up to 500 lb. The previous owner's initials are hastily scratched off the clasp.", effect: "Holds 500lb / 64 cubic ft", icon: "💎", stolen: true, heat: 3, original_owner: "Lord Ashworth's estate" },
+      { name: "+1 Longsword (Engraved)", category: "Weapon", rarity: "rare", base_price: 500, stock: 1, weight: 3, description: "A masterwork blade with a noble house crest on the pommel — partially filed down but still recognizable to anyone who knows heraldry.", effect: "+1 to attack and damage rolls", icon: "⚔️", stolen: true, heat: 4, original_owner: "Captain Aldric Voss" },
+      { name: "Cloak of Elvenkind", category: "Clothing", rarity: "uncommon", base_price: 500, stock: 1, weight: 1, description: "Grants advantage on Stealth checks. The stitching is elven — this was likely lifted from a diplomat's quarters.", effect: "Advantage on Stealth", icon: "👘", stolen: true, heat: 2, original_owner: "Elven Embassy" },
+      { name: "Poison: Midnight Oil", category: "Poison", rarity: "rare", base_price: 250, stock: 3, weight: 0.1, description: "Odorless, colorless. DC 15 CON save or take 3d6 poison damage and be poisoned for 1 hour. Favored by assassins.", effect: "3d6 poison, DC15 CON, poisoned 1hr", icon: "☠️" },
+      { name: "Thieves' Tools (Masterwork)", category: "Tool", rarity: "uncommon", base_price: 100, stock: 2, weight: 1, description: "An exquisite set of lockpicks made from mithral-tipped steel. Grants +2 to lockpicking checks.", effect: "+2 to Sleight of Hand (lockpicking)", icon: "🔧" },
+      { name: "Scroll of Knock", category: "Scroll", rarity: "uncommon", base_price: 150, stock: 2, weight: 0.1, description: "A one-use scroll that opens any lock, latch, or sealed door within 60 feet. Makes a loud knocking sound audible 300 feet away.", effect: "Opens any lock (loud)", icon: "📜" },
+      { name: "Forged Identity Papers", category: "Misc", rarity: "uncommon", base_price: 75, stock: 3, weight: 0.1, description: "Expertly forged travel papers, merchant licenses, or noble credentials. DC 18 Investigation to detect as forgeries.", effect: "DC 18 to detect forgery", icon: "📦" },
+      { name: "Ring of Mind Shielding", category: "Trinket", rarity: "uncommon", base_price: 600, stock: 1, weight: 0, description: "While wearing this ring, you are immune to magic that allows others to read your thoughts or determine if you are lying. Suspiciously convenient for a fence.", effect: "Immune to thought-reading magic", icon: "💎", stolen: true, heat: 1, original_owner: "Unknown mage" },
+      { name: "Smoke Bomb (3-pack)", category: "Bomb", rarity: "common", base_price: 30, stock: 5, weight: 0.5, description: "Throw to create a 10-ft radius of heavily obscured area for 1 round. Perfect for disappearing acts.", effect: "Heavily obscured 10ft, 1 round", icon: "💣" },
+      { name: "Potion of Greater Healing", category: "Potion", rarity: "uncommon", base_price: 100, stock: 4, weight: 0.5, description: "Heals 4d4+4 HP. No questions asked about why you need so many.", effect: "Heal 4d4+4 HP", icon: "🧪" },
+      { name: "Garrote Wire", category: "Weapon", rarity: "common", base_price: 15, stock: 3, weight: 0.2, description: "A length of thin, strong wire with wooden handles. On a successful grapple, deals 1d6 damage per turn and the target cannot speak or cast spells with verbal components.", effect: "1d6/turn on grapple, silences target", icon: "⚔️" },
+      { name: "Noble's Signet Ring", category: "Trinket", rarity: "uncommon", base_price: 200, stock: 1, weight: 0, description: "Bearing the crest of House Velanthor. Could be used to forge documents, gain entry to noble events, or returned for a hefty reward — or hefty trouble.", icon: "💎", stolen: true, heat: 5, original_owner: "House Velanthor" },
+      { name: "Blackmail Documents", category: "Misc", rarity: "rare", base_price: 350, stock: 1, weight: 0.1, description: "Letters implicating a prominent merchant in smuggling operations. Could be leveraged for favors, gold, or creating very dangerous enemies.", effect: "Leverage against a merchant lord", icon: "📦" },
+      { name: "Poison: Serpent's Kiss", category: "Poison", rarity: "uncommon", base_price: 120, stock: 2, weight: 0.1, description: "Apply to a blade. Next hit forces DC 13 CON save or 2d8 poison damage and disadvantage on attacks for 1 minute.", effect: "2d8 poison, DC13 CON, disadv attacks 1min", icon: "☠️" },
+    ]
+  },
 ];
