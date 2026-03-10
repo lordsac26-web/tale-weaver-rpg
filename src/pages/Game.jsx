@@ -48,7 +48,7 @@ export default function Game() {
   const [aarData, setAarData] = useState(null);
   const [aarLoading, setAarLoading] = useState(false);
   const [showAAR, setShowAAR] = useState(false);
-  const initialRestoreDone = useRef(false);
+  const lastRestoredLogLen = useRef(0);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate(createPageUrl('Home')); return; }
@@ -60,16 +60,14 @@ export default function Game() {
     const chars = await base44.entities.Character.filter({ id: sess.character_id });
     setCharacter(chars[0] || null);
 
-    // Only restore narrative from story_log on initial page load, not after every action
-    if (!initialRestoreDone.current && sess.story_log?.length > 0) {
-      initialRestoreDone.current = true;
-      // Strip embedded choice text (numbered lists like "1. ...\n2. ...") from restored narration
+    // Restore narrative from story_log whenever the log length has changed
+    // (covers initial load AND returning to the tab after state was lost)
+    const logLen = sess.story_log?.length || 0;
+    if (logLen > 0 && logLen !== lastRestoredLogLen.current) {
+      lastRestoredLogLen.current = logLen;
       const stripChoices = (text) => {
         if (!text) return text;
-        // Remove trailing numbered choice blocks (e.g. "\n1. **Do something**\n   - Skill Check...\n2. ...")
-        // First strip any "choices loomed:" intro line
         let cleaned = text.replace(/\n[^\n]*(?:choices?\s+(?:loomed|are|were|remain)):?\s*$/im, '');
-        // Then strip numbered choice blocks (multi-line with sub-bullets)
         cleaned = cleaned.replace(/(\n\s*\d+\.\s+.+(?:\n\s+[-–—*].+)*){2,}$/gs, '').trim();
         return cleaned;
       };
@@ -90,6 +88,17 @@ export default function Game() {
   }, [sessionId]);
 
   useEffect(() => { loadState(); }, [sessionId]);
+
+  // Re-sync narrative state when user returns to this tab/window
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && sessionId) {
+        loadState();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [sessionId, loadState]);
 
   const startAdventure = async () => {
     setStoryLoading(true);
