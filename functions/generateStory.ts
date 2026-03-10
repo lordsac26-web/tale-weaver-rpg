@@ -247,6 +247,58 @@ Create a context-appropriate event. Could be combat, social, environmental, or d
     add_context_from_internet: false
   });
 
+  // ── Post-process: extract choices embedded in narrative text ──
+  // The LLM sometimes embeds numbered choices as markdown inside the narrative string
+  // instead of populating the choices array. Detect and extract them.
+  if (result.narrative && (!result.choices || result.choices.length === 0)) {
+    const lines = result.narrative.split('\n');
+    const choiceLines = [];
+    let firstChoiceIdx = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+      // Match patterns like "1. **Lead the way...**" or "1. Lead the way..."
+      if (/^\s*\d+\.\s+/.test(lines[i])) {
+        if (firstChoiceIdx === -1) firstChoiceIdx = i;
+        choiceLines.push({ startIdx: i, lines: [lines[i]] });
+      } else if (choiceLines.length > 0 && firstChoiceIdx !== -1 && lines[i].trim() !== '' && !/^\s*\d+\.\s+/.test(lines[i])) {
+        // Continuation line (e.g. "   - *Skill Check: Stealth (DC 13)*")
+        choiceLines[choiceLines.length - 1].lines.push(lines[i]);
+      }
+    }
+
+    if (choiceLines.length >= 2) {
+      const extracted = [];
+      for (const block of choiceLines) {
+        const fullText = block.lines.join(' ').trim();
+        // Strip the leading number+dot: "1. **Lead the way...**" → "**Lead the way...**"
+        const textOnly = fullText.replace(/^\s*\d+\.\s+/, '').replace(/\*\*/g, '').trim();
+
+        // Try to extract skill check and DC from embedded text
+        const skillMatch = fullText.match(/Skill\s+Check:\s*(\w[\w\s]*?)\s*\(?\s*DC\s*(\d+)/i);
+        const riskMatch = fullText.match(/Risk\s+Level:\s*(Low|Medium|High|Extreme)/i);
+
+        extracted.push({
+          text: textOnly.replace(/\s*[-–—]\s*\*?Skill Check:.*$/i, '').replace(/\s*[-–—]\s*\*?Risk Level:.*$/i, '').replace(/\*+/g, '').trim(),
+          skill_check: skillMatch ? skillMatch[1].trim() : undefined,
+          dc: skillMatch ? parseInt(skillMatch[2]) : undefined,
+          risk_level: riskMatch ? riskMatch[1].toLowerCase() : 'low',
+        });
+      }
+
+      result.choices = extracted;
+      // Strip the choice block from the narrative
+      result.narrative = lines.slice(0, firstChoiceIdx).join('\n').trim();
+    }
+  }
+
+  // Also strip any trailing choice-like text that may remain in narrative
+  if (result.narrative && result.choices && result.choices.length > 0) {
+    result.narrative = result.narrative
+      .replace(/(\n\s*\d+\.\s+\*{0,2}.+){2,}$/gs, '')
+      .replace(/\n\s*(Desiree's|Your|The player's|The hero's)\s+choices?\s+(loomed|are|were|remain):?\s*$/i, '')
+      .trim();
+  }
+
   // Update session story log
   if (result.narrative) {
     const updatedLog = [...(session.story_log || []), {
