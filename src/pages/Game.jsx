@@ -473,7 +473,10 @@ export default function Game() {
     if (roll.success) {
       setNarrative(prev => [...prev, { type: 'roll_result', text: `Acrobatics: ${roll.final_result} vs DC 12 — You escape!`, success: true }]);
       const combatId = combat?.id || session?.combat_state?.combat_id;
-      if (combatId) await base44.entities.CombatLog.update(combatId, { is_active: false, result: 'fled' });
+      if (combatId) {
+        await base44.entities.CombatLog.update(combatId, { is_active: false, result: 'fled' });
+        generateAAR(combatId);
+      }
       await base44.entities.GameSession.update(sessionId, { in_combat: false });
       setCombat(null);
       const storyResult = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: 'You fled from combat successfully.' });
