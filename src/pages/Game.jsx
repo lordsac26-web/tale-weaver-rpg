@@ -649,6 +649,16 @@ export default function Game() {
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,140,90,0.2)'; e.currentTarget.style.color = 'rgba(201,169,110,0.6)'; }}>
           <User className="w-3.5 h-3.5" /> Sheet
         </button>
+
+        {started && !inCombat && (
+          <button onClick={() => setShowRestModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
+            style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(100,80,180,0.25)', color: 'rgba(129,140,248,0.65)' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(129,140,248,0.5)'; e.currentTarget.style.color = '#a5b4fc'; e.currentTarget.style.boxShadow = '0 0 10px rgba(129,140,248,0.15)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(100,80,180,0.25)'; e.currentTarget.style.color = 'rgba(129,140,248,0.65)'; e.currentTarget.style.boxShadow = 'none'; }}>
+            <Moon className="w-3.5 h-3.5" /> Rest
+          </button>
+        )}
       </div>
 
       {/* Main Game Area */}
