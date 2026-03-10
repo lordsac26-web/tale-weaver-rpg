@@ -46,6 +46,7 @@ export default function Game() {
   const [showLootModal, setShowLootModal] = useState(false);
   const [defeatedEnemies, setDefeatedEnemies] = useState([]);
   const [showBattleMap, setShowBattleMap] = useState(false);
+  const [showRestModal, setShowRestModal] = useState(false);
   const [aarData, setAarData] = useState(null);
   const [aarLoading, setAarLoading] = useState(false);
   const [showAAR, setShowAAR] = useState(false);
