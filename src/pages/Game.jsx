@@ -63,7 +63,13 @@ export default function Game() {
     // Only restore narrative from story_log on initial page load, not after every action
     if (!initialRestoreDone.current && sess.story_log?.length > 0) {
       initialRestoreDone.current = true;
-      const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: e.text }));
+      // Strip embedded choice text (numbered lists like "1. ...\n2. ...") from restored narration
+      const stripChoices = (text) => {
+        if (!text) return text;
+        // Remove trailing numbered choice blocks (e.g. "\n1. Do something\n2. Do another thing")
+        return text.replace(/(\n\s*\d+\.\s+.+){2,}$/g, '').trim();
+      };
+      const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: stripChoices(e.text) }));
       setNarrative(restored);
       setStarted(true);
       const lastEntry = sess.story_log[sess.story_log.length - 1];
