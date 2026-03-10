@@ -52,7 +52,7 @@ export default function NewGame() {
     const session = await base44.entities.GameSession.create({
       character_id: selectedChar,
       title: title || `${char?.name || 'Hero'}'s Adventure`,
-      setting, adult_mode: adultMode, story_seed: storySeed,
+      setting, game_system: gameSystem, adult_mode: adultMode, story_seed: storySeed,
       story_seed_file_url: storySeedFileUrl,
       season, time_of_day: timeOfDay,
       current_location: 'The Crossroads Inn',
