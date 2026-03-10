@@ -188,6 +188,20 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
           />
         </div>
 
+        {/* Black Market disclaimer */}
+        {isBlackMarket && (
+          <div className="mx-4 mb-2 p-3 rounded-xl" style={{ background: 'rgba(60,10,10,0.35)', border: '1px solid rgba(180,40,40,0.25)' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="w-3.5 h-3.5" style={{ color: '#fca5a5' }} />
+              <span className="font-fantasy text-xs font-bold" style={{ color: '#fca5a5', letterSpacing: '0.08em' }}>BLACK MARKET</span>
+            </div>
+            <p className="text-xs" style={{ color: 'rgba(252,165,165,0.55)', fontFamily: 'IM Fell English, serif', lineHeight: 1.6 }}>
+              Items marked with 🔓 are stolen goods. Prices are low, but carrying them risks detection by local authorities.
+              The higher the heat, the more likely a sheriff, guard, or bounty hunter will notice — and they won't ask nicely.
+            </p>
+          </div>
+        )}
+
         {/* Stock refresh info */}
         {vendorData.last_stock_refresh && !vendor.is_traveling && (
           <div className="px-4 pb-2">
