@@ -40,7 +40,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                     }}>
                     {entry.text}
                   </p>
-                  {narrationEnabled && i === narrative.filter(e => e.type === 'narration').length - 1 && (
+                  {narrationEnabled && i === narrative.map((e, idx) => e.type === 'narration' ? idx : -1).filter(idx => idx >= 0).pop() && (
                     <div className="mt-2">
                       <NarrationPlayer
                         text={entry.text}
