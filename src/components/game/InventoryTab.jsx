@@ -622,7 +622,19 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
              );
            })}
          </div>
-      )}
-    </div>
-  );
-}
+         )}
+
+         {/* Consumable Use Modal */}
+         <AnimatePresence>
+         {consumableModal && (
+          <ConsumableUseModal
+            item={consumableModal.item}
+            character={character}
+            onUse={handleConsumableUsed}
+            onClose={() => setConsumableModal(null)}
+          />
+         )}
+         </AnimatePresence>
+         </div>
+         );
+         }
