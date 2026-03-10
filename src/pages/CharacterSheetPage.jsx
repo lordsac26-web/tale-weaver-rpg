@@ -222,12 +222,12 @@ export default function CharacterSheetPage() {
               </h1>
               <div className="flex flex-wrap items-center gap-2 mt-1">
                 <span className="badge-gold px-2 py-0.5 rounded-full text-xs font-fantasy">Lv {character.level}</span>
-                <span className="text-sm italic" style={{ color: 'rgba(201,169,110,0.6)', fontFamily: 'EB Garamond, serif' }}>
+                <span className="text-sm italic" style={{ color: 'rgba(220,190,130,0.75)', fontFamily: 'EB Garamond, serif' }}>
                   {character.race} {character.class}{character.subclass ? ` · ${character.subclass}` : ''}
                 </span>
               </div>
               {character.alignment && (
-                <div className="text-xs mt-1" style={{ color: 'rgba(180,150,100,0.4)', fontFamily: 'EB Garamond, serif' }}>
+                <div className="text-xs mt-1" style={{ color: 'rgba(200,170,120,0.6)', fontFamily: 'EB Garamond, serif' }}>
                   {character.alignment}{character.background ? ` · ${character.background}` : ''}
                 </div>
               )}
@@ -249,7 +249,7 @@ export default function CharacterSheetPage() {
                 <div className="font-fantasy font-bold text-lg" style={{ color }}>
                   {key ? <EditableNumber value={character[key] ?? 0} onSave={v => handleUpdate({ [key]: v })} min={min} max={max} color={color} /> : display}
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>{label}</div>
+                <div className="text-xs mt-0.5" style={{ color: 'rgba(200,165,110,0.6)', fontFamily: 'EB Garamond, serif' }}>{label}</div>
               </div>
             ))}
           </div>
@@ -294,7 +294,7 @@ export default function CharacterSheetPage() {
                     return (
                       <div key={stat} className="stat-box rounded-xl p-4 text-center">
                         <div className="text-xl mb-1">{STAT_ICONS[stat]}</div>
-                        <div className="font-fantasy text-xs tracking-widest mb-1" style={{ color: 'rgba(180,140,90,0.5)', fontSize: '0.62rem' }}>
+                        <div className="font-fantasy text-xs tracking-widest mb-1" style={{ color: 'rgba(210,175,120,0.65)', fontSize: '0.62rem' }}>
                           {STAT_LABELS[stat]}
                         </div>
                         <div className="font-fantasy font-bold text-3xl mb-1">
@@ -302,7 +302,7 @@ export default function CharacterSheetPage() {
                         </div>
                         <div className="font-fantasy font-bold text-sm mb-1"
                           style={{ color: mod >= 0 ? '#86efac' : '#fca5a5' }}>{calcModDisplay(mod)}</div>
-                        <div className="text-xs" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>
+                        <div className="text-xs" style={{ color: 'rgba(200,165,110,0.6)', fontFamily: 'EB Garamond, serif' }}>
                           Save {calcModDisplay(saveMod)}
                           {saveProf && <span style={{ color: 'rgba(201,169,110,0.6)' }}> ●</span>}
                         </div>
@@ -311,7 +311,7 @@ export default function CharacterSheetPage() {
                   })}
                 </div>
                 <div className="rounded-xl p-3 stat-box text-center">
-                  <span style={{ color: 'rgba(180,150,100,0.5)', fontFamily: 'EB Garamond, serif' }}>Proficiency Bonus: </span>
+                  <span style={{ color: 'rgba(210,180,130,0.65)', fontFamily: 'EB Garamond, serif' }}>Proficiency Bonus: </span>
                   <span className="font-fantasy font-bold" style={{ color: '#f0c040' }}>+{profBonus}</span>
                 </div>
               </div>
@@ -347,15 +347,15 @@ export default function CharacterSheetPage() {
                             border: '1px solid ' + (profLevel === 'expert' ? 'rgba(240,192,64,0.6)' : profLevel === 'proficient' ? 'rgba(134,239,172,0.5)' : 'rgba(80,60,30,0.3)'),
                             boxShadow: profLevel ? '0 0 5px ' + (profLevel === 'expert' ? 'rgba(240,192,64,0.4)' : 'rgba(134,239,172,0.3)') : 'none'
                           }} />
-                        <span className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif', fontSize: '0.95rem' }}>{skill}</span>
-                        <span className="text-xs" style={{ color: 'rgba(180,140,90,0.35)' }}>({STAT_LABELS[stat]})</span>
+                        <span className="text-sm" style={{ color: '#efe0c8', fontFamily: 'EB Garamond, serif', fontSize: '0.95rem' }}>{skill}</span>
+                        <span className="text-xs" style={{ color: 'rgba(200,165,110,0.5)' }}>({STAT_LABELS[stat]})</span>
                       </div>
                       <span className="font-fantasy font-bold text-sm"
                         style={{ color: total >= 0 ? '#86efac' : '#fca5a5' }}>{calcModDisplay(total)}</span>
                     </div>
                   );
                 })}
-                <div className="text-xs mt-3 pt-2" style={{ color: 'rgba(180,140,90,0.3)', fontFamily: 'EB Garamond, serif', borderTop: '1px solid rgba(180,140,90,0.08)' }}>
+                <div className="text-xs mt-3 pt-2" style={{ color: 'rgba(200,165,110,0.45)', fontFamily: 'EB Garamond, serif', borderTop: '1px solid rgba(180,140,90,0.08)' }}>
                   Click the dot next to a skill to toggle: none → proficient → expert
                 </div>
               </div>
@@ -387,7 +387,7 @@ export default function CharacterSheetPage() {
                         style={{ background: 'rgba(20,10,5,0.6)', border: '1px solid rgba(180,100,50,0.2)' }}>
                         <div>
                           <div className="font-fantasy text-sm" style={{ color: '#fca5a5' }}>{condData.icon} {name}</div>
-                          <div className="text-xs mt-1" style={{ color: 'rgba(180,150,100,0.5)', fontFamily: 'EB Garamond, serif' }}>{condData.description}</div>
+                          <div className="text-xs mt-1" style={{ color: 'rgba(210,180,130,0.65)', fontFamily: 'EB Garamond, serif' }}>{condData.description}</div>
                         </div>
                         <button onClick={() => handleUpdate({ conditions: (character.conditions || []).filter((_, j) => j !== i) })}
                           className="p-1 rounded transition-colors flex-shrink-0" style={{ color: 'rgba(180,100,100,0.4)' }}
@@ -406,22 +406,22 @@ export default function CharacterSheetPage() {
             {tab === 'features' && (
               <div className="p-5 space-y-3">
                 {(character.features || []).length === 0 ? (
-                  <div className="text-center py-8 text-sm" style={{ color: 'rgba(180,140,90,0.35)', fontFamily: 'EB Garamond, serif' }}>No features recorded</div>
+                  <div className="text-center py-8 text-sm" style={{ color: 'rgba(200,165,110,0.5)', fontFamily: 'EB Garamond, serif' }}>No features recorded</div>
                 ) : (
                   (character.features || []).map((feat, i) => (
                     <div key={i} className="p-3 rounded-xl" style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.12)' }}>
-                      <div className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{feat}</div>
+                      <div className="text-sm" style={{ color: '#efe0c8', fontFamily: 'EB Garamond, serif' }}>{feat}</div>
                     </div>
                   ))
                 )}
                 {character.backstory && (
                   <div className="mt-4">
-                    <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(201,169,110,0.4)', fontSize: '0.65rem' }}>BACKSTORY</div>
+                    <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(220,190,130,0.55)', fontSize: '0.65rem' }}>BACKSTORY</div>
                     <div className="p-4 rounded-xl leading-relaxed text-sm"
-                      style={{ background: 'rgba(15,10,4,0.7)', border: '1px solid rgba(180,140,90,0.12)', color: 'rgba(232,213,183,0.7)', fontFamily: 'IM Fell English, serif', lineHeight: '1.8' }}>
+                      style={{ background: 'rgba(15,10,4,0.7)', border: '1px solid rgba(180,140,90,0.12)', color: '#e0d0b4', fontFamily: 'IM Fell English, serif', lineHeight: '1.8' }}>
                       <EditableText value={character.backstory} onSave={v => handleUpdate({ backstory: v })}
                         placeholder="No backstory written yet..." multiline
-                        style={{ width: '100%', color: 'rgba(232,213,183,0.8)', fontFamily: 'IM Fell English, serif' }} />
+                        style={{ width: '100%', color: '#e0d0b4', fontFamily: 'IM Fell English, serif' }} />
                     </div>
                   </div>
                 )}
