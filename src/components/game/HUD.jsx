@@ -51,7 +51,7 @@ export default function HUD({ character, session }) {
             <div className="font-fantasy font-semibold text-sm truncate" style={{ color: '#f0c040', textShadow: '0 0 12px rgba(201,169,110,0.4)' }}>
               {character.name}
             </div>
-            <div className="text-xs truncate" style={{ color: 'rgba(201,169,110,0.6)', fontFamily: 'EB Garamond, serif' }}>
+            <div className="text-xs truncate" style={{ color: 'rgba(220,190,130,0.75)', fontFamily: 'EB Garamond, serif' }}>
               Lv.{character.level} {character.race} {character.class}
             </div>
           </div>
@@ -109,7 +109,7 @@ export default function HUD({ character, session }) {
 
         {/* Location & Time */}
         {session && (
-          <div className="flex items-center gap-3 ml-auto" style={{ color: 'rgba(201,169,110,0.45)', fontFamily: 'EB Garamond, serif', fontSize: '0.75rem' }}>
+          <div className="flex items-center gap-3 ml-auto" style={{ color: 'rgba(220,190,130,0.6)', fontFamily: 'EB Garamond, serif', fontSize: '0.75rem' }}>
             <span className="hidden md:flex items-center gap-1.5">
               <MapPin className="w-3 h-3" />
               <span className="italic">{session.current_location || 'Unknown'}</span>

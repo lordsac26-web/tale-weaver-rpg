@@ -267,8 +267,8 @@ export default function CharacterSheetPage() {
                 boxShadow: '0 0 12px rgba(201,169,110,0.1)',
               } : {
                 background: 'rgba(15,10,5,0.5)',
-                border: '1px solid rgba(180,140,90,0.1)',
-                color: 'rgba(180,150,100,0.45)',
+                border: '1px solid rgba(180,140,90,0.15)',
+                color: 'rgba(210,180,130,0.6)',
               }}>
               {t === 'spells' ? '🔮 Spells' : t === 'stats' ? '⚔️ Stats' : t === 'skills' ? '🎯 Skills' : t === 'inventory' ? '🎒 Inventory' : t === 'conditions' ? '🌀 Status' : '📜 Features'}
             </button>
