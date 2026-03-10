@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Search, RefreshCw, Coins, Package, ShoppingBag } from 'lucide-react';
+import { ChevronLeft, Search, RefreshCw, Coins, Package, ShoppingBag, AlertTriangle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import ItemCard from './ItemCard';
 import HaggleModal from './HaggleModal';
@@ -19,6 +19,9 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
   const [showGreeting, setShowGreeting] = useState(true);
   const [filterCategory, setFilterCategory] = useState('all');
   const [aiDialogueContext, setAiDialogueContext] = useState({ context: 'greeting', itemName: '', itemDesc: '' });
+  const [stolenAlert, setStolenAlert] = useState(null);
+
+  const isBlackMarket = vendor.type === 'black_market';
 
   const meta = VENDOR_TYPE_META[vendor.type] || VENDOR_TYPE_META.general;
   const isResting = vendor.type === 'tavern_inn' || vendor.type === 'tavern_pub';
@@ -56,7 +59,21 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
       weight: item.weight || 0, cost: price, cost_unit: 'gp',
       description: item.description, icon: item.icon,
       effect: item.effect || '',
+      ...(item.stolen ? { stolen: true, heat: item.heat || 1, original_owner: item.original_owner || 'Unknown' } : {}),
     };
+
+    // Sheriff detection warning for stolen goods
+    if (item.stolen) {
+      const heat = item.heat || 1;
+      const heatLabels = ['Cold', 'Warm', 'Hot', 'Scorching', 'Blazing'];
+      setStolenAlert({
+        itemName: item.name,
+        heat,
+        heatLabel: heatLabels[Math.min(heat - 1, 4)],
+        originalOwner: item.original_owner || 'Unknown',
+      });
+      setTimeout(() => setStolenAlert(null), 8000);
+    }
     const newInventory = [...(char?.inventory || []), invItem];
     const updatedChar = { ...char, gold: newGold, inventory: newInventory };
     setChar(updatedChar);
