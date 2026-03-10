@@ -317,6 +317,42 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
         )}
       </AnimatePresence>
 
+      {/* Stolen goods alert */}
+      <AnimatePresence>
+        {stolenAlert && (
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 40 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 max-w-sm w-full mx-4 p-4 rounded-xl"
+            style={{
+              background: 'rgba(60,10,10,0.95)',
+              border: '1px solid rgba(220,60,60,0.5)',
+              boxShadow: '0 0 30px rgba(220,40,40,0.2), 0 8px 32px rgba(0,0,0,0.8)',
+              backdropFilter: 'blur(8px)',
+            }}>
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#fca5a5' }} />
+              <div>
+                <div className="font-fantasy text-sm font-bold mb-1" style={{ color: '#fca5a5' }}>
+                  ⚠️ Hot Merchandise Acquired
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: 'rgba(252,165,165,0.7)', fontFamily: 'EB Garamond, serif' }}>
+                  <strong style={{ color: '#fde68a' }}>{stolenAlert.itemName}</strong> was reported stolen from{' '}
+                  <em>{stolenAlert.originalOwner}</em>. Heat level:{' '}
+                  <strong style={{ color: stolenAlert.heat >= 4 ? '#ef4444' : stolenAlert.heat >= 2 ? '#fb923c' : '#86efac' }}>
+                    {stolenAlert.heatLabel}
+                  </strong>.
+                </p>
+                <p className="text-xs mt-1.5 italic" style={{ color: 'rgba(201,169,110,0.45)', fontFamily: 'IM Fell English, serif' }}>
+                  Guards and sheriffs may recognize this item on you. Keep it hidden, or face the consequences.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Transaction Toast */}
       <AnimatePresence>
         {transaction && (
