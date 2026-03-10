@@ -498,9 +498,21 @@ export default function Game() {
         </span>
 
         {inCombat && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full font-fantasy text-xs badge-blood combat-active">
-            <Swords className="w-3 h-3" /> In Combat
-          </div>
+          <>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full font-fantasy text-xs badge-blood combat-active">
+              <Swords className="w-3 h-3" /> In Combat
+            </div>
+            <button onClick={() => setShowBattleMap(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
+              style={showBattleMap ? {
+                background: 'rgba(80,10,10,0.7)', border: '1px solid rgba(220,50,50,0.5)', color: '#fca5a5',
+                boxShadow: '0 0 10px rgba(180,30,30,0.15)',
+              } : {
+                background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(180,60,40,0.2)', color: 'rgba(252,165,165,0.55)',
+              }}>
+              <Grid3X3 className="w-3.5 h-3.5" /> Map
+            </button>
+          </>
         )}
 
         <button onClick={() => setShowDiceRoller(v => !v)}
@@ -586,7 +598,7 @@ export default function Game() {
       {/* Main Game Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {inCombat ? (
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden min-h-0">
+          <div className={`flex-1 grid overflow-hidden min-h-0 ${showBattleMap ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1 lg:grid-cols-2'}`}>
             <div className="overflow-hidden flex flex-col min-h-0" style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
               <StoryPanel narrative={narrative} choices={[]} loading={storyLoading}
                 onChoice={() => {}} customInput={customInput}
@@ -600,6 +612,11 @@ export default function Game() {
                 loading={combatLoading}
                 lastCombatEvent={lastCombatEvent} />
             </div>
+            {showBattleMap && (
+              <div className="overflow-hidden hidden lg:block" style={{ borderLeft: '1px solid rgba(180,30,30,0.2)' }}>
+                <CombatBattleMap combat={combat} character={character} />
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex-1 overflow-hidden min-h-0">
