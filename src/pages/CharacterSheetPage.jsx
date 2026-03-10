@@ -79,14 +79,24 @@ export default function CharacterSheetPage() {
   const [exporting, setExporting] = useState(false);
   const sheetRef = useRef(null);
 
+  const loadCharacter = async () => {
+    if (!characterId) { navigate(createPageUrl('Home')); return; }
+    const chars = await base44.entities.Character.filter({ id: characterId });
+    if (chars[0]) setCharacter(chars[0]);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadCharacter(); }, [characterId]);
+
+  // Re-fetch character data when user returns to this tab/window
   useEffect(() => {
-    async function load() {
-      if (!characterId) { navigate(createPageUrl('Home')); return; }
-      const chars = await base44.entities.Character.filter({ id: characterId });
-      if (chars[0]) setCharacter(chars[0]);
-      setLoading(false);
-    }
-    load();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && characterId) {
+        loadCharacter();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [characterId]);
 
   const handleUpdate = async (updates) => {
