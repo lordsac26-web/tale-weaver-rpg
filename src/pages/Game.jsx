@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
@@ -48,6 +48,7 @@ export default function Game() {
   const [aarData, setAarData] = useState(null);
   const [aarLoading, setAarLoading] = useState(false);
   const [showAAR, setShowAAR] = useState(false);
+  const initialRestoreDone = useRef(false);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate(createPageUrl('Home')); return; }
@@ -59,12 +60,16 @@ export default function Game() {
     const chars = await base44.entities.Character.filter({ id: sess.character_id });
     setCharacter(chars[0] || null);
 
-    if (sess.story_log?.length > 0 && narrative.length === 0) {
+    // Only restore narrative from story_log on initial page load, not after every action
+    if (!initialRestoreDone.current && sess.story_log?.length > 0) {
+      initialRestoreDone.current = true;
       const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: e.text }));
       setNarrative(restored);
       setStarted(true);
       const lastEntry = sess.story_log[sess.story_log.length - 1];
-      if (lastEntry?.choices?.length > 0) setChoices(lastEntry.choices);
+      if (lastEntry?.choices?.length > 0) {
+        setChoices(lastEntry.choices);
+      }
     }
 
     if (sess.in_combat && sess.combat_state?.combat_id) {
