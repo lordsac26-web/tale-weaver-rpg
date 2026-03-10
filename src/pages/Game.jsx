@@ -285,6 +285,7 @@ export default function Game() {
       action: 'start_combat', session_id: sessionId, character_id: character?.id, payload: { enemies }
     });
     setCombat({ ...result.data, id: result.data.combat_id });
+    setShowBattleMap(true);
     await loadState();
   };
 
