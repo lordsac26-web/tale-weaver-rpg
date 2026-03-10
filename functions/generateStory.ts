@@ -297,7 +297,7 @@ Create a context-appropriate event. Could be combat, social, environmental, or d
   if (result.narrative && result.choices && result.choices.length > 0) {
     result.narrative = result.narrative
       .replace(/(\n\s*\d+\.\s+\*{0,2}.+){2,}$/gs, '')
-      .replace(/\n\s*(Desiree's|Your|The player's|The hero's)\s+choices?\s+(loomed|are|were|remain):?\s*$/i, '')
+      .replace(/\n[^\n]*choices?\s+(?:loomed|are|were|remain|await)[^\n]*$/i, '')
       .trim();
   }
 
