@@ -11,7 +11,7 @@ const RISK_STYLES = {
   extreme: { border: 'rgba(180,20,20,0.4)',   bg: 'rgba(40,5,5,0.5)',    hover: 'rgba(180,20,20,0.6)',  badge: { bg: 'rgba(60,5,5,0.7)',   color: '#fca5a5', border: 'rgba(180,20,20,0.45)' } },
 };
 
-export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit }) {
+export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit, sessionSetting, narrationEnabled = true }) {
   const endRef = useRef(null);
 
   useEffect(() => {
