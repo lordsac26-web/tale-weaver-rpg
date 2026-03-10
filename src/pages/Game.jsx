@@ -334,13 +334,15 @@ export default function Game() {
     }
 
     if (data.combat_ended) {
+      const endCombatId = combatId;
       if (data.result === 'victory') {
         const victoriousEnemies = (combat?.combatants || []).filter(c => c.type === 'enemy');
         setDefeatedEnemies(victoriousEnemies);
         setShowLootModal(true);
         setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! The battle is won. Your enemies lie defeated.' }]);
-        // Save history snapshot (loot added later via onCollect)
-        await saveCombatHistory(combatId, 'victory', victoriousEnemies);
+        await saveCombatHistory(endCombatId, 'victory', victoriousEnemies);
+        // Generate AAR in background (non-blocking)
+        generateAAR(endCombatId);
         const storyResult = await base44.functions.invoke('generateStory', {
           session_id: sessionId, action: 'choice', custom_input: 'The combat has ended in victory.'
         });
@@ -348,7 +350,8 @@ export default function Game() {
         setChoices(storyResult.data?.choices || []);
       } else if (data.result === 'defeat') {
         const defeatedEnemyList = (combat?.combatants || []).filter(c => c.type === 'enemy');
-        await saveCombatHistory(combatId, 'defeat', defeatedEnemyList);
+        await saveCombatHistory(endCombatId, 'defeat', defeatedEnemyList);
+        generateAAR(endCombatId);
         setNarrative(prev => [...prev, { type: 'narration', text: '💀 You have fallen in battle. Darkness takes you...' }]);
         setChoices([]);
       }
