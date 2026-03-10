@@ -18,6 +18,7 @@ import Dice3DModal from '@/components/dice/Dice3DModal.jsx';
 import LootModal from '@/components/game/LootModal.jsx';
 import CombatBattleMap from '@/components/battlemap/CombatBattleMap';
 import AfterActionReport from '@/components/game/AfterActionReport';
+import RestModal from '@/components/game/RestModal';
 
 export default function Game() {
   const navigate = useNavigate();
