@@ -397,6 +397,8 @@ export default function Game() {
           }
         if (data.player_dead) {
           setNarrative(prev => [...prev, { type: 'narration', text: '💀 You have fallen in battle...' }]);
+          await saveCombatHistory(combatId, 'defeat', (combat?.combatants || []).filter(c => c.type === 'enemy'));
+          generateAAR(combatId);
           setCombat(null);
           break;
         }
