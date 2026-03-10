@@ -9,12 +9,14 @@ export const VENDOR_TYPE_META = {
   tavern_pub:   { icon: '🍺',  label: 'Tavern',            color: '#fdba74', borderColor: 'rgba(180,100,10,0.3)',  bg: 'rgba(35,18,3,0.75)' },
   brothel:      { icon: '🌹',  label: 'Establishment',     color: '#f9a8d4', borderColor: 'rgba(220,60,120,0.3)',  bg: 'rgba(40,8,20,0.75)' },
   traveling:    { icon: '🐪',  label: 'Traveling Merchant', color: '#c084fc', borderColor: 'rgba(140,60,220,0.3)',  bg: 'rgba(30,8,50,0.75)' },
+  black_market: { icon: '🗝️',  label: 'Black Market',       color: '#a78bfa', borderColor: 'rgba(100,60,180,0.4)',  bg: 'rgba(15,5,30,0.85)' },
 };
 
 export const ITEM_CATEGORY_ICONS = {
   Weapon: '⚔️', Armor: '🛡️', Potion: '🧪', Scroll: '📜', Food: '🍖',
   Drink: '🍺', Service: '🛏️', Tool: '🔧', Clothing: '👘', Trinket: '💎',
   Component: '🌿', Poison: '☠️', Bomb: '💣', Ammunition: '🏹', Misc: '📦',
+  'Stolen Goods': '🔓',
 };
 
 export const RARITY_META = {
@@ -33,6 +35,7 @@ export const BUY_BACK_CATEGORIES = {
   tavern_pub: ['Food','Drink'],
   brothel:    [],
   traveling:  ['Weapon','Armor','Potion','Tool','Trinket','Misc','Clothing'],
+  black_market: ['Weapon','Armor','Potion','Tool','Trinket','Misc','Clothing','Poison','Scroll','Stolen Goods'],
 };
 
 export const HAGGLE_FLAVOR = {
@@ -70,6 +73,11 @@ export const HAGGLE_FLAVOR = {
     '"My friend! You have the eye of a merchant! I like you. Final offer — and I\'m losing money, I swear it."',
     '"These goods came from Calimshan on camel-back! But for you... a traveler\'s discount."',
   ],
+  black_market: [
+    'The figure taps the counter and glances toward the door. "Keep it quick, keep it quiet."',
+    '"These prices already account for my... risk premium. But I respect ambition."',
+    '"I don\'t haggle. I set prices that keep us both out of prison."',
+  ],
 };
 
 export const TRANSACTION_FLAVOR = {
@@ -82,6 +90,7 @@ export const TRANSACTION_FLAVOR = {
     tavern_pub: '"There you are, friend. Best in the house — which admittedly isn\'t saying much."',
     brothel:    'The proprietress gestures gracefully toward the private corridor. "Right this way."',
     traveling:  '"A pleasure doing business! You\'ve excellent taste — I can tell immediately."',
+    black_market: 'The item vanishes into your pack before you can blink. "You never saw me. I was never here."',
   },
   sell: {
     alchemist:  'She holds the item to the light, sniffs it, and nods. "I can work with this."',
@@ -92,6 +101,7 @@ export const TRANSACTION_FLAVOR = {
     tavern_pub: '"The regulars will enjoy this. Or regret it. Either way — here\'s your coin."',
     brothel:    'A raised eyebrow, a brief inspection, and a quiet nod. The coin is counted without comment.',
     traveling:  '"Gold from my own pouch — the highest compliment I can pay! Done!"',
+    black_market: 'A gloved hand takes the item, inspects it under dim light, and slides a coin pouch back. "Pleasure."',
   },
 };
 
