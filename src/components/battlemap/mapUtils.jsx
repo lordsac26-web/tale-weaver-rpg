@@ -63,6 +63,8 @@ export function createToken(id, name, type, row, col, extraData = {}) {
     initiative: extraData.initiative ?? 0,
     size: extraData.size ?? 1, // 1=medium, 2=large, 3=huge
     emoji: extraData.emoji ?? null,
+    characterClass: extraData.characterClass ?? null,
+    race: extraData.race ?? null,
     moved_this_turn: false,
   };
 }
