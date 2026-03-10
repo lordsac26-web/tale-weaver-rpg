@@ -221,7 +221,8 @@ Create an interesting tactical layout with chokepoints, cover, and varied terrai
       <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Grid area */}
         <div className="flex-1 overflow-auto relative" style={{ background: 'rgba(6,3,1,0.95)' }}>
-          <div className="relative inline-block" style={{ margin: '12px' }}>
+          <div className="relative inline-block" style={{ margin: '12px' }}
+            onMouseLeave={() => setHoverCell(null)}>
             {/* Grid cells */}
             <div className="grid" style={{
               gridTemplateColumns: `repeat(${GRID_SIZE}, ${cellSize}px)`,
@@ -241,6 +242,7 @@ Create an interesting tactical layout with chokepoints, cover, and varied terrai
                     isRangeCell={!moveCellSet.has(key) && rangeCellSet.has(key)}
                     cellSize={cellSize}
                     onClick={() => handleCellClick(row, col)}
+                    onMouseEnter={() => setHoverCell({ row, col })}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setGrid(prev => ({ ...prev, [key]: 'floor' }));
