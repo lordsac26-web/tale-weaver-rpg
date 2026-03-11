@@ -289,7 +289,7 @@ function SkillsTab({ character, profBonus, computed }) {
 }
 
 // ─── Combat Tab (Spell Slots + Equipped) ──────────────────────────────────────
-function CombatTab({ character, profBonus, isCaster, onUpdate }) {
+function CombatTab({ character, profBonus, isCaster, onUpdate, computed }) {
   const equipped = character.equipped || {};
 
   // Spell slots
@@ -388,14 +388,19 @@ function CombatTab({ character, profBonus, isCaster, onUpdate }) {
       {/* Combat Stats */}
       <Section title="Combat Statistics" icon="⚔️">
         <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: 'Initiative', val: calcModDisplay(calcStatMod(character.dexterity || 10)), color: '#fde68a' },
-            { label: 'Prof Bonus', val: `+${profBonus}`, color: '#c9a96e' },
-            { label: 'Speed', val: `${character.speed || 30}ft`, color: '#86efac' },
-            { label: 'STR Save', val: calcModDisplay(calcStatMod(character.strength||10) + (CLASSES[character.class]?.saves?.includes('strength') ? profBonus : 0)), color: '#fca5a5' },
-            { label: 'DEX Save', val: calcModDisplay(calcStatMod(character.dexterity||10) + (CLASSES[character.class]?.saves?.includes('dexterity') ? profBonus : 0)), color: '#fca5a5' },
-            { label: 'CON Save', val: calcModDisplay(calcStatMod(character.constitution||10) + (CLASSES[character.class]?.saves?.includes('constitution') ? profBonus : 0)), color: '#fca5a5' },
-          ].map(({ label, val, color }) => (
+          {(() => {
+            const saves = computed?.merged_saves || new Set(CLASSES[character.class]?.saves || []);
+            const saveBonus = computed?.effects?.save_bonus || 0;
+            const getSave = (stat) => calcStatMod(computed?.[stat] ?? character[stat] ?? 10) + (saves.has(stat) ? profBonus : 0) + saveBonus;
+            return [
+              { label: 'Initiative', val: calcModDisplay(calcStatMod(computed?.dexterity ?? character.dexterity ?? 10)), color: '#fde68a' },
+              { label: 'Prof Bonus', val: `+${profBonus}`, color: '#c9a96e' },
+              { label: 'Speed', val: `${computed?.speed ?? character.speed ?? 30}ft`, color: '#86efac' },
+              { label: 'STR Save', val: calcModDisplay(getSave('strength')), color: '#fca5a5' },
+              { label: 'DEX Save', val: calcModDisplay(getSave('dexterity')), color: '#fca5a5' },
+              { label: 'CON Save', val: calcModDisplay(getSave('constitution')), color: '#fca5a5' },
+            ];
+          })().map(({ label, val, color }) => (
             <div key={label} className="text-center py-2 rounded-lg stat-box">
               <div className="font-fantasy font-bold text-sm" style={{ color }}>{val}</div>
               <div className="text-xs mt-0.5" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif', fontSize: '0.65rem' }}>{label}</div>
