@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
-import { User, Loader2, ChevronLeft, Dices, Swords, Map, ShoppingBag, Eye, Paintbrush, Scroll, BookMarked, Grid3X3, Moon } from 'lucide-react';
+import { User, Loader2, ChevronLeft, Dices, Swords, Map, ShoppingBag, Eye, Paintbrush, Scroll, BookMarked, Grid3X3, Moon, Package } from 'lucide-react';
 import { SKILL_STAT_MAP, calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
 import { getAlignmentLabel } from '@/components/game/AlignmentBadge';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -598,6 +598,14 @@ export default function Game() {
           onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(220,80,60,0.45)'; e.currentTarget.style.color = '#fca5a5'; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,60,40,0.2)'; e.currentTarget.style.color = 'rgba(252,165,165,0.55)'; }}>
           <BookMarked className="w-3.5 h-3.5" /> History
+        </button>
+
+        <button onClick={() => navigate(createPageUrl('PartyStash') + `?session_id=${sessionId}&character_id=${character?.id}`)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
+          style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(74,222,128,0.2)', color: 'rgba(74,222,128,0.6)' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(74,222,128,0.45)'; e.currentTarget.style.color = '#86efac'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(74,222,128,0.2)'; e.currentTarget.style.color = 'rgba(74,222,128,0.6)'; }}>
+          <Package className="w-3.5 h-3.5" /> Stash
         </button>
 
         <button onClick={() => navigate(createPageUrl('Market') + `?session_id=${sessionId}&character_id=${character?.id}`)}
