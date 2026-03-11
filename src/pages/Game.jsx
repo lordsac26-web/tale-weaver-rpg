@@ -792,6 +792,7 @@ export default function Game() {
           <LootModal
             enemies={defeatedEnemies}
             character={character}
+            sessionId={sessionId}
             onClose={() => setShowLootModal(false)}
             onCollect={async (updates, lootSnapshot) => {
               setCharacter(prev => ({ ...prev, ...updates }));
