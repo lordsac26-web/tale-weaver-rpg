@@ -384,6 +384,7 @@ export default function LootModal({ enemies, character, onClose, onCollect, sess
                         selected={selectedItem?.name === item.name}
                         onSelect={setSelectedItem}
                         onCompare={setCompareItem}
+                        onStash={sessionId ? handleSendToStash : undefined}
                       />
                     </div>
                   ))}
