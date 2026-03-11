@@ -187,20 +187,25 @@ function QuickStatsBar({ character, computed }) {
 }
 
 // ─── Stats Tab ─────────────────────────────────────────────────────────────────
-function StatsTab({ character, profBonus }) {
+function StatsTab({ character, profBonus, computed, onUpdate }) {
+  const mergedSaves = computed?.merged_saves || new Set(CLASSES[character.class]?.saves || []);
   return (
     <div>
       <div className="grid grid-cols-3 gap-2.5 mb-3">
         {STATS.map(stat => {
-          const val = character[stat] || 10;
-          const mod = calcStatMod(val);
-          const saveProf = CLASSES[character.class]?.saves?.includes(stat);
-          const saveMod = mod + (saveProf ? profBonus : 0);
+          const baseVal = character[stat] || 10;
+          const effectiveVal = computed?.[stat] ?? baseVal;
+          const mod = calcStatMod(effectiveVal);
+          const saveProf = mergedSaves.has(stat);
+          const saveMod = mod + (saveProf ? profBonus : 0) + (computed?.effects?.save_bonus || 0);
           return (
             <div key={stat} className="stat-box rounded-xl p-3 text-center">
               <div className="text-base mb-0.5">{STAT_ICONS[stat]}</div>
               <div className="font-fantasy text-xs tracking-widest mb-0.5" style={{ color: 'rgba(180,140,90,0.5)', fontSize: '0.6rem' }}>{STAT_LABELS[stat]}</div>
-              <div className="font-fantasy font-bold text-2xl mb-0.5" style={{ color: '#e8d5b7' }}>{val}</div>
+              <div className="font-fantasy font-bold text-2xl mb-0.5 flex items-center justify-center gap-0.5" style={{ color: '#e8d5b7' }}>
+                {effectiveVal}
+                <ComputedStatBadge baseStat={baseVal} effectiveStat={effectiveVal} label={STAT_LABELS[stat]} />
+              </div>
               <div className="font-fantasy font-bold text-sm" style={{ color: mod >= 0 ? '#86efac' : '#fca5a5' }}>{calcModDisplay(mod)}</div>
               <div className="text-xs mt-1 pt-1" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif', borderTop: '1px solid rgba(180,140,90,0.1)', fontSize: '0.65rem' }}>
                 Save {calcModDisplay(saveMod)}{saveProf && <span style={{ color: '#c9a96e' }}> ●</span>}
@@ -213,6 +218,19 @@ function StatsTab({ character, profBonus }) {
         <span style={{ color: 'rgba(180,150,100,0.5)', fontFamily: 'EB Garamond, serif', fontSize: '0.9rem' }}>Proficiency Bonus </span>
         <span className="font-fantasy font-bold" style={{ color: '#f0c040' }}>+{profBonus}</span>
       </div>
+
+      {/* Multiclass Manager */}
+      <div className="mt-3">
+        <MulticlassManager character={character} onUpdate={onUpdate} />
+      </div>
+
+      {/* Active Magical Effects from Equipment */}
+      {computed?.effects && (
+        <div className="mt-3">
+          <ActiveEffectsPanel effects={computed.effects} />
+        </div>
+      )}
+
       {/* Passive Scores */}
       <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.1)' }}>
         <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(201,169,110,0.4)', fontSize: '0.6rem' }}>PASSIVE SCORES</div>
@@ -222,7 +240,7 @@ function StatsTab({ character, profBonus }) {
             { label: 'Insight', stat: 'wisdom', skill: 'Insight' },
             { label: 'Investigation', stat: 'intelligence', skill: 'Investigation' },
           ].map(({ label, stat, skill }) => {
-            const mod = calcStatMod(character[stat] || 10);
+            const mod = calcStatMod(computed?.[stat] ?? character[stat] ?? 10);
             const prof = character.skills?.[skill];
             const bonus = prof === 'expert' ? profBonus * 2 : (prof === 'proficient' || prof === true) ? profBonus : 0;
             return (
