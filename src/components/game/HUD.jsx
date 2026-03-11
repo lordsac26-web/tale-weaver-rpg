@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Shield, Heart, Star, MapPin, Clock, Swords } from 'lucide-react';
 import { CONDITIONS } from './gameData';
 import { motion } from 'framer-motion';
 import AlignmentBadge from './AlignmentBadge';
+import computeCharacterStats from './computeCharacterStats';
 
 export default function HUD({ character, session }) {
   if (!character) return null;
+  const computed = useMemo(() => computeCharacterStats(character), [character]);
 
   const hpPct = Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100));
   const hpBarClass = hpPct > 60 ? 'hp-bar-high' : hpPct > 30 ? 'hp-bar-mid' : 'hp-bar-low';
@@ -52,7 +54,8 @@ export default function HUD({ character, session }) {
               {character.name}
             </div>
             <div className="text-xs truncate" style={{ color: 'rgba(220,190,130,0.75)', fontFamily: 'EB Garamond, serif' }}>
-              Lv.{character.level} {character.race} {character.class}
+              Lv.{computed?.total_level || character.level} {character.race} {character.class}
+              {(character.multiclass || []).length > 0 && ` / ${character.multiclass.map(mc => `${mc.class} ${mc.level}`).join(' / ')}`}
             </div>
           </div>
         </div>
@@ -97,10 +100,10 @@ export default function HUD({ character, session }) {
           </div>
         </div>
 
-        {/* AC Badge */}
+        {/* AC Badge — uses computed AC from equipped items */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg stat-box">
           <Shield className="w-3.5 h-3.5" style={{ color: '#93c5fd' }} />
-          <span className="font-bold text-sm font-fantasy" style={{ color: '#93c5fd' }}>{character.armor_class}</span>
+          <span className="font-bold text-sm font-fantasy" style={{ color: '#93c5fd' }}>{computed?.armor_class ?? character.armor_class}</span>
           <span className="text-xs" style={{ color: 'rgba(147,197,253,0.5)', fontFamily: 'EB Garamond, serif' }}>AC</span>
         </div>
 
