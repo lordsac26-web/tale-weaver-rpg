@@ -514,15 +514,19 @@ function ConditionsTab({ character, onUpdate }) {
 }
 
 // ─── Features Tab ─────────────────────────────────────────────────────────────
-function FeaturesTab({ character }) {
+function FeaturesTab({ character, computed }) {
   const [expanded, setExpanded] = useState({});
-  const classData = CLASSES[character.class] || {};
-  const classFeatures = [];
-  Object.entries(classData.features || {}).forEach(([lvl, feats]) => {
-    if (parseInt(lvl) <= (character.level || 1)) {
-      feats.forEach(f => classFeatures.push({ name: f, level: parseInt(lvl) }));
-    }
-  });
+  // Use computed features if available (includes multiclass), otherwise fallback
+  const classFeatures = computed?.all_features || (() => {
+    const feats = [];
+    const classData = CLASSES[character.class] || {};
+    Object.entries(classData.features || {}).forEach(([lvl, fs]) => {
+      if (parseInt(lvl) <= (character.level || 1)) {
+        fs.forEach(f => feats.push({ name: f, source: character.class, level: parseInt(lvl) }));
+      }
+    });
+    return feats;
+  })();
 
   return (
     <div className="space-y-4">
@@ -547,9 +551,9 @@ function FeaturesTab({ character }) {
         )}
       </Section>
 
-      {/* Class Features by Level */}
+      {/* Class Features by Level (merged across all classes) */}
       {classFeatures.length > 0 && (
-        <Section title={`${character.class} Class Features`} icon="📖">
+        <Section title="Class Features" icon="📖">
           <div className="space-y-1">
             {classFeatures.map((f, i) => (
               <div key={i} className="flex items-start gap-2.5 py-2 px-3 rounded-lg"
@@ -559,6 +563,12 @@ function FeaturesTab({ character }) {
                   Lv.{f.level}
                 </span>
                 <span className="text-sm" style={{ color: 'rgba(232,213,183,0.8)', fontFamily: 'EB Garamond, serif' }}>{f.name}</span>
+                {f.source && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
+                    style={{ background: 'rgba(30,15,50,0.4)', border: '1px solid rgba(150,90,230,0.15)', color: 'rgba(192,132,252,0.6)', fontSize: '0.55rem' }}>
+                    {f.source}
+                  </span>
+                )}
               </div>
             ))}
           </div>
