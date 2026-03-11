@@ -159,17 +159,21 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
 }
 
 // ─── Quick Stats Bar ───────────────────────────────────────────────────────────
-function QuickStatsBar({ character }) {
+function QuickStatsBar({ character, computed }) {
   const hpPct = character.hp_max ? Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100)) : 100;
   const hpColor = hpPct > 60 ? '#22c55e' : hpPct > 30 ? '#d97706' : '#dc2626';
+  const effectiveAC = computed?.armor_class ?? character.armor_class ?? '—';
+  const effectiveSpeed = computed?.speed ?? character.speed ?? 30;
+  const effectiveProf = computed?.proficiency_bonus || PROFICIENCY_BY_LEVEL[(character.level||1)-1] || 2;
+  const acDiff = computed ? effectiveAC - (character.armor_class || 10) : 0;
   return (
     <div className="flex-shrink-0 px-4 py-2 grid grid-cols-5 gap-2"
       style={{ borderBottom: '1px solid rgba(180,140,90,0.1)', background: 'rgba(10,6,3,0.6)' }}>
       {[
         { icon: Heart, color: hpColor, val: `${character.hp_current ?? '?'}/${character.hp_max ?? '?'}`, label: 'HP' },
-        { icon: Shield, color: '#3b82f6', val: character.armor_class ?? '—', label: 'AC' },
-        { icon: Zap, color: '#d97706', val: `${character.speed ?? 30}ft`, label: 'Speed' },
-        { icon: CircleDot, color: '#a78bfa', val: `+${PROFICIENCY_BY_LEVEL[(character.level||1)-1]||2}`, label: 'Prof' },
+        { icon: Shield, color: '#3b82f6', val: effectiveAC, label: acDiff ? `AC (${acDiff > 0 ? '+' : ''}${acDiff})` : 'AC' },
+        { icon: Zap, color: '#d97706', val: `${effectiveSpeed}ft`, label: 'Speed' },
+        { icon: CircleDot, color: '#a78bfa', val: `+${effectiveProf}`, label: 'Prof' },
         { icon: Star, color: '#c9a96e', val: character.xp ?? 0, label: 'XP' },
       ].map(({ icon: Icon, color, val, label }, i) => (
         <div key={label} className="text-center py-1">
