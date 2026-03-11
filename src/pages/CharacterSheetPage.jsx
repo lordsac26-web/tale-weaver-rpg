@@ -343,7 +343,7 @@ export default function CharacterSheetPage() {
             {tab === 'skills' && (
               <div className="p-5 space-y-0.5">
                 {Object.entries(SKILL_STAT_MAP).map(([skill, stat]) => {
-                  const statMod = calcStatMod(character[stat] || 10);
+                  const statMod = calcStatMod(computed?.[stat] ?? character[stat] ?? 10);
                   const profLevel = character.skills?.[skill];
                   // Support boolean true (legacy), 'proficient', and 'expert'
                   const bonus = profLevel === 'expert' ? profBonus * 2 : (profLevel === 'proficient' || profLevel === true) ? profBonus : 0;
