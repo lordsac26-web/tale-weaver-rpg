@@ -118,7 +118,7 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
         </div>
 
         {/* Quick Stats bar */}
-        <QuickStatsBar character={character} />
+        <QuickStatsBar character={character} computed={computed} />
 
         {/* Tabs */}
         <div className="flex flex-shrink-0 overflow-x-auto"
@@ -141,13 +141,13 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
         <div className="flex-1 overflow-y-auto p-4">
           <AnimatePresence mode="wait">
             <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-              {tab === 'stats' && <StatsTab character={character} profBonus={profBonus} />}
-              {tab === 'skills' && <SkillsTab character={character} profBonus={profBonus} />}
-              {tab === 'combat' && <CombatTab character={character} profBonus={profBonus} isCaster={isCaster} onUpdate={handleUpdateCharacter} />}
+              {tab === 'stats' && <StatsTab character={character} profBonus={profBonus} computed={computed} onUpdate={handleUpdateCharacter} />}
+              {tab === 'skills' && <SkillsTab character={character} profBonus={profBonus} computed={computed} />}
+              {tab === 'combat' && <CombatTab character={character} profBonus={profBonus} isCaster={isCaster} onUpdate={handleUpdateCharacter} computed={computed} />}
               {tab === 'inventory' && <InventoryTab character={character} onUpdate={handleUpdateCharacter} onIdentify={null} />}
               {tab === 'spells' && <SpellbookTab character={character} onUpdateCharacter={handleUpdateCharacter} />}
               {tab === 'conditions' && <ConditionsTab character={character} onUpdate={handleUpdateCharacter} />}
-              {tab === 'features' && <FeaturesTab character={character} />}
+              {tab === 'features' && <FeaturesTab character={character} computed={computed} />}
             </motion.div>
           </AnimatePresence>
         </div>
