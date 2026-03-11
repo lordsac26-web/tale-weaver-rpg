@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X, Shield, Heart, Zap, Star, Swords, FlaskConical, BookOpen, Layers, Sparkles, ShieldCheck, CircleDot, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import InventoryTab from './InventoryTab';
-import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS } from './gameData';
+import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS, SPELLCASTING_CLASSES } from './gameData';
 import { base44 } from '@/api/base44Client';
 import SpellbookTab from './SpellbookTab';
-
-const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
+import computeCharacterStats, { getTotalLevel } from './computeCharacterStats';
+import ComputedStatBadge from './ComputedStatBadge';
+import ActiveEffectsPanel from './ActiveEffectsPanel';
+import MulticlassManager from './MulticlassManager';
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 const STAT_ICONS = { strength: '💪', dexterity: '🏹', constitution: '❤️', intelligence: '📚', wisdom: '🔮', charisma: '✨' };
@@ -55,8 +57,10 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
   const [character, setCharacter] = useState(initialCharacter);
   if (!character) return null;
 
-  const isCaster = SPELLCASTING_CLASSES.includes(character.class);
-  const profBonus = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
+  const computed = useMemo(() => computeCharacterStats(character), [character]);
+  const isCaster = computed?.is_caster || SPELLCASTING_CLASSES.includes(character.class);
+  const profBonus = computed?.proficiency_bonus || PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
+  const totalLevel = computed?.total_level || character.level || 1;
   const visibleTabs = TABS.filter(t => t.id !== 'spells' || isCaster);
 
   const handleUpdateCharacter = async (updates) => {
@@ -94,8 +98,9 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
               {character.name}
             </h2>
             <p className="text-sm italic mt-0.5" style={{ color: 'rgba(201,169,110,0.55)', fontFamily: 'EB Garamond, serif' }}>
-              Level {character.level} {character.race} {character.class}
+              Level {totalLevel} {character.race} {character.class}
               {character.subclass ? ` · ${character.subclass}` : ''}
+              {(character.multiclass || []).map(mc => ` / ${mc.class} ${mc.level}`).join('')}
             </p>
             {character.alignment && (
               <p className="text-xs mt-0.5" style={{ color: 'rgba(180,150,100,0.35)', fontFamily: 'EB Garamond, serif' }}>
