@@ -302,18 +302,21 @@ export default function CharacterSheetPage() {
               <div className="p-5">
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   {STATS.map(stat => {
-                    const val = character[stat] || 10;
-                    const mod = calcStatMod(val);
-                    const saveProf = CLASSES[character.class]?.saves?.includes(stat);
-                    const saveMod = mod + (saveProf ? profBonus : 0);
+                    const baseVal = character[stat] || 10;
+                    const effectiveVal = computed?.[stat] ?? baseVal;
+                    const mod = calcStatMod(effectiveVal);
+                    const mergedSaves = computed?.merged_saves || new Set(CLASSES[character.class]?.saves || []);
+                    const saveProf = mergedSaves.has(stat);
+                    const saveMod = mod + (saveProf ? profBonus : 0) + (computed?.effects?.save_bonus || 0);
                     return (
                       <div key={stat} className="stat-box rounded-xl p-4 text-center">
                         <div className="text-xl mb-1">{STAT_ICONS[stat]}</div>
                         <div className="font-fantasy text-xs tracking-widest mb-1" style={{ color: 'rgba(210,175,120,0.65)', fontSize: '0.62rem' }}>
                           {STAT_LABELS[stat]}
                         </div>
-                        <div className="font-fantasy font-bold text-3xl mb-1">
-                          <EditableNumber value={val} onSave={v => handleUpdate({ [stat]: v })} min={1} max={30} color="#e8d5b7" />
+                        <div className="font-fantasy font-bold text-3xl mb-1 flex items-center justify-center gap-0.5">
+                          <EditableNumber value={baseVal} onSave={v => handleUpdate({ [stat]: v })} min={1} max={30} color="#e8d5b7" />
+                          <ComputedStatBadge baseStat={baseVal} effectiveStat={effectiveVal} label={STAT_LABELS[stat]} />
                         </div>
                         <div className="font-fantasy font-bold text-sm mb-1"
                           style={{ color: mod >= 0 ? '#86efac' : '#fca5a5' }}>{calcModDisplay(mod)}</div>
@@ -329,6 +332,10 @@ export default function CharacterSheetPage() {
                   <span style={{ color: 'rgba(210,180,130,0.65)', fontFamily: 'EB Garamond, serif' }}>Proficiency Bonus: </span>
                   <span className="font-fantasy font-bold" style={{ color: '#f0c040' }}>+{profBonus}</span>
                 </div>
+                {/* Multiclass Manager */}
+                <div className="mt-4"><MulticlassManager character={character} onUpdate={handleUpdate} /></div>
+                {/* Active Magical Effects */}
+                {computed?.effects && <div className="mt-4"><ActiveEffectsPanel effects={computed.effects} /></div>}
               </div>
             )}
 
