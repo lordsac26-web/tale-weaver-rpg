@@ -103,7 +103,7 @@ function CoinRow({ gold, silver, copper }) {
  *  onClose     — dismiss callback
  *  onCollect   — (charUpdates, lootSnapshot) => void
  */
-export default function LootModal({ enemies, character, onClose, onCollect }) {
+export default function LootModal({ enemies, character, onClose, onCollect, sessionId }) {
   const [loot, setLoot] = useState(null);          // { gold, silver, copper, items[] }
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -231,6 +231,26 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
     setSelectedItem(null);
     setSaving(false);
     onCollect(updates, null);
+  };
+
+  // Send item to party stash instead of personal inventory
+  const handleSendToStash = async (item) => {
+    if (!item || !sessionId) return;
+    setSaving(true);
+    // Find or create party stash
+    const stashes = await base44.entities.PartyStash.filter({ session_id: sessionId });
+    let stash = stashes[0];
+    if (!stash) {
+      stash = await base44.entities.PartyStash.create({ session_id: sessionId, items: [], gold: 0, silver: 0, copper: 0, log: [] });
+    }
+    const invItem = toInventoryItem(item);
+    const newItems = [...(stash.items || []), invItem];
+    const newLog = [...(stash.log || []), { action: 'deposited', item: item.name, character: character?.name || 'Unknown', timestamp: new Date().toISOString() }];
+    await base44.entities.PartyStash.update(stash.id, { items: newItems, log: newLog });
+    setCollectedItems(prev => new Set([...prev, item.name]));
+    setCompareItem(null);
+    setSelectedItem(null);
+    setSaving(false);
   };
 
   // Keep in bag only — add to inventory without equipping
