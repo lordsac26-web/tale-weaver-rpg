@@ -4,6 +4,7 @@ import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 import { User, Loader2, ChevronLeft, Dices, Swords, Map, ShoppingBag, Eye, Paintbrush, Scroll, BookMarked, Grid3X3, Moon, Package } from 'lucide-react';
 import { SKILL_STAT_MAP, calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
+import computeCharacterStats from '@/components/game/computeCharacterStats';
 import { getAlignmentLabel } from '@/components/game/AlignmentBadge';
 import { motion, AnimatePresence } from 'framer-motion';
 import HUD from '@/components/game/HUD';
@@ -113,12 +114,14 @@ export default function Game() {
     setStoryLoading(false);
   };
 
-  // Compute skill check modifier from character stats + proficiency
+  // Compute skill check modifier from character stats (with equipment bonuses) + proficiency
   const computeSkillModifier = (skillName) => {
     if (!character) return 0;
+    const computed = computeCharacterStats(character);
     const stat = SKILL_STAT_MAP[skillName];
-    const base = stat ? calcStatMod(character[stat]) : 0;
-    const prof = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
+    const effectiveStat = computed?.[stat] ?? character[stat];
+    const base = stat ? calcStatMod(effectiveStat) : 0;
+    const prof = computed?.proficiency_bonus || PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
     // character.skills stores exact skill name as key, value is 'proficient', 'expert', or true (legacy)
     const skillVal = (character.skills || {})[skillName];
     const isProficient = skillVal === 'proficient' || skillVal === true;
