@@ -254,8 +254,8 @@ export default function CharacterSheetPage() {
             {[
               { label: 'HP', key: 'hp_current', max: character.hp_max, color: '#dc2626' },
               { label: 'HP Max', key: 'hp_max', color: '#dc2626' },
-              { label: 'AC', key: 'armor_class', color: '#3b82f6' },
-              { label: 'Speed', key: 'speed', color: '#d97706' },
+              { label: computed?.armor_class !== character.armor_class ? `AC (${computed.armor_class})` : 'AC', key: 'armor_class', color: '#3b82f6' },
+              { label: 'Speed', key: null, display: `${computed?.speed ?? character.speed ?? 30}`, color: '#d97706' },
               { label: 'Prof', key: null, display: `+${profBonus}`, color: '#c9a96e' },
               { label: 'Gold', key: 'gold', color: '#f0c040' },
               { label: 'Level', key: 'level', color: '#a78bfa', min: 1, max: 20 },
