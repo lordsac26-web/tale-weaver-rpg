@@ -58,6 +58,7 @@ import ImageCreator from './pages/ImageCreator';
 import Market from './pages/Market';
 import NewGame from './pages/NewGame';
 import WorldMap from './pages/WorldMap';
+import PartyStash from './pages/PartyStash';
 import __Layout from './Layout.jsx';
 
 
@@ -73,6 +74,7 @@ export const PAGES = {
     "Market": Market,
     "NewGame": NewGame,
     "WorldMap": WorldMap,
+    "PartyStash": PartyStash,
 }
 
 export const pagesConfig = {
