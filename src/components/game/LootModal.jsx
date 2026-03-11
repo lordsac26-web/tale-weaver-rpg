@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
 import { Loader2, X, Coins, ChevronRight, Package, ArrowLeftRight } from 'lucide-react';
 import { LOOT_RARITY, generateLootForEnemy, generateCoinsForEnemy } from './lootTables';
+import { generateEncounterLoot } from './proceduralLoot';
 import EquipmentComparePanel from './EquipmentComparePanel';
 
 // ─── Single loot item card with reveal animation ────────────────────────────
@@ -114,26 +115,28 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
 
   const buildLoot = () => {
     setLoading(true);
-    // Generate loot client-side using type-aware tables (fast, no network)
-    const allItems = [];
-    let totalGold = 0, totalSilver = 0, totalCopper = 0;
 
     const enemyList = enemies?.length > 0 ? enemies : [{ name: 'Unknown Enemy', type: 'Humanoid', cr: 1 }];
 
+    // Generate procedural loot (unique items with names, descriptions, stats)
+    const procedural = generateEncounterLoot(
+      enemyList.map(e => ({
+        name: e.name || 'Enemy',
+        type: e.type || e.meta?.split(' ')[0] || 'Humanoid',
+        cr: parseFloat(e.cr || e.challenge) || 1,
+      }))
+    );
+
+    // Also generate classic type-based loot drops
+    const classicItems = [];
     enemyList.forEach(enemy => {
       const type = enemy.type || enemy.meta?.split(' ')[0] || 'Humanoid';
       const cr = parseFloat(enemy.cr || enemy.challenge) || 1;
-
-      const items = generateLootForEnemy(enemy.name || 'Enemy', type, cr);
-      allItems.push(...items);
-
-      const coins = generateCoinsForEnemy(type, cr);
-      totalGold   += coins.gold;
-      totalSilver += coins.silver;
-      totalCopper += coins.copper;
+      classicItems.push(...generateLootForEnemy(enemy.name || 'Enemy', type, cr));
     });
 
-    // Deduplicate items by name (can happen when multiple same-type enemies)
+    // Merge classic + procedural, deduplicate by name
+    const allItems = [...procedural.items, ...classicItems];
     const seen = new Set();
     const uniqueItems = allItems.filter(it => {
       if (seen.has(it.name)) return false;
@@ -141,7 +144,23 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
       return true;
     });
 
-    setLoot({ gold: totalGold, silver: totalSilver, copper: totalCopper, items: uniqueItems });
+    // Use procedural coins (already type-aware) + classic coins, take higher
+    const classicCoins = { gold: 0, silver: 0, copper: 0 };
+    enemyList.forEach(enemy => {
+      const type = enemy.type || enemy.meta?.split(' ')[0] || 'Humanoid';
+      const cr = parseFloat(enemy.cr || enemy.challenge) || 1;
+      const c = generateCoinsForEnemy(type, cr);
+      classicCoins.gold += c.gold;
+      classicCoins.silver += c.silver;
+      classicCoins.copper += c.copper;
+    });
+
+    setLoot({
+      gold: Math.max(procedural.gold, classicCoins.gold),
+      silver: Math.max(procedural.silver, classicCoins.silver),
+      copper: Math.max(procedural.copper, classicCoins.copper),
+      items: uniqueItems,
+    });
     setLoading(false);
   };
 
