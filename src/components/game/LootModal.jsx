@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
-import { Loader2, X, Coins, ChevronRight, Package, ArrowLeftRight } from 'lucide-react';
+import { Loader2, X, Coins, ChevronRight, ArrowLeftRight, Package } from 'lucide-react';
 import { LOOT_RARITY, generateLootForEnemy, generateCoinsForEnemy } from './lootTables';
 import { generateEncounterLoot } from './proceduralLoot';
 import EquipmentComparePanel from './EquipmentComparePanel';
 
 // ─── Single loot item card with reveal animation ────────────────────────────
-function LootItemCard({ item, index, onCompare, selected, onSelect }) {
+function LootItemCard({ item, index, onCompare, selected, onSelect, onStash }) {
   const r = LOOT_RARITY[item.rarity] || LOOT_RARITY.common;
   return (
     <motion.div
@@ -51,18 +51,31 @@ function LootItemCard({ item, index, onCompare, selected, onSelect }) {
         )}
       </div>
 
-      {/* Compare button */}
-      {item.category !== 'material' && item.category !== 'consumable' && item.category !== 'gem' && item.category !== 'document' && (
-        <button
-          onClick={e => { e.stopPropagation(); onCompare(item); }}
-          className="flex-shrink-0 p-1.5 rounded-lg transition-all"
-          style={{ background: 'rgba(38,10,70,0.4)', border: '1px solid rgba(130,70,210,0.25)', color: 'rgba(192,132,252,0.55)' }}
-          title="Compare with equipped"
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,110,255,0.5)'; e.currentTarget.style.color = '#dfc8ff'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(130,70,210,0.25)'; e.currentTarget.style.color = 'rgba(192,132,252,0.55)'; }}>
-          <ArrowLeftRight className="w-3.5 h-3.5" />
-        </button>
-      )}
+      {/* Action buttons */}
+      <div className="flex gap-1 flex-shrink-0">
+        {item.category !== 'material' && item.category !== 'consumable' && item.category !== 'gem' && item.category !== 'document' && (
+          <button
+            onClick={e => { e.stopPropagation(); onCompare(item); }}
+            className="p-1.5 rounded-lg transition-all"
+            style={{ background: 'rgba(38,10,70,0.4)', border: '1px solid rgba(130,70,210,0.25)', color: 'rgba(192,132,252,0.55)' }}
+            title="Compare with equipped"
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,110,255,0.5)'; e.currentTarget.style.color = '#dfc8ff'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(130,70,210,0.25)'; e.currentTarget.style.color = 'rgba(192,132,252,0.55)'; }}>
+            <ArrowLeftRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {onStash && (
+          <button
+            onClick={e => { e.stopPropagation(); onStash(item); }}
+            className="p-1.5 rounded-lg transition-all"
+            style={{ background: 'rgba(10,40,15,0.4)', border: '1px solid rgba(74,222,128,0.25)', color: 'rgba(74,222,128,0.55)' }}
+            title="Send to Party Stash"
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(74,222,128,0.5)'; e.currentTarget.style.color = '#86efac'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(74,222,128,0.25)'; e.currentTarget.style.color = 'rgba(74,222,128,0.55)'; }}>
+            <Package className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
     </motion.div>
   );
 }
