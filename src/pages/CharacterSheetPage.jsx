@@ -6,11 +6,13 @@ import { ChevronLeft, Save, Edit2, Check, X, RefreshCw, Scroll, Printer, Downloa
 import { motion, AnimatePresence } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS } from '@/components/game/gameData';
+import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS, SPELLCASTING_CLASSES } from '@/components/game/gameData';
 import InventoryTab from '@/components/game/InventoryTab';
 import SpellbookTab from '@/components/game/SpellbookTab';
-
-const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger'];
+import computeCharacterStats from '@/components/game/computeCharacterStats';
+import ComputedStatBadge from '@/components/game/ComputedStatBadge';
+import ActiveEffectsPanel from '@/components/game/ActiveEffectsPanel';
+import MulticlassManager from '@/components/game/MulticlassManager';
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 const STAT_ICONS = { strength: '💪', dexterity: '🏹', constitution: '❤️', intelligence: '📚', wisdom: '🔮', charisma: '✨' };
@@ -156,8 +158,10 @@ export default function CharacterSheetPage() {
     </div>
   );
 
-  const isCaster = SPELLCASTING_CLASSES.includes(character.class);
-  const profBonus = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
+  const computed = React.useMemo(() => computeCharacterStats(character), [character]);
+  const isCaster = computed?.is_caster || SPELLCASTING_CLASSES.includes(character.class);
+  const profBonus = computed?.proficiency_bonus || PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
+  const totalLevel = computed?.total_level || character.level || 1;
   const TABS = ['stats', 'skills', 'inventory', ...(isCaster ? ['spells'] : []), 'conditions', 'features'];
 
   return (
@@ -231,9 +235,10 @@ export default function CharacterSheetPage() {
                 <EditableText value={character.name} onSave={v => handleUpdate({ name: v })} placeholder="Name" />
               </h1>
               <div className="flex flex-wrap items-center gap-2 mt-1">
-                <span className="badge-gold px-2 py-0.5 rounded-full text-xs font-fantasy">Lv {character.level}</span>
+                <span className="badge-gold px-2 py-0.5 rounded-full text-xs font-fantasy">Lv {totalLevel}</span>
                 <span className="text-sm italic" style={{ color: 'rgba(220,190,130,0.75)', fontFamily: 'EB Garamond, serif' }}>
                   {character.race} {character.class}{character.subclass ? ` · ${character.subclass}` : ''}
+                  {(character.multiclass || []).map(mc => ` / ${mc.class} ${mc.level}`).join('')}
                 </span>
               </div>
               {character.alignment && (
