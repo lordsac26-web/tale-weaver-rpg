@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     // Only load monsters for 'start' — skip for all other actions
     let gameDataContext = '';
     if (action === 'start') {
-      const monsters = await base44.asServiceRole.entities.Monster.list('-created_date', 8);
+      const monsters = await base44.asServiceRole.entities.Monster.list('-created_date', 5);
       const monsterNames = monsters
         .map(m => `${m.name} (CR ${m.challenge}, AC ${m.armor_class})`)
         .join('; ');
