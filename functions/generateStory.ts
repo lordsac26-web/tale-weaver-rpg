@@ -13,7 +13,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
  * 4. Monster list capped at 15 instead of 30
  * 5. Condition descriptions truncated more aggressively
  * 6. Wrapped in try/catch for proper error responses instead of silent 502s
- */
+ */ 
 
 Deno.serve(async (req) => {
   try {
