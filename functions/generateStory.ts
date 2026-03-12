@@ -36,24 +36,14 @@ Deno.serve(async (req) => {
     // 'choice' and other actions don't need the full monster/condition lists
     let gameDataContext = '';
     if (action === 'start') {
-      const [monsters, conditions] = await Promise.all([
-        base44.asServiceRole.entities.Monster.list('-created_date', 15), // reduced from 30
-        base44.asServiceRole.entities.DnDCondition.list(),
-        // Removed magic items — not useful enough in prompt to justify the load
-      ]);
+  const monsters = await base44.asServiceRole.entities.Monster.list('-created_date', 8);
 
-      const monsterNames = monsters
-        .map(m => `${m.name} (CR ${m.challenge}, AC ${m.armor_class}, HP ${m.hit_points})`)
-        .join('; ');
-      const conditionNames = conditions
-        .map(c => `${c.name}: ${(c.description || []).slice(0, 1).join(' ').slice(0, 60)}`)
-        .join('; ');
+  const monsterNames = monsters
+    .map(m => `${m.name} (CR ${m.challenge}, AC ${m.armor_class})`)
+    .join('; ');
 
-      gameDataContext = `
-Available Monsters (use real names/stats when spawning enemies): ${monsterNames}
-D&D 5E Conditions (apply accurately): ${conditionNames}
-`;
-    }
+  gameDataContext = `Available Monsters: ${monsterNames}`;
+}
 
     // Alignment axis helper
     const getAlignmentLabel = (lc, ge) => {
