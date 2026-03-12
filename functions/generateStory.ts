@@ -1,20 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
-/**
- * AI Story Engine - generates narrative, choices, events, NPC dialogue
- * Accepts: { session_id, action, choice_index, custom_input }
- *
- * CPU OPTIMIZATIONS:
- * 1. Game data (monsters, conditions, magic items) only loaded for 'start' action
- *    For 'choice' actions, we skip the heavy DB reads — the AI doesn't need full
- *    monster lists to continue a story, only to begin one.
- * 2. Story log slice reduced from last 5 to last 3 entries to shrink prompt size
- * 3. Magic items removed from context entirely — rarely useful in prompt, high cost
- * 4. Monster list capped at 15 instead of 30
- * 5. Condition descriptions truncated more aggressively
- * 6. Wrapped in try/catch for proper error responses instead of silent 502s
- */ 
-
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -23,7 +8,6 @@ Deno.serve(async (req) => {
 
     const { session_id, action, choice_index, custom_input } = await req.json();
 
-    // Load session + character (always needed)
     const sessions = await base44.asServiceRole.entities.GameSession.filter({ id: session_id });
     const session = sessions[0];
     if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
@@ -32,20 +16,16 @@ Deno.serve(async (req) => {
     const character = chars[0];
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
 
-    // OPTIMIZATION: Only load game reference data for 'start' action
-    // 'choice' and other actions don't need the full monster/condition lists
+    // Only load monsters for 'start' — skip for all other actions
     let gameDataContext = '';
     if (action === 'start') {
-  const monsters = await base44.asServiceRole.entities.Monster.list('-created_date', 8);
+      const monsters = await base44.asServiceRole.entities.Monster.list('-created_date', 8);
+      const monsterNames = monsters
+        .map(m => `${m.name} (CR ${m.challenge}, AC ${m.armor_class})`)
+        .join('; ');
+      gameDataContext = monsterNames ? `Available Monsters: ${monsterNames}` : '';
+    }
 
-  const monsterNames = monsters
-    .map(m => `${m.name} (CR ${m.challenge}, AC ${m.armor_class})`)
-    .join('; ');
-
-  gameDataContext = `Available Monsters: ${monsterNames}`;
-}
-
-    // Alignment axis helper
     const getAlignmentLabel = (lc, ge) => {
       const lawChaos = lc >= 4 ? 'Lawful' : lc <= -4 ? 'Chaotic' : 'Neutral';
       const goodEvil = ge >= 4 ? 'Good' : ge <= -4 ? 'Evil' : 'Neutral';
@@ -56,56 +36,38 @@ Deno.serve(async (req) => {
     const geScore = character?.alignment_good_evil || 0;
     const currentAlignment = getAlignmentLabel(lcScore, geScore);
 
-    // Build context summary
-    const charSummary = `
-Character: ${character.name}, Level ${character.level} ${character.race} ${character.class}
+    const charSummary = `Character: ${character.name}, Level ${character.level} ${character.race} ${character.class}
 HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class}
-Active Conditions: ${(character.conditions || []).map(c => c.name || c).join(', ') || 'None'}
-Background: ${character.backstory || 'Unknown'}
-Alignment: ${currentAlignment} (Law/Chaos score: ${lcScore}, Good/Evil score: ${geScore})
-`;
+Conditions: ${(character.conditions || []).map(c => c.name || c).join(', ') || 'None'}
+Background: ${(character.backstory || 'Unknown').slice(0, 200)}
+Alignment: ${currentAlignment} (L/C: ${lcScore}, G/E: ${geScore})`;
 
-    const worldSummary = `
-Location: ${session.current_location || 'Unknown'}
-Season: ${session.season} | Time: ${session.time_of_day}
-Active Quests: ${(session.active_quests || []).map(q => q.title).join(', ') || 'None'}
-Reputation: ${session.reputation || 0}
-Adult Mode: ${session.adult_mode ? 'Yes (mature content enabled)' : 'No'}
-Story Seed: ${session.story_seed || 'Standard high fantasy adventure'}
-`;
+    const worldSummary = `Location: ${session.current_location || 'Unknown'} | Season: ${session.season} | Time: ${session.time_of_day}
+Quests: ${(session.active_quests || []).map(q => q.title).join(', ') || 'None'}
+Reputation: ${session.reputation || 0} | Adult Mode: ${session.adult_mode ? 'Yes' : 'No'}
+Story Seed: ${session.story_seed || 'Standard high fantasy adventure'}`;
 
-    // OPTIMIZATION: reduced from last 5 to last 3 entries to shrink prompt size
+    const statusHeader = `**HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class} | Level: ${character.level} | Alignment: ${currentAlignment} | ${session.current_location || 'Unknown'} | ${session.time_of_day || 'Morning'}**`;
+
     const recentLog = (session.story_log || []).slice(-3).map(e => e.text).join('\n');
 
     let prompt = '';
     let responseSchema = null;
 
     if (action === 'start') {
-      prompt = `You are the Dungeon Master for a high fantasy RPG. Begin the adventure.
+      prompt = `You are a Dungeon Master. Begin this adventure.
 ${charSummary}
 ${worldSummary}
 ${gameDataContext}
-Story Seed: ${session.story_seed || 'A mysterious summons has drawn our hero to action...'}
 
-Write an immersive opening narrative (3-4 paragraphs) that:
-- Sets the scene vividly (environment, atmosphere, sensory details)
-- Introduces the immediate situation the character finds themselves in
-- Ends with a moment of tension or decision
-${session.adult_mode ? '- Mature/gritty tone is permitted' : '- Keep content appropriate for general audiences'}
+Write an immersive opening (3-4 paragraphs): set the scene vividly, introduce the situation, end with tension.
+${session.adult_mode ? 'Mature/gritty tone permitted.' : 'Keep content appropriate for general audiences.'}
 
-Then provide exactly 4 choices the player can make in the "choices" JSON array.
-CRITICAL: Choices MUST go in the "choices" array — NEVER embed them as numbered lists inside the "narrative" string.
-For EACH choice that involves risk or effort, include a relevant skill check and DC. Use diverse skills — not just combat ones. For example:
-- Dialogue with NPCs: Persuasion DC 12-16, Deception DC 12-18, Intimidation DC 10-16, Insight DC 13
-- Physical obstacles: Athletics DC 12-18, Acrobatics DC 10-15
-- Exploration/secrets: Perception DC 12-15, Investigation DC 13-16, Stealth DC 12-14, Survival DC 11
-- Knowledge/magic: Arcana DC 13-17, History DC 12, Religion DC 13, Medicine DC 12
-DCs should reflect actual difficulty (10=trivial, 15=moderate, 20=hard, 25=extreme). At least 2-3 of the 4 choices should have skill checks.
+Provide exactly 4 choices in the "choices" JSON array. NEVER embed choices in the narrative.
+Include skill checks (DC 10-25) on 2-3 choices. Use diverse skills (Persuasion, Stealth, Arcana, Athletics, etc.).
 
-Begin your narrative with this exact header format:
-**HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class} | Level: ${character.level} | Alignment: ${currentAlignment} (L/C: ${lcScore}, G/E: ${geScore}) | ${session.current_location || 'Unknown'} | ${session.time_of_day || 'Morning'}**
-
-Then continue with your scene description and story.`;
+Begin with:
+${statusHeader}`;
 
       responseSchema = {
         type: 'object',
@@ -135,37 +97,27 @@ Then continue with your scene description and story.`;
         : `Player action: ${custom_input}`;
 
       const skillCheckNote = selectedChoice.includes('[Skill Check:')
-        ? `IMPORTANT: The player attempted a skill check. The outcome is embedded in their action text (SUCCESS or FAILURE). Reflect this outcome DIRECTLY in your narrative — do not contradict it. On SUCCESS: describe how the character overcomes the challenge. On FAILURE: describe a setback or consequence.`
+        ? `The player attempted a skill check — outcome is in their action text (SUCCESS or FAILURE). Reflect this directly in your narrative.`
         : '';
 
-      prompt = `You are the Dungeon Master for a dark-fantasy RPG. Continue the story based on the player's choice.
+      prompt = `You are a Dungeon Master. Continue the story.
 ${charSummary}
 ${worldSummary}
-Recent Story:
-${recentLog}
+Recent Story: ${recentLog}
 
 Player Action: ${selectedChoice}
 ${skillCheckNote}
 
-=== ALIGNMENT TRACKING ===
-Law/Chaos axis = ${lcScore} (positive = Lawful, negative = Chaotic)
-Good/Evil axis = ${geScore} (positive = Good, negative = Evil)
-Current alignment: ${currentAlignment}
+Alignment: ${currentAlignment} (L/C: ${lcScore}, G/E: ${geScore})
+Return alignment_shift (law_chaos_shift, good_evil_shift, range -5 to +5, 0 if neutral).
 
-After morally significant decisions return alignment_shift values:
-- law_chaos_shift: -5 to +5 (positive = more Lawful)
-- good_evil_shift: -5 to +5 (positive = more Good)
-- Set both to 0 if morally neutral
-=== END ALIGNMENT ===
+Begin with:
+${statusHeader}
 
-Begin your response with:
-**HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class} | Level: ${character.level} | Alignment: ${currentAlignment} (L/C: ${lcScore}, G/E: ${geScore}) | ${session.current_location || 'Unknown'} | ${session.time_of_day || 'Morning'}**
-
-Write the consequence narrative (2-3 paragraphs) reacting to the player's action. Then provide 4 new choices in the "choices" JSON array.
-CRITICAL: The "narrative" field must contain ONLY story text — NEVER numbered choice lists. Choices go exclusively in the "choices" array.
-${session.adult_mode ? '- Mature/gritty content permitted' : ''}
-- If combat should trigger, flag it
-- Never decide the player's emotions or words — only describe the world and consequences`;
+Write 2-3 paragraphs reacting to the action. Then provide 4 new choices in the "choices" array.
+NEVER put choices inside the narrative text.
+${session.adult_mode ? 'Mature content permitted.' : ''}
+Flag combat if it should trigger. Never decide the player's emotions or words.`;
 
       responseSchema = {
         type: 'object',
@@ -203,12 +155,10 @@ ${session.adult_mode ? '- Mature/gritty content permitted' : ''}
       };
 
     } else if (action === 'combat_narrate') {
-      prompt = `You are the Dungeon Master narrating a combat round.
+      prompt = `You are a Dungeon Master narrating a combat round.
 ${charSummary}
-${worldSummary}
 Combat context: ${custom_input}
-
-Write a vivid 1-2 paragraph combat narrative for this round.`;
+Write a vivid 1-2 paragraph combat narrative.`;
 
       responseSchema = {
         type: 'object',
@@ -219,12 +169,10 @@ Write a vivid 1-2 paragraph combat narrative for this round.`;
       };
 
     } else if (action === 'generate_event') {
-      prompt = `Generate a random encounter/event appropriate for:
+      prompt = `Generate a random encounter for:
 ${charSummary}
 ${worldSummary}
-Type: ${custom_input || 'random'}
-
-Create a context-appropriate event. Could be combat, social, environmental, or discovery.`;
+Type: ${custom_input || 'random'}`;
 
       responseSchema = {
         type: 'object',
@@ -244,7 +192,7 @@ Create a context-appropriate event. Could be combat, social, environmental, or d
       add_context_from_internet: false
     });
 
-    // ── Post-process: extract choices embedded in narrative text ──
+    // Extract choices embedded in narrative if AI ignored the schema
     if (result.narrative && (!result.choices || result.choices.length === 0)) {
       const lines = result.narrative.split('\n');
       const choiceLines = [];
@@ -278,7 +226,7 @@ Create a context-appropriate event. Could be combat, social, environmental, or d
       }
     }
 
-    // Strip any trailing choice-like text from narrative
+    // Strip any trailing numbered list from narrative
     if (result.narrative && result.choices && result.choices.length > 0) {
       result.narrative = result.narrative
         .replace(/(\n\s*\d+\.\s+\*{0,2}.+){2,}$/gs, '')
@@ -286,7 +234,7 @@ Create a context-appropriate event. Could be combat, social, environmental, or d
         .trim();
     }
 
-    // Update session story log
+    // Persist to DB
     if (result.narrative) {
       const updatedLog = [...(session.story_log || []), {
         timestamp: new Date().toISOString(),
@@ -304,7 +252,6 @@ Create a context-appropriate event. Could be combat, social, environmental, or d
 
       await base44.asServiceRole.entities.GameSession.update(session_id, updateData);
 
-      // Award XP and apply alignment shifts
       const charUpdates = {};
       if (result.xp_earned) charUpdates.xp = (character.xp || 0) + result.xp_earned;
 
