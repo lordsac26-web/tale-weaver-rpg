@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       const initMod = statMod(enemy.dexterity || 10);
       combatants.push({
         id: `enemy_${Math.random().toString(36).substr(2, 9)}`,
-        name: enemy.name,
+        name: enemy.name || enemy.monster_name || `Enemy`,
         type: 'enemy',
         initiative_roll: initRoll,
         initiative_mod: initMod,
