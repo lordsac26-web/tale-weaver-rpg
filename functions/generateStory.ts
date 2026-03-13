@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
   // Load game data context for the AI
   const [monsters, conditions, magicItems] = await Promise.all([
     base44.asServiceRole.entities.Monster.list('-created_date', 30),
-    base44.asServiceRole.entities.DnDCondition.list(),
+    base44.asServiceRole.entities.DnDCondition.list('-created_date', 20),
     base44.asServiceRole.entities.MagicItem.list('-created_date', 20)
   ]);
 
