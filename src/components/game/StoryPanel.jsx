@@ -11,48 +11,71 @@ const RISK_STYLES = {
   extreme: { border: 'rgba(180,20,20,0.4)',   bg: 'rgba(40,5,5,0.5)',    hover: 'rgba(180,20,20,0.6)',  badge: { bg: 'rgba(60,5,5,0.7)',   color: '#fca5a5', border: 'rgba(180,20,20,0.45)' } },
 };
 
+// Truncate narration text to first N characters at a sentence boundary.
+// Keeps ElevenLabs latency low while still sounding natural.
+function truncateForNarration(text, maxChars = 400) {
+  if (!text || text.length <= maxChars) return text;
+  const slice = text.slice(0, maxChars);
+  // Try to cut at the last sentence boundary within the slice
+  const lastPeriod = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('! '), slice.lastIndexOf('? '));
+  return lastPeriod > 100 ? slice.slice(0, lastPeriod + 1) : slice;
+}
+
 export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit }) {
   const endRef = useRef(null);
   const audioRef = useRef(null);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [isNarrating, setIsNarrating] = useState(false);
+  const [audioLoading, setAudioLoading] = useState(false);
   const lastNarratedIndex = useRef(-1);
 
+  // Auto-scroll on new narrative entries
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [narrative, loading]);
 
+  // Trigger narration on new narration entries — non-blocking
   useEffect(() => {
     if (!narrationEnabled || loading) return;
-    
     const narrationEntries = narrative.filter(e => e.type === 'narration');
     const latestIndex = narrationEntries.length - 1;
-    
     if (latestIndex > lastNarratedIndex.current) {
-      const latestEntry = narrationEntries[latestIndex];
-      narrateText(latestEntry.text);
       lastNarratedIndex.current = latestIndex;
+      // Fire and forget — don't await, text is already visible
+      narrateText(narrationEntries[latestIndex].text);
     }
   }, [narrative, narrationEnabled, loading]);
 
   const narrateText = async (text) => {
-    if (!text?.trim() || isNarrating) return;
-    
+    if (!text?.trim()) return;
+
+    // Stop any currently playing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    // Only truncate what we send to ElevenLabs — keeps latency fast
+    const narrationText = truncateForNarration(text, 400);
+
     try {
-      setIsNarrating(true);
-      const result = await base44.functions.invoke('narrateStory', { text });
-      
+      setAudioLoading(true);
+      const result = await base44.functions.invoke('narrateStory', { text: narrationText });
+
       if (result.data?.audio) {
-        if (audioRef.current) {
-          audioRef.current.pause();
-        }
         const audio = new Audio(result.data.audio);
         audioRef.current = audio;
+        setAudioLoading(false);
+        setIsNarrating(true);
         await audio.play();
         audio.onended = () => setIsNarrating(false);
+        audio.onerror = () => setIsNarrating(false);
+      } else {
+        setAudioLoading(false);
       }
     } catch (error) {
       console.error('Narration failed:', error);
+      setAudioLoading(false);
       setIsNarrating(false);
     }
   };
@@ -60,12 +83,24 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   const toggleNarration = () => {
     const newState = !narrationEnabled;
     setNarrationEnabled(newState);
-    
-    if (!newState && audioRef.current) {
-      audioRef.current.pause();
+    if (!newState) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
       setIsNarrating(false);
+      setAudioLoading(false);
     }
   };
+
+  // Narration button label
+  const narrationLabel = audioLoading
+    ? 'Loading...'
+    : isNarrating
+    ? 'Playing ♪'
+    : narrationEnabled
+    ? 'Narration On'
+    : 'Narration Off';
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -83,11 +118,16 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
             border: '1px solid rgba(180,140,90,0.2)',
             color: 'rgba(201,169,110,0.5)',
           }}>
-          {narrationEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-          {isNarrating ? 'Narrating...' : narrationEnabled ? 'Narration On' : 'Narration Off'}
+          {audioLoading
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : narrationEnabled
+            ? <Volume2 className="w-3.5 h-3.5" />
+            : <VolumeX className="w-3.5 h-3.5" />
+          }
+          {narrationLabel}
         </button>
       </div>
-      
+
       {/* Narrative Area */}
       <div className="flex-1 overflow-y-auto p-5 md:p-7 space-y-5 min-h-0" style={{ background: 'transparent' }}>
         <AnimatePresence initial={false}>
