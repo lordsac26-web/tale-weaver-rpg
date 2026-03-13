@@ -270,7 +270,7 @@ export default function CharacterSheetPage() {
                 border: '1px solid rgba(180,140,90,0.1)',
                 color: 'rgba(180,150,100,0.45)',
               }}>
-              {t === 'spells' ? '🔮 Spells' : t === 'stats' ? '⚔️ Stats' : t === 'skills' ? '🎯 Skills' : t === 'inventory' ? '🎒 Inventory' : t === 'conditions' ? '🌀 Status' : '📜 Features'}
+              {t === 'spells' ? '🔮 Spells' : t === 'stats' ? '⚔️ Stats' : t === 'skills' ? '🎯 Skills' : t === 'inventory' ? '🎒 Inventory' : t === 'conditions' ? '🌀 Status' : t === 'multiclass' ? '🎭 Multiclass' : '📜 Features'}
             </button>
           ))}
         </div>
