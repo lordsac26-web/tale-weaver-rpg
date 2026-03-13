@@ -12,8 +12,7 @@ const RISK_STYLES = {
 };
 
 // Truncate narration text to first N characters at a sentence boundary.
-// Keeps ElevenLabs latency low while still sounding natural.
-function truncateForNarration(text, maxChars = 400) {
+function truncateForNarration(text, maxChars = 800) {
   if (!text || text.length <= maxChars) return text;
   const slice = text.slice(0, maxChars);
   // Try to cut at the last sentence boundary within the slice
@@ -49,30 +48,54 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   const narrateText = async (text) => {
     if (!text?.trim()) return;
 
-    // Stop any currently playing audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+    // Stop any currently playing speech
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
     }
 
-    // Only truncate what we send to ElevenLabs — keeps latency fast
-    const narrationText = truncateForNarration(text, 400);
+    // Only truncate for performance
+    const narrationText = truncateForNarration(text, 800);
 
     try {
       setAudioLoading(true);
-      const result = await base44.functions.invoke('narrateStory', { text: narrationText });
+      
+      // Wait for voices to load
+      let voices = window.speechSynthesis.getVoices();
+      if (voices.length === 0) {
+        await new Promise(resolve => {
+          window.speechSynthesis.onvoiceschanged = () => {
+            voices = window.speechSynthesis.getVoices();
+            resolve();
+          };
+        });
+      }
 
-      if (result.data?.audio) {
-        const audio = new Audio(result.data.audio);
-        audioRef.current = audio;
+      // Select best available voice (prefer British/natural sounding)
+      const preferredVoice = voices.find(v => 
+        v.name.includes('Daniel') || 
+        v.name.includes('Alex') ||
+        v.name.includes('Google UK') ||
+        v.name.includes('British')
+      ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+
+      const utterance = new SpeechSynthesisUtterance(narrationText);
+      utterance.voice = preferredVoice;
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+
+      utterance.onstart = () => {
         setAudioLoading(false);
         setIsNarrating(true);
-        await audio.play();
-        audio.onended = () => setIsNarrating(false);
-        audio.onerror = () => setIsNarrating(false);
-      } else {
+      };
+      utterance.onend = () => setIsNarrating(false);
+      utterance.onerror = () => {
+        setIsNarrating(false);
         setAudioLoading(false);
-      }
+      };
+
+      window.speechSynthesis.speak(utterance);
+      audioRef.current = { pause: () => window.speechSynthesis.cancel() };
     } catch (error) {
       console.error('Narration failed:', error);
       setAudioLoading(false);
@@ -84,10 +107,8 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     const newState = !narrationEnabled;
     setNarrationEnabled(newState);
     if (!newState) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      window.speechSynthesis.cancel();
+      audioRef.current = null;
       setIsNarrating(false);
       setAudioLoading(false);
     }
