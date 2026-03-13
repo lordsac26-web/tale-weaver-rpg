@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, Coins, ShoppingCart } from 'lucide-react';
 import { RARITY_META, ITEM_CATEGORY_ICONS } from './vendorData';
-import StolenGoodsWarning, { HeatBadge } from './StolenGoodsWarning';
 
 export default function ItemCard({ item, vendorType, character, onBuy, mode = 'buy' }) {
   const [expanded, setExpanded] = useState(false);
@@ -54,7 +53,6 @@ export default function ItemCard({ item, vendorType, character, onBuy, mode = 'b
               {rarity.icon} {rarity.label}
             </span>
             {!inStock && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(60,10,10,0.4)', color: '#fca5a5', fontSize: '0.58rem' }}>Out of Stock</span>}
-            {item.stolen && <HeatBadge heat={item.heat} />}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>{item.category}</span>
@@ -121,7 +119,6 @@ export default function ItemCard({ item, vendorType, character, onBuy, mode = 'b
                 Weight: {item.weight} lb
               </div>
             )}
-            <StolenGoodsWarning item={item} />
           </motion.div>
         )}
       </AnimatePresence>

@@ -9,48 +9,31 @@ import * as THREE from 'three';
 
 // Texture URLs from uploaded images
 const WALL_TEXTURE_URL = 'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69a4e1720142630debaad046/979b57267_ChatGPTImageMar7202604_36_21AM.png';
-const TOP_TEXTURE_URL = 'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69a4e1720142630debaad046/ed47f85cd_ChatGPTImageMar7202605_20_55AM.png';
-const FRONT_TEXTURE_URL = 'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69a4e1720142630debaad046/fcb33eac7_ChatGPTImageMar7202605_19_51AM.png';
 
 const textureLoader = new THREE.TextureLoader();
-let wallTexLoaded = null;
-let wallTexPromise = null;
+let wallTexCache = null;
 
-// Load texture once, reuse everywhere — no cloning to avoid "no image data" warnings
-function loadWallTexture() {
-  if (wallTexLoaded) return wallTexLoaded;
-  if (!wallTexPromise) {
-    wallTexPromise = new Promise((resolve) => {
-      textureLoader.load(WALL_TEXTURE_URL, (tex) => {
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
-        tex.colorSpace = THREE.SRGBColorSpace;
-        wallTexLoaded = tex;
-        resolve(tex);
-      });
-    });
-  }
-  return null;
+function getWallTexture() {
+  if (wallTexCache) return wallTexCache;
+  wallTexCache = textureLoader.load(WALL_TEXTURE_URL);
+  wallTexCache.wrapS = THREE.RepeatWrapping;
+  wallTexCache.wrapT = THREE.RepeatWrapping;
+  wallTexCache.colorSpace = THREE.SRGBColorSpace;
+  return wallTexCache;
 }
 
 // ─── Materials ────────────────────────────────────────────────────────────────
-// Use solid wood colors; texture applied once loaded via callback
 
-function createWoodMaterial() {
-  const mat = new THREE.MeshStandardMaterial({
-    color: '#6a4225',
+function createWoodMaterial(repeatX = 1, repeatY = 1) {
+  const tex = getWallTexture().clone();
+  tex.needsUpdate = true;
+  tex.repeat.set(repeatX, repeatY);
+  return new THREE.MeshStandardMaterial({
+    map: tex,
     roughness: 0.82,
     metalness: 0.05,
+    color: '#9a7050',
   });
-  // Apply texture when loaded
-  const tex = loadWallTexture();
-  if (tex) {
-    mat.map = tex;
-    mat.needsUpdate = true;
-  } else if (wallTexPromise) {
-    wallTexPromise.then(t => { mat.map = t; mat.needsUpdate = true; });
-  }
-  return mat;
 }
 
 function createBrassMaterial() {
@@ -64,19 +47,16 @@ function createBrassMaterial() {
 }
 
 function createFloorMaterial() {
-  const mat = new THREE.MeshStandardMaterial({
-    color: '#5a3820',
+  const tex = getWallTexture().clone();
+  tex.needsUpdate = true;
+  tex.repeat.set(2, 2);
+  tex.rotation = Math.PI / 2;
+  return new THREE.MeshStandardMaterial({
+    map: tex,
     roughness: 0.9,
     metalness: 0.02,
+    color: '#6a4830',
   });
-  const tex = loadWallTexture();
-  if (tex) {
-    mat.map = tex;
-    mat.needsUpdate = true;
-  } else if (wallTexPromise) {
-    wallTexPromise.then(t => { mat.map = t; mat.needsUpdate = true; });
-  }
-  return mat;
 }
 
 // ─── Build tower geometry ─────────────────────────────────────────────────────
@@ -117,7 +97,7 @@ export function buildTavernTower(scene, towerType, towerConfig) {
   group.add(trayFloor);
 
   // Tray walls (low lip)
-  const lipMat = isWooden ? createWoodMaterial() : createThemedWall(towerType);
+  const lipMat = isWooden ? createWoodMaterial(1.5, 0.3) : createThemedWall(towerType);
   // Left lip
   addBox(group, [wallThick, trayH, trayD], [-trayW / 2 + wallThick / 2, trayFloorY + trayH / 2, trayD / 2 - 0.3], lipMat);
   // Right lip
@@ -126,7 +106,7 @@ export function buildTavernTower(scene, towerType, towerConfig) {
   addBox(group, [trayW, trayH, wallThick], [0, trayFloorY + trayH / 2, trayD - 0.3 - wallThick / 2 + 0.05], lipMat);
 
   // ── Tower body (back section rising up) ─────────────────────────────────────
-  const towerMat = isWooden ? createWoodMaterial() : createThemedWall(towerType);
+  const towerMat = isWooden ? createWoodMaterial(1, 2) : createThemedWall(towerType);
   const towerBaseY = trayFloorY;
 
   // Back wall
@@ -136,45 +116,27 @@ export function buildTavernTower(scene, towerType, towerConfig) {
   // Right wall
   addBox(group, [wallThick, towerH, towerD], [towerW / 2 - wallThick / 2, towerBaseY + towerH / 2, 0], towerMat);
 
-  // Top cap — replaced with textured plane showing the bowl/hole image
-  if (isWooden) {
-    const topPlaneGeo = new THREE.PlaneGeometry(towerW + 0.1, towerD + 0.1);
-    const topMat = new THREE.MeshStandardMaterial({
-      color: '#ffffff',
-      roughness: 0.7,
-      metalness: 0.05,
-    });
-    textureLoader.load(TOP_TEXTURE_URL, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      topMat.map = tex;
-      topMat.needsUpdate = true;
-    });
-    const topPlane = new THREE.Mesh(topPlaneGeo, topMat);
-    topPlane.rotation.x = -Math.PI / 2;
-    topPlane.position.set(0, towerBaseY + towerH + 0.08, 0);
-    topPlane.receiveShadow = true;
-    group.add(topPlane);
-  } else {
-    // Non-wooden towers keep original cap
-    const capGeo = new THREE.BoxGeometry(towerW, 0.12, towerD);
-    const cap = new THREE.Mesh(capGeo, createThemedWall(towerType));
-    cap.position.set(0, towerBaseY + towerH, 0);
-    cap.receiveShadow = true;
-    group.add(cap);
+  // Top cap (where dice enter — bowl-like opening)
+  const capGeo = new THREE.BoxGeometry(towerW, 0.12, towerD);
+  const cap = new THREE.Mesh(capGeo, isWooden ? createWoodMaterial(1, 1) : createThemedWall(towerType));
+  cap.position.set(0, towerBaseY + towerH, 0);
+  cap.receiveShadow = true;
+  group.add(cap);
 
-    const holeGeo = new THREE.CircleGeometry(0.8, 24);
-    const holeMat = new THREE.MeshBasicMaterial({ color: '#0a0502' });
-    const hole = new THREE.Mesh(holeGeo, holeMat);
-    hole.rotation.x = -Math.PI / 2;
-    hole.position.set(0, towerBaseY + towerH + 0.07, 0);
-    group.add(hole);
+  // Opening hole in cap (visual — a dark circle on top)
+  const holeGeo = new THREE.CircleGeometry(0.8, 24);
+  const holeMat = new THREE.MeshBasicMaterial({ color: '#0a0502' });
+  const hole = new THREE.Mesh(holeGeo, holeMat);
+  hole.rotation.x = -Math.PI / 2;
+  hole.position.set(0, towerBaseY + towerH + 0.07, 0);
+  group.add(hole);
 
-    const rimGeo = new THREE.TorusGeometry(0.85, 0.08, 8, 24);
-    const rim = new THREE.Mesh(rimGeo, createBrassMaterial());
-    rim.rotation.x = -Math.PI / 2;
-    rim.position.set(0, towerBaseY + towerH + 0.1, 0);
-    group.add(rim);
-  }
+  // Bowl rim on top
+  const rimGeo = new THREE.TorusGeometry(0.85, 0.08, 8, 24);
+  const rim = new THREE.Mesh(rimGeo, createBrassMaterial());
+  rim.rotation.x = -Math.PI / 2;
+  rim.position.set(0, towerBaseY + towerH + 0.1, 0);
+  group.add(rim);
 
   // ── Brass corner brackets ───────────────────────────────────────────────────
   const brassMat = createBrassMaterial();
@@ -241,81 +203,29 @@ export function buildTavernTower(scene, towerType, towerConfig) {
       lGlow.userData.isLantern = true;
       group.add(lGlow);
 
-      // Lantern point light — tagged for flickering
+      // Lantern point light
       const lLight = new THREE.PointLight('#ff8822', 1.5, 4);
       lLight.position.set(pos[0], pos[1], pos[2]);
       lLight.userData.isTowerElement = true;
-      lLight.userData.isLanternLight = true;
-      lLight.userData.baseIntensity = 1.5;
       scene.add(lLight);
     });
   }
 
-  // ── Front wall — upper portion only (above the archway opening) ──────────
-  // The archway takes up the lower ~38% of the front, so the wall covers top ~62%
-  const archTopY = towerBaseY + towerH * 0.38;
-  const upperFrontH = towerH - towerH * 0.38;
-  if (isWooden) {
-    const frontPlaneGeo = new THREE.PlaneGeometry(towerW, upperFrontH);
-    const frontMat = new THREE.MeshStandardMaterial({
-      color: '#ffffff',
-      roughness: 0.7,
-      metalness: 0.05,
-      transparent: false,
-    });
-    textureLoader.load(FRONT_TEXTURE_URL, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      frontMat.map = tex;
-      frontMat.needsUpdate = true;
-    });
-    const frontPlane = new THREE.Mesh(frontPlaneGeo, frontMat);
-    frontPlane.position.set(0, archTopY + upperFrontH / 2, towerD / 2 - wallThick + 0.01);
-    frontPlane.receiveShadow = true;
-    group.add(frontPlane);
-  } else {
-    // Non-wooden: solid upper front wall
-    addBox(group, [towerW, upperFrontH, wallThick], [0, archTopY + upperFrontH / 2, towerD / 2 - wallThick / 2], towerMat);
-  }
-
   // ── Internal baffles (angled shelves inside tower for dice to bounce) ───────
-  const baffleMat = isWooden ? createWoodMaterial() : createThemedWall(towerType);
-  
-  // Baffle 1 — upper, angled right-to-left (dice hit this first)
-  const b1 = new THREE.Mesh(new THREE.BoxGeometry(towerW * 0.7, 0.12, towerD * 0.5), baffleMat);
+  const baffleMat = isWooden ? createWoodMaterial(0.8, 0.3) : createThemedWall(towerType);
+  // Baffle 1 — angled left
+  const b1 = new THREE.Mesh(new THREE.BoxGeometry(towerW * 0.7, 0.1, towerD * 0.5), baffleMat);
   b1.position.set(0.3, towerBaseY + towerH * 0.65, 0);
   b1.rotation.z = 0.35;
   b1.rotation.x = -0.15;
-  b1.castShadow = true;
-  b1.receiveShadow = true;
   group.add(b1);
 
-  // Baffle 2 — middle, angled left-to-right
-  const b2 = new THREE.Mesh(new THREE.BoxGeometry(towerW * 0.7, 0.12, towerD * 0.5), baffleMat);
+  // Baffle 2 — angled right
+  const b2 = new THREE.Mesh(new THREE.BoxGeometry(towerW * 0.7, 0.1, towerD * 0.5), baffleMat);
   b2.position.set(-0.3, towerBaseY + towerH * 0.35, 0);
   b2.rotation.z = -0.35;
   b2.rotation.x = 0.1;
-  b2.castShadow = true;
-  b2.receiveShadow = true;
   group.add(b2);
-
-  // Baffle 3 — low exit ramp, angled forward to direct dice out the archway
-  const b3 = new THREE.Mesh(new THREE.BoxGeometry(towerW * 0.8, 0.10, towerD * 0.55), baffleMat);
-  b3.position.set(0, towerBaseY + towerH * 0.12, 0.4);
-  b3.rotation.x = -0.25; // tilted forward
-  b3.castShadow = true;
-  b3.receiveShadow = true;
-  group.add(b3);
-
-  // ── Archway frame (decorative) ──────────────────────────────────────────────
-  // Brass archway trim around the exit opening
-  const archHeight = towerH * 0.38;
-  const archBrass = createBrassMaterial();
-  // Arch top beam
-  addBox(group, [towerW + 0.08, 0.12, 0.12], [0, towerBaseY + archHeight, towerD / 2 + 0.01], archBrass);
-  // Arch left pillar
-  addBox(group, [0.1, archHeight, 0.1], [-towerW / 2 + 0.05, towerBaseY + archHeight / 2, towerD / 2 + 0.01], archBrass);
-  // Arch right pillar
-  addBox(group, [0.1, archHeight, 0.1], [towerW / 2 - 0.05, towerBaseY + archHeight / 2, towerD / 2 + 0.01], archBrass);
 
   scene.add(group);
   return group;
@@ -378,7 +288,6 @@ export function buildSceneLights(scene, towerConfig) {
   main.shadow.mapSize.width = 1024;
   main.shadow.mapSize.height = 1024;
   main.userData.isTowerElement = true;
-  main.userData.lightRole = 'main';
   scene.add(main);
   lights.push(main);
 
@@ -386,7 +295,6 @@ export function buildSceneLights(scene, towerConfig) {
   const fill = new THREE.PointLight('#ffa855', 1.5);
   fill.position.set(0, 0, 5);
   fill.userData.isTowerElement = true;
-  fill.userData.lightRole = 'fill';
   scene.add(fill);
   lights.push(fill);
 
@@ -394,7 +302,6 @@ export function buildSceneLights(scene, towerConfig) {
   const rim = new THREE.PointLight('#8888ff', 0.4);
   rim.position.set(-4, 4, -4);
   rim.userData.isTowerElement = true;
-  rim.userData.lightRole = 'rim';
   scene.add(rim);
   lights.push(rim);
 

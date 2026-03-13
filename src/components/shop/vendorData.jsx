@@ -9,14 +9,12 @@ export const VENDOR_TYPE_META = {
   tavern_pub:   { icon: '🍺',  label: 'Tavern',            color: '#fdba74', borderColor: 'rgba(180,100,10,0.3)',  bg: 'rgba(35,18,3,0.75)' },
   brothel:      { icon: '🌹',  label: 'Establishment',     color: '#f9a8d4', borderColor: 'rgba(220,60,120,0.3)',  bg: 'rgba(40,8,20,0.75)' },
   traveling:    { icon: '🐪',  label: 'Traveling Merchant', color: '#c084fc', borderColor: 'rgba(140,60,220,0.3)',  bg: 'rgba(30,8,50,0.75)' },
-  black_market: { icon: '🗝️',  label: 'Black Market',       color: '#a78bfa', borderColor: 'rgba(100,60,180,0.4)',  bg: 'rgba(15,5,30,0.85)' },
 };
 
 export const ITEM_CATEGORY_ICONS = {
   Weapon: '⚔️', Armor: '🛡️', Potion: '🧪', Scroll: '📜', Food: '🍖',
   Drink: '🍺', Service: '🛏️', Tool: '🔧', Clothing: '👘', Trinket: '💎',
   Component: '🌿', Poison: '☠️', Bomb: '💣', Ammunition: '🏹', Misc: '📦',
-  'Stolen Goods': '🔓',
 };
 
 export const RARITY_META = {
@@ -35,7 +33,6 @@ export const BUY_BACK_CATEGORIES = {
   tavern_pub: ['Food','Drink'],
   brothel:    [],
   traveling:  ['Weapon','Armor','Potion','Tool','Trinket','Misc','Clothing'],
-  black_market: ['Weapon','Armor','Potion','Tool','Trinket','Misc','Clothing','Poison','Scroll','Stolen Goods'],
 };
 
 export const HAGGLE_FLAVOR = {
@@ -73,11 +70,6 @@ export const HAGGLE_FLAVOR = {
     '"My friend! You have the eye of a merchant! I like you. Final offer — and I\'m losing money, I swear it."',
     '"These goods came from Calimshan on camel-back! But for you... a traveler\'s discount."',
   ],
-  black_market: [
-    'The figure taps the counter and glances toward the door. "Keep it quick, keep it quiet."',
-    '"These prices already account for my... risk premium. But I respect ambition."',
-    '"I don\'t haggle. I set prices that keep us both out of prison."',
-  ],
 };
 
 export const TRANSACTION_FLAVOR = {
@@ -90,7 +82,6 @@ export const TRANSACTION_FLAVOR = {
     tavern_pub: '"There you are, friend. Best in the house — which admittedly isn\'t saying much."',
     brothel:    'The proprietress gestures gracefully toward the private corridor. "Right this way."',
     traveling:  '"A pleasure doing business! You\'ve excellent taste — I can tell immediately."',
-    black_market: 'The item vanishes into your pack before you can blink. "You never saw me. I was never here."',
   },
   sell: {
     alchemist:  'She holds the item to the light, sniffs it, and nods. "I can work with this."',
@@ -101,7 +92,6 @@ export const TRANSACTION_FLAVOR = {
     tavern_pub: '"The regulars will enjoy this. Or regret it. Either way — here\'s your coin."',
     brothel:    'A raised eyebrow, a brief inspection, and a quiet nod. The coin is counted without comment.',
     traveling:  '"Gold from my own pouch — the highest compliment I can pay! Done!"',
-    black_market: 'A gloved hand takes the item, inspects it under dim light, and slides a coin pouch back. "Pleasure."',
   },
 };
 
@@ -222,35 +212,6 @@ export const VENDOR_SEED = [
       { name: "Potion of Climbing", category: "Potion", rarity: "common", base_price: 75, stock: 2, weight: 0.5, description: "When you drink this potion, you gain a climbing speed equal to your walking speed for 1 hour.", effect: "Climbing speed = walking speed, 1hr", icon: "🧪" },
       { name: "Perfume (vial)", category: "Misc", rarity: "common", base_price: 5, stock: 6, weight: 0.1, description: '"From the harems of Calimshan. All three marriages were MY idea." — Zandros', icon: "📦" },
       { name: "Spyglass", category: "Tool", rarity: "uncommon", base_price: 1000, stock: 1, weight: 1, description: "Objects viewed through this lens appear magnified to twice their size.", effect: "2× magnification", icon: "🔧" },
-    ]
-  },
-  {
-    name: "The Rat's Whisper",
-    type: "black_market",
-    location: "Sewers — Beneath the Docks",
-    description: "A damp alcove hidden behind a false wall in the sewer tunnels. The air reeks of brine and old blood. A hooded figure sits behind a table of suspiciously fine goods, each tagged with a symbol you don't recognize — but the quality is undeniable.",
-    greeting: '"You found this place, so you already know the rules. No names. No questions. Gold talks, everything else walks."',
-    personality: "Cold, calculating fence who speaks in clipped sentences. Knows everything about everyone. Shows zero emotion unless you try to cheat them.",
-    portrait_emoji: "🐀",
-    gold_reserve: 800,
-    reputation_modifier: -15,
-    is_traveling: false,
-    is_active: true,
-    items: [
-      { name: "Bag of Holding", category: "Trinket", rarity: "rare", base_price: 400, stock: 1, weight: 0.5, description: "This bag's interior is far larger than its outside dimensions suggest. Holds up to 500 lb. The previous owner's initials are hastily scratched off the clasp.", effect: "Holds 500lb / 64 cubic ft", icon: "💎", stolen: true, heat: 3, original_owner: "Lord Ashworth's estate" },
-      { name: "+1 Longsword (Engraved)", category: "Weapon", rarity: "rare", base_price: 500, stock: 1, weight: 3, description: "A masterwork blade with a noble house crest on the pommel — partially filed down but still recognizable to anyone who knows heraldry.", effect: "+1 to attack and damage rolls", icon: "⚔️", stolen: true, heat: 4, original_owner: "Captain Aldric Voss" },
-      { name: "Cloak of Elvenkind", category: "Clothing", rarity: "uncommon", base_price: 500, stock: 1, weight: 1, description: "Grants advantage on Stealth checks. The stitching is elven — this was likely lifted from a diplomat's quarters.", effect: "Advantage on Stealth", icon: "👘", stolen: true, heat: 2, original_owner: "Elven Embassy" },
-      { name: "Poison: Midnight Oil", category: "Poison", rarity: "rare", base_price: 250, stock: 3, weight: 0.1, description: "Odorless, colorless. DC 15 CON save or take 3d6 poison damage and be poisoned for 1 hour. Favored by assassins.", effect: "3d6 poison, DC15 CON, poisoned 1hr", icon: "☠️" },
-      { name: "Thieves' Tools (Masterwork)", category: "Tool", rarity: "uncommon", base_price: 100, stock: 2, weight: 1, description: "An exquisite set of lockpicks made from mithral-tipped steel. Grants +2 to lockpicking checks.", effect: "+2 to Sleight of Hand (lockpicking)", icon: "🔧" },
-      { name: "Scroll of Knock", category: "Scroll", rarity: "uncommon", base_price: 150, stock: 2, weight: 0.1, description: "A one-use scroll that opens any lock, latch, or sealed door within 60 feet. Makes a loud knocking sound audible 300 feet away.", effect: "Opens any lock (loud)", icon: "📜" },
-      { name: "Forged Identity Papers", category: "Misc", rarity: "uncommon", base_price: 75, stock: 3, weight: 0.1, description: "Expertly forged travel papers, merchant licenses, or noble credentials. DC 18 Investigation to detect as forgeries.", effect: "DC 18 to detect forgery", icon: "📦" },
-      { name: "Ring of Mind Shielding", category: "Trinket", rarity: "uncommon", base_price: 600, stock: 1, weight: 0, description: "While wearing this ring, you are immune to magic that allows others to read your thoughts or determine if you are lying. Suspiciously convenient for a fence.", effect: "Immune to thought-reading magic", icon: "💎", stolen: true, heat: 1, original_owner: "Unknown mage" },
-      { name: "Smoke Bomb (3-pack)", category: "Bomb", rarity: "common", base_price: 30, stock: 5, weight: 0.5, description: "Throw to create a 10-ft radius of heavily obscured area for 1 round. Perfect for disappearing acts.", effect: "Heavily obscured 10ft, 1 round", icon: "💣" },
-      { name: "Potion of Greater Healing", category: "Potion", rarity: "uncommon", base_price: 100, stock: 4, weight: 0.5, description: "Heals 4d4+4 HP. No questions asked about why you need so many.", effect: "Heal 4d4+4 HP", icon: "🧪" },
-      { name: "Garrote Wire", category: "Weapon", rarity: "common", base_price: 15, stock: 3, weight: 0.2, description: "A length of thin, strong wire with wooden handles. On a successful grapple, deals 1d6 damage per turn and the target cannot speak or cast spells with verbal components.", effect: "1d6/turn on grapple, silences target", icon: "⚔️" },
-      { name: "Noble's Signet Ring", category: "Trinket", rarity: "uncommon", base_price: 200, stock: 1, weight: 0, description: "Bearing the crest of House Velanthor. Could be used to forge documents, gain entry to noble events, or returned for a hefty reward — or hefty trouble.", icon: "💎", stolen: true, heat: 5, original_owner: "House Velanthor" },
-      { name: "Blackmail Documents", category: "Misc", rarity: "rare", base_price: 350, stock: 1, weight: 0.1, description: "Letters implicating a prominent merchant in smuggling operations. Could be leveraged for favors, gold, or creating very dangerous enemies.", effect: "Leverage against a merchant lord", icon: "📦" },
-      { name: "Poison: Serpent's Kiss", category: "Poison", rarity: "uncommon", base_price: 120, stock: 2, weight: 0.1, description: "Apply to a blade. Next hit forces DC 13 CON save or 2d8 poison damage and disadvantage on attacks for 1 minute.", effect: "2d8 poison, DC13 CON, disadv attacks 1min", icon: "☠️" },
     ]
   },
 ];

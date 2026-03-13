@@ -6,8 +6,7 @@ const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', in
 
 const CLASS_ICONS = {
   Fighter: '⚔️', Rogue: '🗡️', Wizard: '🔮', Cleric: '✨', Ranger: '🏹',
-  Paladin: '🛡️', Barbarian: '🪓', Bard: '🎵', Druid: '🌿', Monk: '👊',
-  Sorcerer: '💫', Warlock: '👁️', Artificer: '🔧', Oracle: '🔮', Witch: '🧹'
+  Paladin: '🛡️', Barbarian: '🪓', Bard: '🎵', Druid: '🌿', Monk: '👊', Sorcerer: '💫', Warlock: '👁️'
 };
 
 export default function StepClassInfo({ character, set }) {

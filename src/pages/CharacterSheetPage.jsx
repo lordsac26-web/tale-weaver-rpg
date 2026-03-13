@@ -6,13 +6,11 @@ import { ChevronLeft, Save, Edit2, Check, X, RefreshCw, Scroll, Printer, Downloa
 import { motion, AnimatePresence } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS, SPELLCASTING_CLASSES } from '@/components/game/gameData';
+import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS } from '@/components/game/gameData';
 import InventoryTab from '@/components/game/InventoryTab';
 import SpellbookTab from '@/components/game/SpellbookTab';
-import computeCharacterStats from '@/components/game/computeCharacterStats';
-import ComputedStatBadge from '@/components/game/ComputedStatBadge';
-import ActiveEffectsPanel from '@/components/game/ActiveEffectsPanel';
-import MulticlassManager from '@/components/game/MulticlassManager';
+
+const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger'];
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 const STAT_ICONS = { strength: '💪', dexterity: '🏹', constitution: '❤️', intelligence: '📚', wisdom: '🔮', charisma: '✨' };
@@ -81,24 +79,14 @@ export default function CharacterSheetPage() {
   const [exporting, setExporting] = useState(false);
   const sheetRef = useRef(null);
 
-  const loadCharacter = async () => {
-    if (!characterId) { navigate(createPageUrl('Home')); return; }
-    const chars = await base44.entities.Character.filter({ id: characterId });
-    if (chars[0]) setCharacter(chars[0]);
-    setLoading(false);
-  };
-
-  useEffect(() => { loadCharacter(); }, [characterId]);
-
-  // Re-fetch character data when user returns to this tab/window
   useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && characterId) {
-        loadCharacter();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
+    async function load() {
+      if (!characterId) { navigate(createPageUrl('Home')); return; }
+      const chars = await base44.entities.Character.filter({ id: characterId });
+      if (chars[0]) setCharacter(chars[0]);
+      setLoading(false);
+    }
+    load();
   }, [characterId]);
 
   const handleUpdate = async (updates) => {
@@ -158,10 +146,8 @@ export default function CharacterSheetPage() {
     </div>
   );
 
-  const computed = React.useMemo(() => computeCharacterStats(character), [character]);
-  const isCaster = computed?.is_caster || SPELLCASTING_CLASSES.includes(character.class);
-  const profBonus = computed?.proficiency_bonus || PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
-  const totalLevel = computed?.total_level || character.level || 1;
+  const isCaster = SPELLCASTING_CLASSES.includes(character.class);
+  const profBonus = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
   const TABS = ['stats', 'skills', 'inventory', ...(isCaster ? ['spells'] : []), 'conditions', 'features'];
 
   return (
@@ -235,14 +221,13 @@ export default function CharacterSheetPage() {
                 <EditableText value={character.name} onSave={v => handleUpdate({ name: v })} placeholder="Name" />
               </h1>
               <div className="flex flex-wrap items-center gap-2 mt-1">
-                <span className="badge-gold px-2 py-0.5 rounded-full text-xs font-fantasy">Lv {totalLevel}</span>
-                <span className="text-sm italic" style={{ color: 'rgba(220,190,130,0.75)', fontFamily: 'EB Garamond, serif' }}>
+                <span className="badge-gold px-2 py-0.5 rounded-full text-xs font-fantasy">Lv {character.level}</span>
+                <span className="text-sm italic" style={{ color: 'rgba(201,169,110,0.6)', fontFamily: 'EB Garamond, serif' }}>
                   {character.race} {character.class}{character.subclass ? ` · ${character.subclass}` : ''}
-                  {(character.multiclass || []).map(mc => ` / ${mc.class} ${mc.level}`).join('')}
                 </span>
               </div>
               {character.alignment && (
-                <div className="text-xs mt-1" style={{ color: 'rgba(200,170,120,0.6)', fontFamily: 'EB Garamond, serif' }}>
+                <div className="text-xs mt-1" style={{ color: 'rgba(180,150,100,0.4)', fontFamily: 'EB Garamond, serif' }}>
                   {character.alignment}{character.background ? ` · ${character.background}` : ''}
                 </div>
               )}
@@ -254,8 +239,8 @@ export default function CharacterSheetPage() {
             {[
               { label: 'HP', key: 'hp_current', max: character.hp_max, color: '#dc2626' },
               { label: 'HP Max', key: 'hp_max', color: '#dc2626' },
-              { label: computed && computed.armor_class !== (character.armor_class || 10) ? `AC (${computed.armor_class})` : 'AC', key: 'armor_class', color: '#3b82f6' },
-              { label: 'Speed', key: null, display: `${computed?.speed ?? character.speed ?? 30}`, color: '#d97706' },
+              { label: 'AC', key: 'armor_class', color: '#3b82f6' },
+              { label: 'Speed', key: 'speed', color: '#d97706' },
               { label: 'Prof', key: null, display: `+${profBonus}`, color: '#c9a96e' },
               { label: 'Gold', key: 'gold', color: '#f0c040' },
               { label: 'Level', key: 'level', color: '#a78bfa', min: 1, max: 20 },
@@ -264,7 +249,7 @@ export default function CharacterSheetPage() {
                 <div className="font-fantasy font-bold text-lg" style={{ color }}>
                   {key ? <EditableNumber value={character[key] ?? 0} onSave={v => handleUpdate({ [key]: v })} min={min} max={max} color={color} /> : display}
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: 'rgba(200,165,110,0.6)', fontFamily: 'EB Garamond, serif' }}>{label}</div>
+                <div className="text-xs mt-0.5" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>{label}</div>
               </div>
             ))}
           </div>
@@ -282,8 +267,8 @@ export default function CharacterSheetPage() {
                 boxShadow: '0 0 12px rgba(201,169,110,0.1)',
               } : {
                 background: 'rgba(15,10,5,0.5)',
-                border: '1px solid rgba(180,140,90,0.15)',
-                color: 'rgba(210,180,130,0.6)',
+                border: '1px solid rgba(180,140,90,0.1)',
+                color: 'rgba(180,150,100,0.45)',
               }}>
               {t === 'spells' ? '🔮 Spells' : t === 'stats' ? '⚔️ Stats' : t === 'skills' ? '🎯 Skills' : t === 'inventory' ? '🎒 Inventory' : t === 'conditions' ? '🌀 Status' : '📜 Features'}
             </button>
@@ -302,25 +287,22 @@ export default function CharacterSheetPage() {
               <div className="p-5">
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   {STATS.map(stat => {
-                    const baseVal = character[stat] || 10;
-                    const effectiveVal = computed?.[stat] ?? baseVal;
-                    const mod = calcStatMod(effectiveVal);
-                    const mergedSaves = computed?.merged_saves || new Set(CLASSES[character.class]?.saves || []);
-                    const saveProf = mergedSaves.has(stat);
-                    const saveMod = mod + (saveProf ? profBonus : 0) + (computed?.effects?.save_bonus || 0);
+                    const val = character[stat] || 10;
+                    const mod = calcStatMod(val);
+                    const saveProf = CLASSES[character.class]?.saves?.includes(stat);
+                    const saveMod = mod + (saveProf ? profBonus : 0);
                     return (
                       <div key={stat} className="stat-box rounded-xl p-4 text-center">
                         <div className="text-xl mb-1">{STAT_ICONS[stat]}</div>
-                        <div className="font-fantasy text-xs tracking-widest mb-1" style={{ color: 'rgba(210,175,120,0.65)', fontSize: '0.62rem' }}>
+                        <div className="font-fantasy text-xs tracking-widest mb-1" style={{ color: 'rgba(180,140,90,0.5)', fontSize: '0.62rem' }}>
                           {STAT_LABELS[stat]}
                         </div>
-                        <div className="font-fantasy font-bold text-3xl mb-1 flex items-center justify-center gap-0.5">
-                          <EditableNumber value={baseVal} onSave={v => handleUpdate({ [stat]: v })} min={1} max={30} color="#e8d5b7" />
-                          <ComputedStatBadge baseStat={baseVal} effectiveStat={effectiveVal} label={STAT_LABELS[stat]} />
+                        <div className="font-fantasy font-bold text-3xl mb-1">
+                          <EditableNumber value={val} onSave={v => handleUpdate({ [stat]: v })} min={1} max={30} color="#e8d5b7" />
                         </div>
                         <div className="font-fantasy font-bold text-sm mb-1"
                           style={{ color: mod >= 0 ? '#86efac' : '#fca5a5' }}>{calcModDisplay(mod)}</div>
-                        <div className="text-xs" style={{ color: 'rgba(200,165,110,0.6)', fontFamily: 'EB Garamond, serif' }}>
+                        <div className="text-xs" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>
                           Save {calcModDisplay(saveMod)}
                           {saveProf && <span style={{ color: 'rgba(201,169,110,0.6)' }}> ●</span>}
                         </div>
@@ -329,13 +311,9 @@ export default function CharacterSheetPage() {
                   })}
                 </div>
                 <div className="rounded-xl p-3 stat-box text-center">
-                  <span style={{ color: 'rgba(210,180,130,0.65)', fontFamily: 'EB Garamond, serif' }}>Proficiency Bonus: </span>
+                  <span style={{ color: 'rgba(180,150,100,0.5)', fontFamily: 'EB Garamond, serif' }}>Proficiency Bonus: </span>
                   <span className="font-fantasy font-bold" style={{ color: '#f0c040' }}>+{profBonus}</span>
                 </div>
-                {/* Multiclass Manager */}
-                <div className="mt-4"><MulticlassManager character={character} onUpdate={handleUpdate} /></div>
-                {/* Active Magical Effects */}
-                {computed?.effects && <div className="mt-4"><ActiveEffectsPanel effects={computed.effects} /></div>}
               </div>
             )}
 
@@ -343,7 +321,7 @@ export default function CharacterSheetPage() {
             {tab === 'skills' && (
               <div className="p-5 space-y-0.5">
                 {Object.entries(SKILL_STAT_MAP).map(([skill, stat]) => {
-                  const statMod = calcStatMod(computed?.[stat] ?? character[stat] ?? 10);
+                  const statMod = calcStatMod(character[stat] || 10);
                   const profLevel = character.skills?.[skill];
                   // Support boolean true (legacy), 'proficient', and 'expert'
                   const bonus = profLevel === 'expert' ? profBonus * 2 : (profLevel === 'proficient' || profLevel === true) ? profBonus : 0;
@@ -369,15 +347,15 @@ export default function CharacterSheetPage() {
                             border: '1px solid ' + (profLevel === 'expert' ? 'rgba(240,192,64,0.6)' : profLevel === 'proficient' ? 'rgba(134,239,172,0.5)' : 'rgba(80,60,30,0.3)'),
                             boxShadow: profLevel ? '0 0 5px ' + (profLevel === 'expert' ? 'rgba(240,192,64,0.4)' : 'rgba(134,239,172,0.3)') : 'none'
                           }} />
-                        <span className="text-sm" style={{ color: '#efe0c8', fontFamily: 'EB Garamond, serif', fontSize: '0.95rem' }}>{skill}</span>
-                        <span className="text-xs" style={{ color: 'rgba(200,165,110,0.5)' }}>({STAT_LABELS[stat]})</span>
+                        <span className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif', fontSize: '0.95rem' }}>{skill}</span>
+                        <span className="text-xs" style={{ color: 'rgba(180,140,90,0.35)' }}>({STAT_LABELS[stat]})</span>
                       </div>
                       <span className="font-fantasy font-bold text-sm"
                         style={{ color: total >= 0 ? '#86efac' : '#fca5a5' }}>{calcModDisplay(total)}</span>
                     </div>
                   );
                 })}
-                <div className="text-xs mt-3 pt-2" style={{ color: 'rgba(200,165,110,0.45)', fontFamily: 'EB Garamond, serif', borderTop: '1px solid rgba(180,140,90,0.08)' }}>
+                <div className="text-xs mt-3 pt-2" style={{ color: 'rgba(180,140,90,0.3)', fontFamily: 'EB Garamond, serif', borderTop: '1px solid rgba(180,140,90,0.08)' }}>
                   Click the dot next to a skill to toggle: none → proficient → expert
                 </div>
               </div>
@@ -409,7 +387,7 @@ export default function CharacterSheetPage() {
                         style={{ background: 'rgba(20,10,5,0.6)', border: '1px solid rgba(180,100,50,0.2)' }}>
                         <div>
                           <div className="font-fantasy text-sm" style={{ color: '#fca5a5' }}>{condData.icon} {name}</div>
-                          <div className="text-xs mt-1" style={{ color: 'rgba(210,180,130,0.65)', fontFamily: 'EB Garamond, serif' }}>{condData.description}</div>
+                          <div className="text-xs mt-1" style={{ color: 'rgba(180,150,100,0.5)', fontFamily: 'EB Garamond, serif' }}>{condData.description}</div>
                         </div>
                         <button onClick={() => handleUpdate({ conditions: (character.conditions || []).filter((_, j) => j !== i) })}
                           className="p-1 rounded transition-colors flex-shrink-0" style={{ color: 'rgba(180,100,100,0.4)' }}
@@ -428,22 +406,22 @@ export default function CharacterSheetPage() {
             {tab === 'features' && (
               <div className="p-5 space-y-3">
                 {(character.features || []).length === 0 ? (
-                  <div className="text-center py-8 text-sm" style={{ color: 'rgba(200,165,110,0.5)', fontFamily: 'EB Garamond, serif' }}>No features recorded</div>
+                  <div className="text-center py-8 text-sm" style={{ color: 'rgba(180,140,90,0.35)', fontFamily: 'EB Garamond, serif' }}>No features recorded</div>
                 ) : (
                   (character.features || []).map((feat, i) => (
                     <div key={i} className="p-3 rounded-xl" style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.12)' }}>
-                      <div className="text-sm" style={{ color: '#efe0c8', fontFamily: 'EB Garamond, serif' }}>{feat}</div>
+                      <div className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{feat}</div>
                     </div>
                   ))
                 )}
                 {character.backstory && (
                   <div className="mt-4">
-                    <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(220,190,130,0.55)', fontSize: '0.65rem' }}>BACKSTORY</div>
+                    <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(201,169,110,0.4)', fontSize: '0.65rem' }}>BACKSTORY</div>
                     <div className="p-4 rounded-xl leading-relaxed text-sm"
-                      style={{ background: 'rgba(15,10,4,0.7)', border: '1px solid rgba(180,140,90,0.12)', color: '#e0d0b4', fontFamily: 'IM Fell English, serif', lineHeight: '1.8' }}>
+                      style={{ background: 'rgba(15,10,4,0.7)', border: '1px solid rgba(180,140,90,0.12)', color: 'rgba(232,213,183,0.7)', fontFamily: 'IM Fell English, serif', lineHeight: '1.8' }}>
                       <EditableText value={character.backstory} onSave={v => handleUpdate({ backstory: v })}
                         placeholder="No backstory written yet..." multiline
-                        style={{ width: '100%', color: '#e0d0b4', fontFamily: 'IM Fell English, serif' }} />
+                        style={{ width: '100%', color: 'rgba(232,213,183,0.8)', fontFamily: 'IM Fell English, serif' }} />
                     </div>
                   </div>
                 )}

@@ -1,5 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
-
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 // Vendor type → item categories they carry + slot counts
 const VENDOR_CONFIG = {

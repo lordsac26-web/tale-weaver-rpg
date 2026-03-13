@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Search, RefreshCw, Coins, Package, ShoppingBag, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, Search, RefreshCw, Coins, Package, ShoppingBag } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import ItemCard from './ItemCard';
 import HaggleModal from './HaggleModal';
@@ -19,9 +19,6 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
   const [showGreeting, setShowGreeting] = useState(true);
   const [filterCategory, setFilterCategory] = useState('all');
   const [aiDialogueContext, setAiDialogueContext] = useState({ context: 'greeting', itemName: '', itemDesc: '' });
-  const [stolenAlert, setStolenAlert] = useState(null);
-
-  const isBlackMarket = vendor.type === 'black_market';
 
   const meta = VENDOR_TYPE_META[vendor.type] || VENDOR_TYPE_META.general;
   const isResting = vendor.type === 'tavern_inn' || vendor.type === 'tavern_pub';
@@ -59,21 +56,7 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
       weight: item.weight || 0, cost: price, cost_unit: 'gp',
       description: item.description, icon: item.icon,
       effect: item.effect || '',
-      ...(item.stolen ? { stolen: true, heat: item.heat || 1, original_owner: item.original_owner || 'Unknown' } : {}),
     };
-
-    // Sheriff detection warning for stolen goods
-    if (item.stolen) {
-      const heat = item.heat || 1;
-      const heatLabels = ['Cold', 'Warm', 'Hot', 'Scorching', 'Blazing'];
-      setStolenAlert({
-        itemName: item.name,
-        heat,
-        heatLabel: heatLabels[Math.min(heat - 1, 4)],
-        originalOwner: item.original_owner || 'Unknown',
-      });
-      setTimeout(() => setStolenAlert(null), 8000);
-    }
     const newInventory = [...(char?.inventory || []), invItem];
     const updatedChar = { ...char, gold: newGold, inventory: newInventory };
     setChar(updatedChar);
@@ -187,20 +170,6 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
             autoLoad={true}
           />
         </div>
-
-        {/* Black Market disclaimer */}
-        {isBlackMarket && (
-          <div className="mx-4 mb-2 p-3 rounded-xl" style={{ background: 'rgba(60,10,10,0.35)', border: '1px solid rgba(180,40,40,0.25)' }}>
-            <div className="flex items-center gap-2 mb-1">
-              <AlertTriangle className="w-3.5 h-3.5" style={{ color: '#fca5a5' }} />
-              <span className="font-fantasy text-xs font-bold" style={{ color: '#fca5a5', letterSpacing: '0.08em' }}>BLACK MARKET</span>
-            </div>
-            <p className="text-xs" style={{ color: 'rgba(252,165,165,0.55)', fontFamily: 'IM Fell English, serif', lineHeight: 1.6 }}>
-              Items marked with 🔓 are stolen goods. Prices are low, but carrying them risks detection by local authorities.
-              The higher the heat, the more likely a sheriff, guard, or bounty hunter will notice — and they won't ask nicely.
-            </p>
-          </div>
-        )}
 
         {/* Stock refresh info */}
         {vendorData.last_stock_refresh && !vendor.is_traveling && (
@@ -328,42 +297,6 @@ export default function VendorShop({ vendor, character, onBack, onCharacterUpdat
           <HaggleModal item={haggleItem} vendor={vendor} character={char}
             onAccept={handleHaggleAccept}
             onClose={() => setHaggleItem(null)} />
-        )}
-      </AnimatePresence>
-
-      {/* Stolen goods alert */}
-      <AnimatePresence>
-        {stolenAlert && (
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 40 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 max-w-sm w-full mx-4 p-4 rounded-xl"
-            style={{
-              background: 'rgba(60,10,10,0.95)',
-              border: '1px solid rgba(220,60,60,0.5)',
-              boxShadow: '0 0 30px rgba(220,40,40,0.2), 0 8px 32px rgba(0,0,0,0.8)',
-              backdropFilter: 'blur(8px)',
-            }}>
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#fca5a5' }} />
-              <div>
-                <div className="font-fantasy text-sm font-bold mb-1" style={{ color: '#fca5a5' }}>
-                  ⚠️ Hot Merchandise Acquired
-                </div>
-                <p className="text-xs leading-relaxed" style={{ color: 'rgba(252,165,165,0.7)', fontFamily: 'EB Garamond, serif' }}>
-                  <strong style={{ color: '#fde68a' }}>{stolenAlert.itemName}</strong> was reported stolen from{' '}
-                  <em>{stolenAlert.originalOwner}</em>. Heat level:{' '}
-                  <strong style={{ color: stolenAlert.heat >= 4 ? '#ef4444' : stolenAlert.heat >= 2 ? '#fb923c' : '#86efac' }}>
-                    {stolenAlert.heatLabel}
-                  </strong>.
-                </p>
-                <p className="text-xs mt-1.5 italic" style={{ color: 'rgba(201,169,110,0.45)', fontFamily: 'IM Fell English, serif' }}>
-                  Guards and sheriffs may recognize this item on you. Keep it hidden, or face the consequences.
-                </p>
-              </div>
-            </div>
-          </motion.div>
         )}
       </AnimatePresence>
 

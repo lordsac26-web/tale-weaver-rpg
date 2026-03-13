@@ -15,9 +15,6 @@ export const SPELL_SLOTS_BY_CLASS_LEVEL = {
   Ranger:   { 1:[0,0,0,0,0,0,0,0,0], 2:[2,0,0,0,0,0,0,0,0], 3:[3,0,0,0,0,0,0,0,0], 4:[3,0,0,0,0,0,0,0,0], 5:[4,2,0,0,0,0,0,0,0], 6:[4,2,0,0,0,0,0,0,0], 7:[4,3,0,0,0,0,0,0,0], 8:[4,3,0,0,0,0,0,0,0], 9:[4,3,2,0,0,0,0,0,0], 10:[4,3,2,0,0,0,0,0,0], 11:[4,3,3,0,0,0,0,0,0], 12:[4,3,3,0,0,0,0,0,0], 13:[4,3,3,1,0,0,0,0,0], 14:[4,3,3,1,0,0,0,0,0], 15:[4,3,3,2,0,0,0,0,0], 16:[4,3,3,2,0,0,0,0,0], 17:[4,3,3,3,1,0,0,0,0], 18:[4,3,3,3,1,0,0,0,0], 19:[4,3,3,3,2,0,0,0,0], 20:[4,3,3,3,2,0,0,0,0] },
   // Pact magic (Warlock)
   Warlock:  { 1:[1,0,0,0,0,0,0,0,0], 2:[2,0,0,0,0,0,0,0,0], 3:[0,2,0,0,0,0,0,0,0], 4:[0,2,0,0,0,0,0,0,0], 5:[0,0,2,0,0,0,0,0,0], 6:[0,0,2,0,0,0,0,0,0], 7:[0,0,0,2,0,0,0,0,0], 8:[0,0,0,2,0,0,0,0,0], 9:[0,0,0,0,2,0,0,0,0], 10:[0,0,0,0,2,0,0,0,0], 11:[0,0,0,0,3,0,0,0,0], 12:[0,0,0,0,3,0,0,0,0], 13:[0,0,0,0,3,0,0,0,0], 14:[0,0,0,0,3,0,0,0,0], 15:[0,0,0,0,3,0,0,0,0], 16:[0,0,0,0,3,0,0,0,0], 17:[0,0,0,0,4,0,0,0,0], 18:[0,0,0,0,4,0,0,0,0], 19:[0,0,0,0,4,0,0,0,0], 20:[0,0,0,0,4,0,0,0,0] },
-  // Full casters — Oracle (divine, CHA) and Witch (INT, patron tradition)
-  Oracle:   { 1:[2,0,0,0,0,0,0,0,0], 2:[3,0,0,0,0,0,0,0,0], 3:[4,2,0,0,0,0,0,0,0], 4:[4,3,0,0,0,0,0,0,0], 5:[4,3,2,0,0,0,0,0,0], 6:[4,3,3,0,0,0,0,0,0], 7:[4,3,3,1,0,0,0,0,0], 8:[4,3,3,2,0,0,0,0,0], 9:[4,3,3,3,1,0,0,0,0], 10:[4,3,3,3,2,0,0,0,0], 11:[4,3,3,3,2,1,0,0,0], 12:[4,3,3,3,2,1,0,0,0], 13:[4,3,3,3,2,1,1,0,0], 14:[4,3,3,3,2,1,1,0,0], 15:[4,3,3,3,2,1,1,1,0], 16:[4,3,3,3,2,1,1,1,0], 17:[4,3,3,3,2,1,1,1,1], 18:[4,3,3,3,3,1,1,1,1], 19:[4,3,3,3,3,2,1,1,1], 20:[4,3,3,3,3,2,2,1,1] },
-  Witch:    { 1:[2,0,0,0,0,0,0,0,0], 2:[3,0,0,0,0,0,0,0,0], 3:[4,2,0,0,0,0,0,0,0], 4:[4,3,0,0,0,0,0,0,0], 5:[4,3,2,0,0,0,0,0,0], 6:[4,3,3,0,0,0,0,0,0], 7:[4,3,3,1,0,0,0,0,0], 8:[4,3,3,2,0,0,0,0,0], 9:[4,3,3,3,1,0,0,0,0], 10:[4,3,3,3,2,0,0,0,0], 11:[4,3,3,3,2,1,0,0,0], 12:[4,3,3,3,2,1,0,0,0], 13:[4,3,3,3,2,1,1,0,0], 14:[4,3,3,3,2,1,1,0,0], 15:[4,3,3,3,2,1,1,1,0], 16:[4,3,3,3,2,1,1,1,0], 17:[4,3,3,3,2,1,1,1,1], 18:[4,3,3,3,3,1,1,1,1], 19:[4,3,3,3,3,2,1,1,1], 20:[4,3,3,3,3,2,2,1,1] },
 };
 
 export const SPELLCASTING_ABILITY = {
@@ -31,8 +28,6 @@ export const SPELLCASTING_ABILITY = {
   Ranger: 'wisdom',
   'Eldritch Knight': 'intelligence',
   'Arcane Trickster': 'intelligence',
-  Oracle: 'charisma',
-  Witch: 'intelligence',
 };
 
 // Cantrips per class
@@ -45,8 +40,6 @@ export const CANTRIPS_KNOWN = {
   Druid: [2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4],
   Paladin: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
   Ranger: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-  Oracle: [3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5],
-  Witch: [3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5],
 };
 
 export const SPELLS_BY_CLASS = {
@@ -113,22 +106,6 @@ export const SPELLS_BY_CLASS = {
     3: ['Conjure Animals', 'Conjure Barrage', 'Daylight', 'Nondetection', 'Plant Growth', 'Protection from Energy', 'Speak with Plants', 'Water Breathing', 'Water Walk', 'Wind Wall'],
     4: ['Conjure Woodland Beings', 'Freedom of Movement', 'Grasping Vine', 'Locate Creature', 'Stoneskin'],
     5: ['Conjure Volley', 'Greater Restoration', 'Swift Quiver', 'Tree Stride'],
-  },
-  Oracle: {
-    cantrips: ['Sacred Flame', 'Guidance', 'Spare the Dying', 'Toll the Dead', 'Light', 'Thaumaturgy', 'Resistance', 'Stardust Bolt'],
-    1: ['Cure Wounds', 'Healing Word', 'Bless', 'Guiding Bolt', 'Inflict Wounds', 'Shield of Faith', 'Command', 'Detect Magic', 'Sanctuary', 'Oracle\'s Burden'],
-    2: ['Spiritual Weapon', 'Hold Person', 'Prayer of Healing', 'Aid', 'Augury', 'Blindness/Deafness', 'Calm Emotions', 'Silence', 'Curse of Agony'],
-    3: ['Spirit Guardians', 'Revivify', 'Dispel Magic', 'Mass Healing Word', 'Bestow Curse', 'Clairvoyance', 'Daylight', 'Curse Escalation'],
-    4: ['Banishment', 'Death Ward', 'Divination', 'Freedom of Movement', 'Guardian of Faith', 'Mystery Revelation'],
-    5: ['Flame Strike', 'Greater Restoration', 'Mass Cure Wounds', 'Raise Dead', 'Scrying', 'Final Revelation'],
-  },
-  Witch: {
-    cantrips: ['Chill Touch', 'Minor Illusion', 'Poison Spray', 'Mage Hand', 'Prestidigitation', 'Guidance', 'Evil Eye', 'Witch Bolt Cantrip'],
-    1: ['Hex', 'Charm Person', 'Sleep', 'Detect Magic', 'Find Familiar', 'Ray of Sickness', 'Witch\'s Hex', 'Bane', 'Cause Fear', 'Unseen Servant'],
-    2: ['Hold Person', 'Misty Step', 'Invisibility', 'Web', 'Crown of Madness', 'Darkness', 'Blindness/Deafness', 'Suggestion', 'Phantasmal Force'],
-    3: ['Bestow Curse', 'Counterspell', 'Fly', 'Dispel Magic', 'Hypnotic Pattern', 'Fear', 'Vampiric Touch', 'Animate Dead', 'Hex Escalation'],
-    4: ['Blight', 'Polymorph', 'Banishment', 'Greater Invisibility', 'Confusion', 'Phantasmal Killer'],
-    5: ['Dominate Person', 'Hold Monster', 'Scrying', 'Contact Other Plane', 'Cloudkill', 'Contagion', 'Geas'],
   },
 };
 
@@ -219,26 +196,6 @@ export const SPELL_DETAILS = {
   'Flame Strike': { level: 5, school: 'Evocation', casting_time: '1 action', range: '60 ft', components: 'V, S, M', duration: 'Instantaneous', description: 'A vertical column of divine fire roars down from the heavens. Each creature in a 10-foot-radius, 40-foot-high cylinder must make a Dexterity saving throw, taking 4d6 fire + 4d6 radiant damage on failure, half on success.', attack_type: 'saving_throw', save_type: 'dexterity', damage_dice: '4d6', damage_type: 'fire', higher_levels: 'Each higher slot adds 1d6 fire and 1d6 radiant.' },
   'Mass Cure Wounds': { level: 5, school: 'Evocation', casting_time: '1 action', range: '60 ft', components: 'V, S', duration: 'Instantaneous', description: 'A wave of healing energy washes out from a point you choose within range. Choose up to 6 creatures; each regains 3d8 + spellcasting modifier HP.', attack_type: 'healing', heal_dice: '3d8', heal_type: 'hp', higher_levels: 'Each higher slot adds 1d8.' },
   'Greater Restoration': { level: 5, school: 'Abjuration', casting_time: '1 action', range: 'Touch', components: 'V, S, M', duration: 'Instantaneous', description: 'You imbue a creature with positive energy to undo a debilitating effect. Remove a charm, petrification, curse, ability score reduction, or HP maximum reduction.', attack_type: 'utility', is_utility: true },
-
-  // === ORACLE UNIQUE SPELLS ===
-  'Stardust Bolt': { level: 0, school: 'Evocation', casting_time: '1 action', range: '60 ft', components: 'V, S', duration: 'Instantaneous', description: 'A shard of starlight streaks toward a target. Ranged spell attack. On hit: 1d8 radiant damage. Scales at 5th (2d8), 11th (3d8), 17th (4d8).', attack_type: 'ranged_spell_attack', damage_dice: '1d8', damage_type: 'radiant' },
-  'Oracle\'s Burden': { level: 1, school: 'Enchantment', casting_time: '1 action', range: '60 ft', components: 'V, S', duration: '1 minute (concentration)', description: 'You share the weight of your curse with a creature. Target makes a Wisdom saving throw. On fail: disadvantage on attack rolls and 1d6 psychic damage at the start of each of its turns.', attack_type: 'saving_throw', save_type: 'wisdom', damage_dice: '1d6', damage_type: 'psychic', requires_concentration: true },
-  'Curse of Agony': { level: 2, school: 'Necromancy', casting_time: '1 action', range: '60 ft', components: 'V, S', duration: '1 minute (concentration)', description: 'You curse a creature with wracking pain. Constitution save. On fail: 2d8 necrotic damage and the target has disadvantage on concentration checks. At the start of each of its turns: 1d8 necrotic.', attack_type: 'saving_throw', save_type: 'constitution', damage_dice: '2d8', damage_type: 'necrotic', requires_concentration: true },
-  'Curse Escalation': { level: 3, school: 'Necromancy', casting_time: '1 action', range: '60 ft', components: 'V, S, M', duration: '1 minute (concentration)', description: 'You deepen your curse on a creature. Target makes Charisma save. On fail: speed halved, AC reduced by 2, and 3d6 necrotic damage per turn. Your own curse intensifies (disadvantage on one save of DM\'s choice).', attack_type: 'saving_throw', save_type: 'charisma', damage_dice: '3d6', damage_type: 'necrotic', requires_concentration: true },
-  'Mystery Revelation': { level: 4, school: 'Divination', casting_time: '1 action', range: 'Self', components: 'V, S', duration: '10 minutes', description: 'Your mystery grants you a powerful revelation. Gain truesight 60ft, advantage on all Wisdom checks, and your next damaging spell deals an extra 3d8 radiant damage.', attack_type: 'utility', is_utility: true },
-  'Final Revelation': { level: 5, school: 'Evocation', casting_time: '1 action', range: 'Self (30ft radius)', components: 'V, S, M', duration: 'Instantaneous', description: 'You unleash the full power of your mystery in a devastating 30ft burst. All enemies must make a Charisma save. On fail: 8d8 radiant damage (half on success). Allies in the area are healed for 4d8 HP.', attack_type: 'saving_throw', save_type: 'charisma', damage_dice: '8d8', damage_type: 'radiant' },
-
-  // === WITCH UNIQUE SPELLS ===
-  'Evil Eye': { level: 0, school: 'Enchantment', casting_time: '1 action', range: '30 ft', components: 'V, S', duration: '1 round', description: 'You fix your gaze on a creature, cursing it. Target makes a Wisdom save. On fail: disadvantage on its next attack roll or ability check. Scales: at 5th level also -1d4 to the roll.', attack_type: 'saving_throw', save_type: 'wisdom', damage_dice: '0', damage_type: 'none', special_effects: ['disadvantage_next_attack'] },
-  'Witch Bolt Cantrip': { level: 0, school: 'Evocation', casting_time: '1 action', range: '30 ft', components: 'V, S, M', duration: 'Instantaneous', description: 'A crackling beam of dark energy lances from your finger. Ranged spell attack. On hit: 1d8 lightning damage. Scales at 5th (2d8), 11th (3d8), 17th (4d8).', attack_type: 'ranged_spell_attack', damage_dice: '1d8', damage_type: 'lightning' },
-  'Witch\'s Hex': { level: 1, school: 'Enchantment', casting_time: '1 bonus action', range: '60 ft', components: 'V, S, M', duration: '1 hour (concentration)', description: 'You place a hex on a creature. Until the spell ends, you deal an extra 1d6 necrotic damage whenever you hit it. Choose an ability score: the target has disadvantage on checks with that ability. Your familiar can deliver hex touch spells against the hexed target.', attack_type: 'utility', is_utility: true, requires_concentration: true, special_effects: ['hex_damage'] },
-  'Ray of Sickness': { level: 1, school: 'Necromancy', casting_time: '1 action', range: '60 ft', components: 'V, S', duration: 'Instantaneous', description: 'A ray of sickening greenish energy lashes out. Ranged spell attack. On hit: 2d8 poison damage. Target must make a Constitution save or be poisoned until the end of your next turn.', attack_type: 'ranged_spell_attack', damage_dice: '2d8', damage_type: 'poison', special_effects: ['poisoned'] },
-  'Cause Fear': { level: 1, school: 'Necromancy', casting_time: '1 action', range: '60 ft', components: 'V', duration: '1 minute (concentration)', description: 'You awaken the sense of mortality in a creature. It must succeed on a Wisdom save or become frightened of you. It can repeat the saving throw at the end of each of its turns.', attack_type: 'saving_throw', save_type: 'wisdom', damage_dice: '0', damage_type: 'none', is_utility: true, requires_concentration: true, special_effects: ['frightened'] },
-  'Bane': { level: 1, school: 'Enchantment', casting_time: '1 action', range: '30 ft', components: 'V, S, M', duration: '1 minute (concentration)', description: 'Up to 3 creatures must make a Charisma saving throw. On a failure, whenever the target makes an attack roll or saving throw, it must roll a d4 and subtract the number rolled.', attack_type: 'saving_throw', save_type: 'charisma', damage_dice: '0', damage_type: 'none', is_utility: true, requires_concentration: true },
-  'Phantasmal Force': { level: 2, school: 'Illusion', casting_time: '1 action', range: '60 ft', components: 'V, S, M', duration: '1 minute (concentration)', description: 'You craft an illusion that takes root in a creature\'s mind. Intelligence save. On fail: the target perceives the illusion as real, taking 1d6 psychic damage per turn from its perceived effects.', attack_type: 'saving_throw', save_type: 'intelligence', damage_dice: '1d6', damage_type: 'psychic', requires_concentration: true },
-  'Hex Escalation': { level: 3, school: 'Enchantment', casting_time: '1 bonus action', range: '60 ft', components: 'V, S, M', duration: '1 hour (concentration)', description: 'Upgrade an existing hex. The hexed target now takes 2d6 necrotic damage (instead of 1d6) on each hit, has disadvantage on saves vs your spells, and your familiar can attack it as a reaction.', attack_type: 'utility', is_utility: true, requires_concentration: true },
-  'Phantasmal Killer': { level: 4, school: 'Illusion', casting_time: '1 action', range: '120 ft', components: 'V, S', duration: '1 minute (concentration)', description: 'You tap into a creature\'s deepest fears, manifesting them as a deadly phantom. Wisdom save. On fail: frightened. At end of each turn: 4d10 psychic damage (WIS save ends both). On success: no effect.', attack_type: 'saving_throw', save_type: 'wisdom', damage_dice: '4d10', damage_type: 'psychic', requires_concentration: true, special_effects: ['frightened'] },
-  'Contagion': { level: 5, school: 'Necromancy', casting_time: '1 action', range: 'Touch', components: 'V, S', duration: '7 days', description: 'Your touch inflicts disease. Melee spell attack. On hit, choose a disease: Blinding Sickness, Filth Fever, Flesh Rot, Mindfire, Seizure, or Slimy Doom. Target must make 3 Constitution saves over 3 turns; 3 failures makes the disease permanent for the duration.', attack_type: 'melee_spell_attack', damage_dice: '0', damage_type: 'none', special_effects: ['diseased'] },
 };
 
 export function getSpellsForClass(className, level = 1) {

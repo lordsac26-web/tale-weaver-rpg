@@ -20,9 +20,9 @@ export default function Layout({ children, currentPageName }) {
           --brass-shine:  #f5d08a;
           --brass-glow:   rgba(184,115,51,0.5);
 
-          --parchment:    #f5e8d0;
-          --parchment-mid:#e4d0a8;
-          --parchment-dim:#c8a880;
+          --parchment:    #f0dfc0;
+          --parchment-mid:#dcc49a;
+          --parchment-dim:#b89a72;
 
           --ember:        #c0452a;
           --ember-glow:   rgba(192,69,42,0.4);
@@ -31,9 +31,9 @@ export default function Layout({ children, currentPageName }) {
           --arcane:       #7c3aed;
           --arcane-glow:  rgba(124,58,237,0.35);
 
-          --text-bright:  #faecd8;
-          --text-mid:     #e0c8a4;
-          --text-dim:     #b89a72;
+          --text-bright:  #f5dfc8;
+          --text-mid:     #d4b896;
+          --text-dim:     #9a7a58;
         }
 
         .tavern-root {
@@ -42,12 +42,6 @@ export default function Layout({ children, currentPageName }) {
         }
 
         body { background: var(--wood-deep); color: var(--text-bright); }
-
-        /* Global text brightness boost */
-        .tavern-root p, .tavern-root span, .tavern-root div, .tavern-root li {
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
-        }
 
         /* ── Fonts ── */
         .font-fantasy      { font-family: 'Cinzel', 'Georgia', serif; }
@@ -245,11 +239,11 @@ export default function Layout({ children, currentPageName }) {
 
         /* ── Inputs ── */
         .input-fantasy {
-          background: rgba(12,6,2,0.75);
-          border: 1px solid rgba(184,115,51,0.3);
+          background: rgba(8,4,1,0.75);
+          border: 1px solid rgba(184,115,51,0.25);
           color: var(--parchment);
           font-family: 'EB Garamond', serif;
-          box-shadow: inset 0 2px 7px rgba(0,0,0,0.5);
+          box-shadow: inset 0 2px 7px rgba(0,0,0,0.6);
           transition: border-color 0.2s, box-shadow 0.2s;
         }
         .input-fantasy:focus {
@@ -257,7 +251,7 @@ export default function Layout({ children, currentPageName }) {
           border-color: rgba(212,149,90,0.6);
           box-shadow: inset 0 2px 7px rgba(0,0,0,0.55), 0 0 10px rgba(184,115,51,0.15);
         }
-        .input-fantasy::placeholder { color: rgba(200,175,130,0.4); }
+        .input-fantasy::placeholder { color: rgba(184,155,110,0.3); }
 
         .select-fantasy {
           background: rgba(8,4,1,0.75);
@@ -382,7 +376,7 @@ export default function Layout({ children, currentPageName }) {
           font-family: 'Cinzel', serif;
           font-size: 0.6rem;
           letter-spacing: 0.18em;
-          color: rgba(220,165,100,0.72);
+          color: rgba(212,149,90,0.6);
           text-transform: uppercase;
           text-shadow: 0 0 10px rgba(184,115,51,0.2);
         }

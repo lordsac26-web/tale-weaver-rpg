@@ -1,14 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { X, Shield, Heart, Zap, Star, Swords, FlaskConical, BookOpen, Layers, Sparkles, ShieldCheck, CircleDot, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import InventoryTab from './InventoryTab';
-import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS, SPELLCASTING_CLASSES } from './gameData';
+import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS } from './gameData';
 import { base44 } from '@/api/base44Client';
 import SpellbookTab from './SpellbookTab';
-import computeCharacterStats, { getTotalLevel } from './computeCharacterStats';
-import ComputedStatBadge from './ComputedStatBadge';
-import ActiveEffectsPanel from './ActiveEffectsPanel';
-import MulticlassManager from './MulticlassManager';
+
+const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 const STAT_ICONS = { strength: '💪', dexterity: '🏹', constitution: '❤️', intelligence: '📚', wisdom: '🔮', charisma: '✨' };
@@ -57,10 +55,8 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
   const [character, setCharacter] = useState(initialCharacter);
   if (!character) return null;
 
-  const computed = useMemo(() => computeCharacterStats(character), [character]);
-  const isCaster = computed?.is_caster || SPELLCASTING_CLASSES.includes(character.class);
-  const profBonus = computed?.proficiency_bonus || PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
-  const totalLevel = computed?.total_level || character.level || 1;
+  const isCaster = SPELLCASTING_CLASSES.includes(character.class);
+  const profBonus = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
   const visibleTabs = TABS.filter(t => t.id !== 'spells' || isCaster);
 
   const handleUpdateCharacter = async (updates) => {
@@ -98,9 +94,8 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
               {character.name}
             </h2>
             <p className="text-sm italic mt-0.5" style={{ color: 'rgba(201,169,110,0.55)', fontFamily: 'EB Garamond, serif' }}>
-              Level {totalLevel} {character.race} {character.class}
+              Level {character.level} {character.race} {character.class}
               {character.subclass ? ` · ${character.subclass}` : ''}
-              {(character.multiclass || []).map(mc => ` / ${mc.class} ${mc.level}`).join('')}
             </p>
             {character.alignment && (
               <p className="text-xs mt-0.5" style={{ color: 'rgba(180,150,100,0.35)', fontFamily: 'EB Garamond, serif' }}>
@@ -118,7 +113,7 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
         </div>
 
         {/* Quick Stats bar */}
-        <QuickStatsBar character={character} computed={computed} />
+        <QuickStatsBar character={character} />
 
         {/* Tabs */}
         <div className="flex flex-shrink-0 overflow-x-auto"
@@ -141,13 +136,13 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
         <div className="flex-1 overflow-y-auto p-4">
           <AnimatePresence mode="wait">
             <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-              {tab === 'stats' && <StatsTab character={character} profBonus={profBonus} computed={computed} onUpdate={handleUpdateCharacter} />}
-              {tab === 'skills' && <SkillsTab character={character} profBonus={profBonus} computed={computed} />}
-              {tab === 'combat' && <CombatTab character={character} profBonus={profBonus} isCaster={isCaster} onUpdate={handleUpdateCharacter} computed={computed} />}
+              {tab === 'stats' && <StatsTab character={character} profBonus={profBonus} />}
+              {tab === 'skills' && <SkillsTab character={character} profBonus={profBonus} />}
+              {tab === 'combat' && <CombatTab character={character} profBonus={profBonus} isCaster={isCaster} onUpdate={handleUpdateCharacter} />}
               {tab === 'inventory' && <InventoryTab character={character} onUpdate={handleUpdateCharacter} onIdentify={null} />}
               {tab === 'spells' && <SpellbookTab character={character} onUpdateCharacter={handleUpdateCharacter} />}
               {tab === 'conditions' && <ConditionsTab character={character} onUpdate={handleUpdateCharacter} />}
-              {tab === 'features' && <FeaturesTab character={character} computed={computed} />}
+              {tab === 'features' && <FeaturesTab character={character} />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -159,21 +154,17 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
 }
 
 // ─── Quick Stats Bar ───────────────────────────────────────────────────────────
-function QuickStatsBar({ character, computed }) {
+function QuickStatsBar({ character }) {
   const hpPct = character.hp_max ? Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100)) : 100;
   const hpColor = hpPct > 60 ? '#22c55e' : hpPct > 30 ? '#d97706' : '#dc2626';
-  const effectiveAC = computed?.armor_class ?? character.armor_class ?? '—';
-  const effectiveSpeed = computed?.speed ?? character.speed ?? 30;
-  const effectiveProf = computed?.proficiency_bonus || PROFICIENCY_BY_LEVEL[(character.level||1)-1] || 2;
-  const acDiff = computed ? effectiveAC - (character.armor_class || 10) : 0;
   return (
     <div className="flex-shrink-0 px-4 py-2 grid grid-cols-5 gap-2"
       style={{ borderBottom: '1px solid rgba(180,140,90,0.1)', background: 'rgba(10,6,3,0.6)' }}>
       {[
         { icon: Heart, color: hpColor, val: `${character.hp_current ?? '?'}/${character.hp_max ?? '?'}`, label: 'HP' },
-        { icon: Shield, color: '#3b82f6', val: effectiveAC, label: acDiff ? `AC (${acDiff > 0 ? '+' : ''}${acDiff})` : 'AC' },
-        { icon: Zap, color: '#d97706', val: `${effectiveSpeed}ft`, label: 'Speed' },
-        { icon: CircleDot, color: '#a78bfa', val: `+${effectiveProf}`, label: 'Prof' },
+        { icon: Shield, color: '#3b82f6', val: character.armor_class ?? '—', label: 'AC' },
+        { icon: Zap, color: '#d97706', val: `${character.speed ?? 30}ft`, label: 'Speed' },
+        { icon: CircleDot, color: '#a78bfa', val: `+${PROFICIENCY_BY_LEVEL[(character.level||1)-1]||2}`, label: 'Prof' },
         { icon: Star, color: '#c9a96e', val: character.xp ?? 0, label: 'XP' },
       ].map(({ icon: Icon, color, val, label }, i) => (
         <div key={label} className="text-center py-1">
@@ -187,25 +178,20 @@ function QuickStatsBar({ character, computed }) {
 }
 
 // ─── Stats Tab ─────────────────────────────────────────────────────────────────
-function StatsTab({ character, profBonus, computed, onUpdate }) {
-  const mergedSaves = computed?.merged_saves || new Set(CLASSES[character.class]?.saves || []);
+function StatsTab({ character, profBonus }) {
   return (
     <div>
       <div className="grid grid-cols-3 gap-2.5 mb-3">
         {STATS.map(stat => {
-          const baseVal = character[stat] || 10;
-          const effectiveVal = computed?.[stat] ?? baseVal;
-          const mod = calcStatMod(effectiveVal);
-          const saveProf = mergedSaves.has(stat);
-          const saveMod = mod + (saveProf ? profBonus : 0) + (computed?.effects?.save_bonus || 0);
+          const val = character[stat] || 10;
+          const mod = calcStatMod(val);
+          const saveProf = CLASSES[character.class]?.saves?.includes(stat);
+          const saveMod = mod + (saveProf ? profBonus : 0);
           return (
             <div key={stat} className="stat-box rounded-xl p-3 text-center">
               <div className="text-base mb-0.5">{STAT_ICONS[stat]}</div>
               <div className="font-fantasy text-xs tracking-widest mb-0.5" style={{ color: 'rgba(180,140,90,0.5)', fontSize: '0.6rem' }}>{STAT_LABELS[stat]}</div>
-              <div className="font-fantasy font-bold text-2xl mb-0.5 flex items-center justify-center gap-0.5" style={{ color: '#e8d5b7' }}>
-                {effectiveVal}
-                <ComputedStatBadge baseStat={baseVal} effectiveStat={effectiveVal} label={STAT_LABELS[stat]} />
-              </div>
+              <div className="font-fantasy font-bold text-2xl mb-0.5" style={{ color: '#e8d5b7' }}>{val}</div>
               <div className="font-fantasy font-bold text-sm" style={{ color: mod >= 0 ? '#86efac' : '#fca5a5' }}>{calcModDisplay(mod)}</div>
               <div className="text-xs mt-1 pt-1" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif', borderTop: '1px solid rgba(180,140,90,0.1)', fontSize: '0.65rem' }}>
                 Save {calcModDisplay(saveMod)}{saveProf && <span style={{ color: '#c9a96e' }}> ●</span>}
@@ -218,19 +204,6 @@ function StatsTab({ character, profBonus, computed, onUpdate }) {
         <span style={{ color: 'rgba(180,150,100,0.5)', fontFamily: 'EB Garamond, serif', fontSize: '0.9rem' }}>Proficiency Bonus </span>
         <span className="font-fantasy font-bold" style={{ color: '#f0c040' }}>+{profBonus}</span>
       </div>
-
-      {/* Multiclass Manager */}
-      <div className="mt-3">
-        <MulticlassManager character={character} onUpdate={onUpdate} />
-      </div>
-
-      {/* Active Magical Effects from Equipment */}
-      {computed?.effects && (
-        <div className="mt-3">
-          <ActiveEffectsPanel effects={computed.effects} />
-        </div>
-      )}
-
       {/* Passive Scores */}
       <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.1)' }}>
         <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(201,169,110,0.4)', fontSize: '0.6rem' }}>PASSIVE SCORES</div>
@@ -240,7 +213,7 @@ function StatsTab({ character, profBonus, computed, onUpdate }) {
             { label: 'Insight', stat: 'wisdom', skill: 'Insight' },
             { label: 'Investigation', stat: 'intelligence', skill: 'Investigation' },
           ].map(({ label, stat, skill }) => {
-            const mod = calcStatMod(computed?.[stat] ?? character[stat] ?? 10);
+            const mod = calcStatMod(character[stat] || 10);
             const prof = character.skills?.[skill];
             const bonus = prof === 'expert' ? profBonus * 2 : (prof === 'proficient' || prof === true) ? profBonus : 0;
             return (
@@ -257,11 +230,11 @@ function StatsTab({ character, profBonus, computed, onUpdate }) {
 }
 
 // ─── Skills Tab ────────────────────────────────────────────────────────────────
-function SkillsTab({ character, profBonus, computed }) {
+function SkillsTab({ character, profBonus }) {
   return (
     <div className="space-y-0.5">
       {Object.entries(SKILL_STAT_MAP).map(([skill, stat]) => {
-        const statMod = calcStatMod(computed?.[stat] ?? character[stat] ?? 10);
+        const statMod = calcStatMod(character[stat] || 10);
         const profLevel = character.skills?.[skill];
         const bonus = profLevel === 'expert' ? profBonus * 2 : (profLevel === 'proficient' || profLevel === true) ? profBonus : 0;
         const total = statMod + bonus;
@@ -289,7 +262,7 @@ function SkillsTab({ character, profBonus, computed }) {
 }
 
 // ─── Combat Tab (Spell Slots + Equipped) ──────────────────────────────────────
-function CombatTab({ character, profBonus, isCaster, onUpdate, computed }) {
+function CombatTab({ character, profBonus, isCaster, onUpdate }) {
   const equipped = character.equipped || {};
 
   // Spell slots
@@ -388,19 +361,14 @@ function CombatTab({ character, profBonus, isCaster, onUpdate, computed }) {
       {/* Combat Stats */}
       <Section title="Combat Statistics" icon="⚔️">
         <div className="grid grid-cols-3 gap-2">
-          {(() => {
-            const saves = computed?.merged_saves || new Set(CLASSES[character.class]?.saves || []);
-            const saveBonus = computed?.effects?.save_bonus || 0;
-            const getSave = (stat) => calcStatMod(computed?.[stat] ?? character[stat] ?? 10) + (saves.has(stat) ? profBonus : 0) + saveBonus;
-            return [
-              { label: 'Initiative', val: calcModDisplay(calcStatMod(computed?.dexterity ?? character.dexterity ?? 10)), color: '#fde68a' },
-              { label: 'Prof Bonus', val: `+${profBonus}`, color: '#c9a96e' },
-              { label: 'Speed', val: `${computed?.speed ?? character.speed ?? 30}ft`, color: '#86efac' },
-              { label: 'STR Save', val: calcModDisplay(getSave('strength')), color: '#fca5a5' },
-              { label: 'DEX Save', val: calcModDisplay(getSave('dexterity')), color: '#fca5a5' },
-              { label: 'CON Save', val: calcModDisplay(getSave('constitution')), color: '#fca5a5' },
-            ];
-          })().map(({ label, val, color }) => (
+          {[
+            { label: 'Initiative', val: calcModDisplay(calcStatMod(character.dexterity || 10)), color: '#fde68a' },
+            { label: 'Prof Bonus', val: `+${profBonus}`, color: '#c9a96e' },
+            { label: 'Speed', val: `${character.speed || 30}ft`, color: '#86efac' },
+            { label: 'STR Save', val: calcModDisplay(calcStatMod(character.strength||10) + (CLASSES[character.class]?.saves?.includes('strength') ? profBonus : 0)), color: '#fca5a5' },
+            { label: 'DEX Save', val: calcModDisplay(calcStatMod(character.dexterity||10) + (CLASSES[character.class]?.saves?.includes('dexterity') ? profBonus : 0)), color: '#fca5a5' },
+            { label: 'CON Save', val: calcModDisplay(calcStatMod(character.constitution||10) + (CLASSES[character.class]?.saves?.includes('constitution') ? profBonus : 0)), color: '#fca5a5' },
+          ].map(({ label, val, color }) => (
             <div key={label} className="text-center py-2 rounded-lg stat-box">
               <div className="font-fantasy font-bold text-sm" style={{ color }}>{val}</div>
               <div className="text-xs mt-0.5" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif', fontSize: '0.65rem' }}>{label}</div>
@@ -514,19 +482,15 @@ function ConditionsTab({ character, onUpdate }) {
 }
 
 // ─── Features Tab ─────────────────────────────────────────────────────────────
-function FeaturesTab({ character, computed }) {
+function FeaturesTab({ character }) {
   const [expanded, setExpanded] = useState({});
-  // Use computed features if available (includes multiclass), otherwise fallback
-  const classFeatures = computed?.all_features || (() => {
-    const feats = [];
-    const classData = CLASSES[character.class] || {};
-    Object.entries(classData.features || {}).forEach(([lvl, fs]) => {
-      if (parseInt(lvl) <= (character.level || 1)) {
-        fs.forEach(f => feats.push({ name: f, source: character.class, level: parseInt(lvl) }));
-      }
-    });
-    return feats;
-  })();
+  const classData = CLASSES[character.class] || {};
+  const classFeatures = [];
+  Object.entries(classData.features || {}).forEach(([lvl, feats]) => {
+    if (parseInt(lvl) <= (character.level || 1)) {
+      feats.forEach(f => classFeatures.push({ name: f, level: parseInt(lvl) }));
+    }
+  });
 
   return (
     <div className="space-y-4">
@@ -551,9 +515,9 @@ function FeaturesTab({ character, computed }) {
         )}
       </Section>
 
-      {/* Class Features by Level (merged across all classes) */}
+      {/* Class Features by Level */}
       {classFeatures.length > 0 && (
-        <Section title="Class Features" icon="📖">
+        <Section title={`${character.class} Class Features`} icon="📖">
           <div className="space-y-1">
             {classFeatures.map((f, i) => (
               <div key={i} className="flex items-start gap-2.5 py-2 px-3 rounded-lg"
@@ -563,12 +527,6 @@ function FeaturesTab({ character, computed }) {
                   Lv.{f.level}
                 </span>
                 <span className="text-sm" style={{ color: 'rgba(232,213,183,0.8)', fontFamily: 'EB Garamond, serif' }}>{f.name}</span>
-                {f.source && (
-                  <span className="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
-                    style={{ background: 'rgba(30,15,50,0.4)', border: '1px solid rgba(150,90,230,0.15)', color: 'rgba(192,132,252,0.6)', fontSize: '0.55rem' }}>
-                    {f.source}
-                  </span>
-                )}
               </div>
             ))}
           </div>

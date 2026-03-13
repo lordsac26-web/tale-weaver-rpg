@@ -494,67 +494,6 @@ export const CLASSES = {
       20: ['Soul of Artifice (+1 to all saves per attunement; avoid being reduced to 0 HP as reaction)'],
     },
   },
-  Oracle: {
-    hit_die: 8, primary_stat: 'charisma', saves: ['charisma', 'wisdom'],
-    armor_prof: ['light armor'], weapon_prof: ['simple weapons'],
-    skills: ['Arcana', 'History', 'Insight', 'Medicine', 'Nature', 'Persuasion', 'Religion'],
-    skill_count: 2,
-    subclasses: [
-      { name: 'Mystery of the Ancestors', desc: 'Spirits of the dead guide you. Curse: confusion from conflicting spectral advice. Gain Spirit Shield and ancestral counsel.', features: { 1: ['Ancestral Spirits', 'Spirit Shield (reaction: reduce ally damage by 2d6)'], 6: ['Counsel of the Dead (advantage on History/Religion)'], 10: ['Spiritual Communion'] } },
-      { name: 'Mystery of Battle', desc: 'War and glory. Curse: increasing recklessness. Gain martial proficiencies and divine combat prowess.', features: { 1: ['Bonus Proficiencies (martial weapons, heavy armor)', 'War Sight (+10 initiative)'], 6: ['Battlefield Revelation (Extra Attack)'], 10: ['Iron Resolve (temp HP on hit)'] } },
-      { name: 'Mystery of Bones', desc: 'Death and undeath. Curse: deathlike appearance. Command the dead and drain life.', features: { 1: ['Undead Servitude (animate dead 1/long rest)', 'Death\'s Touch (1d8 necrotic melee cantrip)'], 6: ['Soul Siphon (heal from necrotic damage dealt)'], 10: ['Armor of Bones (+2 AC aura)'] } },
-      { name: 'Mystery of the Cosmos', desc: 'Stars and the void. Curse: burning starlight and spatial distortion. Wield astral energy.', features: { 1: ['Stardust (30ft radiant damage burst, 2d8)', 'Star Map (Guiding Bolt 1/short rest)'], 6: ['Cosmic Omen (reaction: add/subtract d6 from ally/enemy roll)'], 10: ['Gravity Well (difficult terrain aura, pull enemies)'] } },
-      { name: 'Mystery of Flames', desc: 'Fire and destruction. Curse: surrounded by searing heat. Your spells ignite the world.', features: { 1: ['Burning Revelation (fire resistance, +CHA fire damage 1/turn)', 'Flame Cloak (enemies in 5ft take 1d6 fire)'], 6: ['Blazing Vortex (Fireball 1/long rest, CHA save)'], 10: ['Inferno Soul (fire immunity, radiate heat)'] } },
-      { name: 'Mystery of Life', desc: 'Healing and vitality. Curse: healing yourself becomes harder. But your healing of others is unmatched.', features: { 1: ['Abundant Healing (+CHA modifier to all healing spells)', 'Life Link (transfer HP to ally as reaction)'], 6: ['Channel Life (Mass Healing Word without slot 1/long rest)'], 10: ['Life Conduit (stabilize dying creatures in 30ft)'] } },
-      { name: 'Mystery of Tempest', desc: 'Storms and lightning. Curse: uncontrollable winds surround you. Command weather itself.', features: { 1: ['Tempest Revelation (lightning+thunder resistance)', 'Storm Bolt (ranged spell attack, 2d10 lightning)'], 6: ['Wind Barrier (+2 AC vs ranged attacks)'], 10: ['Eye of the Storm (Call Lightning 1/long rest)'] } },
-    ],
-    description: 'A divine spellcaster cursed with powerful mysteries. Greater power comes at the cost of deepening their curse — each revelation makes the oracle stronger but exacts a terrible toll.',
-    features: {
-      1: ['Spellcasting (CHA, divine spell list)', 'Oracle Mystery', 'Oracle Curse (grows stronger as you cast spells)', 'Revelation (mystery-specific power)'],
-      2: ['Oracle Revelation (additional mystery power)'],
-      3: ['Curse Escalation (minor curse effects when casting 1st+ level spells)'],
-      5: ['Greater Revelation'],
-      7: ['Major Curse (powerful curse effects, powerful abilities)'],
-      10: ['Mystery Feature'],
-      14: ['Supreme Revelation'],
-      17: ['Final Revelation (ultimate mystery power)'],
-      20: ['Transcendent Curse (curse becomes a source of power; ignore curse penalties 1/long rest for 1 minute)'],
-    },
-  },
-  Witch: {
-    hit_die: 6, primary_stat: 'intelligence', saves: ['intelligence', 'wisdom'],
-    armor_prof: [], weapon_prof: ['daggers', 'darts', 'slings', 'quarterstaffs', 'light crossbows'],
-    skills: ['Arcana', 'Deception', 'History', 'Insight', 'Intimidation', 'Nature', 'Religion'],
-    skill_count: 2,
-    subclasses: [
-      { name: 'Patron of the Rift (Arcane)', desc: 'Your patron is an entity from beyond the planes. Gain arcane hex magic and reality-warping abilities.', features: { 1: ['Rift Hex (teleport 15ft as bonus action after casting hex cantrip)'], 6: ['Planar Familiar (familiar gains fly speed + resistance)'], 10: ['Dimensional Anchor (Banishment 1/long rest, INT save)'] } },
-      { name: 'Patron of Fervor (Divine)', desc: 'Your patron is a zealous divine spirit. Gain healing hexes and protective wards.', features: { 1: ['Fervent Hex (Healing Word as hex cantrip when you hex a creature)'], 6: ['Sacred Ward (resistance to necrotic + radiant)'], 10: ['Divine Retribution (when hexed target damages ally, it takes radiant damage)'] } },
-      { name: 'Patron of Fate (Occult)', desc: 'Your patron weaves destiny itself. Gain divination hexes and fortune manipulation.', features: { 1: ['Fateful Hex (after hexing: next attack vs target has advantage)'], 6: ['Thread of Destiny (Portent: 1 pre-rolled d20 per long rest)'], 10: ['Unravel Fate (Bestow Curse 1/long rest without slot)'] } },
-      { name: 'Patron of Night (Occult)', desc: 'Your patron dwells in shadow and darkness. Gain shadow hexes and stealth magic.', features: { 1: ['Shadow Hex (Darkness 15ft centered on hexed target, 1 round)'], 6: ['Nightsight (Darkvision 120ft, see through magical darkness)'], 10: ['Umbral Familiar (familiar can become invisible, scout in shadows)'] } },
-      { name: 'Patron of the Wild (Primal)', desc: 'Your patron is a primal nature spirit. Gain nature hexes and beast magic.', features: { 1: ['Bramble Hex (thorns erupt around hexed target, 1d6 piercing to adjacent)'], 6: ['Wild Familiar (familiar transforms into CR 1 beast)'], 10: ['Nature\'s Wrath (Entangle + Plant Growth 1/long rest each)'] } },
-    ],
-    description: 'A spellcaster who draws power from a mysterious patron through a magical familiar. The familiar serves as their spellbook, and hexes are their signature magic — cursing enemies and twisting fate.',
-    features: {
-      1: ['Spellcasting (INT, familiar serves as spellbook)', 'Witch Patron', 'Witch\'s Familiar (enhanced Find Familiar)', 'Hex Cantrips (unique cantrips from patron)'],
-      2: ['Witch Hex (choose a hex: Evil Eye, Cackle, Misfortune, Slumber)'],
-      3: ['Cackle (bonus action: extend hex duration by 1 round)'],
-      5: ['Greater Hex'],
-      6: ['Patron Feature'],
-      7: ['Improved Familiar (familiar gains patron-specific powers)'],
-      10: ['Patron Feature', 'Major Hex'],
-      14: ['Grand Hex'],
-      18: ['Hex Mastery (hex cantrips deal extra 2d6 damage)'],
-      20: ['Supreme Patron Bond (regain all hex uses on short rest; familiar becomes invulnerable for 1 minute 1/long rest)'],
-    },
-    hex_list: [
-      { name: 'Evil Eye', level: 2, description: 'Target creature has disadvantage on next attack or ability check (WIS save negates). Lasts 1 minute or until triggered.' },
-      { name: 'Cackle', level: 3, description: 'As a bonus action, extend the duration of a hex affecting a creature within 30 ft by 1 round.' },
-      { name: 'Misfortune', level: 5, description: 'Target must roll twice and take the worse result on its next attack, save, or check (WIS save). 1/creature/day.' },
-      { name: 'Slumber', level: 5, description: 'Target falls asleep if it has fewer than 50 HP (WIS save). Damage or a loud noise wakes it.' },
-      { name: 'Agony', level: 10, description: 'Target is wracked with pain, taking 4d6 psychic damage and losing its reaction (CON save for half, keeps reaction).' },
-      { name: 'Death Curse', level: 14, description: 'Target creature must make a CON save or drop to 0 HP. On success, takes 10d6 necrotic damage instead. Usable 1/long rest.' },
-    ],
-  },
 };
 
 export const BACKGROUNDS = [
@@ -579,7 +518,7 @@ export const PROFICIENCY_BY_LEVEL = [2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5
 
 export const calcStatMod = (stat) => Math.floor(((stat || 10) - 10) / 2);
 export const calcModDisplay = (mod) => mod >= 0 ? `+${mod}` : `${mod}`;
-export const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Artificer', 'Oracle', 'Witch'];
+export const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Artificer'];
 
 export const calcHP = (charClass, level, conMod) => {
   const hd = CLASSES[charClass]?.hit_die || 8;

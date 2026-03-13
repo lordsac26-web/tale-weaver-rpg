@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
-import { Loader2, X, Coins, ChevronRight, ArrowLeftRight, Package } from 'lucide-react';
+import { Loader2, X, Coins, ChevronRight, Package, ArrowLeftRight } from 'lucide-react';
 import { LOOT_RARITY, generateLootForEnemy, generateCoinsForEnemy } from './lootTables';
-import { generateEncounterLoot } from './proceduralLoot';
 import EquipmentComparePanel from './EquipmentComparePanel';
 
 // ─── Single loot item card with reveal animation ────────────────────────────
-function LootItemCard({ item, index, onCompare, selected, onSelect, onStash }) {
+function LootItemCard({ item, index, onCompare, selected, onSelect }) {
   const r = LOOT_RARITY[item.rarity] || LOOT_RARITY.common;
   return (
     <motion.div
@@ -51,31 +50,18 @@ function LootItemCard({ item, index, onCompare, selected, onSelect, onStash }) {
         )}
       </div>
 
-      {/* Action buttons */}
-      <div className="flex gap-1 flex-shrink-0">
-        {item.category !== 'material' && item.category !== 'consumable' && item.category !== 'gem' && item.category !== 'document' && (
-          <button
-            onClick={e => { e.stopPropagation(); onCompare(item); }}
-            className="p-1.5 rounded-lg transition-all"
-            style={{ background: 'rgba(38,10,70,0.4)', border: '1px solid rgba(130,70,210,0.25)', color: 'rgba(192,132,252,0.55)' }}
-            title="Compare with equipped"
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,110,255,0.5)'; e.currentTarget.style.color = '#dfc8ff'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(130,70,210,0.25)'; e.currentTarget.style.color = 'rgba(192,132,252,0.55)'; }}>
-            <ArrowLeftRight className="w-3.5 h-3.5" />
-          </button>
-        )}
-        {onStash && (
-          <button
-            onClick={e => { e.stopPropagation(); onStash(item); }}
-            className="p-1.5 rounded-lg transition-all"
-            style={{ background: 'rgba(10,40,15,0.4)', border: '1px solid rgba(74,222,128,0.25)', color: 'rgba(74,222,128,0.55)' }}
-            title="Send to Party Stash"
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(74,222,128,0.5)'; e.currentTarget.style.color = '#86efac'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(74,222,128,0.25)'; e.currentTarget.style.color = 'rgba(74,222,128,0.55)'; }}>
-            <Package className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
+      {/* Compare button */}
+      {item.category !== 'material' && item.category !== 'consumable' && item.category !== 'gem' && item.category !== 'document' && (
+        <button
+          onClick={e => { e.stopPropagation(); onCompare(item); }}
+          className="flex-shrink-0 p-1.5 rounded-lg transition-all"
+          style={{ background: 'rgba(38,10,70,0.4)', border: '1px solid rgba(130,70,210,0.25)', color: 'rgba(192,132,252,0.55)' }}
+          title="Compare with equipped"
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,110,255,0.5)'; e.currentTarget.style.color = '#dfc8ff'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(130,70,210,0.25)'; e.currentTarget.style.color = 'rgba(192,132,252,0.55)'; }}>
+          <ArrowLeftRight className="w-3.5 h-3.5" />
+        </button>
+      )}
     </motion.div>
   );
 }
@@ -116,7 +102,7 @@ function CoinRow({ gold, silver, copper }) {
  *  onClose     — dismiss callback
  *  onCollect   — (charUpdates, lootSnapshot) => void
  */
-export default function LootModal({ enemies, character, onClose, onCollect, sessionId }) {
+export default function LootModal({ enemies, character, onClose, onCollect }) {
   const [loot, setLoot] = useState(null);          // { gold, silver, copper, items[] }
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -128,28 +114,26 @@ export default function LootModal({ enemies, character, onClose, onCollect, sess
 
   const buildLoot = () => {
     setLoading(true);
+    // Generate loot client-side using type-aware tables (fast, no network)
+    const allItems = [];
+    let totalGold = 0, totalSilver = 0, totalCopper = 0;
 
     const enemyList = enemies?.length > 0 ? enemies : [{ name: 'Unknown Enemy', type: 'Humanoid', cr: 1 }];
 
-    // Generate procedural loot (unique items with names, descriptions, stats)
-    const procedural = generateEncounterLoot(
-      enemyList.map(e => ({
-        name: e.name || 'Enemy',
-        type: e.type || e.meta?.split(' ')[0] || 'Humanoid',
-        cr: parseFloat(e.cr || e.challenge) || 1,
-      }))
-    );
-
-    // Also generate classic type-based loot drops
-    const classicItems = [];
     enemyList.forEach(enemy => {
       const type = enemy.type || enemy.meta?.split(' ')[0] || 'Humanoid';
       const cr = parseFloat(enemy.cr || enemy.challenge) || 1;
-      classicItems.push(...generateLootForEnemy(enemy.name || 'Enemy', type, cr));
+
+      const items = generateLootForEnemy(enemy.name || 'Enemy', type, cr);
+      allItems.push(...items);
+
+      const coins = generateCoinsForEnemy(type, cr);
+      totalGold   += coins.gold;
+      totalSilver += coins.silver;
+      totalCopper += coins.copper;
     });
 
-    // Merge classic + procedural, deduplicate by name
-    const allItems = [...procedural.items, ...classicItems];
+    // Deduplicate items by name (can happen when multiple same-type enemies)
     const seen = new Set();
     const uniqueItems = allItems.filter(it => {
       if (seen.has(it.name)) return false;
@@ -157,67 +141,15 @@ export default function LootModal({ enemies, character, onClose, onCollect, sess
       return true;
     });
 
-    // Use procedural coins (already type-aware) + classic coins, take higher
-    const classicCoins = { gold: 0, silver: 0, copper: 0 };
-    enemyList.forEach(enemy => {
-      const type = enemy.type || enemy.meta?.split(' ')[0] || 'Humanoid';
-      const cr = parseFloat(enemy.cr || enemy.challenge) || 1;
-      const c = generateCoinsForEnemy(type, cr);
-      classicCoins.gold += c.gold;
-      classicCoins.silver += c.silver;
-      classicCoins.copper += c.copper;
-    });
-
-    setLoot({
-      gold: Math.max(procedural.gold, classicCoins.gold),
-      silver: Math.max(procedural.silver, classicCoins.silver),
-      copper: Math.max(procedural.copper, classicCoins.copper),
-      items: uniqueItems,
-    });
+    setLoot({ gold: totalGold, silver: totalSilver, copper: totalCopper, items: uniqueItems });
     setLoading(false);
-  };
-
-  // Map a loot item to inventory-compatible format
-  const toInventoryItem = (it) => {
-    const LOOT_TO_INV_CATEGORY = {
-      weapon: 'Weapon', armor: 'Armor', accessory: 'Wondrous Item',
-      clothing: 'Other', material: 'Other', gem: 'Other', magical: 'Wondrous Item',
-      consumable: 'Potion', document: 'Other', general: 'Adventuring Gear',
-      Weapon: 'Weapon', Armor: 'Armor', Shield: 'Shield', Ring: 'Ring',
-      Amulet: 'Amulet', Helmet: 'Helmet', Cloak: 'Cloak', Gloves: 'Gloves',
-      Boots: 'Boots', Belt: 'Belt',
-    };
-    return {
-      name: it.name,
-      icon: it.icon || '📦',
-      category: LOOT_TO_INV_CATEGORY[it.category] || it.category || 'Other',
-      rarity: it.rarity || 'common',
-      quantity: it.quantity || 1,
-      weight: it.weight || 0,
-      cost: it.base_price || it.cost || 0,
-      cost_unit: it.cost_unit || 'gp',
-      base_price: it.base_price || it.cost || 0,
-      damage: it.modifiers?.damage_dice || it.damage || '',
-      damage_type: it.damage_type || '',
-      armor_class: it.modifiers?.armor_class || it.armor_class || 0,
-      armor_type: it.armor_type || null,
-      attack_bonus: it.modifiers?.attack_bonus || it.attack_bonus || 0,
-      description: it.description || '',
-      requires_attunement: it.requires_attunement || false,
-      is_magic: it.is_magic || (it.rarity && it.rarity !== 'common') || false,
-      is_procedural: it.is_procedural || false,
-      magic_properties: it.magic_properties || [],
-      modifiers: it.modifiers || {},
-      equip_slot: it.equip_slot || null,
-      source_enemy: it.source_enemy || null,
-    };
   };
 
   // Collect all at once — adds everything to inventory + coin purse
   const handleTakeAll = async () => {
     if (!loot) return;
     setSaving(true);
-    const newItems = loot.items.map(toInventoryItem);
+    const newItems = loot.items.map(it => ({ ...it, magic_properties: [] }));
     const updates = {
       gold:      (character.gold   || 0) + (loot.gold   || 0),
       silver:    (character.silver || 0) + (loot.silver || 0),
@@ -238,48 +170,30 @@ export default function LootModal({ enemies, character, onClose, onCollect, sess
   const handleEquipItem = async (item) => {
     if (!item) return;
     setSaving(true);
-    const invItem = toInventoryItem(item);
     const equipped = { ...(character.equipped || {}) };
-    const slot = item.category === 'weapon' ? 'mainhand' : item.category === 'armor' ? 'armor' : null;
-    if (slot) equipped[slot] = invItem;
+    const slot = item.category === 'weapon' ? 'weapon' : item.category === 'armor' ? 'armor' : item.category === 'accessory' ? 'accessory' : null;
+    if (slot) equipped[slot] = item;
 
-    const newInventory = [...(character.inventory || []), invItem];
-    const updates = { inventory: newInventory, equipped };
+    const newInventory = [...(character.inventory || []), { ...item, magic_properties: [] }];
+    const updates = {
+      inventory: newInventory,
+      equipped,
+    };
     await base44.entities.Character.update(character.id, updates);
 
+    // Mark as collected
     setCollectedItems(prev => new Set([...prev, item.name]));
     setCompareItem(null);
     setSelectedItem(null);
     setSaving(false);
-    onCollect(updates, null);
-  };
-
-  // Send item to party stash instead of personal inventory
-  const handleSendToStash = async (item) => {
-    if (!item || !sessionId) return;
-    setSaving(true);
-    // Find or create party stash
-    const stashes = await base44.entities.PartyStash.filter({ session_id: sessionId });
-    let stash = stashes[0];
-    if (!stash) {
-      stash = await base44.entities.PartyStash.create({ session_id: sessionId, items: [], gold: 0, silver: 0, copper: 0, log: [] });
-    }
-    const invItem = toInventoryItem(item);
-    const newItems = [...(stash.items || []), invItem];
-    const newLog = [...(stash.log || []), { action: 'deposited', item: item.name, character: character?.name || 'Unknown', timestamp: new Date().toISOString() }];
-    await base44.entities.PartyStash.update(stash.id, { items: newItems, log: newLog });
-    setCollectedItems(prev => new Set([...prev, item.name]));
-    setCompareItem(null);
-    setSelectedItem(null);
-    setSaving(false);
+    onCollect({ ...character, ...updates }, null);
   };
 
   // Keep in bag only — add to inventory without equipping
   const handleKeepInBag = async (item) => {
     if (!item) return;
     setSaving(true);
-    const invItem = toInventoryItem(item);
-    const newInventory = [...(character.inventory || []), invItem];
+    const newInventory = [...(character.inventory || []), { ...item, magic_properties: [] }];
     const updates = { inventory: newInventory };
     await base44.entities.Character.update(character.id, updates);
 
@@ -287,7 +201,7 @@ export default function LootModal({ enemies, character, onClose, onCollect, sess
     setCompareItem(null);
     setSelectedItem(null);
     setSaving(false);
-    onCollect(updates, null);
+    onCollect({ ...character, ...updates }, null);
   };
 
   // Get the currently equipped item in the same category for comparison
@@ -392,7 +306,6 @@ export default function LootModal({ enemies, character, onClose, onCollect, sess
                         selected={selectedItem?.name === item.name}
                         onSelect={setSelectedItem}
                         onCompare={setCompareItem}
-                        onStash={sessionId ? handleSendToStash : undefined}
                       />
                     </div>
                   ))}

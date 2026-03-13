@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
-import { User, Loader2, ChevronLeft, Dices, Swords, Map, ShoppingBag, Eye, Paintbrush, Scroll, BookMarked, Grid3X3, Moon, Package } from 'lucide-react';
+import { User, Loader2, ChevronLeft, Dices, Swords, Map, ShoppingBag, Eye, Paintbrush, Scroll, BookMarked } from 'lucide-react';
 import { SKILL_STAT_MAP, calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
-import computeCharacterStats from '@/components/game/computeCharacterStats';
-import { getAlignmentLabel } from '@/components/game/AlignmentBadge';
 import { motion, AnimatePresence } from 'framer-motion';
 import HUD from '@/components/game/HUD';
 import StoryPanel from '@/components/game/StoryPanel';
@@ -17,9 +15,6 @@ import CharacterPortraitGenerator from '@/components/game/CharacterPortraitGener
 import ActionProposalModal from '@/components/game/ActionProposalModal';
 import Dice3DModal from '@/components/dice/Dice3DModal.jsx';
 import LootModal from '@/components/game/LootModal.jsx';
-import CombatBattleMap from '@/components/battlemap/CombatBattleMap';
-import AfterActionReport from '@/components/game/AfterActionReport';
-import RestModal from '@/components/game/RestModal';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -46,12 +41,6 @@ export default function Game() {
   const [lastCombatEvent, setLastCombatEvent] = useState(null);
   const [showLootModal, setShowLootModal] = useState(false);
   const [defeatedEnemies, setDefeatedEnemies] = useState([]);
-  const [showBattleMap, setShowBattleMap] = useState(false);
-  const [showRestModal, setShowRestModal] = useState(false);
-  const [aarData, setAarData] = useState(null);
-  const [aarLoading, setAarLoading] = useState(false);
-  const [showAAR, setShowAAR] = useState(false);
-  const lastRestoredLogLen = useRef(0);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate(createPageUrl('Home')); return; }
@@ -63,24 +52,12 @@ export default function Game() {
     const chars = await base44.entities.Character.filter({ id: sess.character_id });
     setCharacter(chars[0] || null);
 
-    // Restore narrative from story_log whenever the log length has changed
-    // (covers initial load AND returning to the tab after state was lost)
-    const logLen = sess.story_log?.length || 0;
-    if (logLen > 0 && logLen !== lastRestoredLogLen.current) {
-      lastRestoredLogLen.current = logLen;
-      const stripChoices = (text) => {
-        if (!text) return text;
-        let cleaned = text.replace(/\n[^\n]*(?:choices?\s+(?:loomed|are|were|remain)):?\s*$/im, '');
-        cleaned = cleaned.replace(/(\n\s*\d+\.\s+.+(?:\n\s+[-–—*].+)*){2,}$/gs, '').trim();
-        return cleaned;
-      };
-      const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: stripChoices(e.text) }));
+    if (sess.story_log?.length > 0 && narrative.length === 0) {
+      const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: e.text }));
       setNarrative(restored);
       setStarted(true);
       const lastEntry = sess.story_log[sess.story_log.length - 1];
-      if (lastEntry?.choices?.length > 0) {
-        setChoices(lastEntry.choices);
-      }
+      if (lastEntry?.choices?.length > 0) setChoices(lastEntry.choices);
     }
 
     if (sess.in_combat && sess.combat_state?.combat_id) {
@@ -91,17 +68,6 @@ export default function Game() {
   }, [sessionId]);
 
   useEffect(() => { loadState(); }, [sessionId]);
-
-  // Re-sync narrative state when user returns to this tab/window
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && sessionId) {
-        loadState();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [sessionId, loadState]);
 
   const startAdventure = async () => {
     setStoryLoading(true);
@@ -114,14 +80,12 @@ export default function Game() {
     setStoryLoading(false);
   };
 
-  // Compute skill check modifier from character stats (with equipment bonuses) + proficiency
+  // Compute skill check modifier from character stats + proficiency
   const computeSkillModifier = (skillName) => {
     if (!character) return 0;
-    const computed = computeCharacterStats(character);
     const stat = SKILL_STAT_MAP[skillName];
-    const effectiveStat = computed?.[stat] ?? character[stat];
-    const base = stat ? calcStatMod(effectiveStat) : 0;
-    const prof = computed?.proficiency_bonus || PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
+    const base = stat ? calcStatMod(character[stat]) : 0;
+    const prof = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
     // character.skills stores exact skill name as key, value is 'proficient', 'expert', or true (legacy)
     const skillVal = (character.skills || {})[skillName];
     const isProficient = skillVal === 'proficient' || skillVal === true;
@@ -171,44 +135,6 @@ export default function Game() {
     }
   };
 
-  // Process alignment shifts from AI response and emit narrative events
-  const processAlignmentShift = (data) => {
-    if (!data.alignment_shift || !character) return;
-    const lcShift = data.alignment_shift.law_chaos_shift || 0;
-    const geShift = data.alignment_shift.good_evil_shift || 0;
-    if (lcShift === 0 && geShift === 0) return;
-
-    const oldLC = character.alignment_law_chaos || 0;
-    const oldGE = character.alignment_good_evil || 0;
-    const newLC = Math.max(-10, Math.min(10, oldLC + lcShift));
-    const newGE = Math.max(-10, Math.min(10, oldGE + geShift));
-    const oldLabel = getAlignmentLabel(oldLC, oldGE);
-    const newLabel = getAlignmentLabel(newLC, newGE);
-
-    const parts = [];
-    if (lcShift > 0) parts.push(`⚖️ +${lcShift} Lawful`);
-    if (lcShift < 0) parts.push(`🌊 ${lcShift} Chaotic`);
-    if (geShift > 0) parts.push(`💚 +${geShift} Good`);
-    if (geShift < 0) parts.push(`💀 ${geShift} Evil`);
-
-    if (oldLabel !== newLabel) {
-      setNarrative(prev => [...prev, {
-        type: 'alignment_shift',
-        text: `${oldLabel} → ${newLabel}`,
-        details: parts.join(' · '),
-      }]);
-    } else if (Math.abs(lcShift) >= 2 || Math.abs(geShift) >= 2) {
-      setNarrative(prev => [...prev, {
-        type: 'alignment_shift',
-        text: parts.join(' · '),
-        details: `Alignment: ${newLabel} (L/C: ${newLC}, G/E: ${newGE})`,
-      }]);
-    }
-
-    // Update local character state immediately
-    setCharacter(prev => prev ? { ...prev, alignment_law_chaos: newLC, alignment_good_evil: newGE, alignment: newLabel } : prev);
-  };
-
   const handleChoice = async (choiceIndex) => {
     const choice = choices[choiceIndex];
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
@@ -250,7 +176,6 @@ export default function Game() {
 
     if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
     if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP earned!` }]);
-    processAlignmentShift(data);
 
     if (data.combat_trigger && data.enemies?.length > 0) {
       setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
@@ -302,7 +227,6 @@ export default function Game() {
     const data = result.data;
     if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
     if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);
-    processAlignmentShift(data);
     if (data.combat_trigger && data.enemies?.length > 0) {
       setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
       await startCombat(data.enemies);
@@ -318,7 +242,6 @@ export default function Game() {
       action: 'start_combat', session_id: sessionId, character_id: character?.id, payload: { enemies }
     });
     setCombat({ ...result.data, id: result.data.combat_id });
-    setShowBattleMap(true);
     await loadState();
   };
 
@@ -363,15 +286,13 @@ export default function Game() {
     }
 
     if (data.combat_ended) {
-      const endCombatId = combatId;
       if (data.result === 'victory') {
         const victoriousEnemies = (combat?.combatants || []).filter(c => c.type === 'enemy');
         setDefeatedEnemies(victoriousEnemies);
         setShowLootModal(true);
         setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! The battle is won. Your enemies lie defeated.' }]);
-        await saveCombatHistory(endCombatId, 'victory', victoriousEnemies);
-        // Generate AAR in background (non-blocking)
-        generateAAR(endCombatId);
+        // Save history snapshot (loot added later via onCollect)
+        await saveCombatHistory(combatId, 'victory', victoriousEnemies);
         const storyResult = await base44.functions.invoke('generateStory', {
           session_id: sessionId, action: 'choice', custom_input: 'The combat has ended in victory.'
         });
@@ -379,8 +300,7 @@ export default function Game() {
         setChoices(storyResult.data?.choices || []);
       } else if (data.result === 'defeat') {
         const defeatedEnemyList = (combat?.combatants || []).filter(c => c.type === 'enemy');
-        await saveCombatHistory(endCombatId, 'defeat', defeatedEnemyList);
-        generateAAR(endCombatId);
+        await saveCombatHistory(combatId, 'defeat', defeatedEnemyList);
         setNarrative(prev => [...prev, { type: 'narration', text: '💀 You have fallen in battle. Darkness takes you...' }]);
         setChoices([]);
       }
@@ -426,8 +346,6 @@ export default function Game() {
           }
         if (data.player_dead) {
           setNarrative(prev => [...prev, { type: 'narration', text: '💀 You have fallen in battle...' }]);
-          await saveCombatHistory(combatId, 'defeat', (combat?.combatants || []).filter(c => c.type === 'enemy'));
-          generateAAR(combatId);
           setCombat(null);
           break;
         }
@@ -462,23 +380,6 @@ export default function Game() {
     });
   };
 
-  const generateAAR = async (combatId) => {
-    setAarLoading(true);
-    setShowAAR(true);
-    try {
-      const result = await base44.functions.invoke('generateAfterActionReport', {
-        combat_id: combatId,
-        session_id: sessionId,
-        character_id: character?.id,
-      });
-      setAarData(result.data);
-    } catch (e) {
-      console.error('AAR generation failed:', e);
-      setAarData(null);
-    }
-    setAarLoading(false);
-  };
-
   const reloadCombat = async (combatId) => {
     const logs = await base44.entities.CombatLog.filter({ id: combatId });
     if (logs[0]) setCombat(logs[0]);
@@ -504,10 +405,7 @@ export default function Game() {
     if (roll.success) {
       setNarrative(prev => [...prev, { type: 'roll_result', text: `Acrobatics: ${roll.final_result} vs DC 12 — You escape!`, success: true }]);
       const combatId = combat?.id || session?.combat_state?.combat_id;
-      if (combatId) {
-        await base44.entities.CombatLog.update(combatId, { is_active: false, result: 'fled' });
-        generateAAR(combatId);
-      }
+      if (combatId) await base44.entities.CombatLog.update(combatId, { is_active: false, result: 'fled' });
       await base44.entities.GameSession.update(sessionId, { in_combat: false });
       setCombat(null);
       const storyResult = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: 'You fled from combat successfully.' });
@@ -552,26 +450,14 @@ export default function Game() {
           onMouseLeave={e => e.currentTarget.style.color = 'rgba(201,169,110,0.5)'}>
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <span className="text-sm flex-1 italic" style={{ color: 'rgba(220,190,130,0.65)', fontFamily: 'IM Fell English, serif' }}>
+        <span className="text-sm flex-1 italic" style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'IM Fell English, serif' }}>
           {session?.title || 'Adventure'}
         </span>
 
         {inCombat && (
-          <>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full font-fantasy text-xs badge-blood combat-active">
-              <Swords className="w-3 h-3" /> In Combat
-            </div>
-            <button onClick={() => setShowBattleMap(v => !v)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-              style={showBattleMap ? {
-                background: 'rgba(80,10,10,0.7)', border: '1px solid rgba(220,50,50,0.5)', color: '#fca5a5',
-                boxShadow: '0 0 10px rgba(180,30,30,0.15)',
-              } : {
-                background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(180,60,40,0.2)', color: 'rgba(252,165,165,0.55)',
-              }}>
-              <Grid3X3 className="w-3.5 h-3.5" /> Map
-            </button>
-          </>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full font-fantasy text-xs badge-blood combat-active">
+            <Swords className="w-3 h-3" /> In Combat
+          </div>
         )}
 
         <button onClick={() => setShowDiceRoller(v => !v)}
@@ -601,14 +487,6 @@ export default function Game() {
           onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(220,80,60,0.45)'; e.currentTarget.style.color = '#fca5a5'; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,60,40,0.2)'; e.currentTarget.style.color = 'rgba(252,165,165,0.55)'; }}>
           <BookMarked className="w-3.5 h-3.5" /> History
-        </button>
-
-        <button onClick={() => navigate(createPageUrl('PartyStash') + `?session_id=${sessionId}&character_id=${character?.id}`)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-          style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(74,222,128,0.2)', color: 'rgba(74,222,128,0.6)' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(74,222,128,0.45)'; e.currentTarget.style.color = '#86efac'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(74,222,128,0.2)'; e.currentTarget.style.color = 'rgba(74,222,128,0.6)'; }}>
-          <Package className="w-3.5 h-3.5" /> Stash
         </button>
 
         <button onClick={() => navigate(createPageUrl('Market') + `?session_id=${sessionId}&character_id=${character?.id}`)}
@@ -660,27 +538,16 @@ export default function Game() {
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,140,90,0.2)'; e.currentTarget.style.color = 'rgba(201,169,110,0.6)'; }}>
           <User className="w-3.5 h-3.5" /> Sheet
         </button>
-
-        {started && !inCombat && (
-          <button onClick={() => setShowRestModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-            style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(100,80,180,0.25)', color: 'rgba(129,140,248,0.65)' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(129,140,248,0.5)'; e.currentTarget.style.color = '#a5b4fc'; e.currentTarget.style.boxShadow = '0 0 10px rgba(129,140,248,0.15)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(100,80,180,0.25)'; e.currentTarget.style.color = 'rgba(129,140,248,0.65)'; e.currentTarget.style.boxShadow = 'none'; }}>
-            <Moon className="w-3.5 h-3.5" /> Rest
-          </button>
-        )}
       </div>
 
       {/* Main Game Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {inCombat ? (
-          <div className={`flex-1 grid overflow-hidden min-h-0 ${showBattleMap ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1 lg:grid-cols-2'}`}>
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden min-h-0">
             <div className="overflow-hidden flex flex-col min-h-0" style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
               <StoryPanel narrative={narrative} choices={[]} loading={storyLoading}
                 onChoice={() => {}} customInput={customInput}
-                setCustomInput={setCustomInput} onCustomSubmit={() => {}}
-                sessionSetting={session?.setting} />
+                setCustomInput={setCustomInput} onCustomSubmit={() => {}} />
             </div>
             <div className="overflow-hidden">
               <CombatPanel combat={combat} character={character}
@@ -690,11 +557,6 @@ export default function Game() {
                 loading={combatLoading}
                 lastCombatEvent={lastCombatEvent} />
             </div>
-            {showBattleMap && (
-              <div className="overflow-hidden hidden lg:block" style={{ borderLeft: '1px solid rgba(180,30,30,0.2)' }}>
-                <CombatBattleMap combat={combat} character={character} />
-              </div>
-            )}
           </div>
         ) : (
           <div className="flex-1 overflow-hidden min-h-0">
@@ -712,7 +574,7 @@ export default function Game() {
                   <h2 className="text-3xl font-fantasy font-bold mb-5 text-glow-gold" style={{ color: '#f0c040' }}>
                     Your Adventure Awaits
                   </h2>
-                  <p className="mb-8 leading-relaxed" style={{ color: 'rgba(240,225,200,0.78)', fontFamily: 'IM Fell English, serif', fontSize: '1.1rem' }}>
+                  <p className="mb-8 leading-relaxed" style={{ color: 'rgba(232,213,183,0.65)', fontFamily: 'IM Fell English, serif', fontSize: '1.1rem' }}>
                     {session?.story_seed || 'The realm is full of mystery and danger. Your legend begins now.'}
                   </p>
                   <motion.button onClick={startAdventure} disabled={storyLoading}
@@ -728,8 +590,7 @@ export default function Game() {
             ) : (
               <StoryPanel narrative={narrative} choices={choices} loading={storyLoading}
                 onChoice={handleChoice} customInput={customInput}
-                setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput}
-                sessionSetting={session?.setting} />
+                setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} />
             )}
           </div>
         )}
@@ -795,7 +656,6 @@ export default function Game() {
           <LootModal
             enemies={defeatedEnemies}
             character={character}
-            sessionId={sessionId}
             onClose={() => setShowLootModal(false)}
             onCollect={async (updates, lootSnapshot) => {
               setCharacter(prev => ({ ...prev, ...updates }));
@@ -828,42 +688,6 @@ export default function Game() {
             proposal={pendingProposal}
             onConfirm={() => executeProposedAction(pendingProposal)}
             onCancel={() => setPendingProposal(null)} />
-        )}
-      </AnimatePresence>
-
-      {/* After-Action Report Modal */}
-      <AnimatePresence>
-        {showAAR && (
-          <AfterActionReport
-            aar={aarData}
-            loading={aarLoading}
-            onClose={() => { setShowAAR(false); setAarData(null); }}
-            onNarrativeContinue={(bridge) => {
-              setNarrative(prev => [...prev, { type: 'narration', text: bridge }]);
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Rest Modal */}
-      <AnimatePresence>
-        {showRestModal && character && (
-          <RestModal
-            character={character}
-            session={session}
-            onClose={() => setShowRestModal(false)}
-            onRestComplete={async (type, results) => {
-              await loadState();
-              const restLabel = type === 'short' ? 'Short Rest' : 'Long Rest';
-              const hpMsg = results.healing > 0 ? ` Recovered ${results.healing} HP.` : '';
-              setNarrative(prev => [...prev, {
-                type: 'narration',
-                text: type === 'long'
-                  ? `🌙 *${character.name} takes a long rest.* The night passes peacefully. You awaken fully refreshed and prepared.${hpMsg}`
-                  : `☕ *${character.name} takes a short rest.* A brief respite to catch your breath and tend to wounds.${hpMsg}`,
-              }]);
-            }}
-          />
         )}
       </AnimatePresence>
 

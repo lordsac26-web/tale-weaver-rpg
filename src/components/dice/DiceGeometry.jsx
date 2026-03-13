@@ -56,7 +56,7 @@ function createIvoryMaterial(isCrit, isFail) {
 
 // ─── Crit/fail glow sphere ────────────────────────────────────────────────────
 function addCritGlow(mesh, isCrit) {
-  const glowGeo = new THREE.SphereGeometry(0.4, 16, 16);
+  const glowGeo = new THREE.SphereGeometry(0.8, 16, 16);
   const glowMat = new THREE.MeshBasicMaterial({
     color: isCrit ? '#f0c040' : '#ff2200',
     transparent: true,
@@ -69,28 +69,26 @@ function addCritGlow(mesh, isCrit) {
   mesh.add(glow);
 }
 
-// ─── Global scale for all dice (smaller to fit in tower tray) ─────────────────
-const DICE_SCALE = 0.45;
-
 // ─── D4 (Tetrahedron) ────────────────────────────────────────────────────────
 function createD4(result, isCrit, isFail) {
-  const geo = new THREE.TetrahedronGeometry(0.65 * DICE_SCALE, 0);
+  const geo = new THREE.TetrahedronGeometry(0.65, 0);
   const mat = createIvoryMaterial(isCrit, isFail);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
 
-  const sprite = createFaceSprite(result, isCrit, isFail, 0.3);
-  sprite.position.set(0, -0.08, 0);
+  // Place number sprite at center — D4 reads number at bottom
+  const sprite = createFaceSprite(result, isCrit, isFail, 0.5);
+  sprite.position.set(0, -0.15, 0);
   mesh.add(sprite);
 
   if (isCrit || isFail) addCritGlow(mesh, isCrit);
-  mesh.userData.dieRadius = 0.65 * DICE_SCALE;
+  mesh.userData.dieRadius = 0.65;
   return mesh;
 }
 
 // ─── D6 (Cube) ───────────────────────────────────────────────────────────────
 function createD6(result, isCrit, isFail) {
-  const size = 0.55 * DICE_SCALE;
+  const size = 0.55;
   // Create 6 face materials with numbers baked in
   const materials = [];
   const faceValues = [1, 6, 2, 5, 3, 4]; // Three.js cube face order
@@ -117,66 +115,69 @@ function createD6(result, isCrit, isFail) {
 
 // ─── D8 (Octahedron) ─────────────────────────────────────────────────────────
 function createD8(result, isCrit, isFail) {
-  const geo = new THREE.OctahedronGeometry(0.6 * DICE_SCALE, 0);
+  const geo = new THREE.OctahedronGeometry(0.6, 0);
   const mat = createIvoryMaterial(isCrit, isFail);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
 
-  const sprite = createFaceSprite(result, isCrit, isFail, 0.28);
-  sprite.position.set(0, 0.08, 0.12);
+  const sprite = createFaceSprite(result, isCrit, isFail, 0.45);
+  sprite.position.set(0, 0.15, 0.25);
   mesh.add(sprite);
 
   if (isCrit || isFail) addCritGlow(mesh, isCrit);
-  mesh.userData.dieRadius = 0.6 * DICE_SCALE;
+  mesh.userData.dieRadius = 0.6;
   return mesh;
 }
 
 // ─── D10 (Pentagonal trapezohedron approx — using lathe) ──────────────────────
 function createD10(result, isCrit, isFail) {
-  const geo = new THREE.DodecahedronGeometry(0.55 * DICE_SCALE, 0);
+  // Approximate D10 as a bipyramid with 10 faces
+  const geo = new THREE.DodecahedronGeometry(0.55, 0);
+  // Scale vertically to get more D10-like shape
   geo.scale(0.85, 1.1, 0.85);
   const mat = createIvoryMaterial(isCrit, isFail);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
 
-  const sprite = createFaceSprite(result, isCrit, isFail, 0.25);
-  sprite.position.set(0, 0.08, 0.15);
+  const sprite = createFaceSprite(result, isCrit, isFail, 0.42);
+  sprite.position.set(0, 0.15, 0.3);
   mesh.add(sprite);
 
   if (isCrit || isFail) addCritGlow(mesh, isCrit);
-  mesh.userData.dieRadius = 0.55 * DICE_SCALE;
+  mesh.userData.dieRadius = 0.55;
   return mesh;
 }
 
 // ─── D12 (Dodecahedron) ──────────────────────────────────────────────────────
 function createD12(result, isCrit, isFail) {
-  const geo = new THREE.DodecahedronGeometry(0.6 * DICE_SCALE, 0);
+  const geo = new THREE.DodecahedronGeometry(0.6, 0);
   const mat = createIvoryMaterial(isCrit, isFail);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
 
-  const sprite = createFaceSprite(result, isCrit, isFail, 0.25);
-  sprite.position.set(0, 0.09, 0.14);
+  const sprite = createFaceSprite(result, isCrit, isFail, 0.4);
+  sprite.position.set(0, 0.18, 0.28);
   mesh.add(sprite);
 
   if (isCrit || isFail) addCritGlow(mesh, isCrit);
-  mesh.userData.dieRadius = 0.6 * DICE_SCALE;
+  mesh.userData.dieRadius = 0.6;
   return mesh;
 }
 
 // ─── D20 (Icosahedron) ───────────────────────────────────────────────────────
 function createD20(result, isCrit, isFail) {
-  const geo = new THREE.IcosahedronGeometry(0.6 * DICE_SCALE, 0);
+  const geo = new THREE.IcosahedronGeometry(0.6, 0);
   const mat = createIvoryMaterial(isCrit, isFail);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
 
-  const sprite = createFaceSprite(result, isCrit, isFail, 0.3);
-  sprite.position.set(0, 0.09, 0.15);
+  // Large centered result number
+  const sprite = createFaceSprite(result, isCrit, isFail, 0.48);
+  sprite.position.set(0, 0.18, 0.3);
   mesh.add(sprite);
 
   if (isCrit || isFail) addCritGlow(mesh, isCrit);
-  mesh.userData.dieRadius = 0.6 * DICE_SCALE;
+  mesh.userData.dieRadius = 0.6;
   return mesh;
 }
 
@@ -226,16 +227,17 @@ export function createDieMesh(sides, result, dieColor) {
     case 12:  return createD12(result, isCrit, isFail);
     case 20:  return createD20(result, isCrit, isFail);
     case 100: {
+      // D100 = two D10s (tens + units)
       const tens = Math.floor((result - 1) / 10) * 10;
       const units = ((result - 1) % 10) + 1;
       const group = new THREE.Group();
       const d1 = createD10(tens === 0 ? '00' : tens, false, false);
-      d1.position.set(-0.22, 0, 0);
+      d1.position.set(-0.4, 0, 0);
       const d2 = createD10(units, false, false);
-      d2.position.set(0.22, 0, 0);
+      d2.position.set(0.4, 0, 0);
       group.add(d1);
       group.add(d2);
-      group.userData.dieRadius = 0.7 * DICE_SCALE;
+      group.userData.dieRadius = 0.7;
       return group;
     }
     default:  return createD20(result, isCrit, isFail);
@@ -245,13 +247,13 @@ export function createDieMesh(sides, result, dieColor) {
 // ─── Get physics radius for a die type ────────────────────────────────────────
 export function getDieRadius(sides) {
   switch (sides) {
-    case 4: return 0.65 * DICE_SCALE;
-    case 6: return 0.55 * DICE_SCALE;
-    case 8: return 0.6 * DICE_SCALE;
-    case 10: return 0.55 * DICE_SCALE;
-    case 12: return 0.6 * DICE_SCALE;
-    case 20: return 0.6 * DICE_SCALE;
-    case 100: return 0.7 * DICE_SCALE;
-    default: return 0.6 * DICE_SCALE;
+    case 4: return 0.65;
+    case 6: return 0.55;
+    case 8: return 0.6;
+    case 10: return 0.55;
+    case 12: return 0.6;
+    case 20: return 0.6;
+    case 100: return 0.7;
+    default: return 0.6;
   }
 }

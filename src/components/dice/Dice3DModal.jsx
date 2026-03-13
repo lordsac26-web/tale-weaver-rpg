@@ -1,11 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Dices, ChevronDown, ChevronUp, RotateCcw, Sun, Moon, Sunset } from 'lucide-react';
+import { X, Dices, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { TOWER_CONFIGS } from './DiceTowerScene';
 import CriticalEffect from './CriticalEffect';
 import VanillaThreeScene from './VanillaThreeScene';
-import ModelUploader from './ModelUploader';
-import { getSpawnPosition, getSpawnVelocity, getSpawnAngularVelocity } from './TowerPhysics';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -17,12 +15,6 @@ const DICE_TYPES = [
   { label: 'D12',  sides: 12 },
   { label: 'D20',  sides: 20 },
   { label: 'D100', sides: 100 },
-];
-
-const AMBIENCE_OPTIONS = [
-  { key: 'night', label: 'Night', icon: Moon, color: '#6688cc' },
-  { key: 'dusk',  label: 'Dusk',  icon: Sunset, color: '#e8a040' },
-  { key: 'day',   label: 'Day',   icon: Sun, color: '#ffd080' },
 ];
 
 // ─── Main Modal ───────────────────────────────────────────────────────────────
@@ -37,9 +29,6 @@ export default function Dice3DModal({ onClose, character }) {
   const [critEffect, setCritEffect]       = useState(null);
   const [rollHistory, setRollHistory]     = useState([]);
   const [showTowerPicker, setShowTowerPicker] = useState(false);
-  const [ambience, setAmbience] = useState('dusk');
-  const [customTowerUrl, setCustomTowerUrl] = useState(null);
-  const [customDiceUrl, setCustomDiceUrl] = useState(null);
   const idRef = useRef(0);
 
   const diceType = DICE_TYPES.find(d => d.label === selectedDice) || DICE_TYPES[5];
@@ -52,54 +41,44 @@ export default function Dice3DModal({ onClose, character }) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  // Store pending roll data so we can finalize when dice settle
-  const pendingRollRef = useRef(null);
-
   const handleRoll = useCallback(() => {
     if (rolling) return;
     const count   = Math.min(diceCount, 6);
     const results = Array.from({ length: count }, () => Math.floor(Math.random() * diceType.sides) + 1);
 
-    // Dice spawn inside tower top opening, fall through baffles to catch tray
+    // Dice spawn from the top bowl of the tower, fall through baffles to catch tray
     const newDice = results.map((result, i) => ({
       id: idRef.current++,
       result,
-      position: getSpawnPosition(i),
-      velocity: getSpawnVelocity(),
-      angularVelocity: getSpawnAngularVelocity(),
+      position: [(Math.random() - 0.5) * 0.6, 4 + i * 1.0, (Math.random() - 0.5) * 0.6],
+      velocity: [(Math.random() - 0.5) * 3, -8, (Math.random() - 0.5) * 2 + 1.5],
+      angularVelocity: [
+        (Math.random() - 0.5) * 22,
+        (Math.random() - 0.5) * 22,
+        (Math.random() - 0.5) * 22,
+      ],
     }));
-
-    // Store roll info for when dice settle
-    const total = results.reduce((s, r) => s + r, 0) + modifier;
-    pendingRollRef.current = { count, results, total, sides: diceType.sides, label: diceType.label };
 
     setDice(newDice);
     setRolling(true);
-  }, [rolling, diceCount, diceType, modifier]);
 
-  // Called by VanillaThreeScene when all dice physics bodies have settled
-  const handleDiceSettled = useCallback(() => {
-    const pending = pendingRollRef.current;
-    if (!pending) return;
-    pendingRollRef.current = null;
+    // Crit effects for d20
+    if (diceType.sides === 20 && count === 1) {
+      if (results[0] === 20) setTimeout(() => setCritEffect('crit'), 2400);
+      if (results[0] === 1)  setTimeout(() => setCritEffect('fail'), 2400);
+    }
 
-    // Record to history
+    const total = results.reduce((s, r) => s + r, 0) + modifier;
     setRollHistory(prev => [{
-      dice: `${pending.count}${pending.label}${modifier !== 0 ? (modifier > 0 ? `+${modifier}` : modifier) : ''}`,
-      results: pending.results,
-      total: pending.total,
-      sides: pending.sides,
+      dice: `${count}${diceType.label}${modifier !== 0 ? (modifier > 0 ? `+${modifier}` : modifier) : ''}`,
+      results,
+      total,
+      sides: diceType.sides,
       ts: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     }, ...prev.slice(0, 11)]);
 
-    // Crit effects for d20
-    if (pending.sides === 20 && pending.count === 1) {
-      if (pending.results[0] === 20) setCritEffect('crit');
-      if (pending.results[0] === 1)  setCritEffect('fail');
-    }
-
-    setRolling(false);
-  }, [modifier]);
+    setTimeout(() => setRolling(false), 3800);
+  }, [rolling, diceCount, diceType, modifier]);
 
   const handleClear = () => { setDice([]); };
 
@@ -172,10 +151,6 @@ export default function Dice3DModal({ onClose, character }) {
               towerConfig={cfg}
               dice={dice}
               diceSides={diceType.sides}
-              ambience={ambience}
-              onAllSettled={handleDiceSettled}
-              customTowerUrl={customTowerUrl}
-              customDiceUrl={customDiceUrl}
             />
 
             {/* Roll Result Overlay */}
@@ -265,52 +240,6 @@ export default function Dice3DModal({ onClose, character }) {
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
-
-            <div className="h-px flex-shrink-0" style={{ background: 'rgba(201,169,110,0.1)' }} />
-
-            {/* Ambience / Time of Day */}
-            <div>
-              <div className="text-xs mb-2 font-fantasy" style={{ color: 'rgba(201,169,110,0.45)', letterSpacing: '0.12em' }}>AMBIENCE</div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {AMBIENCE_OPTIONS.map(a => {
-                  const Icon = a.icon;
-                  const active = ambience === a.key;
-                  return (
-                    <button key={a.key}
-                      onClick={() => setAmbience(a.key)}
-                      className="flex flex-col items-center gap-1 py-2 rounded-lg text-xs font-fantasy transition-all"
-                      style={{
-                        background: active ? `${a.color}22` : 'rgba(12,7,2,0.6)',
-                        border: `1px solid ${active ? a.color + '77' : 'rgba(80,50,10,0.2)'}`,
-                        color: active ? a.color : 'rgba(201,169,110,0.4)',
-                        boxShadow: active ? `0 0 12px ${a.color}22` : 'none',
-                      }}>
-                      <Icon className="w-3.5 h-3.5" />
-                      <span>{a.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="h-px flex-shrink-0" style={{ background: 'rgba(201,169,110,0.1)' }} />
-
-            {/* Custom Models */}
-            <div className="space-y-2">
-              <div className="text-xs font-fantasy" style={{ color: 'rgba(201,169,110,0.45)', letterSpacing: '0.12em' }}>CUSTOM MODELS</div>
-              <ModelUploader
-                label="Tower Model (.glb)"
-                currentUrl={customTowerUrl}
-                onUrlChange={setCustomTowerUrl}
-                accentColor={cfg.ambientColor}
-              />
-              <ModelUploader
-                label="Dice Model (.glb)"
-                currentUrl={customDiceUrl}
-                onUrlChange={setCustomDiceUrl}
-                accentColor={cfg.ambientColor}
-              />
             </div>
 
             <div className="h-px flex-shrink-0" style={{ background: 'rgba(201,169,110,0.1)' }} />

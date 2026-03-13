@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { Link } from 'react-router-dom';
-import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Image as ImageIcon } from 'lucide-react';
+import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import CharacterSheet from '@/components/game/CharacterSheet';
@@ -125,7 +125,7 @@ export default function Home() {
         </motion.div>
 
         {/* ── Main Action Cards ── */}
-        <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-14">
+        <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-14">
           {[
             {
               to: createPageUrl('Encyclopedia'),
@@ -159,17 +159,6 @@ export default function Home() {
               descColor: 'rgba(196,181,253,0.55)',
               iconBg: 'linear-gradient(135deg, rgba(65,22,110,0.9), rgba(38,10,75,0.95))',
               iconBorder: 'rgba(150,90,230,0.35)',
-            },
-            {
-              to: createPageUrl('ImageCreator'),
-              icon: ImageIcon, iconColor: '#fbbf24',
-              accentColor: 'rgba(251,191,36,0.18)', glowColor: 'rgba(251,191,36,0.07)',
-              borderColor: 'rgba(251,191,36,0.28)',
-              title: 'Image Forge', titleColor: '#fde68a',
-              desc: 'AI-powered art creation. Describe your vision, choose a style, download.',
-              descColor: 'rgba(251,191,36,0.55)',
-              iconBg: 'linear-gradient(135deg, rgba(120,70,10,0.9), rgba(70,40,5,0.95))',
-              iconBorder: 'rgba(251,191,36,0.35)',
             },
             sessions.length > 0 ? {
               to: createPageUrl('Game') + `?session_id=${sessions[0].id}`,

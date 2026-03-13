@@ -26,7 +26,6 @@ export default function NewGame() {
   const [storySeedFileUrl, setStorySeedFileUrl] = useState('');
   const [season, setSeason] = useState('Spring');
   const [timeOfDay, setTimeOfDay] = useState('Morning');
-  const [gameSystem, setGameSystem] = useState('dnd5e');
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
@@ -52,7 +51,7 @@ export default function NewGame() {
     const session = await base44.entities.GameSession.create({
       character_id: selectedChar,
       title: title || `${char?.name || 'Hero'}'s Adventure`,
-      setting, game_system: gameSystem, adult_mode: adultMode, story_seed: storySeed,
+      setting, adult_mode: adultMode, story_seed: storySeed,
       story_seed_file_url: storySeedFileUrl,
       season, time_of_day: timeOfDay,
       current_location: 'The Crossroads Inn',
@@ -107,26 +106,6 @@ export default function NewGame() {
             <Input value={title} onChange={e => setTitle(e.target.value)}
               placeholder="Give your adventure a name (or leave blank for auto-generated)..."
               className="bg-slate-800/60 border-slate-600 text-amber-100 placeholder-slate-500" />
-          </Section>
-
-          {/* Game System */}
-          <Section title="Game System" icon="📖">
-            <div className="flex gap-3">
-              {[
-                { id: 'dnd5e', label: 'D&D 5th Edition', desc: 'Classic D&D rules, classes, and races' },
-                { id: 'pf2e', label: 'Pathfinder 2E', desc: 'PF2E Remaster ancestries, classes, and feats' },
-              ].map(sys => (
-                <button key={sys.id} onClick={() => setGameSystem(sys.id)}
-                  className={`flex-1 p-4 rounded-xl border text-left transition-all ${
-                    gameSystem === sys.id
-                      ? 'border-amber-500 bg-amber-900/30'
-                      : 'border-slate-700/50 bg-slate-800/30 hover:border-amber-700/50'
-                  }`}>
-                  <div className="font-bold text-sm text-amber-200">{sys.label}</div>
-                  <div className="text-slate-400 text-xs mt-1">{sys.desc}</div>
-                </button>
-              ))}
-            </div>
           </Section>
 
           {/* Setting */}
