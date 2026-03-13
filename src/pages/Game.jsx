@@ -369,7 +369,7 @@ export default function Game() {
             });
           }
         if (data.player_dead) {
-          setNarrative(prev => [...prev, { type: 'narration', text: '💀 You have fallen in battle...' }]);
+          setShowDeathModal(true);
           setCombat(null);
           break;
         }
