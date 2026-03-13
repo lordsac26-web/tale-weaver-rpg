@@ -160,7 +160,7 @@ export default function Home() {
               iconBg: 'linear-gradient(135deg, rgba(65,22,110,0.9), rgba(38,10,75,0.95))',
               iconBorder: 'rgba(150,90,230,0.35)',
             },
-            sessions.length > 0 ? {
+            sessions.length > 0 && characters.find(c => c.id === sessions[0].character_id)?.hp_current > 0 ? {
               to: createPageUrl('Game') + `?session_id=${sessions[0].id}`,
               icon: Play, iconColor: '#86efac',
               accentColor: 'rgba(34,197,94,0.15)', glowColor: 'rgba(34,197,94,0.06)',
@@ -302,6 +302,21 @@ function CharacterCard({ character, sessions, onViewSheet }) {
     : { background: 'linear-gradient(90deg, #7f1d1d, #dc2626)' };
   const hpTextColor = hpPct > 60 ? '#90f4b0' : hpPct > 30 ? '#fde68a' : '#fca5a5';
   const initials = character.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+  const isDead = character.hp_current === 0;
+
+  const handleHeal = async (e) => {
+    e.stopPropagation();
+    await base44.entities.Character.update(character.id, { hp_current: character.hp_max });
+    window.location.reload();
+  };
+
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    if (confirm(`Delete ${character.name} permanently? This cannot be undone.`)) {
+      await base44.entities.Character.update(character.id, { is_active: false });
+      window.location.reload();
+    }
+  };
 
   return (
     <motion.div whileHover={{ y: -3 }} transition={{ type: 'spring', stiffness: 300 }}
@@ -363,23 +378,44 @@ function CharacterCard({ character, sessions, onViewSheet }) {
 
         {/* Action buttons */}
         <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-          <button onClick={onViewSheet}
-            className="flex-1 py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
-            style={{ background: 'rgba(60,30,8,0.6)', border: '1px solid rgba(184,115,51,0.3)', color: 'var(--brass-gold)',
-              textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(92,51,24,0.7)'; e.currentTarget.style.borderColor = 'rgba(212,149,90,0.55)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(60,30,8,0.6)'; e.currentTarget.style.borderColor = 'rgba(184,115,51,0.3)'; }}>
-            <User className="w-3 h-3" /> View Sheet
-          </button>
-          <button onClick={() => navigate(createPageUrl('CharacterSheetPage') + `?character_id=${character.id}`)}
-            className="py-1.5 px-2.5 rounded-lg text-xs transition-all"
-            title="Full Character Sheet"
-            style={{ background: 'rgba(38,10,70,0.5)', border: '1px solid rgba(130,70,210,0.25)', color: 'rgba(190,155,255,0.7)' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,110,255,0.5)'; e.currentTarget.style.color = '#dfc8ff'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(130,70,210,0.25)'; e.currentTarget.style.color = 'rgba(190,155,255,0.7)'; }}>
-            <Scroll className="w-3 h-3" />
-          </button>
-          {session && character.hp_current > 0 ? (
+          {isDead ? (
+            <>
+              <button onClick={handleHeal}
+                className="flex-1 py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
+                style={{ background: 'rgba(8,38,15,0.65)', border: '1px solid rgba(40,160,75,0.35)', color: '#90f4b0' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(12,55,22,0.75)'; e.currentTarget.style.borderColor = 'rgba(60,200,100,0.55)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(8,38,15,0.65)'; e.currentTarget.style.borderColor = 'rgba(40,160,75,0.35)'; }}>
+                <Heart className="w-3 h-3" /> Resurrect
+              </button>
+              <button onClick={handleDelete}
+                className="flex-1 py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
+                style={{ background: 'rgba(60,20,20,0.5)', border: '1px solid rgba(180,50,50,0.3)', color: 'rgba(252,165,165,0.7)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(80,25,25,0.7)'; e.currentTarget.style.borderColor = 'rgba(220,80,80,0.5)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(60,20,20,0.5)'; e.currentTarget.style.borderColor = 'rgba(180,50,50,0.3)'; }}>
+                <Skull className="w-3 h-3" /> Delete
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={onViewSheet}
+                className="flex-1 py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
+                style={{ background: 'rgba(60,30,8,0.6)', border: '1px solid rgba(184,115,51,0.3)', color: 'var(--brass-gold)',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(92,51,24,0.7)'; e.currentTarget.style.borderColor = 'rgba(212,149,90,0.55)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(60,30,8,0.6)'; e.currentTarget.style.borderColor = 'rgba(184,115,51,0.3)'; }}>
+                <User className="w-3 h-3" /> View Sheet
+              </button>
+              <button onClick={() => navigate(createPageUrl('CharacterSheetPage') + `?character_id=${character.id}`)}
+                className="py-1.5 px-2.5 rounded-lg text-xs transition-all"
+                title="Full Character Sheet"
+                style={{ background: 'rgba(38,10,70,0.5)', border: '1px solid rgba(130,70,210,0.25)', color: 'rgba(190,155,255,0.7)' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,110,255,0.5)'; e.currentTarget.style.color = '#dfc8ff'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(130,70,210,0.25)'; e.currentTarget.style.color = 'rgba(190,155,255,0.7)'; }}>
+                <Scroll className="w-3 h-3" />
+              </button>
+            </>
+          )}
+          {session && !isDead ? (
             <Link to={createPageUrl('Game') + `?session_id=${session.id}`} className="flex-1">
               <button className="w-full py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
                 style={{ background: 'rgba(8,38,15,0.65)', border: '1px solid rgba(40,160,75,0.35)', color: '#90f4b0' }}
@@ -388,13 +424,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
                 <Play className="w-3 h-3" /> Resume
               </button>
             </Link>
-          ) : session && character.hp_current === 0 ? (
-            <button className="flex-1 py-1.5 rounded-lg text-xs font-fantasy flex items-center justify-center gap-1.5 opacity-50 cursor-not-allowed"
-              style={{ background: 'rgba(60,20,20,0.5)', border: '1px solid rgba(180,50,50,0.3)', color: 'rgba(252,165,165,0.5)' }}
-              title="Character is dead">
-              <Skull className="w-3 h-3" /> Dead
-            </button>
-          ) : (
+          ) : !isDead ? (
             <Link to={createPageUrl('NewGame') + `?character_id=${character.id}`} className="flex-1">
               <button className="w-full py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
                 style={{ background: 'rgba(38,10,70,0.5)', border: '1px solid rgba(130,70,210,0.3)', color: '#dfc8ff' }}
