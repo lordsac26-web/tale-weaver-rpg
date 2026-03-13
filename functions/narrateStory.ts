@@ -20,8 +20,8 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'ElevenLabs API key not configured' }, { status: 500 });
     }
 
-    // Using "Josh" voice - deep, clear, storytelling voice (ID: TxGEqnHWrfWFTfGW9XjX)
-    const voiceId = 'TxGEqnHWrfWFTfGW9XjX';
+    // Using "Adam" voice - deep, clear, storytelling voice (pre-made voice, always available)
+    const voiceId = 'pNInz6obpgDQGcFmaJgB';
     
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
