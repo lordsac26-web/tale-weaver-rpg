@@ -291,6 +291,13 @@ export default function Game() {
         text: `${data.actions_remaining} action${data.actions_remaining > 1 ? 's' : ''} remaining this turn.`,
         success: true
       }]);
+      setCombatLoading(false);
+      return; // Stop here - player still has actions
+    }
+
+    // No actions remaining - process enemy turns
+    if (!data.combat_ended) {
+      await processEnemyTurns(combatId);
     }
 
     if (data.combat_ended) {
@@ -313,8 +320,6 @@ export default function Game() {
         setChoices([]);
       }
       setCombat(null);
-    } else {
-      await processEnemyTurns(combatId);
     }
     await loadState();
     setCombatLoading(false);
