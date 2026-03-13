@@ -415,24 +415,26 @@ function CharacterCard({ character, sessions, onViewSheet }) {
               </button>
             </>
           )}
-          {session && !isDead ? (
-            <Link to={createPageUrl('Game') + `?session_id=${session.id}`} className="flex-1">
-              <button className="w-full py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
-                style={{ background: 'rgba(8,38,15,0.65)', border: '1px solid rgba(40,160,75,0.35)', color: '#90f4b0' }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(12,55,22,0.75)'; e.currentTarget.style.borderColor = 'rgba(60,200,100,0.55)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(8,38,15,0.65)'; e.currentTarget.style.borderColor = 'rgba(40,160,75,0.35)'; }}>
-                <Play className="w-3 h-3" /> Resume
-              </button>
-            </Link>
-          ) : !isDead ? (
-            <Link to={createPageUrl('NewGame') + `?character_id=${character.id}`} className="flex-1">
-              <button className="w-full py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
-                style={{ background: 'rgba(38,10,70,0.5)', border: '1px solid rgba(130,70,210,0.3)', color: '#dfc8ff' }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(55,18,100,0.65)'; e.currentTarget.style.borderColor = 'rgba(160,110,255,0.5)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(38,10,70,0.5)'; e.currentTarget.style.borderColor = 'rgba(130,70,210,0.3)'; }}>
-                <BookOpen className="w-3 h-3" /> Quest
-              </button>
-            </Link>
+          {!isDead && (
+            session ? (
+              <Link to={createPageUrl('Game') + `?session_id=${session.id}`} className="flex-1">
+                <button className="w-full py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
+                  style={{ background: 'rgba(8,38,15,0.65)', border: '1px solid rgba(40,160,75,0.35)', color: '#90f4b0' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(12,55,22,0.75)'; e.currentTarget.style.borderColor = 'rgba(60,200,100,0.55)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(8,38,15,0.65)'; e.currentTarget.style.borderColor = 'rgba(40,160,75,0.35)'; }}>
+                  <Play className="w-3 h-3" /> Resume
+                </button>
+              </Link>
+            ) : (
+              <Link to={createPageUrl('NewGame') + `?character_id=${character.id}`} className="flex-1">
+                <button className="w-full py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
+                  style={{ background: 'rgba(38,10,70,0.5)', border: '1px solid rgba(130,70,210,0.3)', color: '#dfc8ff' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(55,18,100,0.65)'; e.currentTarget.style.borderColor = 'rgba(160,110,255,0.5)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(38,10,70,0.5)'; e.currentTarget.style.borderColor = 'rgba(130,70,210,0.3)'; }}>
+                  <BookOpen className="w-3 h-3" /> Quest
+                </button>
+              </Link>
+            )
           )}
         </div>
       </div>
