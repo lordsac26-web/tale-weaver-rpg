@@ -328,8 +328,7 @@ export default function Game() {
       } else if (data.result === 'defeat') {
         const defeatedEnemyList = (combat?.combatants || []).filter(c => c.type === 'enemy');
         await saveCombatHistory(combatId, 'defeat', defeatedEnemyList);
-        setNarrative(prev => [...prev, { type: 'narration', text: '💀 You have fallen in battle. Darkness takes you...' }]);
-        setChoices([]);
+        setShowDeathModal(true);
       }
       setCombat(null);
     }
@@ -413,6 +412,55 @@ export default function Game() {
     await reloadCombat(combatId);
     await loadState();
     setCombatLoading(false);
+  };
+
+  const handleEndTurn = async () => {
+    const combatId = combat?.id || session?.combat_state?.combat_id;
+    if (!combatId) return;
+    setCombatLoading(true);
+    
+    // Reset temporary resources for end of round
+    const logs = await base44.entities.CombatLog.filter({ id: combatId });
+    if (logs[0]) {
+      await base44.entities.CombatLog.update(combatId, {
+        world_state: {
+          ...logs[0].world_state,
+          actions_used_this_turn: 0,
+          bonus_action_used: false,
+          reaction_used: false
+        }
+      });
+    }
+    
+    await reloadCombat(combatId);
+    setCombatLoading(false);
+  };
+
+  const handleMiracle = async () => {
+    // Miracle succeeded - restore character to full HP
+    await base44.entities.Character.update(character.id, {
+      hp_current: character.hp_max,
+      conditions: []
+    });
+    setShowDeathModal(false);
+    setNarrative(prev => [...prev, {
+      type: 'narration',
+      text: '✨ The gods heard your plea! You awaken gasping — it was all a terrible dream. You are restored to full health.'
+    }]);
+    await loadState();
+  };
+
+  const handleDeath = async () => {
+    // Reset character HP to full for next adventure
+    await base44.entities.Character.update(character.id, {
+      hp_current: character.hp_max,
+      conditions: [],
+      death_saves_success: 0,
+      death_saves_failure: 0
+    });
+    
+    setShowDeathModal(false);
+    navigate(createPageUrl('Home'));
   };
 
   const handleFlee = async () => {
@@ -627,6 +675,7 @@ export default function Game() {
               <CombatPanel combat={combat} character={character}
                 onPlayerAttack={handlePlayerAttack}
                 onNextTurn={handleNextTurn}
+                onEndTurn={handleEndTurn}
                 onFlee={handleFlee}
                 loading={combatLoading}
                 lastCombatEvent={lastCombatEvent} />
@@ -793,6 +842,18 @@ export default function Game() {
             <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#c9a96e' }} />
             <span className="text-xs font-fantasy" style={{ color: 'rgba(201,169,110,0.7)' }}>DM is considering...</span>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Death Modal */}
+      <AnimatePresence>
+        {showDeathModal && character && (
+          <DeathModal
+            character={character}
+            onMiracle={handleMiracle}
+            onDeath={handleDeath}
+            onClose={() => setShowDeathModal(false)}
+          />
         )}
       </AnimatePresence>
     </div>

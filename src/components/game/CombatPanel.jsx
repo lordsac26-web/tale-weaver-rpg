@@ -25,7 +25,7 @@ function getActionsPerTurn(character) {
   return actions;
 }
 
-export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onFlee, loading, lastCombatEvent }) {
+export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [action, setAction] = useState('attack');
   const [selectedSpell, setSelectedSpell] = useState(null);
@@ -88,17 +88,27 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   return (
     <div className="flex flex-col h-full overflow-hidden relative" style={{ background: 'rgba(8,3,3,0.95)' }}>
       <CombatFloatingText event={lastCombatEvent} />
-      {/* Header — Combat Banner */}
+      {/* Header — Combat Banner with Round Counter */}
       <div className="flex items-center justify-between px-4 py-2.5 flex-shrink-0 combat-active"
         style={{
           background: 'linear-gradient(90deg, rgba(80,5,5,0.9), rgba(50,5,5,0.95))',
           borderBottom: '1px solid rgba(180,30,30,0.4)',
         }}>
-        <div className="flex items-center gap-2">
-          <Swords className="w-4 h-4" style={{ color: '#fca5a5' }} />
-          <span className="font-fantasy font-bold text-sm tracking-widest" style={{ color: '#fca5a5', textShadow: '0 0 10px rgba(220,50,50,0.5)' }}>
-            COMBAT
-          </span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Swords className="w-4 h-4" style={{ color: '#fca5a5' }} />
+            <span className="font-fantasy font-bold text-sm tracking-widest" style={{ color: '#fca5a5', textShadow: '0 0 10px rgba(220,50,50,0.5)' }}>
+              COMBAT
+            </span>
+          </div>
+          <div className="px-2.5 py-1 rounded-full font-fantasy text-xs"
+            style={{
+              background: 'rgba(80,40,8,0.6)',
+              border: '1px solid rgba(201,169,110,0.3)',
+              color: '#f0c040'
+            }}>
+            Round {round || 1}
+          </div>
         </div>
         <div className="flex items-center gap-2 text-xs">
           <span style={{ color: 'rgba(180,100,100,0.6)', fontFamily: 'EB Garamond, serif' }}>Now:</span>
@@ -294,16 +304,31 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
               </motion.button>
             </div>
           ) : (
-            <div className="flex-shrink-0 p-3 flex items-center justify-between"
+            <div className="flex-shrink-0 p-3 space-y-2"
               style={{ borderTop: '1px solid rgba(180,50,50,0.15)', background: 'rgba(10,3,3,0.7)' }}>
-              <span className="text-xs italic" style={{ color: 'rgba(180,100,100,0.5)', fontFamily: 'EB Garamond, serif' }}>
-                ⚔️ {currentCombatant?.name}'s turn...
-              </span>
-              <button onClick={onNextTurn} disabled={loading}
-                className="px-3 py-2 rounded-xl text-xs font-fantasy flex items-center gap-1.5 btn-fantasy">
-                {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <SkipForward className="w-3 h-3" />}
-                Process Turn
-              </button>
+              <div className="flex items-center justify-between">
+                <span className="text-xs italic" style={{ color: 'rgba(180,100,100,0.5)', fontFamily: 'EB Garamond, serif' }}>
+                  ⚔️ {currentCombatant?.name}'s turn...
+                </span>
+                <button onClick={onNextTurn} disabled={loading}
+                  className="px-3 py-2 rounded-xl text-xs font-fantasy flex items-center gap-1.5 btn-fantasy">
+                  {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <SkipForward className="w-3 h-3" />}
+                  Process Turn
+                </button>
+              </div>
+              {onEndTurn && (
+                <button onClick={onEndTurn} disabled={loading}
+                  className="w-full py-2 rounded-xl text-xs font-fantasy transition-all"
+                  style={{
+                    background: 'rgba(20,13,5,0.6)',
+                    border: '1px solid rgba(200,150,20,0.3)',
+                    color: 'rgba(240,192,64,0.7)'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.5)'; e.currentTarget.style.color = '#f0c040'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(200,150,20,0.3)'; e.currentTarget.style.color = 'rgba(240,192,64,0.7)'; }}>
+                  End Round
+                </button>
+              )}
             </div>
           )}
         </div>
