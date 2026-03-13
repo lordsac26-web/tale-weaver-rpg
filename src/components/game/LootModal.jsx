@@ -112,28 +112,45 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
 
   useEffect(() => { buildLoot(); }, []);
 
-  const buildLoot = () => {
+  const buildLoot = async () => {
     setLoading(true);
-    // Generate loot client-side using type-aware tables (fast, no network)
+    try {
+      // Try backend loot generation for enhanced variety
+      const result = await base44.functions.invoke('generateLoot', {
+        level: character.level || 1,
+        enemy_type: enemies[0]?.type || enemies[0]?.meta?.split(' ')[0] || 'humanoid',
+        enemy_cr: parseFloat(enemies[0]?.cr || enemies[0]?.challenge) || 1,
+        num_enemies: enemies.length,
+      });
+
+      if (result.data?.success) {
+        const { coins, items, artifact } = result.data;
+        const allItems = [...items];
+        if (artifact) allItems.push({ ...artifact, icon: '✨', quantity: 1 });
+        setLoot({ gold: coins.gold, silver: coins.silver, copper: coins.copper, items: allItems });
+        setLoading(false);
+        return;
+      }
+    } catch (error) {
+      console.warn('Backend loot generation failed, using fallback:', error);
+    }
+
+    // Fallback: client-side generation
     const allItems = [];
     let totalGold = 0, totalSilver = 0, totalCopper = 0;
-
     const enemyList = enemies?.length > 0 ? enemies : [{ name: 'Unknown Enemy', type: 'Humanoid', cr: 1 }];
 
     enemyList.forEach(enemy => {
       const type = enemy.type || enemy.meta?.split(' ')[0] || 'Humanoid';
       const cr = parseFloat(enemy.cr || enemy.challenge) || 1;
-
       const items = generateLootForEnemy(enemy.name || 'Enemy', type, cr);
       allItems.push(...items);
-
       const coins = generateCoinsForEnemy(type, cr);
       totalGold   += coins.gold;
       totalSilver += coins.silver;
       totalCopper += coins.copper;
     });
 
-    // Deduplicate items by name (can happen when multiple same-type enemies)
     const seen = new Set();
     const uniqueItems = allItems.filter(it => {
       if (seen.has(it.name)) return false;
