@@ -20,20 +20,37 @@ export default function Market() {
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [filterType, setFilterType] = useState('all');
   const [search, setSearch] = useState('');
+  const [session, setSession] = useState(null);
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setLoading(true);
-    const [vends] = await Promise.all([
+    const [vends, sessions] = await Promise.all([
       base44.entities.Vendor.list('-created_date', 50),
+      sessionId ? base44.entities.GameSession.filter({ id: sessionId }) : Promise.resolve([]),
     ]);
-    setVendors(vends.filter(v => v.is_active));
 
     if (characterId) {
       const chars = await base44.entities.Character.filter({ id: characterId });
       if (chars[0]) setCharacter(chars[0]);
     }
+
+    const currentSession = sessions[0];
+    setSession(currentSession);
+
+    // Filter vendors by location if session exists
+    const currentLocation = currentSession?.current_location || '';
+    const filteredVendors = vends.filter(v => {
+      if (!v.is_active) return false;
+      // Match location exactly or show traveling vendors everywhere
+      if (v.is_traveling) return true;
+      if (!currentLocation) return true;
+      return v.location?.toLowerCase().includes(currentLocation.toLowerCase()) || 
+             currentLocation.toLowerCase().includes(v.location?.toLowerCase() || '');
+    });
+
+    setVendors(filteredVendors);
     setLoading(false);
   };
 
@@ -92,6 +109,7 @@ export default function Market() {
           {hasCharacter ? (
             <p className="text-xs" style={{ color: 'rgba(201,169,110,0.4)', fontFamily: 'EB Garamond, serif' }}>
               {character.name} · <span style={{ color: '#f0c040' }}>{character.gold || 0}gp</span>
+              {session?.current_location && ` · 📍 ${session.current_location}`}
             </p>
           ) : (
             <p className="text-xs italic" style={{ color: 'rgba(180,140,90,0.35)', fontFamily: 'EB Garamond, serif' }}>
@@ -111,8 +129,15 @@ export default function Market() {
       {/* Market atmospheric banner */}
       <div className="px-4 py-5 flex-shrink-0" style={{ background: 'rgba(15,10,4,0.6)', borderBottom: '1px solid rgba(180,140,90,0.08)' }}>
         <p className="text-center italic text-sm" style={{ color: 'rgba(201,169,110,0.4)', fontFamily: 'IM Fell English, serif', lineHeight: 1.7 }}>
-          "The market hums with life — voices haggling, coins clinking, the smell of spiced meat and fresh leather on the morning air."
+          {session?.current_location 
+            ? `Market district of ${session.current_location} — voices haggling, coins clinking, the smell of spiced meat and fresh leather.`
+            : "The market hums with life — voices haggling, coins clinking, the smell of spiced meat and fresh leather on the morning air."}
         </p>
+        {filteredVendors.length === 0 && session?.current_location && (
+          <p className="text-center text-xs mt-2" style={{ color: 'rgba(180,140,90,0.3)' }}>
+            No vendors in this location. Traveling merchants may appear anywhere.
+          </p>
+        )}
       </div>
 
       {/* Filter Bar */}
