@@ -13,7 +13,7 @@ import DiceRoller from '@/components/game/DiceRoller';
 import SceneVisualizerModal from '@/components/game/SceneVisualizerModal';
 import CharacterPortraitGenerator from '@/components/game/CharacterPortraitGenerator';
 import ActionProposalModal from '@/components/game/ActionProposalModal';
-
+import DeathModal from '@/components/game/DeathModal';
 import LootModal from '@/components/game/LootModal.jsx';
 import CompanionPanel from '@/components/game/CompanionPanel';
 
@@ -44,6 +44,7 @@ export default function Game() {
   const [defeatedEnemies, setDefeatedEnemies] = useState([]);
   const [companions, setCompanions] = useState([]);
   const [showCompanions, setShowCompanions] = useState(false);
+  const [showDeathModal, setShowDeathModal] = useState(false);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate(createPageUrl('Home')); return; }
