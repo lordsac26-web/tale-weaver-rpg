@@ -9,6 +9,7 @@ import jsPDF from 'jspdf';
 import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS } from '@/components/game/gameData';
 import InventoryTab from '@/components/game/InventoryTab';
 import SpellbookTab from '@/components/game/SpellbookTab';
+import MulticlassManager from '@/components/game/MulticlassManager';
 
 const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger'];
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
@@ -148,7 +149,7 @@ export default function CharacterSheetPage() {
 
   const isCaster = SPELLCASTING_CLASSES.includes(character.class);
   const profBonus = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
-  const TABS = ['stats', 'skills', 'inventory', ...(isCaster ? ['spells'] : []), 'conditions', 'features'];
+  const TABS = ['stats', 'skills', 'inventory', ...(isCaster ? ['spells'] : []), 'conditions', 'multiclass', 'features'];
 
   return (
     <div className="min-h-screen parchment-bg" style={{ color: '#e8d5b7' }}>
@@ -369,6 +370,13 @@ export default function CharacterSheetPage() {
             {/* SPELLS */}
             {tab === 'spells' && (
               <div className="p-5"><SpellbookTab character={character} onUpdateCharacter={handleUpdate} /></div>
+            )}
+
+            {/* MULTICLASS */}
+            {tab === 'multiclass' && (
+              <div className="p-5">
+                <MulticlassManager character={character} onUpdate={handleUpdate} />
+              </div>
             )}
 
             {/* CONDITIONS */}
