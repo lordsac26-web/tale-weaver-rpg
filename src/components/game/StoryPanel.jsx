@@ -1,7 +1,8 @@
-import React, { useRef, useEffect } from 'react';
-import { Loader2, Scroll, Feather } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Loader2, Scroll, Feather, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SkillCheckResult from './SkillCheckResult';
+import { base44 } from '@/api/base44Client';
 
 const RISK_STYLES = {
   low:     { border: 'rgba(40,160,80,0.35)',  bg: 'rgba(10,40,15,0.5)',  hover: 'rgba(40,160,80,0.5)',  badge: { bg: 'rgba(10,50,20,0.7)', color: '#86efac', border: 'rgba(40,160,80,0.4)' } },
@@ -12,13 +13,81 @@ const RISK_STYLES = {
 
 export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit }) {
   const endRef = useRef(null);
+  const audioRef = useRef(null);
+  const [narrationEnabled, setNarrationEnabled] = useState(false);
+  const [isNarrating, setIsNarrating] = useState(false);
+  const lastNarratedIndex = useRef(-1);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [narrative, loading]);
 
+  useEffect(() => {
+    if (!narrationEnabled || loading) return;
+    
+    const narrationEntries = narrative.filter(e => e.type === 'narration');
+    const latestIndex = narrationEntries.length - 1;
+    
+    if (latestIndex > lastNarratedIndex.current) {
+      const latestEntry = narrationEntries[latestIndex];
+      narrateText(latestEntry.text);
+      lastNarratedIndex.current = latestIndex;
+    }
+  }, [narrative, narrationEnabled, loading]);
+
+  const narrateText = async (text) => {
+    if (!text?.trim() || isNarrating) return;
+    
+    try {
+      setIsNarrating(true);
+      const result = await base44.functions.invoke('narrateStory', { text });
+      
+      if (result.data?.audio) {
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+        const audio = new Audio(result.data.audio);
+        audioRef.current = audio;
+        await audio.play();
+        audio.onended = () => setIsNarrating(false);
+      }
+    } catch (error) {
+      console.error('Narration failed:', error);
+      setIsNarrating(false);
+    }
+  };
+
+  const toggleNarration = () => {
+    const newState = !narrationEnabled;
+    setNarrationEnabled(newState);
+    
+    if (!newState && audioRef.current) {
+      audioRef.current.pause();
+      setIsNarrating(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* Narration Toggle */}
+      <div className="flex-shrink-0 px-4 py-2 flex items-center justify-end"
+        style={{ background: 'rgba(8,5,2,0.6)', borderBottom: '1px solid rgba(180,140,90,0.15)' }}>
+        <button onClick={toggleNarration}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-fantasy transition-all"
+          style={narrationEnabled ? {
+            background: 'rgba(80,50,10,0.7)',
+            border: '1px solid rgba(201,169,110,0.5)',
+            color: '#f0c040',
+          } : {
+            background: 'rgba(20,13,5,0.6)',
+            border: '1px solid rgba(180,140,90,0.2)',
+            color: 'rgba(201,169,110,0.5)',
+          }}>
+          {narrationEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+          {isNarrating ? 'Narrating...' : narrationEnabled ? 'Narration On' : 'Narration Off'}
+        </button>
+      </div>
+      
       {/* Narrative Area */}
       <div className="flex-1 overflow-y-auto p-5 md:p-7 space-y-5 min-h-0" style={{ background: 'transparent' }}>
         <AnimatePresence initial={false}>
