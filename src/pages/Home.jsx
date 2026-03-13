@@ -379,7 +379,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(130,70,210,0.25)'; e.currentTarget.style.color = 'rgba(190,155,255,0.7)'; }}>
             <Scroll className="w-3 h-3" />
           </button>
-          {session ? (
+          {session && character.hp_current > 0 ? (
             <Link to={createPageUrl('Game') + `?session_id=${session.id}`} className="flex-1">
               <button className="w-full py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
                 style={{ background: 'rgba(8,38,15,0.65)', border: '1px solid rgba(40,160,75,0.35)', color: '#90f4b0' }}
@@ -388,6 +388,12 @@ function CharacterCard({ character, sessions, onViewSheet }) {
                 <Play className="w-3 h-3" /> Resume
               </button>
             </Link>
+          ) : session && character.hp_current === 0 ? (
+            <button className="flex-1 py-1.5 rounded-lg text-xs font-fantasy flex items-center justify-center gap-1.5 opacity-50 cursor-not-allowed"
+              style={{ background: 'rgba(60,20,20,0.5)', border: '1px solid rgba(180,50,50,0.3)', color: 'rgba(252,165,165,0.5)' }}
+              title="Character is dead">
+              <Skull className="w-3 h-3" /> Dead
+            </button>
           ) : (
             <Link to={createPageUrl('NewGame') + `?character_id=${character.id}`} className="flex-1">
               <button className="w-full py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
@@ -407,10 +413,14 @@ function CharacterCard({ character, sessions, onViewSheet }) {
 // ─── Session Card ──────────────────────────────────────────────────────────────
 function SessionCard({ session, characters }) {
   const char = characters.find(c => c.id === session.character_id);
+  const canResume = char && char.hp_current > 0;
+  const LinkOrDiv = canResume ? Link : 'div';
+  const linkProps = canResume ? { to: createPageUrl('Game') + `?session_id=${session.id}` } : {};
+  
   return (
-    <Link to={createPageUrl('Game') + `?session_id=${session.id}`}>
-      <motion.div whileHover={{ y: -3 }} transition={{ type: 'spring', stiffness: 300 }}
-        className="rounded-xl cursor-pointer fantasy-card overflow-hidden"
+    <LinkOrDiv {...linkProps}>
+      <motion.div whileHover={canResume ? { y: -3 } : {}} transition={{ type: 'spring', stiffness: 300 }}
+        className={`rounded-xl fantasy-card overflow-hidden ${canResume ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
         style={{ background: 'linear-gradient(160deg, rgba(22,10,35,0.95), rgba(14,6,22,0.98))', border: '1px solid rgba(140,80,220,0.22)',
           boxShadow: 'inset 0 1px 0 rgba(196,181,253,0.05), 0 4px 20px rgba(0,0,0,0.6)' }}>
         <div className="px-4 py-3 flex items-center justify-between"
@@ -418,8 +428,8 @@ function SessionCard({ session, characters }) {
           <h3 className="font-fantasy font-bold text-sm" style={{ color: '#dfc8ff', textShadow: '0 1px 4px rgba(0,0,0,0.9)' }}>
             {session.title || 'Unnamed Campaign'}
           </h3>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-fantasy ${session.in_combat ? 'badge-blood' : 'badge-arcane'}`}>
-            {session.in_combat ? '⚔️ Combat' : '📖 Exploring'}
+          <span className={`px-2 py-0.5 rounded-full text-xs font-fantasy ${!canResume ? 'badge-blood' : session.in_combat ? 'badge-blood' : 'badge-arcane'}`}>
+            {!canResume ? '💀 Dead' : session.in_combat ? '⚔️ Combat' : '📖 Exploring'}
           </span>
         </div>
         <div className="px-4 py-3 space-y-1">
@@ -438,6 +448,6 @@ function SessionCard({ session, characters }) {
           )}
         </div>
       </motion.div>
-    </Link>
+    </LinkOrDiv>
   );
 }
