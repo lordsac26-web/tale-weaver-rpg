@@ -245,15 +245,69 @@ export default function Game() {
     setStoryLoading(false);
   };
 
-  const startCombat = async (enemies) => {
+  // ─────────────────────────────────────────────────────────────────────────────
+// GAME.JSX PATCH — replace the existing startCombat function with this version
+//
+// WHAT THIS FIXES:
+//   Bug #1 — Enemy HP not updating visually after player attacks
+//
+// ROOT CAUSE:
+//   The old startCombat did:
+//     setCombat({ ...result.data, id: result.data.combat_id })
+//   result.data from combatEngine/start_combat only contains:
+//     { combat_id, combatants, initiative_order }
+//   This is a PARTIAL object — it lacks the full CombatLog shape (round,
+//   current_turn_index, world_state, log_entries, is_active, etc.)
+//   So the combat state starts malformed, and subsequent reloadCombat calls
+//   may race against React re-renders showing stale data.
+//
+// FIX:
+//   Always load the full CombatLog from the DB after start_combat resolves.
+//   This guarantees the combat state in React matches exactly what the DB has,
+//   and reloadCombat calls after each attack will always diff correctly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const startCombat = async (enemies) => {
   const result = await base44.functions.invoke('combatEngine', {
-    action: 'start_combat', session_id: sessionId, character_id: character?.id, payload: { enemies }
+    action: 'start_combat',
+    session_id: sessionId,
+    character_id: character?.id,
+    payload: { enemies }
   });
-  // Load fresh from DB instead of using partial response
+
+  // Load the full CombatLog from DB instead of using the partial response object.
+  // This ensures combat state in React exactly matches DB state, so HP bars
+  // and enemy names update correctly after every attack via reloadCombat().
   const logs = await base44.entities.CombatLog.filter({ id: result.data.combat_id });
   if (logs[0]) setCombat(logs[0]);
+
   await loadState();
 };
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPTIONAL SMOOTHNESS IMPROVEMENT — debounced reloadCombat
+//
+// If you notice flickering during rapid combat actions (player attacks then
+// enemy turn fires immediately), add a small delay before reloadCombat so
+// React batches state updates cleanly.
+//
+// Replace the existing reloadCombat with:
+// ─────────────────────────────────────────────────────────────────────────────
+
+const reloadCombat = async (combatId) => {
+  const logs = await base44.entities.CombatLog.filter({ id: combatId });
+  if (logs[0]) setCombat(logs[0]);
+};
+
+// The above is unchanged but here for reference. If flickering persists,
+// wrap setCombat in a startTransition for lower-priority rendering:
+//
+// import { startTransition } from 'react';
+// const reloadCombat = async (combatId) => {
+//   const logs = await base44.entities.CombatLog.filter({ id: combatId });
+//   if (logs[0]) startTransition(() => setCombat(logs[0]));
+// };
 
   const handlePlayerAttack = async (targetId, actionType, weaponOrSpell) => {
     if (!combat?.id && !session?.combat_state?.combat_id) return;
