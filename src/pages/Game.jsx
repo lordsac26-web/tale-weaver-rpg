@@ -15,6 +15,7 @@ import CharacterPortraitGenerator from '@/components/game/CharacterPortraitGener
 import ActionProposalModal from '@/components/game/ActionProposalModal';
 
 import LootModal from '@/components/game/LootModal.jsx';
+import CompanionPanel from '@/components/game/CompanionPanel';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -41,6 +42,8 @@ export default function Game() {
   const [lastCombatEvent, setLastCombatEvent] = useState(null);
   const [showLootModal, setShowLootModal] = useState(false);
   const [defeatedEnemies, setDefeatedEnemies] = useState([]);
+  const [companions, setCompanions] = useState([]);
+  const [showCompanions, setShowCompanions] = useState(false);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate(createPageUrl('Home')); return; }
@@ -51,6 +54,11 @@ export default function Game() {
 
     const chars = await base44.entities.Character.filter({ id: sess.character_id });
     setCharacter(chars[0] || null);
+
+    if (chars[0]) {
+      const comps = await base44.entities.Companion.filter({ character_id: chars[0].id });
+      setCompanions(comps);
+    }
 
     if (sess.story_log?.length > 0 && narrative.length === 0) {
       const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: e.text }));
@@ -417,6 +425,52 @@ export default function Game() {
     await loadState();
   };
 
+  const handleCompanionUpdate = async (action, companionData) => {
+    if (action === 'create') {
+      const newComp = await base44.entities.Companion.create({ ...companionData, character_id: character.id });
+      setCompanions(prev => [...prev, newComp]);
+    } else if (action === 'update') {
+      await base44.entities.Companion.update(companionData.id, companionData);
+      setCompanions(prev => prev.map(c => c.id === companionData.id ? companionData : c));
+    }
+  };
+
+  const handleCompanionAttack = async (companion, attack) => {
+    if (!combat?.id && !session?.combat_state?.combat_id) return;
+    const combatId = combat?.id || session?.combat_state?.combat_id;
+    
+    // Roll companion attack similar to player attack
+    const attackRoll = Math.floor(Math.random() * 20) + 1;
+    const hitRoll = attackRoll + attack.bonus;
+    
+    // Find target (first conscious enemy)
+    const target = combat?.combatants?.find(c => c.type === 'enemy' && c.is_conscious);
+    if (!target) return;
+    
+    const hit = hitRoll >= target.ac;
+    let damageTotal = 0;
+    
+    if (hit) {
+      const [count, sides] = attack.damage_dice.split('d').map(Number);
+      for (let i = 0; i < count; i++) {
+        damageTotal += Math.floor(Math.random() * sides) + 1;
+      }
+    }
+    
+    setNarrative(prev => [...prev, {
+      type: 'roll_result',
+      text: `${companion.name} attacks ${target.name} with ${attack.name}! ${hit ? `Hit! ${damageTotal} ${attack.damage_type} damage.` : 'Miss!'}`,
+      success: hit
+    }]);
+    
+    if (hit && damageTotal > 0) {
+      target.hp = Math.max(0, target.hp - damageTotal);
+      if (target.hp === 0) target.is_conscious = false;
+      await base44.entities.CombatLog.update(combatId, { combatants: combat.combatants });
+      await reloadCombat(combatId);
+    }
+  };
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: '#0d0a07' }}>
       <div className="text-center">
@@ -472,6 +526,20 @@ export default function Game() {
             color: 'rgba(201,169,110,0.6)',
           }}>
           <Dices className="w-3.5 h-3.5" /> Dice
+        </button>
+
+        <button onClick={() => setShowCompanions(v => !v)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
+          style={showCompanions ? {
+            background: 'rgba(80,50,10,0.7)',
+            border: '1px solid rgba(201,169,110,0.5)',
+            color: '#f0c040',
+          } : {
+            background: 'rgba(20,13,5,0.7)',
+            border: '1px solid rgba(180,140,90,0.2)',
+            color: 'rgba(201,169,110,0.6)',
+          }}>
+          🐾 Pets
         </button>
 
 
@@ -606,6 +674,30 @@ export default function Game() {
               <ChevronLeft className="w-4 h-4" />
             </button>
             <DiceRoller character={character} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Companions Side Panel */}
+      <AnimatePresence>
+        {showCompanions && (
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className="fixed top-0 right-0 h-full w-96 z-40 shadow-2xl overflow-y-auto"
+            style={{ borderLeft: '1px solid rgba(180,140,90,0.2)', background: 'rgba(8,5,2,0.97)' }}>
+            <button onClick={() => setShowCompanions(false)}
+              className="absolute top-3 left-3 p-1.5 rounded-lg z-10 transition-colors"
+              style={{ color: 'rgba(201,169,110,0.4)', background: 'rgba(20,13,5,0.7)' }}>
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <CompanionPanel 
+              character={character}
+              companions={companions}
+              onUpdate={handleCompanionUpdate}
+              onAttack={handleCompanionAttack} />
           </motion.div>
         )}
       </AnimatePresence>
