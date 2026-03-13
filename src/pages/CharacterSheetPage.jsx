@@ -168,6 +168,15 @@ export default function CharacterSheetPage() {
         <div className="flex items-center gap-2">
           <Scroll className="w-4 h-4" style={{ color: '#c9a96e' }} />
           <span className="font-fantasy font-bold text-sm" style={{ color: '#f0c040' }}>Character Sheet</span>
+          {isCaster && (
+            <button onClick={() => navigate(createPageUrl('SpellManagement') + `?character_id=${character?.id}`)}
+              className="ml-2 px-2.5 py-1 rounded-lg text-xs font-fantasy transition-all"
+              style={{ background: 'rgba(38,18,70,0.7)', border: '1px solid rgba(140,80,220,0.25)', color: 'rgba(192,132,252,0.6)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,100,240,0.5)'; e.currentTarget.style.color = '#d8b4fe'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(140,80,220,0.25)'; e.currentTarget.style.color = 'rgba(192,132,252,0.6)'; }}>
+              ✨ Spells
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-xs font-fantasy">
