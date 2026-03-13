@@ -449,11 +449,6 @@ const reloadCombat = async (combatId) => {
     });
   };
 
-  const reloadCombat = async (combatId) => {
-    const logs = await base44.entities.CombatLog.filter({ id: combatId });
-    if (logs[0]) setCombat(logs[0]);
-  };
-
   const handleNextTurn = async () => {
     const combatId = combat?.id || session?.combat_state?.combat_id;
     if (!combatId) return;
