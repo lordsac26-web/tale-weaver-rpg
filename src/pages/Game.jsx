@@ -246,12 +246,14 @@ export default function Game() {
   };
 
   const startCombat = async (enemies) => {
-    const result = await base44.functions.invoke('combatEngine', {
-      action: 'start_combat', session_id: sessionId, character_id: character?.id, payload: { enemies }
-    });
-    setCombat({ ...result.data, id: result.data.combat_id });
-    await loadState();
-  };
+  const result = await base44.functions.invoke('combatEngine', {
+    action: 'start_combat', session_id: sessionId, character_id: character?.id, payload: { enemies }
+  });
+  // Load fresh from DB instead of using partial response
+  const logs = await base44.entities.CombatLog.filter({ id: result.data.combat_id });
+  if (logs[0]) setCombat(logs[0]);
+  await loadState();
+};
 
   const handlePlayerAttack = async (targetId, actionType, weaponOrSpell) => {
     if (!combat?.id && !session?.combat_state?.combat_id) return;
