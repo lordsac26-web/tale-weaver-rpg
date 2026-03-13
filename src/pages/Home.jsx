@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { Link } from 'react-router-dom';
-import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star } from 'lucide-react';
+import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import CharacterSheet from '@/components/game/CharacterSheet';
@@ -125,8 +125,19 @@ export default function Home() {
         </motion.div>
 
         {/* ── Main Action Cards ── */}
-        <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-14">
+        <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-14">
           {[
+            {
+              to: createPageUrl('ImageForge'),
+              icon: Wand2, iconColor: '#f0c040',
+              accentColor: 'rgba(240,192,64,0.2)', glowColor: 'rgba(240,192,64,0.08)',
+              borderColor: 'rgba(240,192,64,0.3)',
+              title: 'Image Forge', titleColor: '#f0c040',
+              desc: 'Create or transform images into D&D fantasy art.',
+              descColor: 'rgba(240,210,150,0.7)',
+              iconBg: 'linear-gradient(135deg, #7a4520, #5c3318)',
+              iconBorder: 'rgba(240,192,64,0.4)',
+            },
             {
               to: createPageUrl('Encyclopedia'),
               icon: Library, iconColor: 'var(--brass-gold)',
