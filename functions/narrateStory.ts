@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     }
 
     // Using "Adam" voice - deep, clear, storytelling voice (pre-made voice, always available)
-    const voiceId = '5kMbtRSEKIkRZSdXxrZg';
+    const voiceId = 'n1PvBOwxb8X6m7tahp2h';
     
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
