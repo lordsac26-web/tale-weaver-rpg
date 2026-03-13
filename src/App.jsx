@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Inventory from '@/pages/Inventory';
 import SpellManagement from '@/pages/SpellManagement';
+import ImageForge from '@/pages/ImageForge';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -67,6 +68,11 @@ const AuthenticatedApp = () => {
       <Route path="/SpellManagement" element={
         <LayoutWrapper currentPageName="SpellManagement">
           <SpellManagement />
+        </LayoutWrapper>
+      } />
+      <Route path="/ImageForge" element={
+        <LayoutWrapper currentPageName="ImageForge">
+          <ImageForge />
         </LayoutWrapper>
       } />
       <Route path="*" element={<PageNotFound />} />
