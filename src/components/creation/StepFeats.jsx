@@ -7,6 +7,8 @@ import { CLASSES } from '@/components/game/gameData';
 function getMaxFeats(character) {
   const level = character.level || 1;
   const cls = character.class;
+  const race = character.race;
+  
   // ASI levels per class
   const ASI_LEVELS = {
     Fighter: [4, 6, 8, 12, 14, 16, 19],
@@ -14,7 +16,14 @@ function getMaxFeats(character) {
     default: [4, 8, 12, 16, 19],
   };
   const levels = ASI_LEVELS[cls] || ASI_LEVELS.default;
-  return levels.filter(l => l <= level).length;
+  let feats = levels.filter(l => l <= level).length;
+  
+  // Variant Human gets +1 bonus feat at level 1
+  if (race === 'Human' && character.subrace === 'Variant Human') {
+    feats += 1;
+  }
+  
+  return feats;
 }
 
 export default function StepFeats({ character, set }) {
