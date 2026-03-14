@@ -10,6 +10,7 @@ import Inventory from '@/pages/Inventory';
 import SpellManagement from '@/pages/SpellManagement';
 import ImageForge from '@/pages/ImageForge';
 import Progression from '@/pages/Progression';
+import NPCManager from '@/pages/NPCManager';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -79,6 +80,11 @@ const AuthenticatedApp = () => {
       <Route path="/Progression" element={
         <LayoutWrapper currentPageName="Progression">
           <Progression />
+        </LayoutWrapper>
+      } />
+      <Route path="/NPCManager" element={
+        <LayoutWrapper currentPageName="NPCManager">
+          <NPCManager />
         </LayoutWrapper>
       } />
       <Route path="*" element={<PageNotFound />} />
