@@ -129,6 +129,8 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         combatants={combatants || []}
         currentTurnIndex={current_turn_index}
         round={round}
+        onAdvanceTurn={isPlayerTurn && actionsRemaining === 0 ? onNextTurn : null}
+        combatStartTime={combat.created_date}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -139,7 +141,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
           <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
             <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(180,100,100,0.5)', fontSize: '0.65rem' }}>SELECT TARGET</div>
             {enemies.map(enemy => {
-              const hpPct = Math.max(0, (enemy.hp_current / enemy.hp_max) * 100);
+              const hpPct = Math.max(0, ((enemy.hp || enemy.hp_current) / enemy.hp_max) * 100);
               const isSelected = selectedTarget === enemy.id;
               return (
                 <motion.button key={enemy.id}
@@ -185,7 +187,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                             }} />
                         </div>
                         <span className="text-xs font-mono font-bold flex-shrink-0" style={{ color: '#fca5a5' }}>
-                          {enemy.hp_current}/{enemy.hp_max}
+                          {enemy.hp || enemy.hp_current}/{enemy.hp_max}
                         </span>
                       </div>
                       {enemy.ai_behavior && (

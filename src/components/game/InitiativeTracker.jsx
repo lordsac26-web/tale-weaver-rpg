@@ -192,7 +192,7 @@ export default function InitiativeTracker({ combatants = [], currentTurnIndex, r
                           <div className="flex items-center gap-1">
                             <Heart className="w-2.5 h-2.5" style={{ color: hpPct > 50 ? '#22c55e' : hpPct > 25 ? '#d97706' : '#dc2626' }} />
                             <span className="text-xs font-fantasy font-bold" style={{ color: hpPct > 50 ? '#86efac' : hpPct > 25 ? '#fde68a' : '#fca5a5' }}>
-                              {c.hp}/{c.hp_max}
+                              {c.hp || c.hp_current}/{c.hp_max}
                             </span>
                           </div>
                         </div>
