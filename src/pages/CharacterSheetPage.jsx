@@ -10,8 +10,9 @@ import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_
 import InventoryTab from '@/components/game/InventoryTab';
 import SpellbookTab from '@/components/game/SpellbookTab';
 import MulticlassManager from '@/components/game/MulticlassManager';
+import CharacterGrowthTab from '@/components/game/CharacterGrowthTab';
 
-const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger'];
+const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Artificer'];
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 const STAT_ICONS = { strength: '💪', dexterity: '🏹', constitution: '❤️', intelligence: '📚', wisdom: '🔮', charisma: '✨' };
@@ -149,7 +150,7 @@ export default function CharacterSheetPage() {
 
   const isCaster = SPELLCASTING_CLASSES.includes(character.class);
   const profBonus = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
-  const TABS = ['stats', 'skills', 'inventory', ...(isCaster ? ['spells'] : []), 'conditions', 'multiclass', 'features'];
+  const TABS = ['stats', 'skills', 'growth', 'inventory', ...(isCaster ? ['spells'] : []), 'conditions', 'multiclass', 'features'];
 
   return (
     <div className="min-h-screen parchment-bg" style={{ color: '#e8d5b7' }}>
@@ -280,7 +281,7 @@ export default function CharacterSheetPage() {
                 border: '1px solid rgba(180,140,90,0.1)',
                 color: 'rgba(180,150,100,0.45)',
               }}>
-              {t === 'spells' ? '🔮 Spells' : t === 'stats' ? '⚔️ Stats' : t === 'skills' ? '🎯 Skills' : t === 'inventory' ? '🎒 Inventory' : t === 'conditions' ? '🌀 Status' : t === 'multiclass' ? '🎭 Multiclass' : '📜 Features'}
+  {t === 'spells' ? '🔮 Spells' : t === 'stats' ? '⚔️ Stats' : t === 'skills' ? '🎯 Skills' : t === 'growth' ? '⭐ Growth' : t === 'inventory' ? '🎒 Inventory' : t === 'conditions' ? '🌀 Status' : t === 'multiclass' ? '🎭 Multiclass' : '📜 Features'}
             </button>
           ))}
         </div>
@@ -369,6 +370,11 @@ export default function CharacterSheetPage() {
                   Click the dot next to a skill to toggle: none → proficient → expert
                 </div>
               </div>
+            )}
+
+            {/* GROWTH */}
+            {tab === 'growth' && (
+              <CharacterGrowthTab character={character} onUpdate={handleUpdate} />
             )}
 
             {/* INVENTORY */}
