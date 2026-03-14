@@ -63,9 +63,12 @@ export default function Game() {
       setCompanions(comps);
     }
 
-    if (sess.story_log?.length > 0 && narrative.length === 0) {
-      const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: e.text }));
-      setNarrative(restored);
+    if (sess.story_log?.length > 0) {
+      setNarrative(prev => {
+        if (prev.length > 0) return prev; // already have narrative, don't overwrite
+        const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: e.text }));
+        return restored;
+      });
       setStarted(true);
       const lastEntry = sess.story_log[sess.story_log.length - 1];
       if (lastEntry?.choices?.length > 0) setChoices(lastEntry.choices);
@@ -83,12 +86,18 @@ export default function Game() {
   const startAdventure = async () => {
     setStoryLoading(true);
     setStarted(true);
-    const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'start' });
-    const data = result.data;
-    setNarrative([{ type: 'narration', text: data.narrative }]);
-    setChoices(data.choices || []);
-    await loadState();
-    setStoryLoading(false);
+    try {
+      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'start' });
+      const data = result.data;
+      setNarrative([{ type: 'narration', text: data.narrative }]);
+      setChoices(data.choices || []);
+      await loadState();
+    } catch (err) {
+      console.error('Failed to start adventure:', err);
+      setNarrative([{ type: 'narration', text: 'The tale hesitates... Please try beginning your adventure again.' }]);
+    } finally {
+      setStoryLoading(false);
+    }
   };
 
   // Compute skill check modifier from character stats + proficiency
@@ -175,28 +184,34 @@ export default function Game() {
     }
 
     setStoryLoading(true);
-    const result = await base44.functions.invoke('generateStory', {
-      session_id: sessionId,
-      action: 'choice',
-      choice_index: choiceIndex,
-      custom_input: choice.skill_check
-        ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}]`
-        : choice.text,
-    });
-    const data = result.data;
+    try {
+      const result = await base44.functions.invoke('generateStory', {
+        session_id: sessionId,
+        action: 'choice',
+        choice_index: choiceIndex,
+        custom_input: choice.skill_check
+          ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}]`
+          : choice.text,
+      });
+      const data = result.data;
 
-    if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
-    if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP earned!` }]);
+      if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
+      if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP earned!` }]);
 
-    if (data.combat_trigger && data.enemies?.length > 0) {
-      setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
-      await startCombat(data.enemies);
-    } else {
-      setChoices(data.choices || []);
+      if (data.combat_trigger && data.enemies?.length > 0) {
+        setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
+        await startCombat(data.enemies);
+      } else {
+        setChoices(data.choices || []);
+      }
+
+      await loadState();
+    } catch (err) {
+      console.error('Failed to process choice:', err);
+      setNarrative(prev => [...prev, { type: 'narration', text: 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
+    } finally {
+      setStoryLoading(false);
     }
-
-    await loadState();
-    setStoryLoading(false);
   };
 
   // Intercept custom input — send to DM for adjudication first
@@ -206,13 +221,19 @@ export default function Game() {
     setCustomInput('');
     setEvaluatingAction(true);
 
-    const result = await base44.functions.invoke('evaluatePlayerAction', {
-      action: text,
-      character,
-      session_context: `${session?.current_location || ''} — ${narrative.filter(e => e.type === 'narration').slice(-1)[0]?.text?.slice(0, 200) || ''}`
-    });
-    setEvaluatingAction(false);
-    setPendingProposal({ ...result.data, action: text });
+    try {
+      const result = await base44.functions.invoke('evaluatePlayerAction', {
+        action: text,
+        character,
+        session_context: `${session?.current_location || ''} — ${narrative.filter(e => e.type === 'narration').slice(-1)[0]?.text?.slice(0, 200) || ''}`
+      });
+      setPendingProposal({ ...result.data, action: text });
+    } catch (err) {
+      console.error('Failed to evaluate action:', err);
+      setCustomInput(text); // restore the player's input so they don't lose it
+    } finally {
+      setEvaluatingAction(false);
+    }
   };
 
   const executeProposedAction = async (proposal) => {
@@ -234,18 +255,24 @@ export default function Game() {
     }
 
     setStoryLoading(true);
-    const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: action + checkResult });
-    const data = result.data;
-    if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
-    if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);
-    if (data.combat_trigger && data.enemies?.length > 0) {
-      setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
-      await startCombat(data.enemies);
-    } else {
-      setChoices(data.choices || []);
+    try {
+      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: action + checkResult });
+      const data = result.data;
+      if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
+      if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);
+      if (data.combat_trigger && data.enemies?.length > 0) {
+        setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
+        await startCombat(data.enemies);
+      } else {
+        setChoices(data.choices || []);
+      }
+      await loadState();
+    } catch (err) {
+      console.error('Failed to execute action:', err);
+      setNarrative(prev => [...prev, { type: 'narration', text: 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
+    } finally {
+      setStoryLoading(false);
     }
-    await loadState();
-    setStoryLoading(false);
   };
 
   const startCombat = async (enemies) => {
@@ -318,20 +345,24 @@ export default function Game() {
 
     if (data.combat_ended) {
       if (data.result === 'victory') {
-        const victoriousEnemies = (combat?.combatants || []).filter(c => c.type === 'enemy');
+        // Grab combatants from the freshly reloaded log (not stale combat state)
+        const freshLogs = await base44.entities.CombatLog.filter({ id: combatId });
+        const freshCombat = freshLogs[0];
+        const victoriousEnemies = (freshCombat?.combatants || combat?.combatants || []).filter(c => c.type === 'enemy');
         setDefeatedEnemies(victoriousEnemies);
         setShowLootModal(true);
         setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! The battle is won. Your enemies lie defeated.' }]);
-        // Save history snapshot (loot added later via onCollect)
-        await saveCombatHistory(combatId, 'victory', victoriousEnemies);
+        await saveCombatHistory(combatId, 'victory', victoriousEnemies, freshCombat?.round);
         const storyResult = await base44.functions.invoke('generateStory', {
           session_id: sessionId, action: 'choice', custom_input: 'The combat has ended in victory.'
         });
         if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
         setChoices(storyResult.data?.choices || []);
       } else if (data.result === 'defeat') {
-        const defeatedEnemyList = (combat?.combatants || []).filter(c => c.type === 'enemy');
-        await saveCombatHistory(combatId, 'defeat', defeatedEnemyList);
+        const freshLogs = await base44.entities.CombatLog.filter({ id: combatId });
+        const freshCombat = freshLogs[0];
+        const defeatedEnemyList = (freshCombat?.combatants || combat?.combatants || []).filter(c => c.type === 'enemy');
+        await saveCombatHistory(combatId, 'defeat', defeatedEnemyList, freshCombat?.round);
         setShowDeathModal(true);
       }
       setCombat(null);
@@ -363,7 +394,8 @@ export default function Game() {
         });
         const data = result.data;
         if (data.log_entry) {
-            setNarrative(prev => [...prev, { type: 'roll_result', text: data.log_entry.text, success: !data.log_entry.hit }]);
+            // Enemy hitting the player is bad for the player — show red (success: false)
+            setNarrative(prev => [...prev, { type: 'roll_result', text: data.log_entry.text, success: data.log_entry.hit === false }]);
             // Floating text for enemy attacks on player
             setLastCombatEvent({
               key: Date.now(),
@@ -389,13 +421,20 @@ export default function Game() {
   };
 
   // Saves a completed encounter snapshot to the CombatLog for history tracking
-  const saveCombatHistory = async (combatId, result, enemies) => {
+  // Takes an optional freshRound param to avoid reading from stale combat state closure
+  const saveCombatHistory = async (combatId, result, enemies, freshRound) => {
     if (!combatId) return;
     const enemySnapshot = enemies.map(e => ({
       name: e.name,
       max_hp: e.max_hp || e.hp,
       cr: e.cr || null,
     }));
+    // Fetch current round from DB if not provided, to avoid stale closure on combat?.round
+    let totalRounds = freshRound;
+    if (totalRounds == null) {
+      const logs = await base44.entities.CombatLog.filter({ id: combatId });
+      totalRounds = logs[0]?.round || 0;
+    }
     await base44.entities.CombatLog.update(combatId, {
       result,
       is_active: false,
@@ -403,7 +442,7 @@ export default function Game() {
       session_title: session?.title || 'Unknown Campaign',
       character_name: character?.name || '',
       location: session?.current_location || '',
-      total_rounds: combat?.round || 0,
+      total_rounds: totalRounds,
       encounter_date: new Date().toISOString(),
     });
   };
@@ -849,18 +888,21 @@ export default function Game() {
             character={character}
             onClose={() => setShowLootModal(false)}
             onCollect={async (updates, lootSnapshot) => {
-              setCharacter(prev => ({ ...prev, ...updates }));
-              const coinParts = [];
-              if (updates.gold   > character.gold)   coinParts.push(`+${updates.gold   - character.gold} gp`);
-              if (updates.silver > character.silver) coinParts.push(`+${updates.silver - character.silver} sp`);
-              if (updates.copper > character.copper) coinParts.push(`+${updates.copper - character.copper} cp`);
-              if ((updates.inventory?.length || 0) > (character.inventory?.length || 0)) {
-                const newCount = (updates.inventory?.length || 0) - (character.inventory?.length || 0);
-                coinParts.push(`${newCount} item${newCount > 1 ? 's' : ''} added`);
-              }
-              if (coinParts.length > 0) {
-                setNarrative(prev => [...prev, { type: 'xp_gain', text: `💰 Looted: ${coinParts.join(' · ')}` }]);
-              }
+              // Use functional updater to get current character state, avoiding stale closure
+              setCharacter(prev => {
+                const coinParts = [];
+                if ((updates.gold   || 0) > (prev.gold   || 0)) coinParts.push(`+${(updates.gold   || 0) - (prev.gold   || 0)} gp`);
+                if ((updates.silver || 0) > (prev.silver || 0)) coinParts.push(`+${(updates.silver || 0) - (prev.silver || 0)} sp`);
+                if ((updates.copper || 0) > (prev.copper || 0)) coinParts.push(`+${(updates.copper || 0) - (prev.copper || 0)} cp`);
+                if ((updates.inventory?.length || 0) > (prev.inventory?.length || 0)) {
+                  const newCount = (updates.inventory?.length || 0) - (prev.inventory?.length || 0);
+                  coinParts.push(`${newCount} item${newCount > 1 ? 's' : ''} added`);
+                }
+                if (coinParts.length > 0) {
+                  setNarrative(n => [...n, { type: 'xp_gain', text: `💰 Looted: ${coinParts.join(' · ')}` }]);
+                }
+                return { ...prev, ...updates };
+              });
               // Persist loot snapshot to combat history record
               if (lootSnapshot && session?.combat_state?.combat_id) {
                 await base44.entities.CombatLog.update(session.combat_state.combat_id, {
