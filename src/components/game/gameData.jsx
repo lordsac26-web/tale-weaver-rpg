@@ -173,6 +173,14 @@ export const RACES = {
     description: 'The most human-seeming of the yuan-ti, purebloods are the most numerous of their serpentine kin. They infiltrate humanoid society while serving their dark masters.',
     subraces: [],
   },
+  Minotaur: {
+    traits: ['Horns (1d6 + STR piercing unarmed attack)', 'Goring Rush (dash ≥20 ft, bonus horn attack)', 'Hammering Horns (push Large or smaller 10 ft on horn hit)', 'Labyrinthine Recall (perfect recall of paths traveled)'],
+    stat_bonuses: { strength: 2, constitution: 1 },
+    speed: 30, size: 'Medium',
+    languages: ['Common', 'Minotaur'],
+    description: 'Powerful bull-headed warriors with an innate sense of direction. Minotaurs are fierce in battle and never forget a path they\'ve traveled.',
+    subraces: [],
+  },
 };
 
 export const CLASSES = {
