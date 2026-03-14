@@ -7,42 +7,50 @@ const COMPANION_PRESETS = {
   familiar: {
     Owl: { creature_type: 'Owl', hp_max: 1, ac: 11, speed: 5, fly: 60, str: 3, dex: 13, con: 8, int: 2, wis: 12, cha: 7, 
       abilities: [{ name: 'Flyby', desc: 'No opportunity attacks when flying out of reach' }, { name: 'Keen Hearing/Sight', desc: 'Advantage on Perception checks' }],
-      attacks: [{ name: 'Talons', bonus: 3, damage_dice: '1d1', damage_type: 'slashing' }], emoji: '🦉' },
-    Cat: { creature_type: 'Cat', hp_max: 2, ac: 12, speed: 40, str: 3, dex: 15, con: 10, int: 3, wis: 12, cha: 7,
+      attacks: [{ name: 'Talons', bonus: 3, damage_dice: '1d1', damage_type: 'slashing' }], emoji: '🦉',
+      initiative_bonus: 1, class_requirement: 'Wizard/Warlock', spell_required: 'Find Familiar', casting_time: '1 hour ritual' },
+    Cat: { creature_type: 'Cat', hp_max: 2, ac: 12, speed: 40, climb: 30, str: 3, dex: 15, con: 10, int: 3, wis: 12, cha: 7,
       abilities: [{ name: 'Keen Smell', desc: 'Advantage on Perception checks relying on smell' }],
-      attacks: [{ name: 'Claws', bonus: 0, damage_dice: '1d1', damage_type: 'slashing' }], emoji: '🐈' },
+      attacks: [{ name: 'Claws', bonus: 0, damage_dice: '1d1', damage_type: 'slashing' }], emoji: '🐈',
+      initiative_bonus: 2, class_requirement: 'Wizard/Warlock', spell_required: 'Find Familiar' },
     Raven: { creature_type: 'Raven', hp_max: 1, ac: 12, speed: 10, fly: 50, str: 2, dex: 14, con: 8, int: 2, wis: 12, cha: 6,
       abilities: [{ name: 'Mimicry', desc: 'Can mimic simple sounds' }],
-      attacks: [{ name: 'Beak', bonus: 4, damage_dice: '1d1', damage_type: 'piercing' }], emoji: '🐦‍⬛' },
+      attacks: [{ name: 'Beak', bonus: 4, damage_dice: '1d1', damage_type: 'piercing' }], emoji: '🐦‍⬛',
+      initiative_bonus: 2, class_requirement: 'Wizard/Warlock', spell_required: 'Find Familiar' },
     Bat: { creature_type: 'Bat', hp_max: 1, ac: 12, speed: 5, fly: 30, str: 2, dex: 15, con: 8, int: 2, wis: 12, cha: 4,
       abilities: [{ name: 'Echolocation', desc: 'Blindsight 60 ft.' }, { name: 'Keen Hearing', desc: 'Advantage on hearing-based Perception' }],
-      attacks: [{ name: 'Bite', bonus: 0, damage_dice: '1d1', damage_type: 'piercing' }], emoji: '🦇' },
-    Toad: { creature_type: 'Toad', hp_max: 1, ac: 11, speed: 20, str: 1, dex: 13, con: 8, int: 1, wis: 8, cha: 3,
-      abilities: [{ name: 'Amphibious', desc: 'Can breathe air and water' }],
-      attacks: [], emoji: '🐸' },
-    Spider: { creature_type: 'Spider', hp_max: 1, ac: 12, speed: 20, climb: 20, str: 2, dex: 14, con: 8, int: 1, wis: 10, cha: 2,
-      abilities: [{ name: 'Spider Climb', desc: 'Can climb difficult surfaces' }, { name: 'Web Sense', desc: 'Knows location of creatures on its web' }],
-      attacks: [{ name: 'Bite', bonus: 4, damage_dice: '1d1', damage_type: 'piercing' }], emoji: '🕷️' },
-    Snake: { creature_type: 'Snake', hp_max: 2, ac: 12, speed: 30, swim: 30, str: 2, dex: 16, con: 11, int: 1, wis: 10, cha: 3,
-      abilities: [{ name: 'Poison', desc: 'Bite deals poison damage' }],
-      attacks: [{ name: 'Bite', bonus: 5, damage_dice: '1d2', damage_type: 'piercing' }], emoji: '🐍' },
+      attacks: [{ name: 'Bite', bonus: 0, damage_dice: '1d1', damage_type: 'piercing' }], emoji: '🦇',
+      initiative_bonus: 2, class_requirement: 'Wizard/Warlock', spell_required: 'Find Familiar' },
+    Pseudodragon: { creature_type: 'Pseudodragon', hp_max: 7, ac: 13, speed: 15, fly: 60, str: 6, dex: 15, con: 13, int: 10, wis: 12, cha: 10,
+      abilities: [{ name: 'Magic Resistance', desc: 'Advantage on saves vs spells' }, { name: 'Limited Telepathy', desc: 'Communicate simple ideas within 100 ft' }],
+      attacks: [{ name: 'Sting', bonus: 4, damage_dice: '1d4+2', damage_type: 'piercing', special: 'DC 11 CON save or poisoned for 1 hour' }], emoji: '🐉',
+      initiative_bonus: 2, class_requirement: 'Warlock (Pact of Chain)', spell_required: 'Find Familiar (Pact boon)' },
+    Imp: { creature_type: 'Imp', hp_max: 10, ac: 13, speed: 20, fly: 40, str: 6, dex: 17, con: 13, int: 11, wis: 12, cha: 14,
+      abilities: [{ name: 'Shapechanger', desc: 'Can polymorph into rat/raven/spider' }, { name: 'Devil\'s Sight', desc: 'See in magical darkness 120 ft' }, { name: 'Magic Resistance', desc: 'Advantage on saves vs spells' }],
+      attacks: [{ name: 'Sting', bonus: 5, damage_dice: '1d4+3', damage_type: 'piercing', special: 'DC 11 CON save or 3d6 poison' }], emoji: '😈',
+      initiative_bonus: 3, class_requirement: 'Warlock (Pact of Chain)', spell_required: 'Find Familiar (Pact boon)' },
   },
   beast_companion: {
     Wolf: { creature_type: 'Wolf', hp_max: 11, ac: 13, speed: 40, str: 12, dex: 15, con: 12, int: 3, wis: 12, cha: 6,
-      abilities: [{ name: 'Keen Hearing/Smell', desc: 'Advantage on Perception checks' }, { name: 'Pack Tactics', desc: 'Advantage on attacks if ally is near target' }],
-      attacks: [{ name: 'Bite', bonus: 4, damage_dice: '2d4+2', damage_type: 'piercing' }], emoji: '🐺' },
+      abilities: [{ name: 'Keen Hearing/Smell', desc: 'Advantage on Perception checks' }, { name: 'Pack Tactics', desc: 'Advantage on attacks if ally within 5 ft of target' }],
+      attacks: [{ name: 'Bite', bonus: 4, damage_dice: '2d4+2', damage_type: 'piercing', special: 'DC 11 STR save or knocked prone' }], emoji: '🐺',
+      initiative_bonus: 2, class_requirement: 'Ranger (Beast Master)', level_required: 3 },
     Bear: { creature_type: 'Bear', hp_max: 13, ac: 11, speed: 40, climb: 30, str: 15, dex: 10, con: 14, int: 2, wis: 12, cha: 7,
       abilities: [{ name: 'Keen Smell', desc: 'Advantage on smell-based Perception' }],
-      attacks: [{ name: 'Bite', bonus: 3, damage_dice: '1d6+2', damage_type: 'piercing' }, { name: 'Claws', bonus: 3, damage_dice: '2d4+2', damage_type: 'slashing' }], emoji: '🐻' },
+      attacks: [{ name: 'Bite', bonus: 3, damage_dice: '1d6+2', damage_type: 'piercing' }, { name: 'Claws', bonus: 3, damage_dice: '2d4+2', damage_type: 'slashing' }], emoji: '🐻',
+      initiative_bonus: 0, class_requirement: 'Ranger (Beast Master)', level_required: 3, size: 'Medium', cr: 0.5 },
     Panther: { creature_type: 'Panther', hp_max: 13, ac: 12, speed: 50, climb: 40, str: 14, dex: 15, con: 10, int: 3, wis: 14, cha: 7,
-      abilities: [{ name: 'Keen Smell', desc: 'Advantage on smell-based Perception' }, { name: 'Pounce', desc: 'Knock target prone on charge' }],
-      attacks: [{ name: 'Bite', bonus: 4, damage_dice: '1d6+2', damage_type: 'piercing' }, { name: 'Claw', bonus: 4, damage_dice: '1d4+2', damage_type: 'slashing' }], emoji: '🐆' },
+      abilities: [{ name: 'Keen Smell', desc: 'Advantage on smell-based Perception' }, { name: 'Pounce', desc: 'If moves 20 ft+ and hits, DC 12 STR save or prone, bonus claw attack' }],
+      attacks: [{ name: 'Bite', bonus: 4, damage_dice: '1d6+2', damage_type: 'piercing' }, { name: 'Claw', bonus: 4, damage_dice: '1d4+2', damage_type: 'slashing' }], emoji: '🐆',
+      initiative_bonus: 2, class_requirement: 'Ranger (Beast Master)', level_required: 3, cr: 0.25 },
     Hawk: { creature_type: 'Hawk', hp_max: 7, ac: 13, speed: 10, fly: 80, str: 5, dex: 16, con: 8, int: 2, wis: 14, cha: 6,
       abilities: [{ name: 'Keen Sight', desc: 'Advantage on sight-based Perception' }],
-      attacks: [{ name: 'Talons', bonus: 4, damage_dice: '1d4+2', damage_type: 'slashing' }], emoji: '🦅' },
+      attacks: [{ name: 'Talons', bonus: 4, damage_dice: '1d4+2', damage_type: 'slashing' }], emoji: '🦅',
+      initiative_bonus: 3, class_requirement: 'Ranger (Beast Master)', level_required: 3, cr: 0 },
     Boar: { creature_type: 'Boar', hp_max: 11, ac: 11, speed: 40, str: 13, dex: 11, con: 12, int: 2, wis: 9, cha: 5,
-      abilities: [{ name: 'Charge', desc: 'Bonus damage on charge attack' }, { name: 'Relentless', desc: 'Once per day, drop to 1 HP instead of 0' }],
-      attacks: [{ name: 'Tusk', bonus: 3, damage_dice: '1d6+1', damage_type: 'slashing' }], emoji: '🐗' },
+      abilities: [{ name: 'Charge', desc: 'If moves 20 ft+ and hits, +1d6 damage and DC 11 STR save or prone' }, { name: 'Relentless', desc: 'If reduced to 0 HP, make DC 10 CON save to drop to 1 HP instead (once per rest)' }],
+      attacks: [{ name: 'Tusk', bonus: 3, damage_dice: '1d6+1', damage_type: 'slashing' }], emoji: '🐗',
+      initiative_bonus: 0, class_requirement: 'Ranger (Beast Master)', level_required: 3, cr: 0.25 },
   },
 };
 
@@ -52,6 +60,9 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
   const [selectedPreset, setSelectedPreset] = useState(null);
 
   const activeCompanions = companions.filter(c => c.is_summoned);
+  const charClass = character?.class || '';
+  const charLevel = character?.level || 1;
+  const charSubclass = character?.subclass || '';
 
   const handleSelectPreset = (type, creatureType) => {
     const preset = COMPANION_PRESETS[type]?.[creatureType];
@@ -67,13 +78,61 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
 
   const createCompanion = async () => {
     if (!newCompanion.name?.trim()) return;
-    await onUpdate('create', newCompanion);
+    
+    // Validate class requirements
+    const preset = selectedPreset;
+    if (preset?.class_requirement) {
+      const allowedClasses = preset.class_requirement.split('/').map(c => c.trim());
+      const meetsClass = allowedClasses.some(cls => {
+        if (cls.includes('(')) {
+          const [baseClass, subclassReq] = cls.split('(');
+          return charClass === baseClass.trim() && charSubclass.includes(subclassReq.replace(')', '').trim());
+        }
+        return charClass === cls;
+      });
+      if (!meetsClass) {
+        alert(`This companion requires: ${preset.class_requirement}`);
+        return;
+      }
+    }
+    if (preset?.level_required && charLevel < preset.level_required) {
+      alert(`This companion requires level ${preset.level_required}+`);
+      return;
+    }
+    
+    // Set companion HP to scale with Ranger level for Beast Master
+    let finalHP = newCompanion.hp_max;
+    if (newCompanion.type === 'beast_companion' && charClass === 'Ranger') {
+      // Beast companion HP = 5 + (5 × ranger level) or beast's normal HP, whichever is higher
+      finalHP = Math.max(newCompanion.hp_max, 5 + (5 * charLevel));
+    }
+    
+    await onUpdate('create', { ...newCompanion, hp_max: finalHP, hp_current: finalHP });
     setShowAddModal(false);
     setNewCompanion({ type: 'familiar', creature_type: 'Owl' });
     setSelectedPreset(null);
   };
 
   const toggleSummon = async (companion) => {
+    if (!companion.is_summoned) {
+      // Summoning rules
+      if (companion.type === 'familiar') {
+        // Familiars: 1 hour ritual or 1 action (if already summoned before)
+        // Check if player has Find Familiar spell prepared
+        const hasFindFamiliar = (character?.spells_prepared || character?.spells_known || []).includes('Find Familiar');
+        if (!hasFindFamiliar && charClass !== 'Warlock') {
+          alert('You need Find Familiar spell prepared to summon a familiar.');
+          return;
+        }
+      } else if (companion.type === 'beast_companion') {
+        // Ranger Beast Master: only 1 companion at a time
+        const otherActiveBeasts = companions.filter(c => c.id !== companion.id && c.type === 'beast_companion' && c.is_summoned);
+        if (otherActiveBeasts.length > 0) {
+          alert('Rangers can only have one beast companion active at a time.');
+          return;
+        }
+      }
+    }
     await onUpdate('update', { ...companion, is_summoned: !companion.is_summoned });
   };
 
@@ -147,6 +206,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
 
             {comp.attacks?.length > 0 && (
               <div className="space-y-1">
+                <div className="text-xs font-fantasy tracking-widest mb-1" style={{ color: 'rgba(201,169,110,0.5)', fontSize: '0.6rem' }}>ATTACKS</div>
                 {comp.attacks.map((atk, i) => (
                   <button key={i}
                     onClick={() => onAttack?.(comp, atk)}
@@ -160,6 +220,11 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
                     </span>
                   </button>
                 ))}
+                {comp.type === 'familiar' && (
+                  <div className="text-xs mt-1 p-2 rounded" style={{ background: 'rgba(80,30,120,0.2)', color: 'rgba(192,132,252,0.6)' }}>
+                    ⚠️ Familiars can't attack (except Pact of Chain variants)
+                  </div>
+                )}
               </div>
             )}
 
@@ -216,10 +281,11 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
               <div className="space-y-3">
                 <div>
                   <label className="text-xs font-fantasy tracking-widest mb-1.5 block" style={{ color: 'rgba(201,169,110,0.6)' }}>TYPE</label>
-                  <select value={newCompanion.type} onChange={e => setNewCompanion({ ...newCompanion, type: e.target.value })}
+                  <select value={newCompanion.type} onChange={e => { setNewCompanion({ ...newCompanion, type: e.target.value }); setSelectedPreset(null); }}
                     className="w-full rounded-lg px-3 py-2 text-sm select-fantasy">
-                    <option value="familiar">Familiar (Wizard/Warlock)</option>
-                    <option value="beast_companion">Beast Companion (Ranger)</option>
+                    <option value="familiar">Familiar (Find Familiar spell)</option>
+                    <option value="beast_companion">Beast Companion (Ranger: Beast Master)</option>
+                    <option value="mount">Mount / Steed</option>
                   </select>
                 </div>
 
@@ -249,6 +315,12 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
 
                 {selectedPreset && (
                   <>
+                    <div className="p-2 rounded-lg text-xs" style={{ background: 'rgba(80,30,120,0.2)', border: '1px solid rgba(140,80,220,0.2)', color: 'rgba(192,132,252,0.7)' }}>
+                      <strong>Requires:</strong> {selectedPreset.class_requirement || 'Any class'}
+                      {selectedPreset.level_required && ` (Level ${selectedPreset.level_required}+)`}
+                      {selectedPreset.spell_required && <div className="mt-0.5">📖 {selectedPreset.spell_required}</div>}
+                    </div>
+
                     <div>
                       <label className="text-xs font-fantasy tracking-widest mb-1.5 block" style={{ color: 'rgba(201,169,110,0.6)' }}>NAME</label>
                       <input value={newCompanion.name || ''} onChange={e => setNewCompanion({ ...newCompanion, name: e.target.value })}
@@ -258,12 +330,31 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
 
                     <div className="p-3 rounded-lg" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.15)' }}>
                       <div className="text-xs font-fantasy mb-2" style={{ color: 'rgba(201,169,110,0.7)' }}>STATS</div>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div>HP: <span className="font-bold" style={{ color: '#86efac' }}>{selectedPreset.hp_max}</span></div>
+                      <div className="grid grid-cols-3 gap-2 text-xs mb-2">
+                        <div>HP: <span className="font-bold" style={{ color: '#86efac' }}>
+                          {newCompanion.type === 'beast_companion' && charClass === 'Ranger' 
+                            ? Math.max(selectedPreset.hp_max, 5 + (5 * charLevel))
+                            : selectedPreset.hp_max}
+                        </span></div>
                         <div>AC: <span className="font-bold" style={{ color: '#93c5fd' }}>{selectedPreset.ac}</span></div>
                         <div>Speed: <span className="font-bold" style={{ color: '#fbbf24' }}>{selectedPreset.speed}</span></div>
                       </div>
+                      {selectedPreset.fly && <div className="text-xs" style={{ color: 'rgba(147,197,253,0.6)' }}>✈️ Fly {selectedPreset.fly} ft</div>}
+                      {selectedPreset.climb && <div className="text-xs" style={{ color: 'rgba(134,239,172,0.6)' }}>🧗 Climb {selectedPreset.climb} ft</div>}
+                      {selectedPreset.swim && <div className="text-xs" style={{ color: 'rgba(147,197,253,0.6)' }}>🏊 Swim {selectedPreset.swim} ft</div>}
                     </div>
+
+                    {selectedPreset.abilities?.length > 0 && (
+                      <div className="p-3 rounded-lg space-y-1" style={{ background: 'rgba(15,10,5,0.5)', border: '1px solid rgba(180,140,90,0.12)' }}>
+                        <div className="text-xs font-fantasy mb-1" style={{ color: 'rgba(201,169,110,0.6)' }}>ABILITIES</div>
+                        {selectedPreset.abilities.map((ab, i) => (
+                          <div key={i} className="text-xs">
+                            <span className="font-semibold" style={{ color: '#f0c040' }}>{ab.name}:</span>{' '}
+                            <span style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'EB Garamond, serif' }}>{ab.desc}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </>
                 )}
 
