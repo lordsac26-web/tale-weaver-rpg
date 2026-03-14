@@ -411,7 +411,9 @@ function ConditionsTab({ character, onUpdate }) {
                   <span className="text-xl flex-shrink-0">{condData.icon || '❓'}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-fantasy text-sm capitalize" style={{ color: '#fca5a5' }}>{name}</span>
+                      <ConditionTooltip name={name} position="right">
+                        <span className="font-fantasy text-sm capitalize" style={{ color: '#fca5a5' }}>{name}</span>
+                      </ConditionTooltip>
                       {duration && <span className="text-xs px-1.5 py-0.5 rounded-full badge-blood">{duration}</span>}
                     </div>
                     {condData.description && (
