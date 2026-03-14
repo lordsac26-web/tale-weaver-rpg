@@ -296,7 +296,9 @@ export default function Game() {
       type: 'roll_result', text: data.log_entry?.text || 'Attack resolved.', success: data.hit
     }]);
 
+    // CRITICAL: Reload combat state BEFORE checking actions remaining
     await reloadCombat(combatId);
+    await loadState();
 
     if (data.actions_remaining > 0 && !data.combat_ended) {
       setNarrative(prev => [...prev, {
@@ -333,7 +335,6 @@ export default function Game() {
       }
       setCombat(null);
     }
-    await loadState();
     setCombatLoading(false);
   };
 
