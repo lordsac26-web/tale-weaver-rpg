@@ -1,7 +1,8 @@
 import React from 'react';
-import { Shield, Heart, Star, MapPin, Clock, Swords } from 'lucide-react';
+import { Shield, Heart, Star, MapPin, Clock, Swords, Sparkles } from 'lucide-react';
 import { CONDITIONS } from './gameData';
 import { motion } from 'framer-motion';
+import { getSpellSlotsForLevel } from './spellData';
 
 export default function HUD({ character, session }) {
   if (!character) return null;
@@ -17,6 +18,14 @@ export default function HUD({ character, session }) {
   const xpPct = xpForNext > xpForCurrent ? Math.min(100, ((currentXP - xpForCurrent) / (xpForNext - xpForCurrent)) * 100) : 100;
 
   const initials = character.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+
+  // Spell slot tracking
+  const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Artificer'];
+  const isCaster = SPELLCASTING_CLASSES.includes(character.class);
+  const slotMaxArr = isCaster ? getSpellSlotsForLevel(character.class, character.level || 1) : [];
+  const currentSlots = character.spell_slots || {};
+  const totalSlotsUsed = Object.keys(currentSlots).reduce((sum, key) => sum + (currentSlots[key] || 0), 0);
+  const totalSlotsMax = slotMaxArr.reduce((sum, val) => sum + val, 0);
 
   return (
     <div className="glass-panel border-b border-gold/30 px-4 py-2.5 relative overflow-hidden flex-shrink-0"
@@ -102,6 +111,17 @@ export default function HUD({ character, session }) {
           <span className="font-bold text-sm font-fantasy" style={{ color: '#93c5fd' }}>{character.armor_class}</span>
           <span className="text-xs" style={{ color: 'rgba(147,197,253,0.5)', fontFamily: 'EB Garamond, serif' }}>AC</span>
         </div>
+
+        {/* Spell Slots (if caster) */}
+        {isCaster && totalSlotsMax > 0 && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg stat-box">
+            <Sparkles className="w-3.5 h-3.5" style={{ color: '#a78bfa' }} />
+            <span className="font-bold text-sm font-fantasy" style={{ color: totalSlotsUsed < totalSlotsMax ? '#a78bfa' : '#fca5a5' }}>
+              {totalSlotsMax - totalSlotsUsed}/{totalSlotsMax}
+            </span>
+            <span className="text-xs" style={{ color: 'rgba(167,139,250,0.5)', fontFamily: 'EB Garamond, serif' }}>Slots</span>
+          </div>
+        )}
 
         {/* Location & Time */}
         {session && (
