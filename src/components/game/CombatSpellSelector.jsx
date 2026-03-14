@@ -9,7 +9,8 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
   const [showDetail, setShowDetail] = useState(null);
   const [expandedLevel, setExpandedLevel] = useState(0);
 
-  const knownSpells = character?.spells_known || [];
+  // Use prepared spells in combat (fall back to known for legacy characters)
+  const preparedSpells = character?.spells_prepared || character?.spells_known || [];
   const charLevel = character?.level || 1;
   const charClass = character?.class || '';
   const slotMaxArr = getSpellSlotsForLevel(charClass, charLevel);
@@ -19,7 +20,7 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
 
   // Group spells by level
   const byLevel = {};
-  knownSpells.forEach(name => {
+  preparedSpells.forEach(name => {
     const details = SPELL_DETAILS[name];
     if (!details) return;
     const lvl = details.level || 0;
@@ -36,7 +37,7 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
     return Math.max(0, max - used);
   };
 
-  if (knownSpells.length === 0) {
+  if (preparedSpells.length === 0) {
     return (
       <div className="text-slate-500 text-xs text-center py-4">
         No spells prepared. Visit the Character Sheet → Spellbook to prepare spells.

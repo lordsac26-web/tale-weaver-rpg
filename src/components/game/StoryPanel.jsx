@@ -27,6 +27,8 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   const [isNarrating, setIsNarrating] = useState(false);
   const [audioLoading, setAudioLoading] = useState(false);
   const lastNarratedIndex = useRef(-1);
+  const [selectedVoice, setSelectedVoice] = useState(() => localStorage.getItem('narrationVoice') || 'default');
+  const [showVoiceMenu, setShowVoiceMenu] = useState(false);
 
   // Auto-scroll on new narrative entries
   useEffect(() => {
@@ -53,8 +55,8 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
       window.speechSynthesis.cancel();
     }
 
-    // Only truncate for performance
-    const narrationText = truncateForNarration(text, 800);
+    // Don't truncate — narrate the full text
+    const narrationText = text;
 
     try {
       setAudioLoading(true);
@@ -70,17 +72,21 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
         });
       }
 
-      // Select best available voice (prefer British/natural sounding)
-      const preferredVoice = voices.find(v => 
-        v.name.includes('Daniel') || 
-        v.name.includes('Alex') ||
-        v.name.includes('Google UK') ||
-        v.name.includes('British')
-      ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+      // Voice selection based on user preference
+      const VOICE_PRESETS = {
+        default: (v) => v.find(x => x.name.includes('Daniel') || x.name.includes('Google UK') || x.name.includes('British')) || v.find(x => x.lang.startsWith('en')) || v[0],
+        heroic: (v) => v.find(x => x.name.includes('Alex') || x.name.includes('Fred')) || v.find(x => x.lang.startsWith('en-GB')) || v[0],
+        mystical: (v) => v.find(x => x.name.includes('Fiona') || x.name.includes('Victoria')) || v.find(x => x.lang.startsWith('en-GB') && !x.name.includes('Male')) || v[0],
+        gruff: (v) => v.find(x => x.name.includes('Rishi') || x.name.includes('Daniel')) || v.find(x => x.lang.startsWith('en') && x.name.includes('Male')) || v[0],
+        elegant: (v) => v.find(x => x.name.includes('Samantha') || x.name.includes('Karen')) || v.find(x => x.lang.startsWith('en-US') && !x.name.includes('Male')) || v[0],
+      };
+
+      const getVoiceFn = VOICE_PRESETS[selectedVoice] || VOICE_PRESETS.default;
+      const preferredVoice = getVoiceFn(voices);
 
       const utterance = new SpeechSynthesisUtterance(narrationText);
       utterance.voice = preferredVoice;
-      utterance.rate = 0.95;
+      utterance.rate = 0.92;
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
 
@@ -114,6 +120,12 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     }
   };
 
+  const selectVoice = (voice) => {
+    setSelectedVoice(voice);
+    localStorage.setItem('narrationVoice', voice);
+    setShowVoiceMenu(false);
+  };
+
   // Narration button label
   const narrationLabel = audioLoading
     ? 'Loading...'
@@ -126,8 +138,48 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Narration Toggle */}
-      <div className="flex-shrink-0 px-4 py-2 flex items-center justify-end"
+      <div className="flex-shrink-0 px-4 py-2 flex items-center justify-end gap-2"
         style={{ background: 'rgba(8,5,2,0.6)', borderBottom: '1px solid rgba(180,140,90,0.15)' }}>
+        
+        {/* Voice selector */}
+        {narrationEnabled && (
+          <div className="relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowVoiceMenu(v => !v)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-fantasy transition-all"
+              style={{ background: 'rgba(40,25,10,0.7)', border: '1px solid rgba(180,140,90,0.25)', color: 'rgba(201,169,110,0.7)' }}>
+              🎭 {selectedVoice === 'default' ? 'Default' : selectedVoice === 'heroic' ? 'Heroic' : selectedVoice === 'mystical' ? 'Mystical' : selectedVoice === 'gruff' ? 'Gruff' : 'Elegant'}
+            </button>
+            <AnimatePresence>
+              {showVoiceMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                  className="absolute right-0 top-full mt-1 rounded-xl overflow-hidden shadow-2xl z-50"
+                  style={{ background: 'rgba(15,8,3,0.98)', border: '1px solid rgba(184,115,51,0.35)', minWidth: '160px' }}>
+                  {[
+                    { key: 'default', label: 'Default', icon: '🎙️' },
+                    { key: 'heroic', label: 'Heroic', icon: '⚔️' },
+                    { key: 'mystical', label: 'Mystical', icon: '🔮' },
+                    { key: 'gruff', label: 'Gruff', icon: '🗡️' },
+                    { key: 'elegant', label: 'Elegant', icon: '✨' },
+                  ].map(({ key, label, icon }, i) => (
+                    <button key={key}
+                      onClick={() => selectVoice(key)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left transition-all"
+                      style={{ borderBottom: i < 4 ? '1px solid rgba(184,115,51,0.1)' : 'none', background: selectedVoice === key ? 'rgba(60,30,10,0.6)' : 'transparent' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(60,30,10,0.6)'}
+                      onMouseLeave={e => e.currentTarget.style.background = selectedVoice === key ? 'rgba(60,30,10,0.6)' : 'transparent'}>
+                      <span className="text-base">{icon}</span>
+                      <span className="text-xs font-fantasy" style={{ color: selectedVoice === key ? '#f0c040' : 'rgba(201,169,110,0.7)' }}>{label}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
         <button onClick={toggleNarration}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-fantasy transition-all"
           style={narrationEnabled ? {
