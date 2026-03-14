@@ -66,9 +66,23 @@ export default function CharacterCreation() {
   };
 
   const applyRacialBonuses = (char) => {
-    const raceBonuses = RACES[char.race]?.stat_bonuses || {};
+    const race = RACES[char.race];
+    if (!race) return char;
+    
+    let bonuses = { ...race.stat_bonuses };
+    
+    // Apply subrace bonuses
+    if (char.subrace && race.subraces?.length > 0) {
+      const subrace = race.subraces.find(s => s.name === char.subrace);
+      if (subrace?.stat_bonuses) {
+        Object.entries(subrace.stat_bonuses).forEach(([stat, val]) => {
+          bonuses[stat] = (bonuses[stat] || 0) + val;
+        });
+      }
+    }
+    
     const updated = { ...char };
-    STATS.forEach(stat => { updated[stat] = (updated[stat] || 10) + (raceBonuses[stat] || 0); });
+    STATS.forEach(stat => { updated[stat] = (updated[stat] || 10) + (bonuses[stat] || 0); });
     return updated;
   };
 
