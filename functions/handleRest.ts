@@ -1,4 +1,17 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+
+// Spell slot progression by class
+const SPELL_SLOTS_BY_CLASS = {
+  Wizard: [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]],
+  Sorcerer: [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]],
+  Bard: [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]],
+  Cleric: [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]],
+  Druid: [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]],
+  Paladin: [[0],[0],[2],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]],
+  Ranger: [[0],[0],[2],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]],
+  Artificer: [[0],[2],[2],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]],
+  Warlock: [[1],[2],[2],[2],[2],[2],[2],[2],[2],[2],[3],[3],[3],[3],[3],[3],[4],[4],[4],[4]],
+};
 
 /**
  * Handle Short and Long Rests
@@ -15,73 +28,75 @@ Deno.serve(async (req) => {
   const character = chars[0];
   if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
 
+  const charClass = character.class;
+  const charLevel = character.level || 1;
+  const currentSlots = character.spell_slots || {};
+  const maxSlots = SPELL_SLOTS_BY_CLASS[charClass]?.[charLevel - 1] || [];
+
   const updates = {};
+  const restorations = [];
 
   if (rest_type === 'short') {
     // SHORT REST (1 hour)
-    // - Spend Hit Dice to heal (not auto-healed, but we'll auto-spend for simplicity)
-    // - Warlock regains all spell slots
-    // - Fighter regains Action Surge + Second Wind
-    // - Monk regains Ki points
-    // - Bard regains Bardic Inspiration
-
-    // Auto-spend half of available hit dice for healing
-    const hitDie = { Fighter: 10, Rogue: 8, Wizard: 6, Cleric: 8, Ranger: 10, Paladin: 10, Barbarian: 12, Bard: 8, Druid: 8, Monk: 8, Sorcerer: 6, Warlock: 8, Artificer: 8 }[character.class] || 8;
+    const hitDie = { Fighter: 10, Rogue: 8, Wizard: 6, Cleric: 8, Ranger: 10, Paladin: 10, Barbarian: 12, Bard: 8, Druid: 8, Monk: 8, Sorcerer: 6, Warlock: 8, Artificer: 8 }[charClass] || 8;
     const conMod = Math.floor(((character.constitution || 10) - 10) / 2);
-    const level = character.level || 1;
-    const diceToSpend = Math.max(1, Math.floor(level / 2));
+    const diceToSpend = Math.max(1, Math.floor(charLevel / 2));
     let healing = 0;
     for (let i = 0; i < diceToSpend; i++) {
       healing += Math.floor(Math.random() * hitDie) + 1 + conMod;
     }
     const newHP = Math.min(character.hp_max, (character.hp_current || 0) + healing);
     updates.hp_current = newHP;
+    restorations.push(`${healing} HP restored`);
 
-    // Warlock: restore all spell slots
-    if (character.class === 'Warlock') {
-      const slots = {};
-      for (let i = 1; i <= 9; i++) {
-        slots[`level_${i}`] = 0; // reset to 0 used
-      }
-      updates.spell_slots = slots;
+    // Warlock: restore all pact slots on short rest
+    if (charClass === 'Warlock') {
+      updates.spell_slots = {};
+      restorations.push('All pact slots recovered');
     }
 
-    // Clear short-rest abilities used flags (if we add them later)
+    // Wizard: reset Arcane Recovery availability
+    if (charClass === 'Wizard') {
+      updates.arcane_recovery_used = false;
+      restorations.push('Arcane Recovery available');
+    }
+
+    if (charClass === 'Fighter') restorations.push('Action Surge & Second Wind');
+    if (charClass === 'Monk') restorations.push('Ki points recharged');
+
     updates.short_rest_abilities = {};
 
   } else if (rest_type === 'long') {
     // LONG REST (8 hours)
-    // - Restore full HP
-    // - Restore all spell slots
-    // - Restore ½ hit dice (minimum 1)
-    // - Remove exhaustion levels (1 level)
-    // - All class abilities reset
-
     updates.hp_current = character.hp_max;
+    restorations.push('Full HP restored');
 
     // Reset all spell slots
-    const slots = {};
-    for (let i = 1; i <= 9; i++) {
-      slots[`level_${i}`] = 0; // 0 = none used
+    if (maxSlots.length > 0) {
+      updates.spell_slots = {};
+      restorations.push('All spell slots recovered');
     }
-    updates.spell_slots = slots;
 
-    // Remove one level of exhaustion (if present)
+    // Reset Arcane Recovery
+    if (charClass === 'Wizard') {
+      updates.arcane_recovery_used = false;
+    }
+
+    // Remove one level of exhaustion
     const conditions = character.conditions || [];
     const exhaustIdx = conditions.findIndex(c => (typeof c === 'string' ? c : c.name) === 'exhausted');
     if (exhaustIdx >= 0) {
       const newConditions = [...conditions];
       newConditions.splice(exhaustIdx, 1);
       updates.conditions = newConditions;
+      restorations.push('Exhaustion reduced');
     }
 
-    // Reset death saves
     updates.death_saves_success = 0;
     updates.death_saves_failure = 0;
-
-    // Clear ability usage trackers
     updates.short_rest_abilities = {};
     updates.long_rest_abilities = {};
+    restorations.push('All abilities recharged');
   }
 
   await base44.asServiceRole.entities.Character.update(character_id, updates);
@@ -92,8 +107,6 @@ Deno.serve(async (req) => {
     character: updatedChars[0],
     healing: updates.hp_current - (character.hp_current || 0),
     rest_type,
-    restorations: rest_type === 'short' ? 
-      ['Hit Dice healing', 'Short rest abilities'] :
-      ['Full HP', 'All spell slots', 'Hit Dice', 'All abilities']
+    restorations
   });
 });

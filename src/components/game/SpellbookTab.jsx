@@ -231,45 +231,47 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
       {/* Spell Slots Panel */}
       {activeSection === 'slots' && (
         <div className="space-y-3">
-          <div className="text-xs text-slate-400">Click a slot to expend/recover it. Slots reset on long rest.</div>
-          {slotArray.some(s => s > 0) ? (
-            <div className="space-y-3">
-              {slotArray.map((maxSlots, i) => {
-                if (maxSlots === 0) return null;
-                const level = i + 1;
-                const used = currentSlots[`level_${level}`] || 0;
-                const remaining = maxSlots - used;
-                return (
-                  <div key={level} className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm text-purple-300 font-medium">{LEVEL_LABELS[level]} Level</div>
-                      <div className="text-xs text-slate-400">{remaining}/{maxSlots} remaining</div>
-                    </div>
-                    <div className="flex gap-2 flex-wrap">
-                      {Array.from({ length: maxSlots }).map((_, j) => (
-                        <button key={j} onClick={() => handleToggleSlot(level, j, maxSlots)}
-                          className={`w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center text-xs font-bold ${j < remaining ? 'bg-purple-500/60 border-purple-400 text-purple-100 hover:bg-purple-400/60' : 'bg-slate-700/40 border-slate-600 text-slate-500 hover:border-purple-600/40'}`}>
-                          {j + 1}
-                        </button>
-                      ))}
-                    </div>
-                    {used > 0 && (
-                      <button onClick={() => onUpdateCharacter({ spell_slots: { ...currentSlots, [`level_${level}`]: 0 } })}
-                        className="mt-2 text-xs text-slate-500 hover:text-green-400 transition-colors">
-                        ↺ Recover all {LEVEL_LABELS[level]} slots
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-              <button onClick={() => onUpdateCharacter({ spell_slots: {} })}
-                className="w-full py-2 border border-green-700/40 text-green-400 text-xs rounded-xl hover:bg-green-900/20 transition-all">
-                ☀️ Long Rest — Recover All Slots
-              </button>
-            </div>
-          ) : (
-            <div className="text-center text-slate-500 py-6 text-sm">No spell slots at this level/class</div>
-          )}
+          <SpellSlotTracker 
+            character={character}
+            onUpdateSlots={(newSlots) => onUpdateCharacter({ spell_slots: newSlots })}
+          />
+          
+          <div className="flex gap-2 pt-2">
+            <button onClick={async () => {
+              const result = await base44.functions.invoke('recoverSpellSlots', {
+                character_id: character.id,
+                rest_type: 'short'
+              });
+              if (result.data?.character) {
+                onUpdateCharacter({ 
+                  spell_slots: result.data.character.spell_slots,
+                  arcane_recovery_used: result.data.character.arcane_recovery_used
+                });
+              }
+            }}
+              className="flex-1 py-2 border text-xs rounded-xl transition-all flex items-center justify-center gap-2"
+              style={{ background: 'rgba(60,30,8,0.4)', border: '1px solid rgba(184,115,51,0.25)', color: 'rgba(201,169,110,0.7)' }}>
+              <RotateCcw className="w-3.5 h-3.5" />
+              Short Rest
+            </button>
+            <button onClick={async () => {
+              const result = await base44.functions.invoke('recoverSpellSlots', {
+                character_id: character.id,
+                rest_type: 'long'
+              });
+              if (result.data?.character) {
+                onUpdateCharacter({ 
+                  spell_slots: result.data.character.spell_slots,
+                  arcane_recovery_used: result.data.character.arcane_recovery_used
+                });
+              }
+            }}
+              className="flex-1 py-2 border text-xs rounded-xl transition-all flex items-center justify-center gap-2"
+              style={{ background: 'rgba(38,10,70,0.4)', border: '1px solid rgba(130,70,210,0.3)', color: 'rgba(192,132,252,0.7)' }}>
+              <Moon className="w-3.5 h-3.5" />
+              Long Rest
+            </button>
+          </div>
         </div>
       )}
 
