@@ -10,6 +10,45 @@ const QUALITY_PRESETS = {
   '4k': { label: '4K (4096x4096)', size: '4096x4096', desc: 'Ultra quality' },
 };
 
+const STYLE_PRESETS = {
+  dark_fantasy: { 
+    label: 'Dark Fantasy', 
+    icon: '🌑', 
+    desc: 'Gothic, grim, shadowy tones',
+    suffix: ', dark fantasy art style, gothic atmosphere, moody lighting, grim aesthetics, shadowy tones, ominous mood'
+  },
+  high_fantasy: { 
+    label: 'High Fantasy', 
+    icon: '✨', 
+    desc: 'Epic, heroic, vibrant colors',
+    suffix: ', high fantasy art style, epic and heroic, vibrant colors, majestic atmosphere, legendary feel, grand composition'
+  },
+  gritty_realism: { 
+    label: 'Gritty Realism', 
+    icon: '⚔️', 
+    desc: 'Weathered, battle-worn, harsh',
+    suffix: ', gritty realistic fantasy art, weathered and battle-worn, harsh lighting, dirty and lived-in, brutally authentic'
+  },
+  ethereal: { 
+    label: 'Ethereal', 
+    icon: '🌙', 
+    desc: 'Dreamlike, mystical, soft glow',
+    suffix: ', ethereal fantasy art style, dreamlike and mystical, soft glowing lighting, otherworldly atmosphere, magical luminescence'
+  },
+  classic_dnd: { 
+    label: 'Classic D&D', 
+    icon: '🎲', 
+    desc: 'Traditional tabletop RPG style',
+    suffix: ', classic Dungeons & Dragons art style, traditional tabletop RPG aesthetic, iconic fantasy illustration, nostalgic pen and ink feel'
+  },
+  none: { 
+    label: 'No Style', 
+    icon: '○', 
+    desc: 'Use prompt as-is',
+    suffix: ''
+  },
+};
+
 export default function ImageForge() {
   const navigate = useNavigate();
   const [mode, setMode] = useState('describe'); // 'describe' | 'upload'
@@ -17,6 +56,8 @@ export default function ImageForge() {
   const [uploadedImage, setUploadedImage] = useState(null);
   const [uploadPreview, setUploadPreview] = useState(null);
   const [quality, setQuality] = useState('2k');
+  const [style, setStyle] = useState('high_fantasy');
+  const [useAiEnhance, setUseAiEnhance] = useState(true);
   const [matureContent, setMatureContent] = useState(false);
   const [enhancingPrompt, setEnhancingPrompt] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -67,10 +108,15 @@ export default function ImageForge() {
           return;
         }
 
+        // Apply style suffix if selected
+        const styleSuffix = STYLE_PRESETS[style]?.suffix || '';
+        const finalPrompt = prompt.trim() + styleSuffix;
+
         const result = await base44.functions.invoke('forgeDndImage', {
-          prompt: prompt.trim(),
+          prompt: finalPrompt,
           quality,
           mature_content: matureContent,
+          use_ai_enhance: useAiEnhance,
         });
 
         if (result.data?.image_url) {
@@ -87,11 +133,17 @@ export default function ImageForge() {
 
         const uploadResult = await base44.integrations.Core.UploadFile({ file: uploadedImage });
         
+        // Apply style suffix if selected
+        const styleSuffix = STYLE_PRESETS[style]?.suffix || '';
+        const basePrompt = prompt.trim() || 'Transform this into a D&D fantasy art style';
+        const finalPrompt = basePrompt + styleSuffix;
+        
         const result = await base44.functions.invoke('forgeDndImage', {
           reference_image_url: uploadResult.file_url,
-          prompt: prompt.trim() || 'Transform this into a D&D fantasy art style',
+          prompt: finalPrompt,
           quality,
           mature_content: matureContent,
+          use_ai_enhance: useAiEnhance,
         });
 
         if (result.data?.image_url) {
@@ -188,8 +240,11 @@ export default function ImageForge() {
                   className="w-full py-2 rounded-xl font-fantasy text-sm transition-all disabled:opacity-50"
                   style={{ background: 'rgba(80,40,120,0.6)', border: '1px solid rgba(140,80,220,0.4)', color: '#c084fc' }}>
                   {enhancingPrompt ? <Loader2 className="w-4 h-4 inline animate-spin mr-1.5" /> : <Sparkles className="w-4 h-4 inline mr-1.5" />}
-                  {enhancingPrompt ? 'Enhancing...' : 'AI Enhance Prompt'}
+                  {enhancingPrompt ? 'Enhancing...' : 'Preview AI Enhancement'}
                 </button>
+                <div className="text-xs italic" style={{ color: 'rgba(180,140,90,0.5)', fontFamily: 'EB Garamond, serif' }}>
+                  💡 AI will automatically enhance your prompt during generation if enabled below
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
@@ -230,7 +285,32 @@ export default function ImageForge() {
 
           {/* Settings */}
           <div className="rounded-2xl p-4" style={{ background: 'rgba(15,10,5,0.85)', border: '1px solid rgba(180,140,90,0.2)' }}>
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Style Selection */}
+              <div>
+                <div className="tavern-section-label mb-2">Art Style</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {Object.entries(STYLE_PRESETS).map(([key, { label, icon, desc }]) => (
+                    <button key={key} onClick={() => setStyle(key)}
+                      className="py-2.5 px-2 rounded-lg font-fantasy text-xs transition-all"
+                      style={style === key ? {
+                        background: 'rgba(60,40,10,0.8)',
+                        border: '1px solid rgba(201,169,110,0.5)',
+                        color: '#f0c040',
+                      } : {
+                        background: 'rgba(20,13,5,0.5)',
+                        border: '1px solid rgba(180,140,90,0.15)',
+                        color: 'rgba(180,140,90,0.5)',
+                      }}>
+                      <div className="text-base mb-0.5">{icon}</div>
+                      <div className="font-semibold">{label}</div>
+                      <div className="text-xs opacity-60 leading-tight" style={{ fontFamily: 'EB Garamond, serif' }}>{desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quality Selection */}
               <div>
                 <div className="tavern-section-label mb-2">Quality</div>
                 <div className="grid grid-cols-3 gap-2">
@@ -253,6 +333,22 @@ export default function ImageForge() {
                 </div>
               </div>
 
+              {/* AI Enhancement Toggle */}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={useAiEnhance} onChange={e => setUseAiEnhance(e.target.checked)}
+                  className="rounded" style={{ accentColor: '#a78bfa' }} />
+                <div className="flex-1">
+                  <div className="font-fantasy text-sm flex items-center gap-1.5" style={{ color: 'rgba(201,169,110,0.8)' }}>
+                    <Sparkles className="w-3.5 h-3.5" style={{ color: '#a78bfa' }} />
+                    AI Prompt Enhancement
+                  </div>
+                  <div className="text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>
+                    Automatically improve prompt with vivid details
+                  </div>
+                </div>
+              </label>
+
+              {/* Mature Content Toggle */}
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={matureContent} onChange={e => setMatureContent(e.target.checked)}
                   className="rounded" style={{ accentColor: '#f0c040' }} />
@@ -316,7 +412,7 @@ export default function ImageForge() {
                     <Download className="w-4 h-4" />
                     Download ({QUALITY_PRESETS[quality].label})
                   </button>
-                  <button onClick={() => { setGeneratedImage(null); setPrompt(''); setUploadedImage(null); setUploadPreview(null); }}
+                  <button onClick={() => { setGeneratedImage(null); setPrompt(''); setUploadedImage(null); setUploadPreview(null); setError(null); }}
                     className="px-4 py-2.5 rounded-xl font-fantasy text-sm transition-all"
                     style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(180,140,90,0.2)', color: 'rgba(201,169,110,0.6)' }}>
                     New Image
