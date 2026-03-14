@@ -100,7 +100,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
   const [filterLevel, setFilterLevel] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [activeSection, setActiveSection] = useState('prepared'); // 'prepared' | 'available' | 'slots'
-  const [preparedSpells, setPreparedSpells] = useState(new Set(character?.spells_prepared || character?.spells_known || []));
+  const preparedSpells = new Set(character.spells_prepared || []);
 
   if (!character) return null;
 
@@ -116,9 +116,6 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
   const profBonus = Math.floor((charLevel - 1) / 4) + 2;
   const spellcastingAbilityScore = character[spellcastingAbility] || 10;
   const spellcastingMod = Math.floor((spellcastingAbilityScore - 10) / 2);
-  
-  // Max prepared spells for preparation-based classes
-  const maxPrepared = isPreparation ? Math.max(1, charLevel + spellcastingMod) : Infinity;
 
   const classSpells = SPELLS_BY_CLASS[charClass] || {};
   const allAvailableSpells = [];
@@ -135,29 +132,22 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
   };
 
   const togglePrepared = (spellName) => {
-    const spellLevel = allAvailableSpells.find(s => s.name === spellName)?.level || 0;
-    const isCantrip = spellLevel === 0;
+    const isPrepared = preparedSpells.has(spellName);
+    const maxPrepared = isPreparation ? Math.max(1, charLevel + spellcastingMod) : 999;
     
-    const newPrepared = new Set(preparedSpells);
-    if (newPrepared.has(spellName)) {
-      newPrepared.delete(spellName);
-    } else {
-      // Check if at max prepared spells (cantrips don't count toward limit)
-      const preparedNonCantrips = [...newPrepared].filter(name => {
-        const lvl = allAvailableSpells.find(s => s.name === name)?.level || 0;
-        return lvl > 0;
-      }).length;
-      
-      if (!isCantrip && isPreparation && preparedNonCantrips >= maxPrepared) {
-        alert(`You can only prepare ${maxPrepared} spells at level ${charLevel}.`);
-        return;
-      }
-      newPrepared.add(spellName);
+    if (!isPrepared && preparedSpells.size >= maxPrepared && isPreparation) {
+      alert(`You can only prepare ${maxPrepared} spells at once. Unprepare a spell first.`);
+      return;
     }
     
-    const arr = [...newPrepared];
-    setPreparedSpells(newPrepared);
-    onUpdateCharacter({ spells_prepared: arr, spells_known: arr }); // sync both for now
+    const updated = isPrepared
+      ? [...preparedSpells].filter(s => s !== spellName)
+      : [...preparedSpells, spellName];
+    
+    // Auto-add to known if not already
+    const finalKnown = knownSpells.has(spellName) ? [...knownSpells] : [...knownSpells, spellName];
+    
+    onUpdateCharacter({ spells_prepared: updated, spells_known: finalKnown });
   };
 
   const filterSpell = ({ name, level: lvl }) => {
@@ -174,12 +164,8 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
   };
 
   const preparedList = allAvailableSpells.filter(s => preparedSpells.has(s.name) && filterSpell(s));
-  const availableList = allAvailableSpells.filter(s => !preparedSpells.has(s.name) && filterSpell(s));
-  
-  const preparedNonCantrips = [...preparedSpells].filter(name => {
-    const lvl = allAvailableSpells.find(s => s.name === name)?.level || 0;
-    return lvl > 0;
-  }).length;
+  const knownList = allAvailableSpells.filter(s => knownSpells.has(s.name) && !preparedSpells.has(s.name) && filterSpell(s));
+  const availableList = allAvailableSpells.filter(s => !knownSpells.has(s.name) && filterSpell(s));
 
   const hasSpellcasting = !!spellcastingAbility;
 
@@ -223,13 +209,18 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
       </div>
       {isPreparation && (
         <div className="text-xs text-purple-400/70 bg-purple-900/10 border border-purple-700/20 rounded-lg px-3 py-2">
-          📖 <strong>{charClass}</strong> prepares spells daily. Prepared: <span className={preparedNonCantrips >= maxPrepared ? 'text-amber-400 font-bold' : 'text-purple-300 font-bold'}>{preparedNonCantrips}/{maxPrepared}</span> (cantrips always prepared)
+          📖 <strong>{charClass}</strong> prepares spells daily. Max prepared: {Math.max(1, charLevel + spellcastingMod)} spells. Currently prepared: {preparedSpells.size}
         </div>
       )}
 
       {/* Section Tabs */}
       <div className="flex gap-1 bg-slate-800/40 p-1 rounded-lg">
-        {[['prepared', `Prepared (${preparedSpells.size})`], ['available', 'All Spells'], ['slots', 'Spell Slots']].map(([key, label]) => (
+        {[
+          ['prepared', `Prepared (${preparedSpells.size})`], 
+          ['known', `Known (${knownSpells.size})`], 
+          ['available', 'Spellbook'], 
+          ['slots', 'Spell Slots']
+        ].map(([key, label]) => (
           <button key={key} onClick={() => setActiveSection(key)}
             className={`flex-1 py-1.5 text-xs rounded-md transition-all ${activeSection === key ? 'bg-purple-800/60 text-purple-200 border border-purple-700/40' : 'text-slate-400 hover:text-slate-200'}`}>
             {label}
@@ -312,7 +303,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
         {activeSection === 'prepared' ? (
           preparedList.length === 0 ? (
             <div className="text-center py-8 text-slate-500 text-sm">
-              {preparedSpells.size === 0 ? 'No spells prepared. Browse the All Spells tab to prepare spells.' : 'No spells match your filters.'}
+              {preparedSpells.size === 0 ? 'No spells prepared. Click the star icon on spells to prepare them.' : 'No spells match your filters.'}
             </div>
           ) : (
             [0,1,2,3,4,5].map(level => {
@@ -322,6 +313,30 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
                 <div key={level}>
                   <div className="text-xs text-purple-400/70 uppercase tracking-widest mb-2 flex items-center gap-2">
                     <CheckCircle className="w-3 h-3" />
+                    {LEVEL_LABELS[level]} {level > 0 ? 'Level' : 's'}
+                  </div>
+                  <div className="space-y-2">
+                    {levelSpells.map(({ name }) => (
+                      <SpellCard key={name} spellName={name} character={character} isKnown={true} onToggleKnown={togglePrepared} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )
+        ) : activeSection === 'known' ? (
+          knownList.length === 0 ? (
+            <div className="text-center py-8 text-slate-500 text-sm">
+              {knownSpells.size === 0 ? 'No spells known. Browse the Spellbook tab to learn spells.' : 'No spells match your filters.'}
+            </div>
+          ) : (
+            [0,1,2,3,4,5].map(level => {
+              const levelSpells = knownList.filter(s => s.level === level);
+              if (levelSpells.length === 0) return null;
+              return (
+                <div key={level}>
+                  <div className="text-xs text-amber-400/70 uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <Star className="w-3 h-3" />
                     {LEVEL_LABELS[level]} {level > 0 ? 'Level' : 's'}
                   </div>
                   <div className="space-y-2">
@@ -345,7 +360,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
                 </div>
                 <div className="space-y-2">
                   {levelSpells.map(({ name }) => (
-                    <SpellCard key={name} spellName={name} character={character} isKnown={false} onToggleKnown={togglePrepared} />
+                    <SpellCard key={name} spellName={name} character={character} isKnown={false} onToggleKnown={toggleKnown} />
                   ))}
                 </div>
               </div>

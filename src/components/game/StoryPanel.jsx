@@ -26,9 +26,10 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [isNarrating, setIsNarrating] = useState(false);
   const [audioLoading, setAudioLoading] = useState(false);
-  const lastNarratedIndex = useRef(-1);
-  const [selectedVoice, setSelectedVoice] = useState(() => localStorage.getItem('narrationVoice') || 'default');
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState(() => localStorage.getItem('narratorVoice') || 'eloquent');
+  const lastNarratedIndex = useRef(-1);
+  const currentUtterance = useRef(null);
 
   // Auto-scroll on new narrative entries
   useEffect(() => {
@@ -47,6 +48,14 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     }
   }, [narrative, narrationEnabled, loading]);
 
+  const VOICE_PRESETS = {
+    eloquent: { name: 'Eloquent Scholar', filter: ['Daniel', 'Google UK', 'British'], rate: 0.92, pitch: 1.0, desc: 'Refined and scholarly' },
+    heroic: { name: 'Heroic Narrator', filter: ['Alex', 'Microsoft David'], rate: 0.88, pitch: 0.95, desc: 'Bold and commanding' },
+    mysterious: { name: 'Mysterious Sage', filter: ['Samantha', 'Google US'], rate: 0.85, pitch: 0.9, desc: 'Deep and enigmatic' },
+    energetic: { name: 'Energetic Bard', filter: ['Karen', 'Zira'], rate: 1.05, pitch: 1.1, desc: 'Lively and dramatic' },
+    ancient: { name: 'Ancient Elder', filter: ['Fred', 'Rishi'], rate: 0.80, pitch: 0.85, desc: 'Slow and wise' },
+  };
+
   const narrateText = async (text) => {
     if (!text?.trim()) return;
 
@@ -54,9 +63,24 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     if (window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
     }
+    if (currentUtterance.current) {
+      currentUtterance.current = null;
+    }
 
-    // Don't truncate — narrate the full text
-    const narrationText = text;
+    // Split text into chunks to prevent cutoff (Chrome has ~300 char limit for some voices)
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+    const chunks = [];
+    let currentChunk = '';
+    
+    for (const sentence of sentences) {
+      if ((currentChunk + sentence).length > 200 && currentChunk) {
+        chunks.push(currentChunk.trim());
+        currentChunk = sentence;
+      } else {
+        currentChunk += sentence;
+      }
+    }
+    if (currentChunk.trim()) chunks.push(currentChunk.trim());
 
     try {
       setAudioLoading(true);
@@ -69,39 +93,70 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
             voices = window.speechSynthesis.getVoices();
             resolve();
           };
+          setTimeout(resolve, 100); // fallback
+        });
+        voices = window.speechSynthesis.getVoices();
+      }
+
+      // Select voice based on preset
+      const preset = VOICE_PRESETS[selectedVoice] || VOICE_PRESETS.eloquent;
+      let voice = null;
+      for (const filter of preset.filter) {
+        voice = voices.find(v => v.name.includes(filter));
+        if (voice) break;
+      }
+      if (!voice) voice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+
+      setAudioLoading(false);
+      setIsNarrating(true);
+
+      // Speak chunks sequentially with resumption to prevent Chrome cutoff
+      for (let i = 0; i < chunks.length; i++) {
+        await new Promise((resolve, reject) => {
+          if (!narrationEnabled) { resolve(); return; }
+          
+          const utterance = new SpeechSynthesisUtterance(chunks[i]);
+          utterance.voice = voice;
+          utterance.rate = preset.rate;
+          utterance.pitch = preset.pitch;
+          utterance.volume = 1.0;
+          
+          currentUtterance.current = utterance;
+
+          utterance.onend = () => {
+            // Resume synthesis after each chunk to prevent browser timeout
+            if (window.speechSynthesis.paused) {
+              window.speechSynthesis.resume();
+            }
+            resolve();
+          };
+          utterance.onerror = (e) => {
+            console.error('Speech error:', e);
+            resolve(); // continue to next chunk
+          };
+
+          window.speechSynthesis.speak(utterance);
+          
+          // Workaround for Chrome bug: resume every 10 seconds
+          const resumeInterval = setInterval(() => {
+            if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
+              window.speechSynthesis.resume();
+            }
+          }, 10000);
+          
+          utterance.onend = () => {
+            clearInterval(resumeInterval);
+            resolve();
+          };
+          utterance.onerror = () => {
+            clearInterval(resumeInterval);
+            resolve();
+          };
         });
       }
 
-      // Voice selection based on user preference
-      const VOICE_PRESETS = {
-        default: (v) => v.find(x => x.name.includes('Daniel') || x.name.includes('Google UK') || x.name.includes('British')) || v.find(x => x.lang.startsWith('en')) || v[0],
-        heroic: (v) => v.find(x => x.name.includes('Alex') || x.name.includes('Fred')) || v.find(x => x.lang.startsWith('en-GB')) || v[0],
-        mystical: (v) => v.find(x => x.name.includes('Fiona') || x.name.includes('Victoria')) || v.find(x => x.lang.startsWith('en-GB') && !x.name.includes('Male')) || v[0],
-        gruff: (v) => v.find(x => x.name.includes('Rishi') || x.name.includes('Daniel')) || v.find(x => x.lang.startsWith('en') && x.name.includes('Male')) || v[0],
-        elegant: (v) => v.find(x => x.name.includes('Samantha') || x.name.includes('Karen')) || v.find(x => x.lang.startsWith('en-US') && !x.name.includes('Male')) || v[0],
-      };
-
-      const getVoiceFn = VOICE_PRESETS[selectedVoice] || VOICE_PRESETS.default;
-      const preferredVoice = getVoiceFn(voices);
-
-      const utterance = new SpeechSynthesisUtterance(narrationText);
-      utterance.voice = preferredVoice;
-      utterance.rate = 0.92;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-
-      utterance.onstart = () => {
-        setAudioLoading(false);
-        setIsNarrating(true);
-      };
-      utterance.onend = () => setIsNarrating(false);
-      utterance.onerror = () => {
-        setIsNarrating(false);
-        setAudioLoading(false);
-      };
-
-      window.speechSynthesis.speak(utterance);
-      audioRef.current = { pause: () => window.speechSynthesis.cancel() };
+      setIsNarrating(false);
+      currentUtterance.current = null;
     } catch (error) {
       console.error('Narration failed:', error);
       setAudioLoading(false);
@@ -114,15 +169,15 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     setNarrationEnabled(newState);
     if (!newState) {
       window.speechSynthesis.cancel();
-      audioRef.current = null;
+      currentUtterance.current = null;
       setIsNarrating(false);
       setAudioLoading(false);
     }
   };
 
-  const selectVoice = (voice) => {
-    setSelectedVoice(voice);
-    localStorage.setItem('narrationVoice', voice);
+  const handleVoiceChange = (voiceKey) => {
+    setSelectedVoice(voiceKey);
+    localStorage.setItem('narratorVoice', voiceKey);
     setShowVoiceMenu(false);
   };
 
@@ -138,40 +193,42 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Narration Toggle */}
-      <div className="flex-shrink-0 px-4 py-2 flex items-center justify-end gap-2"
+      <div className="flex-shrink-0 px-4 py-2 flex items-center justify-end gap-2 relative"
         style={{ background: 'rgba(8,5,2,0.6)', borderBottom: '1px solid rgba(180,140,90,0.15)' }}>
         
-        {/* Voice selector */}
+        {/* Voice selector dropdown */}
         {narrationEnabled && (
-          <div className="relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowVoiceMenu(v => !v)}
+          <div className="relative">
+            <button onClick={(e) => { e.stopPropagation(); setShowVoiceMenu(v => !v); }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-fantasy transition-all"
-              style={{ background: 'rgba(40,25,10,0.7)', border: '1px solid rgba(180,140,90,0.25)', color: 'rgba(201,169,110,0.7)' }}>
-              🎭 {selectedVoice === 'default' ? 'Default' : selectedVoice === 'heroic' ? 'Heroic' : selectedVoice === 'mystical' ? 'Mystical' : selectedVoice === 'gruff' ? 'Gruff' : 'Elegant'}
+              style={{ background: 'rgba(30,20,8,0.6)', border: '1px solid rgba(180,140,90,0.25)', color: 'rgba(201,169,110,0.6)' }}>
+              🎭 {VOICE_PRESETS[selectedVoice]?.name || 'Voice'}
             </button>
+            
             <AnimatePresence>
               {showVoiceMenu && (
                 <motion.div
                   initial={{ opacity: 0, y: -8, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                  className="absolute right-0 top-full mt-1 rounded-xl overflow-hidden shadow-2xl z-50"
-                  style={{ background: 'rgba(15,8,3,0.98)', border: '1px solid rgba(184,115,51,0.35)', minWidth: '160px' }}>
-                  {[
-                    { key: 'default', label: 'Default', icon: '🎙️' },
-                    { key: 'heroic', label: 'Heroic', icon: '⚔️' },
-                    { key: 'mystical', label: 'Mystical', icon: '🔮' },
-                    { key: 'gruff', label: 'Gruff', icon: '🗡️' },
-                    { key: 'elegant', label: 'Elegant', icon: '✨' },
-                  ].map(({ key, label, icon }, i) => (
+                  className="absolute right-0 top-full mt-1 rounded-xl overflow-hidden shadow-2xl z-50 min-w-[200px]"
+                  style={{ background: 'rgba(15,8,3,0.98)', border: '1px solid rgba(180,140,90,0.3)' }}>
+                  {Object.entries(VOICE_PRESETS).map(([key, preset], i) => (
                     <button key={key}
-                      onClick={() => selectVoice(key)}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-left transition-all"
-                      style={{ borderBottom: i < 4 ? '1px solid rgba(184,115,51,0.1)' : 'none', background: selectedVoice === key ? 'rgba(60,30,10,0.6)' : 'transparent' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(60,30,10,0.6)'}
-                      onMouseLeave={e => e.currentTarget.style.background = selectedVoice === key ? 'rgba(60,30,10,0.6)' : 'transparent'}>
-                      <span className="text-base">{icon}</span>
-                      <span className="text-xs font-fantasy" style={{ color: selectedVoice === key ? '#f0c040' : 'rgba(201,169,110,0.7)' }}>{label}</span>
+                      onClick={() => handleVoiceChange(key)}
+                      className="w-full text-left px-3 py-2.5 transition-all"
+                      style={{ 
+                        borderBottom: i < Object.keys(VOICE_PRESETS).length - 1 ? '1px solid rgba(180,140,90,0.08)' : 'none',
+                        background: selectedVoice === key ? 'rgba(80,50,10,0.5)' : 'transparent'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(60,35,10,0.5)'}
+                      onMouseLeave={e => e.currentTarget.style.background = selectedVoice === key ? 'rgba(80,50,10,0.5)' : 'transparent'}>
+                      <div className="text-xs font-fantasy" style={{ color: selectedVoice === key ? '#f0c040' : 'rgba(232,213,183,0.8)' }}>
+                        {preset.name}
+                      </div>
+                      <div className="text-xs mt-0.5" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>
+                        {preset.desc}
+                      </div>
                     </button>
                   ))}
                 </motion.div>
@@ -179,7 +236,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
             </AnimatePresence>
           </div>
         )}
-
+        
         <button onClick={toggleNarration}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-fantasy transition-all"
           style={narrationEnabled ? {
