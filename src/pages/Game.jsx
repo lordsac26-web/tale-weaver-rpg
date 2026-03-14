@@ -503,27 +503,62 @@ export default function Game() {
     if (!combat?.id && !session?.combat_state?.combat_id) return;
     const combatId = combat?.id || session?.combat_state?.combat_id;
     
-    // Roll companion attack similar to player attack
+    // D&D 5E Rule: Standard familiars can't attack (only Help/Dash/Disengage/Dodge/Hide)
+    if (companion.type === 'familiar' && !companion.can_attack) {
+      setNarrative(prev => [...prev, {
+        type: 'roll_result',
+        text: `${companion.name} can't attack — familiars can only Help, Dash, Disengage, Dodge, or Hide. (Pact of Chain familiars are the exception)`,
+        success: false
+      }]);
+      return;
+    }
+    
+    // Beast companion uses bonus action (Ranger: Beast Master)
+    // Pact familiars act independently on their own initiative
+    
     const attackRoll = Math.floor(Math.random() * 20) + 1;
-    const hitRoll = attackRoll + attack.bonus;
+    const isCrit = attackRoll === 20;
+    const isMiss = attackRoll === 1;
+    
+    // Beast Master companions add ranger's proficiency bonus to attacks
+    let finalBonus = attack.bonus || 0;
+    if (companion.type === 'beast_companion' && character?.class === 'Ranger') {
+      const profBonus = character.proficiency_bonus || 2;
+      finalBonus += profBonus;
+    }
+    
+    const hitRoll = attackRoll + finalBonus;
     
     // Find target (first conscious enemy)
     const target = combat?.combatants?.find(c => c.type === 'enemy' && c.is_conscious);
     if (!target) return;
     
-    const hit = hitRoll >= target.ac;
+    const hit = !isMiss && (isCrit || hitRoll >= target.ac);
     let damageTotal = 0;
     
     if (hit) {
-      const [count, sides] = attack.damage_dice.split('d').map(Number);
-      for (let i = 0; i < count; i++) {
-        damageTotal += Math.floor(Math.random() * sides) + 1;
+      // Parse damage dice (e.g. "2d4+2")
+      const diceMatch = attack.damage_dice.match(/(\d+)d(\d+)(?:\+(\d+))?/);
+      if (diceMatch) {
+        const numDice = isCrit ? parseInt(diceMatch[1]) * 2 : parseInt(diceMatch[1]);
+        const sides = parseInt(diceMatch[2]);
+        const flatBonus = parseInt(diceMatch[3] || 0);
+        
+        for (let i = 0; i < numDice; i++) {
+          damageTotal += Math.floor(Math.random() * sides) + 1;
+        }
+        damageTotal += flatBonus;
+        
+        // Beast companions add proficiency to damage at level 3+
+        if (companion.type === 'beast_companion' && character?.class === 'Ranger' && (character?.level || 1) >= 3) {
+          damageTotal += character.proficiency_bonus || 2;
+        }
       }
     }
     
     setNarrative(prev => [...prev, {
       type: 'roll_result',
-      text: `${companion.name} attacks ${target.name} with ${attack.name}! ${hit ? `Hit! ${damageTotal} ${attack.damage_type} damage.` : 'Miss!'}`,
+      text: `${companion.name} ${isCrit ? 'CRITS' : 'attacks'} ${target.name} with ${attack.name}! ${hit ? `Hit! ${damageTotal} ${attack.damage_type} damage. ${attack.special || ''}` : 'Miss!'} (${attackRoll}+${finalBonus}=${hitRoll} vs AC ${target.ac})`,
       success: hit
     }]);
     
