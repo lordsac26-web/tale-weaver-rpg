@@ -2,7 +2,7 @@
  * D&D 5E Spell Data
  * Comprehensive spell list with mechanics for combat integration
  */
- 
+
 export const SPELL_SLOTS_BY_CLASS_LEVEL = {
   // Full casters
   Wizard:   { 1:[2,0,0,0,0,0,0,0,0], 2:[3,0,0,0,0,0,0,0,0], 3:[4,2,0,0,0,0,0,0,0], 4:[4,3,0,0,0,0,0,0,0], 5:[4,3,2,0,0,0,0,0,0], 6:[4,3,3,0,0,0,0,0,0], 7:[4,3,3,1,0,0,0,0,0], 8:[4,3,3,2,0,0,0,0,0], 9:[4,3,3,3,1,0,0,0,0], 10:[4,3,3,3,2,0,0,0,0], 11:[4,3,3,3,2,1,0,0,0], 12:[4,3,3,3,2,1,0,0,0], 13:[4,3,3,3,2,1,1,0,0], 14:[4,3,3,3,2,1,1,0,0], 15:[4,3,3,3,2,1,1,1,0], 16:[4,3,3,3,2,1,1,1,0], 17:[4,3,3,3,2,1,1,1,1], 18:[4,3,3,3,3,1,1,1,1], 19:[4,3,3,3,3,2,1,1,1], 20:[4,3,3,3,3,2,2,1,1] },
@@ -16,7 +16,7 @@ export const SPELL_SLOTS_BY_CLASS_LEVEL = {
   // Pact magic (Warlock)
   Warlock:  { 1:[1,0,0,0,0,0,0,0,0], 2:[2,0,0,0,0,0,0,0,0], 3:[0,2,0,0,0,0,0,0,0], 4:[0,2,0,0,0,0,0,0,0], 5:[0,0,2,0,0,0,0,0,0], 6:[0,0,2,0,0,0,0,0,0], 7:[0,0,0,2,0,0,0,0,0], 8:[0,0,0,2,0,0,0,0,0], 9:[0,0,0,0,2,0,0,0,0], 10:[0,0,0,0,2,0,0,0,0], 11:[0,0,0,0,3,0,0,0,0], 12:[0,0,0,0,3,0,0,0,0], 13:[0,0,0,0,3,0,0,0,0], 14:[0,0,0,0,3,0,0,0,0], 15:[0,0,0,0,3,0,0,0,0], 16:[0,0,0,0,3,0,0,0,0], 17:[0,0,0,0,4,0,0,0,0], 18:[0,0,0,0,4,0,0,0,0], 19:[0,0,0,0,4,0,0,0,0], 20:[0,0,0,0,4,0,0,0,0] },
 };
- 
+
 export const SPELLCASTING_ABILITY = {
   Wizard: 'intelligence',
   Sorcerer: 'charisma',
@@ -29,7 +29,7 @@ export const SPELLCASTING_ABILITY = {
   'Eldritch Knight': 'intelligence',
   'Arcane Trickster': 'intelligence',
 };
- 
+
 // Cantrips per class
 export const CANTRIPS_KNOWN = {
   Wizard: [3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5],
@@ -41,7 +41,7 @@ export const CANTRIPS_KNOWN = {
   Paladin: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
   Ranger: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 };
- 
+
 export const SPELLS_BY_CLASS = {
   Wizard: {
     cantrips: ['Fire Bolt', 'Ray of Frost', 'Prestidigitation', 'Mage Hand', 'Minor Illusion', 'Shocking Grasp', 'Acid Splash', 'Chill Touch', 'Poison Spray', 'Light'],
@@ -108,7 +108,7 @@ export const SPELLS_BY_CLASS = {
     5: ['Conjure Volley', 'Greater Restoration', 'Swift Quiver', 'Tree Stride'],
   },
 };
- 
+
 // Detailed spell mechanics
 export const SPELL_DETAILS = {
   // === CANTRIPS ===
@@ -137,7 +137,7 @@ export const SPELL_DETAILS = {
   'Dancing Lights': { level: 0, school: 'Evocation', casting_time: '1 action', range: '120 ft', components: 'V, S, M', duration: '1 minute', description: 'You create up to four torch-sized lights within range.', attack_type: 'utility', is_utility: true },
   'Mending': { level: 0, school: 'Transmutation', casting_time: '1 minute', range: 'Touch', components: 'V, S, M', duration: 'Instantaneous', description: 'This spell repairs a single break or tear in an object.', attack_type: 'utility', is_utility: true },
   'True Strike': { level: 0, school: 'Divination', casting_time: '1 action', range: '30 ft', components: 'S', duration: '1 round', description: 'You extend your hand and point a finger at a target in range. Your magic grants you a brief insight into the target\'s defenses. On your next turn, you gain advantage on your first attack roll against the target.', attack_type: 'utility', is_utility: true },
- 
+
   // === LEVEL 1 ===
   'Magic Missile': { level: 1, school: 'Evocation', casting_time: '1 action', range: '120 ft', components: 'V, S', duration: 'Instantaneous', description: 'Three glowing darts of magical force each deal 1d4+1 force damage to a target. They automatically hit.', attack_type: 'auto_hit', num_missiles: 3, damage_dice: '1d4', damage_bonus: 1, damage_type: 'force', higher_levels: 'Each higher slot level adds one more dart.' },
   'Burning Hands': { level: 1, school: 'Evocation', casting_time: '1 action', range: 'Self (15ft cone)', components: 'V, S', duration: 'Instantaneous', description: 'A thin sheet of flames shoots forth in a 15-foot cone. Each creature in the area must make a Dexterity saving throw.', attack_type: 'saving_throw', save_type: 'dexterity', damage_dice: '3d6', damage_type: 'fire', higher_levels: 'Each higher slot adds 1d6.' },
@@ -158,7 +158,7 @@ export const SPELL_DETAILS = {
   'Divine Favor': { level: 1, school: 'Evocation', casting_time: '1 bonus action', range: 'Self', components: 'V, S', duration: '1 minute (concentration)', description: 'Your prayer empowers you with divine radiance. Until the spell ends, your weapon attacks deal an extra 1d4 radiant damage on a hit.', attack_type: 'utility', is_utility: true, requires_concentration: true },
   'Hellish Rebuke': { level: 1, school: 'Evocation', casting_time: '1 reaction', range: '60 ft', components: 'V, S', duration: 'Instantaneous', description: 'Reaction when damaged: you point your finger, and the creature that damaged you is momentarily surrounded by hellish flames. Dexterity saving throw or 2d10 fire damage.', attack_type: 'saving_throw', save_type: 'dexterity', damage_dice: '2d10', damage_type: 'fire', is_reaction: true, higher_levels: 'Each higher slot adds 1d10.' },
   'Dissonant Whispers': { level: 1, school: 'Enchantment', casting_time: '1 action', range: '60 ft', components: 'V', duration: 'Instantaneous', description: 'Whisper a discordant melody. One creature must make a Wisdom saving throw or take 3d6 psychic damage and use its reaction to move its full speed away from you.', attack_type: 'saving_throw', save_type: 'wisdom', damage_dice: '3d6', damage_type: 'psychic', higher_levels: 'Each higher slot adds 1d6.' },
- 
+
   // === LEVEL 2 ===
   'Misty Step': { level: 2, school: 'Conjuration', casting_time: '1 bonus action', range: 'Self', components: 'V', duration: 'Instantaneous', description: 'Briefly surrounded by silvery mist, you teleport up to 30 feet to an unoccupied space you can see.', attack_type: 'utility', is_utility: true },
   'Shatter': { level: 2, school: 'Evocation', casting_time: '1 action', range: '60 ft', components: 'V, S, M', duration: 'Instantaneous', description: 'A sudden loud ringing noise, painfully intense, erupts at a point you choose within range in a 10-foot-radius sphere. Constitution saving throw or 3d8 thunder damage. Disadvantage if made of inorganic material.', attack_type: 'saving_throw', save_type: 'constitution', damage_dice: '3d8', damage_type: 'thunder', higher_levels: 'Each higher slot adds 1d8.' },
@@ -170,7 +170,7 @@ export const SPELL_DETAILS = {
   'Heat Metal': { level: 2, school: 'Transmutation', casting_time: '1 action', range: '60 ft', components: 'V, S, M', duration: '1 minute (concentration)', description: 'Choose a manufactured metal object. Any creature in physical contact must succeed on a Constitution saving throw or take 2d8 fire damage and drop the object (if possible). Bonus action: repeat each turn.', attack_type: 'saving_throw', save_type: 'constitution', damage_dice: '2d8', damage_type: 'fire', requires_concentration: true },
   'Moonbeam': { level: 2, school: 'Evocation', casting_time: '1 action', range: '120 ft', components: 'V, S, M', duration: '1 minute (concentration)', description: 'A silvery beam of pale light shines down in a 5-foot-radius, 40-foot-tall cylinder. Each creature entering the beam must Constitution save or take 2d10 radiant damage.', attack_type: 'saving_throw', save_type: 'constitution', damage_dice: '2d10', damage_type: 'radiant', requires_concentration: true },
   'Crown of Madness': { level: 2, school: 'Enchantment', casting_time: '1 action', range: '120 ft', components: 'V, S', duration: '1 minute (concentration)', description: 'One humanoid you can see must succeed on a Wisdom saving throw or become charmed. The charmed target must use its action to attack the nearest creature other than you.', attack_type: 'saving_throw', save_type: 'wisdom', damage_dice: '0', damage_type: 'none', is_utility: true, requires_concentration: true, special_effects: ['charmed', 'madness'] },
- 
+
   // === LEVEL 3 ===
   'Fireball': { level: 3, school: 'Evocation', casting_time: '1 action', range: '150 ft', components: 'V, S, M', duration: 'Instantaneous', description: 'A bright streak flashes from your pointing finger to a point you choose and then blossoms into a fiery explosion. Each creature in a 20-foot-radius sphere centered on that point must make a Dexterity saving throw. Targets take 8d6 fire damage on a failed save, or half on success.', attack_type: 'saving_throw', save_type: 'dexterity', damage_dice: '8d6', damage_type: 'fire', higher_levels: 'Each higher slot adds 1d6.' },
   'Lightning Bolt': { level: 3, school: 'Evocation', casting_time: '1 action', range: 'Self (100ft line)', components: 'V, S, M', duration: 'Instantaneous', description: 'A stroke of lightning forming a line 100 feet long and 5 feet wide blasts out from you. Each creature in the line must make a Dexterity saving throw. 8d6 lightning damage on fail, half on success.', attack_type: 'saving_throw', save_type: 'dexterity', damage_dice: '8d6', damage_type: 'lightning', higher_levels: 'Each higher slot adds 1d6.' },
@@ -180,7 +180,7 @@ export const SPELL_DETAILS = {
   'Hypnotic Pattern': { level: 3, school: 'Illusion', casting_time: '1 action', range: '120 ft', components: 'S, M', duration: '1 minute (concentration)', description: 'You create a twisting pattern of colors in a 30-foot cube. Each creature that can see the pattern must make a Wisdom saving throw or become charmed (incapacitated, speed 0).', attack_type: 'saving_throw', save_type: 'wisdom', damage_dice: '0', damage_type: 'none', is_utility: true, requires_concentration: true, special_effects: ['charmed', 'incapacitated'] },
   'Spirit Guardians': { level: 3, school: 'Conjuration', casting_time: '1 action', range: 'Self (15ft radius)', components: 'V, S, M', duration: '10 minutes (concentration)', description: 'Call forth spirits to protect you. Each hostile creature that enters or starts its turn in a 15-foot-radius area must make a Wisdom saving throw or take 3d8 radiant (or necrotic) damage.', attack_type: 'saving_throw', save_type: 'wisdom', damage_dice: '3d8', damage_type: 'radiant', requires_concentration: true, higher_levels: 'Each higher slot adds 1d8.' },
   'Vampiric Touch': { level: 3, school: 'Necromancy', casting_time: '1 action', range: 'Self', components: 'V, S', duration: '1 minute (concentration)', description: 'The touch of your shadow-wreathed hand can siphon life force. Make a melee spell attack. On a hit, the target takes 3d6 necrotic damage and you regain HP equal to half the damage dealt.', attack_type: 'melee_spell_attack', damage_dice: '3d6', damage_type: 'necrotic', requires_concentration: true, special_effects: ['lifesteal'] },
- 
+
   // === LEVEL 4 ===
   'Polymorph': { level: 4, school: 'Transmutation', casting_time: '1 action', range: '60 ft', components: 'V, S, M', duration: '1 hour (concentration)', description: 'Transform a creature into a beast. Target must make a Wisdom saving throw or be transformed. New form has own HP; when reduced to 0, creature reverts to original form.', attack_type: 'saving_throw', save_type: 'wisdom', damage_dice: '0', damage_type: 'none', is_utility: true, requires_concentration: true, special_effects: ['polymorphed'] },
   'Banishment': { level: 4, school: 'Abjuration', casting_time: '1 action', range: '60 ft', components: 'V, S, M', duration: '1 minute (concentration)', description: 'You attempt to send one creature to another plane. It must make a Charisma saving throw or be banished. Extraplanar creatures are banished permanently if held for the full minute.', attack_type: 'saving_throw', save_type: 'charisma', damage_dice: '0', damage_type: 'none', is_utility: true, requires_concentration: true, special_effects: ['banished'] },
@@ -188,7 +188,7 @@ export const SPELL_DETAILS = {
   'Blight': { level: 4, school: 'Necromancy', casting_time: '1 action', range: '30 ft', components: 'V, S', duration: 'Instantaneous', description: 'Necromantic energy washes over a creature. It must make a Constitution saving throw or take 8d8 necrotic damage (half on success). Plants are particularly vulnerable.', attack_type: 'saving_throw', save_type: 'constitution', damage_dice: '8d8', damage_type: 'necrotic', higher_levels: 'Each higher slot adds 1d8.' },
   'Wall of Fire': { level: 4, school: 'Evocation', casting_time: '1 action', range: '120 ft', components: 'V, S, M', duration: '1 minute (concentration)', description: 'You create a wall of fire on a solid surface within range. The wall deals 5d8 fire damage to any creature that enters it or starts its turn within 10 ft of it (on one side).', attack_type: 'saving_throw', save_type: 'dexterity', damage_dice: '5d8', damage_type: 'fire', requires_concentration: true },
   'Ice Storm': { level: 4, school: 'Evocation', casting_time: '1 action', range: '300 ft', components: 'V, S, M', duration: 'Instantaneous', description: 'A hail of rock-hard ice pounds down in a 20-foot-radius, 40-foot-high cylinder. Creatures in the area must make a Dexterity saving throw: 2d8 bludgeoning + 4d6 cold damage, or half on success. Ground becomes difficult terrain.', attack_type: 'saving_throw', save_type: 'dexterity', damage_dice: '4d6', damage_type: 'cold', higher_levels: 'Each higher slot adds 1d8 bludgeoning.' },
- 
+
   // === LEVEL 5 ===
   'Cone of Cold': { level: 5, school: 'Evocation', casting_time: '1 action', range: 'Self (60ft cone)', components: 'V, S, M', duration: 'Instantaneous', description: 'A blast of cold air erupts from your hands in a 60-foot cone. Each creature must make a Constitution saving throw, taking 8d8 cold damage on a fail or half on success. Creatures killed become frozen statues.', attack_type: 'saving_throw', save_type: 'constitution', damage_dice: '8d8', damage_type: 'cold', higher_levels: 'Each higher slot adds 1d8.' },
   'Dominate Person': { level: 5, school: 'Enchantment', casting_time: '1 action', range: '60 ft', components: 'V, S', duration: '1 minute (concentration)', description: 'You attempt to beguile a humanoid. It must make a Wisdom saving throw or be charmed by you for the duration. While charmed, you have telepathic link and can command it each turn.', attack_type: 'saving_throw', save_type: 'wisdom', damage_dice: '0', damage_type: 'none', is_utility: true, requires_concentration: true, special_effects: ['dominated'] },
@@ -197,7 +197,7 @@ export const SPELL_DETAILS = {
   'Mass Cure Wounds': { level: 5, school: 'Evocation', casting_time: '1 action', range: '60 ft', components: 'V, S', duration: 'Instantaneous', description: 'A wave of healing energy washes out from a point you choose within range. Choose up to 6 creatures; each regains 3d8 + spellcasting modifier HP.', attack_type: 'healing', heal_dice: '3d8', heal_type: 'hp', higher_levels: 'Each higher slot adds 1d8.' },
   'Greater Restoration': { level: 5, school: 'Abjuration', casting_time: '1 action', range: 'Touch', components: 'V, S, M', duration: 'Instantaneous', description: 'You imbue a creature with positive energy to undo a debilitating effect. Remove a charm, petrification, curse, ability score reduction, or HP maximum reduction.', attack_type: 'utility', is_utility: true },
 };
- 
+
 export function getSpellsForClass(className, level = 1) {
   const spellList = SPELLS_BY_CLASS[className] || {};
   const result = { cantrips: spellList.cantrips || [] };
@@ -206,7 +206,7 @@ export function getSpellsForClass(className, level = 1) {
   }
   return result;
 }
- 
+
 export function getMaxSpellLevel(className, level) {
   const slots = SPELL_SLOTS_BY_CLASS_LEVEL[className]?.[level];
   if (!slots) return 0;
@@ -215,17 +215,17 @@ export function getMaxSpellLevel(className, level) {
   }
   return 0;
 }
- 
+
 import { PROFICIENCY_BY_LEVEL, calcStatMod } from './gameData';
- 
+
 export function getSpellSlotsForLevel(className, level) {
   return SPELL_SLOTS_BY_CLASS_LEVEL[className]?.[level] || [0,0,0,0,0,0,0,0,0];
 }
- 
+
 export function getSpellcastingAbility(className, subclass = '') {
   return SPELLCASTING_ABILITY[className] || SPELLCASTING_ABILITY[subclass] || null;
 }
- 
+
 export function calcSpellSaveDC(character) {
   const ability = getSpellcastingAbility(character.class, character.subclass);
   if (!ability) return null;
@@ -234,7 +234,7 @@ export function calcSpellSaveDC(character) {
   const profBonus  = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
   return 8 + abilityMod + profBonus;
 }
- 
+
 export function calcSpellAttackBonus(character) {
   const ability = getSpellcastingAbility(character.class, character.subclass);
   if (!ability) return null;
@@ -242,7 +242,7 @@ export function calcSpellAttackBonus(character) {
   const profBonus  = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
   return abilityMod + profBonus;
 }
- 
+
 // ── Cantrip damage scaling per 5e rules ────────────────────────────────────
 // Cantrips scale at character levels 5, 11, and 17 (not class level).
 const CANTRIP_SCALE_DICE = {
@@ -268,7 +268,7 @@ const CANTRIP_SCALE_DICE = {
   'Mending':         ['0',   '0',   '0',   '0'],
   'Resistance':      ['0',   '0',   '0',   '0'],
 };
- 
+
 // Returns the correct damage dice string for a cantrip at a given character level
 export function getCantripDamageDice(spellName, characterLevel) {
   const table = CANTRIP_SCALE_DICE[spellName];
@@ -276,7 +276,7 @@ export function getCantripDamageDice(spellName, characterLevel) {
   const tier = characterLevel >= 17 ? 3 : characterLevel >= 11 ? 2 : characterLevel >= 5 ? 1 : 0;
   return table[tier];
 }
- 
+
 // Returns the number of Eldritch Blast beams at a given character level
 export function getEldritchBlastBeams(characterLevel) {
   if (characterLevel >= 17) return 4;
@@ -284,7 +284,7 @@ export function getEldritchBlastBeams(characterLevel) {
   if (characterLevel >= 5)  return 2;
   return 1;
 }
- 
+
 export const SCHOOL_COLORS = {
   Evocation: 'text-orange-400',
   Abjuration: 'text-blue-400',
@@ -295,7 +295,7 @@ export const SCHOOL_COLORS = {
   Transmutation: 'text-teal-400',
   Divination: 'text-cyan-400',
 };
- 
+
 export const DAMAGE_TYPE_COLORS = {
   fire: 'text-orange-400',
   cold: 'text-blue-300',

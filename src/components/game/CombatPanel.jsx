@@ -10,9 +10,9 @@ import InitiativeTracker from './InitiativeTracker';
 import ActionPointBar from './ActionPointBar';
 import CombatFloatingText from './CombatFloatingText';
 import CombatModifiersPanel from './CombatModifiersPanel';
- 
+
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger'];
- 
+
 // D&D 5e Extra Attack — returns number of weapon attacks per Attack action.
 // Note: Monk Flurry of Blows is a BONUS ACTION (handled in CombatModifiersPanel).
 function getActionsPerTurn(character) {
@@ -22,27 +22,27 @@ function getActionsPerTurn(character) {
   const subclass  = (character.subclass || '').toLowerCase();
   const level     = character.level || 1;
   let attacks = 1;
- 
+
   // All martial classes get Extra Attack (2 attacks) at level 5
   if (['fighter','ranger','paladin','barbarian','monk'].includes(charClass) && level >= 5) attacks = 2;
- 
+
   // Fighter uniquely gets additional attacks at higher levels
   if (charClass === 'fighter') {
     if (level >= 20) attacks = 4;
     else if (level >= 11) attacks = 3;
   }
- 
+
   // Artificer Battle Smith / Armorer get Extra Attack at level 5
   if (charClass === 'artificer' &&
       (subclass.includes('battle smith') || subclass.includes('armorer')) &&
       level >= 5) attacks = Math.max(attacks, 2);
- 
+
   // Feat / multiclass feature override
   if (features.some(f => f.includes('extra attack'))) attacks = Math.max(attacks, 2);
- 
+
   return attacks;
 }
- 
+
 export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [action, setAction] = useState('attack');
@@ -51,9 +51,9 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const [selectedSpellBaseLevel, setSelectedSpellBaseLevel] = useState(null);
   const [showDice, setShowDice] = useState(false);
   const [combatModifiers, setCombatModifiers] = useState({});
- 
+
   if (!combat) return null;
- 
+
   const { combatants, initiative_order, log_entries, round, current_turn_index, world_state } = combat;
   const enemies = (combatants || []).filter(c => c.type === 'enemy');
   const player = (combatants || []).find(c => c.type === 'player');
@@ -63,7 +63,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const actionsPerTurn = getActionsPerTurn(character);
   const actionsUsed = world_state?.actions_used_this_turn || 0;
   const actionsRemaining = Math.max(0, actionsPerTurn - actionsUsed);
- 
+
   // Derive attack modifier for dice roller display
   // Per 5e: ranged weapons use DEX; melee weapons use STR; finesse weapons use whichever is higher
   const charLevel   = character?.level || 1;
@@ -76,13 +76,13 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   // Finesse: use whichever mod is higher. Ranged: always DEX. Melee: STR.
   const statMod     = isRanged ? dexMod : isFinesse ? Math.max(strMod, dexMod) : strMod;
   const attackMod   = statMod + profBonus + (equippedWeapon?.attack_bonus || 0);
- 
+
   const handleSelectSpell = (spellName, baseLevel) => {
     setSelectedSpell(spellName);
     setSelectedSpellBaseLevel(baseLevel);
     setSelectedSpellLevel(baseLevel);
   };
- 
+
   const handleAction = () => {
     if (!selectedTarget) return;
     if (action === 'spell' && selectedSpell) {
@@ -105,9 +105,9 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
       onPlayerAttack(selectedTarget, action, null, combatModifiers);
     }
   };
- 
+
   const canAct = isPlayerTurn && selectedTarget && (action !== 'spell' || selectedSpell);
- 
+
   return (
     <div className="flex flex-col h-full overflow-hidden relative" style={{ background: 'rgba(8,3,3,0.95)' }}>
       <CombatFloatingText event={lastCombatEvent} />
@@ -144,7 +144,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
           )}
         </div>
       </div>
- 
+
       {/* Initiative Tracker */}
       <InitiativeTracker
         combatants={combatants || []}
@@ -153,11 +153,11 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         onAdvanceTurn={isPlayerTurn && actionsRemaining === 0 ? onNextTurn : null}
         combatStartTime={combat.created_date}
       />
- 
+
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT — targets + actions */}
         <div className="flex flex-col w-1/2 overflow-hidden" style={{ borderRight: '1px solid rgba(180,50,50,0.2)' }}>
- 
+
           {/* Enemy targets */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
             <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(180,100,100,0.5)', fontSize: '0.65rem' }}>SELECT TARGET</div>
@@ -222,12 +222,12 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
               );
             })}
           </div>
- 
+
           {/* Action panel */}
           {isPlayerTurn ? (
             <div className="flex-shrink-0 p-3 space-y-2"
               style={{ borderTop: '1px solid rgba(180,50,50,0.2)', background: 'rgba(10,3,3,0.85)' }}>
- 
+
               {/* Action point bar */}
               <ActionPointBar
                 actionsTotal={actionsPerTurn}
@@ -235,14 +235,14 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                 bonusActionUsed={world_state?.bonus_action_used || false}
                 reactionUsed={world_state?.reaction_used || false}
               />
- 
+
               {/* Combat Modifiers */}
               <CombatModifiersPanel
                 character={character}
                 activeModifiers={combatModifiers}
                 onToggleModifier={(id) => setCombatModifiers(prev => ({ ...prev, [id]: !prev[id] }))}
               />
- 
+
               {/* Action tabs */}
               <div className="flex gap-1.5">
                 <button onClick={() => { setAction('attack'); setSelectedSpell(null); }}
@@ -276,7 +276,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                   🏃
                 </button>
               </div>
- 
+
               {/* Spell selector */}
               {action === 'spell' && (
                 <div className="max-h-44 overflow-y-auto">
@@ -289,7 +289,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                   />
                 </div>
               )}
- 
+
               {/* Inline dice roller toggle */}
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowDice(v => !v)}
@@ -309,7 +309,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                   </motion.div>
                 )}
               </AnimatePresence>
- 
+
               {/* Action button */}
               <motion.button onClick={handleAction} disabled={!canAct || loading || actionsRemaining === 0}
                 whileTap={{ scale: 0.97 }}
@@ -364,7 +364,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
             </div>
           )}
         </div>
- 
+
         {/* RIGHT — Visual Combat Log */}
         <div className="flex flex-col w-1/2 overflow-hidden">
           <CombatLog logEntries={log_entries || []} player={player} />

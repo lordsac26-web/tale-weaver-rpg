@@ -1,21 +1,21 @@
 import React, { useState } from 'react';
 import { Zap, Shield, Flame, Sparkles, Swords, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
- 
+
 // D&D 5e Barbarian rage uses per level (PHB table)
 const RAGE_USES_BY_LEVEL = [2,2,3,3,3,4,4,4,4,4,4,5,5,5,5,6,6,6,6,Infinity];
- 
+
 export default function CombatModifiersPanel({ character, onToggleModifier, activeModifiers = {} }) {
   const [expanded, setExpanded] = useState(false);
- 
+
   const level     = character?.level || 1;
   const charClass = character?.class || '';
- 
+
   // Per 5e PHB p.173: if both advantage AND disadvantage apply, they cancel to a straight roll
   const bothAdvDis = !!(activeModifiers.advantage && activeModifiers.disadvantage);
- 
+
   const availableModifiers = [];
- 
+
   // ── Barbarian: Rage ─────────────────────────────────────────────────────────
   if (charClass === 'Barbarian') {
     const rageDamage  = level < 9 ? 2 : level < 16 ? 3 : 4;
@@ -23,7 +23,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
     const usedRages   = character?.rage_uses_spent || 0;
     const ragesLeft   = maxRageUses === Infinity ? '∞' : Math.max(0, maxRageUses - usedRages);
     const outOfRages  = maxRageUses !== Infinity && usedRages >= maxRageUses;
- 
+
     availableModifiers.push({
       id: 'rage',
       name: 'Rage',
@@ -36,7 +36,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
       disabled: outOfRages,
     });
   }
- 
+
   // ── Fighter: Action Surge (level 2+, once per short rest) ───────────────────
   if (charClass === 'Fighter' && level >= 2) {
     const used = !!character?.action_surge_used;
@@ -50,7 +50,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
       disabled: used,
     });
   }
- 
+
   // ── Paladin: Divine Smite (level 2+) ────────────────────────────────────────
   if (charClass === 'Paladin' && level >= 2) {
     availableModifiers.push({
@@ -62,7 +62,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
       description: 'When you hit with a melee weapon attack, expend a spell slot (no action required). Deal +2d8 radiant damage per slot level (max 5d8). On a critical hit, all smite dice are doubled. Undead and fiends take +1d8 extra.',
     });
   }
- 
+
   // ── Rogue: Sneak Attack — with proper 5e conditions noted ───────────────────
   if (charClass === 'Rogue') {
     const sneakDice = Math.ceil(level / 2);
@@ -75,7 +75,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
       description: `Once per turn, add ${sneakDice}d6 extra damage when using a finesse or ranged weapon AND you have advantage on the roll, OR an ally is within 5 ft of the target (and you don't have disadvantage). Only once per turn regardless of number of attacks.`,
     });
   }
- 
+
   // ── Monk: Flurry of Blows (bonus action, level 2+) ──────────────────────────
   if (charClass === 'Monk' && level >= 2) {
     const kiLeft = character?.ki_points_remaining ?? level;
@@ -91,7 +91,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
       disabled: kiLeft <= 0,
     });
   }
- 
+
   // ── Advantage ────────────────────────────────────────────────────────────────
   availableModifiers.push({
     id: 'advantage',
@@ -103,7 +103,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
       : 'Roll 2d20, take higher result',
     description: 'Roll two d20s and take the higher. Sources: hidden attacker, target is prone (melee), target is paralysed/unconscious, ally cast Faerie Fire/Bless. If you also have any source of disadvantage, they cancel out to a straight roll.',
   });
- 
+
   // ── Disadvantage ─────────────────────────────────────────────────────────────
   availableModifiers.push({
     id: 'disadvantage',
@@ -115,7 +115,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
       : 'Roll 2d20, take lower result',
     description: 'Roll two d20s and take the lower. Sources: attacking at long range, target is invisible, you are poisoned/exhausted, target has cover. If you also have any source of advantage, they cancel out to a straight roll.',
   });
- 
+
   // ── Cover ────────────────────────────────────────────────────────────────────
   availableModifiers.push({
     id: 'half_cover',
@@ -125,7 +125,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
     effect: 'Target +2 AC and DEX saves',
     description: 'Target is behind a low wall, large creature, or corner. +2 bonus to AC and Dexterity saving throws against this attack.',
   });
- 
+
   availableModifiers.push({
     id: 'three_quarters_cover',
     name: 'Target: ¾ Cover',
@@ -134,11 +134,11 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
     effect: 'Target +5 AC and DEX saves',
     description: 'Target is behind a portcullis, arrow slit, or thick tree trunk. +5 bonus to AC and Dexterity saving throws — significantly harder to hit.',
   });
- 
+
   if (availableModifiers.length === 0) return null;
- 
+
   const activeCount = Object.keys(activeModifiers).filter(k => activeModifiers[k]).length;
- 
+
   return (
     <div className="rounded-lg overflow-hidden"
       style={{ background: 'rgba(10,8,3,0.6)', border: '1px solid rgba(180,140,90,0.15)' }}>
@@ -160,7 +160,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
           <ChevronDown className="w-3 h-3" />
         </motion.div>
       </button>
- 
+
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -170,7 +170,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
             className="overflow-hidden">
             <div className="px-3 pb-3 space-y-1.5 pt-1"
               style={{ borderTop: '1px solid rgba(180,140,90,0.08)' }}>
- 
+
               {/* Adv+Dis cancellation warning banner */}
               {bothAdvDis && (
                 <div className="flex items-start gap-2 px-2.5 py-2 rounded-lg"
@@ -181,7 +181,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
                   </span>
                 </div>
               )}
- 
+
               {availableModifiers.map(mod => {
                 const isActive   = !!activeModifiers[mod.id];
                 const isDisabled = !!mod.disabled && !isActive;

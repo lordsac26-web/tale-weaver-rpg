@@ -7,13 +7,13 @@ import {
   getCantripDamageDice, getEldritchBlastBeams
 } from './spellData';
 import { SpellTooltip } from './GameTooltip';
- 
+
 const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
- 
+
 export default function CombatSpellSelector({ character, onSelectSpell, selectedSpell, selectedSlotLevel, onSelectSlotLevel }) {
   const [showDetail,    setShowDetail]    = useState(null);
   const [expandedLevel, setExpandedLevel] = useState(0);
- 
+
   const preparedSpells = character?.spells_prepared || [];
   const knownSpells    = preparedSpells.length > 0 ? preparedSpells : (character?.spells_known || []);
   const charLevel      = character?.level || 1;
@@ -22,7 +22,7 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
   const currentSlots   = character?.spell_slots || {};
   const spellSaveDC    = calcSpellSaveDC(character);
   const spellAttackBonus = calcSpellAttackBonus(character);
- 
+
   // Group spells by level
   const byLevel = {};
   knownSpells.forEach(name => {
@@ -32,14 +32,14 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
     if (!byLevel[lvl]) byLevel[lvl] = [];
     byLevel[lvl].push(name);
   });
- 
+
   const getRemainingSlots = (level) => {
     if (level === 0) return Infinity; // cantrips never run out
     const max  = slotMaxArr[level - 1] || 0;
     const used = currentSlots[`level_${level}`] || 0;
     return Math.max(0, max - used);
   };
- 
+
   // Fix #10: Build ALL available upcast slot levels for a given base spell level
   // Player can upcast to any slot level they have available, not just +2 above base.
   const getAvailableUpcastLevels = (baseLevel) => {
@@ -51,7 +51,7 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
     }
     return levels;
   };
- 
+
   if (knownSpells.length === 0) {
     return (
       <div className="text-slate-500 text-xs text-center py-4">
@@ -59,7 +59,7 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
       </div>
     );
   }
- 
+
   return (
     <div className="space-y-2">
       {/* Spell stats */}
@@ -67,13 +67,13 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
         <span className="text-slate-500">Save DC: <span className="text-purple-300 font-bold">{spellSaveDC ?? '—'}</span></span>
         <span className="text-slate-500">Attack: <span className="text-purple-300 font-bold">{spellAttackBonus != null ? `+${spellAttackBonus}` : '—'}</span></span>
       </div>
- 
+
       {[0,1,2,3,4,5,6,7,8,9].map(level => {
         const spells = byLevel[level] || [];
         if (spells.length === 0) return null;
         const remaining  = getRemainingSlots(level);
         const isExpanded = expandedLevel === level;
- 
+
         return (
           <div key={level} className="border border-slate-700/40 rounded-xl overflow-hidden">
             <button
@@ -98,12 +98,12 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
                 {isExpanded ? <ChevronUp className="w-3 h-3 text-slate-500" /> : <ChevronDown className="w-3 h-3 text-slate-500" />}
               </div>
             </button>
- 
+
             <AnimatePresence>
               {isExpanded && (
                 <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
                   <div className="p-2 space-y-1.5 bg-slate-900/40">
- 
+
                     {/* Fix #10: Full upcast selector — all available slot levels above base, not just +2 */}
                     {level > 0 && selectedSpell && SPELL_DETAILS[selectedSpell]?.level === level && (
                       (() => {
@@ -127,27 +127,27 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
                         );
                       })()
                     )}
- 
+
                     {spells.map(name => {
                       const details    = SPELL_DETAILS[name];
                       const isSelected = selectedSpell === name;
                       const canCast    = level === 0 || remaining > 0;
                       const dmgColor   = DAMAGE_TYPE_COLORS?.[details?.damage_type] || 'text-amber-300';
                       const isDetailOpen = showDetail === name;
- 
+
                       // Fix #11: Show scaled cantrip dice for current character level
                       const displayDice = level === 0
                         ? getCantripDamageDice(name, charLevel)
                         : details?.damage_dice;
- 
+
                       // Fix #11: Eldritch Blast special note on beam count
                       const beamNote = name === 'Eldritch Blast'
                         ? ` ×${getEldritchBlastBeams(charLevel)} beams`
                         : '';
- 
+
                       // Fix #12: Flag bonus action spells clearly
                       const isBonusAction = details?.casting_time?.includes('bonus action');
- 
+
                       return (
                         <div key={name}>
                           <button
@@ -207,7 +207,7 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
                               </div>
                             </div>
                           </button>
- 
+
                           <AnimatePresence>
                             {isDetailOpen && (
                               <motion.div
@@ -246,4 +246,3 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
     </div>
   );
 }
- 
