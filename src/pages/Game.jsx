@@ -14,6 +14,7 @@ import SceneVisualizerModal from '@/components/game/SceneVisualizerModal';
 import CharacterPortraitGenerator from '@/components/game/CharacterPortraitGenerator';
 import ActionProposalModal from '@/components/game/ActionProposalModal';
 import DeathModal from '@/components/game/DeathModal';
+import DeathSavesModal from '@/components/game/DeathSavesModal';
 import LootModal from '@/components/game/LootModal.jsx';
 import CompanionPanel from '@/components/game/CompanionPanel';
 import RestModal from '@/components/game/RestModal';
@@ -46,6 +47,7 @@ export default function Game() {
   const [companions, setCompanions] = useState([]);
   const [showCompanions, setShowCompanions] = useState(false);
   const [showDeathModal, setShowDeathModal] = useState(false);
+  const [showDeathSaves, setShowDeathSaves] = useState(false);
   const [showRestModal, setShowRestModal] = useState(false);
 
   const loadState = useCallback(async () => {
@@ -363,7 +365,8 @@ export default function Game() {
         const freshCombat = freshLogs[0];
         const defeatedEnemyList = (freshCombat?.combatants || combat?.combatants || []).filter(c => c.type === 'enemy');
         await saveCombatHistory(combatId, 'defeat', defeatedEnemyList, freshCombat?.round);
-        setShowDeathModal(true);
+        // Per 5e: player reaches 0 HP → death saving throws, not instant death
+        setShowDeathSaves(true);
       }
       setCombat(null);
     }
@@ -405,7 +408,9 @@ export default function Game() {
             });
           }
         if (data.player_dead) {
-          setShowDeathModal(true);
+          // Per 5e: dropping to 0 HP triggers death saving throws, not instant death
+          // (unless the damage was from a massive hit equal to or exceeding max HP)
+          setShowDeathSaves(true);
           setCombat(null);
           break;
         }
@@ -936,7 +941,51 @@ export default function Game() {
         )}
       </AnimatePresence>
 
-      {/* Death Modal */}
+      {/* Death Saves Modal — D&D 5e: reaching 0 HP triggers death saving throws */}
+      <AnimatePresence>
+        {showDeathSaves && character && (
+          <DeathSavesModal
+            character={character}
+            onStabilise={async (saveUpdates) => {
+              // 3 successes: character is stabilised (unconscious, no longer dying)
+              await base44.entities.Character.update(character.id, {
+                hp_current: 0,
+                conditions: [...(character.conditions || []).filter(c => c !== 'dying'), 'unconscious'],
+                death_saves_success: 0,
+                death_saves_failure: 0,
+              });
+              setShowDeathSaves(false);
+              setNarrative(prev => [...prev, {
+                type: 'narration',
+                text: `${character.name} stabilises — unconscious but breathing. The immediate danger has passed.`
+              }]);
+              await loadState();
+            }}
+            onDeath={() => {
+              // 3 failures: actual death → show final death modal
+              setShowDeathSaves(false);
+              setShowDeathModal(true);
+            }}
+            onMiracle={async () => {
+              // Natural 20 on death save: regain 1 HP and stand up
+              await base44.entities.Character.update(character.id, {
+                hp_current: 1,
+                conditions: (character.conditions || []).filter(c => c !== 'dying' && c !== 'unconscious'),
+                death_saves_success: 0,
+                death_saves_failure: 0,
+              });
+              setShowDeathSaves(false);
+              setNarrative(prev => [...prev, {
+                type: 'narration',
+                text: `✨ Natural 20! ${character.name} surges back to life with 1 HP — fate is not done with them yet.`
+              }]);
+              await loadState();
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Death Modal — shown only after 3 failed death saves */}
       <AnimatePresence>
         {showDeathModal && character && (
           <DeathModal
