@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Zap, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS, getSpellSlotsForLevel, calcSpellSaveDC, calcSpellAttackBonus } from './spellData';
+import { SpellTooltip } from './GameTooltip';
 
 const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th'];
 
@@ -120,7 +121,9 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <span className="text-sm">{details?.attack_type === 'healing' ? '💚' : details?.attack_type === 'saving_throw' ? '🎲' : details?.attack_type?.includes('melee') ? '⚔️' : details?.attack_type === 'auto_hit' ? '✨' : details?.is_utility ? '🔧' : '🎯'}</span>
-                                <span className={`text-xs font-medium truncate ${isSelected ? 'text-purple-200' : 'text-slate-300'}`}>{name}</span>
+                                <SpellTooltip name={name} position="right">
+                                  <span className={`text-xs font-medium truncate ${isSelected ? 'text-purple-200' : 'text-slate-300'}`}>{name}</span>
+                                </SpellTooltip>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 {details?.damage_dice && details.damage_dice !== '0' && (

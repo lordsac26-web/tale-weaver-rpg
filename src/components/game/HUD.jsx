@@ -3,6 +3,7 @@ import { Shield, Heart, Star, MapPin, Clock, Swords, Sparkles } from 'lucide-rea
 import { CONDITIONS } from './gameData';
 import { motion } from 'framer-motion';
 import { getSpellSlotsForLevel } from './spellData';
+import { ConditionTooltip } from './GameTooltip';
  
 export default function HUD({ character, session }) {
   if (!character) return null;
@@ -144,10 +145,11 @@ export default function HUD({ character, session }) {
               const condName = typeof cond === 'string' ? cond : cond.name;
               const condData = CONDITIONS[condName?.toLowerCase()] || {};
               return (
-                <span key={i} title={condData.description || condName}
-                  className="px-2 py-0.5 rounded-full text-xs badge-blood cursor-default">
-                  {condData.icon || '⚫'} {condName}
-                </span>
+                <ConditionTooltip key={i} name={condName} position="bottom">
+                  <span className="px-2 py-0.5 rounded-full text-xs badge-blood cursor-default">
+                    {condData.icon || '⚫'} {condName}
+                  </span>
+                </ConditionTooltip>
               );
             })}
           </div>

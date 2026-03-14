@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Swords, Shield, Heart, Zap, Clock, ChevronRight, Flame, Snowflake, Wind, Sparkles, X } from 'lucide-react';
 import { CONDITIONS } from './gameData';
+import { ConditionTooltip } from './GameTooltip';
 
 const EFFECT_ICONS = {
   blessed: { icon: '✨', color: '#fbbf24', label: 'Blessed' },
@@ -247,11 +248,12 @@ export default function InitiativeTracker({ combatants = [], currentTurnIndex, r
                             const condName = typeof cond === 'string' ? cond : cond.name;
                             const condData = CONDITIONS[condName?.toLowerCase()] || {};
                             return (
-                              <span key={idx} title={condData.description}
-                                className="px-1.5 py-0.5 rounded-full text-xs flex items-center gap-0.5"
-                                style={{ background: 'rgba(60,5,5,0.6)', border: '1px solid rgba(180,30,30,0.3)', color: '#fca5a5', fontSize: '0.6rem' }}>
-                                {condData.icon || '⚫'} {condName}
-                              </span>
+                              <ConditionTooltip key={idx} name={condName} position="bottom">
+                                <span className="px-1.5 py-0.5 rounded-full text-xs flex items-center gap-0.5"
+                                  style={{ background: 'rgba(60,5,5,0.6)', border: '1px solid rgba(180,30,30,0.3)', color: '#fca5a5', fontSize: '0.6rem' }}>
+                                  {condData.icon || '⚫'} {condName}
+                                </span>
+                              </ConditionTooltip>
                             );
                           })}
                         </div>
