@@ -3,14 +3,14 @@ import { Loader2, Scroll, Feather, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SkillCheckResult from './SkillCheckResult';
 import { base44 } from '@/api/base44Client';
-
+ 
 const RISK_STYLES = {
   low:     { border: 'rgba(40,160,80,0.35)',  bg: 'rgba(10,40,15,0.5)',  hover: 'rgba(40,160,80,0.5)',  badge: { bg: 'rgba(10,50,20,0.7)', color: '#86efac', border: 'rgba(40,160,80,0.4)' } },
   medium:  { border: 'rgba(200,150,20,0.35)', bg: 'rgba(40,30,5,0.5)',   hover: 'rgba(200,150,20,0.5)', badge: { bg: 'rgba(60,40,5,0.7)',  color: '#fde68a', border: 'rgba(200,150,20,0.4)' } },
   high:    { border: 'rgba(200,80,20,0.35)',  bg: 'rgba(40,15,5,0.5)',   hover: 'rgba(200,80,20,0.5)',  badge: { bg: 'rgba(60,20,5,0.7)',  color: '#fdba74', border: 'rgba(200,80,20,0.4)' } },
   extreme: { border: 'rgba(180,20,20,0.4)',   bg: 'rgba(40,5,5,0.5)',    hover: 'rgba(180,20,20,0.6)',  badge: { bg: 'rgba(60,5,5,0.7)',   color: '#fca5a5', border: 'rgba(180,20,20,0.45)' } },
 };
-
+ 
 // Truncate narration text to first N characters at a sentence boundary.
 function truncateForNarration(text, maxChars = 800) {
   if (!text || text.length <= maxChars) return text;
@@ -19,10 +19,9 @@ function truncateForNarration(text, maxChars = 800) {
   const lastPeriod = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('! '), slice.lastIndexOf('? '));
   return lastPeriod > 100 ? slice.slice(0, lastPeriod + 1) : slice;
 }
-
+ 
 export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit }) {
   const endRef = useRef(null);
-  const audioRef = useRef(null);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [isNarrating, setIsNarrating] = useState(false);
   const [audioLoading, setAudioLoading] = useState(false);
@@ -30,12 +29,12 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   const [selectedVoice, setSelectedVoice] = useState(() => localStorage.getItem('narratorVoice') || 'eloquent');
   const lastNarratedIndex = useRef(-1);
   const currentUtterance = useRef(null);
-
+ 
   // Auto-scroll on new narrative entries
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [narrative, loading]);
-
+ 
   // Trigger narration on new narration entries — non-blocking
   useEffect(() => {
     if (!narrationEnabled || loading) return;
@@ -47,7 +46,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
       narrateText(narrationEntries[latestIndex].text);
     }
   }, [narrative, narrationEnabled, loading]);
-
+ 
   const VOICE_PRESETS = {
     eloquent: { name: 'Eloquent Scholar', filter: ['Daniel', 'Google UK', 'British'], rate: 0.92, pitch: 1.0, desc: 'Refined and scholarly' },
     heroic: { name: 'Heroic Narrator', filter: ['Alex', 'Microsoft David'], rate: 0.88, pitch: 0.95, desc: 'Bold and commanding' },
@@ -55,10 +54,10 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     energetic: { name: 'Energetic Bard', filter: ['Karen', 'Zira'], rate: 1.05, pitch: 1.1, desc: 'Lively and dramatic' },
     ancient: { name: 'Ancient Elder', filter: ['Fred', 'Rishi'], rate: 0.80, pitch: 0.85, desc: 'Slow and wise' },
   };
-
+ 
   const narrateText = async (text) => {
     if (!text?.trim()) return;
-
+ 
     // Stop any currently playing speech
     if (window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
@@ -66,7 +65,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     if (currentUtterance.current) {
       currentUtterance.current = null;
     }
-
+ 
     // Split text into chunks to prevent cutoff (Chrome has ~300 char limit for some voices)
     const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
     const chunks = [];
@@ -81,7 +80,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
       }
     }
     if (currentChunk.trim()) chunks.push(currentChunk.trim());
-
+ 
     try {
       setAudioLoading(true);
       
@@ -97,7 +96,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
         });
         voices = window.speechSynthesis.getVoices();
       }
-
+ 
       // Select voice based on preset
       const preset = VOICE_PRESETS[selectedVoice] || VOICE_PRESETS.eloquent;
       let voice = null;
@@ -106,10 +105,10 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
         if (voice) break;
       }
       if (!voice) voice = voices.find(v => v.lang.startsWith('en')) || voices[0];
-
+ 
       setAudioLoading(false);
       setIsNarrating(true);
-
+ 
       // Speak chunks sequentially with resumption to prevent Chrome cutoff
       for (let i = 0; i < chunks.length; i++) {
         await new Promise((resolve, reject) => {
@@ -122,39 +121,28 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
           utterance.volume = 1.0;
           
           currentUtterance.current = utterance;
-
-          utterance.onend = () => {
-            // Resume synthesis after each chunk to prevent browser timeout
-            if (window.speechSynthesis.paused) {
-              window.speechSynthesis.resume();
-            }
-            resolve();
-          };
-          utterance.onerror = (e) => {
-            console.error('Speech error:', e);
-            resolve(); // continue to next chunk
-          };
-
-          window.speechSynthesis.speak(utterance);
-          
-          // Workaround for Chrome bug: resume every 10 seconds
+ 
+          // Workaround for Chrome bug: resume every 10 seconds to prevent silence cutoff
           const resumeInterval = setInterval(() => {
             if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
               window.speechSynthesis.resume();
             }
           }, 10000);
-          
+ 
           utterance.onend = () => {
             clearInterval(resumeInterval);
             resolve();
           };
-          utterance.onerror = () => {
+          utterance.onerror = (e) => {
+            console.error('Speech error:', e);
             clearInterval(resumeInterval);
-            resolve();
+            resolve(); // continue to next chunk
           };
+ 
+          window.speechSynthesis.speak(utterance);
         });
       }
-
+ 
       setIsNarrating(false);
       currentUtterance.current = null;
     } catch (error) {
@@ -163,7 +151,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
       setIsNarrating(false);
     }
   };
-
+ 
   const toggleNarration = () => {
     const newState = !narrationEnabled;
     setNarrationEnabled(newState);
@@ -174,13 +162,13 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
       setAudioLoading(false);
     }
   };
-
+ 
   const handleVoiceChange = (voiceKey) => {
     setSelectedVoice(voiceKey);
     localStorage.setItem('narratorVoice', voiceKey);
     setShowVoiceMenu(false);
   };
-
+ 
   // Narration button label
   const narrationLabel = audioLoading
     ? 'Loading...'
@@ -189,7 +177,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     : narrationEnabled
     ? 'Narration On'
     : 'Narration Off';
-
+ 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Narration Toggle */}
@@ -257,7 +245,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
           {narrationLabel}
         </button>
       </div>
-
+ 
       {/* Narrative Area */}
       <div className="flex-1 overflow-y-auto p-5 md:p-7 space-y-5 min-h-0" style={{ background: 'transparent' }}>
         <AnimatePresence initial={false}>
@@ -266,7 +254,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, ease: 'easeOut' }}>
-
+ 
               {entry.type === 'narration' && (
                 <div className="relative">
                   <p className="leading-8 text-base md:text-lg whitespace-pre-wrap"
@@ -280,7 +268,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                   </p>
                 </div>
               )}
-
+ 
               {entry.type === 'player_action' && (
                 <div className="flex justify-end">
                   <div className="rounded-xl px-4 py-3 max-w-md text-sm italic"
@@ -296,11 +284,11 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                   </div>
                 </div>
               )}
-
+ 
               {entry.type === 'skill_check' && (
                 <SkillCheckResult entry={entry} />
               )}
-
+ 
               {entry.type === 'roll_result' && (
                 <div className="flex justify-center">
                   <motion.div
@@ -323,7 +311,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                   </motion.div>
                 </div>
               )}
-
+ 
               {entry.type === 'combat_start' && (
                 <div className="text-center py-3">
                   <motion.div
@@ -341,7 +329,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                   </motion.div>
                 </div>
               )}
-
+ 
               {entry.type === 'xp_gain' && (
                 <motion.div className="text-center"
                   initial={{ scale: 0.7, opacity: 0, y: -10 }}
@@ -356,7 +344,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
             </motion.div>
           ))}
         </AnimatePresence>
-
+ 
         {loading && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className="flex items-center gap-3 py-2">
@@ -368,7 +356,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
         )}
         <div ref={endRef} />
       </div>
-
+ 
       {/* Choices + Input */}
       {!loading && (
         <div className="flex-shrink-0 p-4 space-y-2.5"
@@ -430,7 +418,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
               </AnimatePresence>
             </>
           )}
-
+ 
           {/* Custom input */}
           <div className="flex gap-2 mt-3">
             <div className="flex-1 relative">
