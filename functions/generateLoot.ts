@@ -30,6 +30,9 @@ const LOOT_TABLES = {
     { name: 'Scroll of Fireball', type: 'consumable', rarity: 'uncommon', effect: 'Cast Fireball (3rd level)', weight: 0.1, value: 300 },
     { name: 'Wand of Magic Missiles', type: 'weapon', rarity: 'uncommon', effect: '7 charges, recharge daily', weight: 1, value: 500 },
     { name: 'Cloak of Protection', type: 'armor', rarity: 'uncommon', effect: '+1 AC and saving throws', weight: 2, value: 400 },
+    { name: '+1 Weapon', type: 'weapon', rarity: 'uncommon', effect: '+1 to attack and damage rolls', weight: 3, value: 600 },
+    { name: 'Bracers of Archery', type: 'armor', rarity: 'uncommon', effect: '+2 damage with longbow/shortbow', weight: 1, value: 500 },
+    { name: 'Boots of Elvenkind', type: 'armor', rarity: 'uncommon', effect: 'Advantage on Stealth (Dexterity)', weight: 1, value: 450 },
   ],
 
   // Rare items
@@ -40,6 +43,10 @@ const LOOT_TABLES = {
     { name: 'Boots of Speed', type: 'armor', rarity: 'rare', effect: 'Double movement speed (bonus action)', weight: 2, value: 1200 },
     { name: 'Amulet of Health', type: 'accessory', rarity: 'rare', effect: 'Constitution becomes 19', weight: 0.2, value: 2000 },
     { name: 'Flame Tongue Sword', type: 'weapon', rarity: 'rare', effect: '+2d6 fire damage when activated', weight: 3, value: 2500 },
+    { name: '+2 Weapon', type: 'weapon', rarity: 'rare', effect: '+2 to attack and damage rolls', weight: 3, value: 2000 },
+    { name: 'Belt of Giant Strength (Hill)', type: 'accessory', rarity: 'rare', effect: 'Strength becomes 21', weight: 1, value: 3000 },
+    { name: 'Cloak of Displacement', type: 'armor', rarity: 'rare', effect: 'Attackers have disadvantage', weight: 2, value: 2500 },
+    { name: 'Necklace of Fireballs', type: 'accessory', rarity: 'rare', effect: '5 beads, each casts Fireball', weight: 0.2, value: 1800 },
   ],
 
   // Legendary items
@@ -83,6 +90,15 @@ function determineTier(level) {
   return 'legendary';
 }
 
+function determineTierByCR(cr) {
+  const crNum = parseFloat(cr) || 0;
+  if (crNum < 1) return 'trivial';
+  if (crNum < 5) return 'low';
+  if (crNum < 11) return 'medium';
+  if (crNum < 17) return 'high';
+  return 'legendary';
+}
+
 function generateCoins(tier, enemyType = 'humanoid') {
   const coinData = LOOT_TABLES.coins[tier];
   const multiplier = LOOT_TABLES.enemyTypes[enemyType]?.coinMultiplier || 1;
@@ -94,9 +110,11 @@ function generateCoins(tier, enemyType = 'humanoid') {
   };
 }
 
-function generateItems(tier, level, enemyType = 'humanoid') {
+function generateItems(tier, level, enemyType = 'humanoid', cr = null) {
   const items = [];
-  const itemCount = level <= 4 ? 1 : level <= 10 ? rollDice(1, 3) : level <= 16 ? rollDice(1, 4) : rollDice(2, 3);
+  // Use CR to determine item count if available
+  const effectiveLevel = cr ? Math.ceil(parseFloat(cr) * 2.5) : level;
+  const itemCount = effectiveLevel <= 4 ? 1 : effectiveLevel <= 10 ? rollDice(1, 3) : effectiveLevel <= 16 ? rollDice(1, 4) : rollDice(2, 3);
 
   // Enemy-specific bonus items
   const enemyData = LOOT_TABLES.enemyTypes[enemyType];
@@ -144,28 +162,26 @@ Deno.serve(async (req) => {
 
     const { level, enemy_type, enemy_cr, num_enemies = 1 } = await req.json();
 
-    if (!level || level < 1 || level > 20) {
-      return Response.json({ error: 'Invalid level (1-20 required)' }, { status: 400 });
-    }
-
-    const tier = determineTier(level);
+    // Determine tier by CR if provided, otherwise use character level
+    const tier = enemy_cr ? determineTierByCR(enemy_cr) : level ? determineTier(level) : 'low';
     const effectiveEnemyType = enemy_type?.toLowerCase() || 'humanoid';
 
     // Generate loot
     const coins = generateCoins(tier, effectiveEnemyType);
-    const items = generateItems(tier, level, effectiveEnemyType);
+    const items = generateItems(tier, level || 1, effectiveEnemyType, enemy_cr);
 
     // Scale coins by number of enemies
     coins.gold *= num_enemies;
     coins.silver *= num_enemies;
     coins.copper *= num_enemies;
 
-    // Generate magical artifact chance (5% base, increases with level)
-    const artifactChance = Math.min(0.05 + (level * 0.02), 0.5);
+    // Generate magical artifact chance based on CR or level
+    const effectiveLevel = enemy_cr ? Math.ceil(parseFloat(enemy_cr) * 2) : level;
+    const artifactChance = Math.min(0.05 + (effectiveLevel * 0.02), 0.5);
     let artifact = null;
 
     if (Math.random() < artifactChance) {
-      const artifactTier = level <= 5 ? 'uncommon' : level <= 10 ? 'rare' : level <= 15 ? 'rare' : 'legendary';
+      const artifactTier = effectiveLevel <= 5 ? 'uncommon' : effectiveLevel <= 10 ? 'rare' : effectiveLevel <= 15 ? 'rare' : 'legendary';
       const artifactPools = {
         uncommon: LOOT_TABLES.uncommonItems,
         rare: LOOT_TABLES.rareItems,
@@ -177,6 +193,7 @@ Deno.serve(async (req) => {
     return Response.json({
       success: true,
       tier,
+      cr_used: enemy_cr || null,
       coins,
       items,
       artifact,
@@ -187,6 +204,7 @@ Deno.serve(async (req) => {
           const rarities = ['common', 'uncommon', 'rare', 'legendary'];
           return rarities.indexOf(item.rarity) > rarities.indexOf(max) ? item.rarity : max;
         }, 'common'),
+        enemies_defeated: num_enemies,
       },
     });
   } catch (error) {
