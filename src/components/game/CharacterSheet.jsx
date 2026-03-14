@@ -5,6 +5,7 @@ import InventoryTab from './InventoryTab';
 import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS } from './gameData';
 import { base44 } from '@/api/base44Client';
 import SpellbookTab from './SpellbookTab';
+import { SkillTooltip, FeatureTooltip, ConditionTooltip } from './GameTooltip';
 
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
@@ -250,7 +251,9 @@ function SkillsTab({ character, profBonus }) {
                   background: profLevel === 'expert' ? '#f0c040' : (profLevel === 'proficient' || profLevel === true) ? '#86efac' : 'rgba(80,60,30,0.4)',
                   boxShadow: profLevel ? '0 0 4px ' + (profLevel === 'expert' ? 'rgba(240,192,64,0.3)' : 'rgba(134,239,172,0.3)') : 'none',
                 }} />
-              <span className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{skill}</span>
+              <SkillTooltip name={skill} position="right">
+                <span className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{skill}</span>
+              </SkillTooltip>
               <span className="text-xs" style={{ color: 'rgba(180,140,90,0.35)' }}>({STAT_LABELS[stat]})</span>
             </div>
             <span className="font-fantasy font-bold text-sm" style={{ color: total >= 0 ? '#86efac' : '#fca5a5' }}>{calcModDisplay(total)}</span>
@@ -526,7 +529,9 @@ function FeaturesTab({ character }) {
                   style={{ background: 'rgba(60,40,8,0.6)', border: '1px solid rgba(201,169,110,0.2)', color: 'rgba(201,169,110,0.6)', fontSize: '0.6rem' }}>
                   Lv.{f.level}
                 </span>
-                <span className="text-sm" style={{ color: 'rgba(232,213,183,0.8)', fontFamily: 'EB Garamond, serif' }}>{f.name}</span>
+                <FeatureTooltip featureName={f.name} className={character.class} position="right">
+                  <span className="text-sm" style={{ color: 'rgba(232,213,183,0.8)', fontFamily: 'EB Garamond, serif' }}>{f.name}</span>
+                </FeatureTooltip>
               </div>
             ))}
           </div>
