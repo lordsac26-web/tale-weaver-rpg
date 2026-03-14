@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Heart, Shield, Zap, Eye, EyeOff, Sparkles, Swords } from 'lucide-react';
+import { Heart, Shield, Zap, Eye, EyeOff, Sparkles, Swords, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { calcStatMod, calcModDisplay } from './gameData';
-
+ 
 const COMPANION_PRESETS = {
   familiar: {
     Owl: { creature_type: 'Owl', hp_max: 1, ac: 11, speed: 5, fly: 60, str: 3, dex: 13, con: 8, int: 2, wis: 12, cha: 7, 
@@ -53,17 +53,18 @@ const COMPANION_PRESETS = {
       initiative_bonus: 0, class_requirement: 'Ranger (Beast Master)', level_required: 3, cr: 0.25 },
   },
 };
-
+ 
 export default function CompanionPanel({ character, companions, onUpdate, onAttack }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCompanion, setNewCompanion] = useState({ type: 'familiar', creature_type: 'Owl' });
   const [selectedPreset, setSelectedPreset] = useState(null);
-
+  const [validationError, setValidationError] = useState(null);
+ 
   const activeCompanions = companions.filter(c => c.is_summoned);
   const charClass = character?.class || '';
   const charLevel = character?.level || 1;
   const charSubclass = character?.subclass || '';
-
+ 
   const handleSelectPreset = (type, creatureType) => {
     const preset = COMPANION_PRESETS[type]?.[creatureType];
     if (!preset) return;
@@ -75,7 +76,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
       ...preset,
     });
   };
-
+ 
   const createCompanion = async () => {
     if (!newCompanion.name?.trim()) return;
     
@@ -91,12 +92,12 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
         return charClass === cls;
       });
       if (!meetsClass) {
-        alert(`This companion requires: ${preset.class_requirement}`);
+        setValidationError(`This companion requires: ${preset.class_requirement}`);
         return;
       }
     }
     if (preset?.level_required && charLevel < preset.level_required) {
-      alert(`This companion requires level ${preset.level_required}+`);
+      setValidationError(`This companion requires level ${preset.level_required}+`);
       return;
     }
     
@@ -111,38 +112,36 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
     setShowAddModal(false);
     setNewCompanion({ type: 'familiar', creature_type: 'Owl' });
     setSelectedPreset(null);
+    setValidationError(null);
   };
-
+ 
   const toggleSummon = async (companion) => {
     if (!companion.is_summoned) {
-      // Summoning rules
       if (companion.type === 'familiar') {
-        // Familiars: 1 hour ritual or 1 action (if already summoned before)
-        // Check if player has Find Familiar spell prepared
         const hasFindFamiliar = (character?.spells_prepared || character?.spells_known || []).includes('Find Familiar');
         if (!hasFindFamiliar && charClass !== 'Warlock') {
-          alert('You need Find Familiar spell prepared to summon a familiar.');
+          setValidationError('You need Find Familiar spell prepared to summon a familiar.');
           return;
         }
       } else if (companion.type === 'beast_companion') {
-        // Ranger Beast Master: only 1 companion at a time
         const otherActiveBeasts = companions.filter(c => c.id !== companion.id && c.type === 'beast_companion' && c.is_summoned);
         if (otherActiveBeasts.length > 0) {
-          alert('Rangers can only have one beast companion active at a time.');
+          setValidationError('Rangers can only have one beast companion active at a time.');
           return;
         }
       }
     }
+    setValidationError(null);
     await onUpdate('update', { ...companion, is_summoned: !companion.is_summoned });
   };
-
+ 
   const hpColor = (current, max) => {
     const pct = (current / max) * 100;
     if (pct > 60) return '#86efac';
     if (pct > 30) return '#fbbf24';
     return '#fca5a5';
   };
-
+ 
   return (
     <div className="p-3 space-y-3">
       <div className="flex items-center justify-between">
@@ -152,13 +151,24 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
           + Add
         </button>
       </div>
-
+ 
+      {validationError && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-start gap-2 px-3 py-2 rounded-lg text-xs"
+          style={{ background: 'rgba(60,10,10,0.7)', border: '1px solid rgba(180,50,50,0.4)', color: '#fca5a5' }}>
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+          <span style={{ fontFamily: 'EB Garamond, serif' }}>{validationError}</span>
+          <button onClick={() => setValidationError(null)} className="ml-auto opacity-60 hover:opacity-100">✕</button>
+        </motion.div>
+      )}
+ 
       {activeCompanions.length === 0 && (
         <p className="text-xs text-center py-4" style={{ color: 'rgba(201,169,110,0.4)', fontFamily: 'EB Garamond, serif' }}>
           No companions summoned
         </p>
       )}
-
+ 
       {activeCompanions.map(comp => {
         const hpPct = (comp.hp_current / comp.hp_max) * 100;
         return (
@@ -180,7 +190,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
                 <EyeOff className="w-3.5 h-3.5" />
               </button>
             </div>
-
+ 
             <div className="grid grid-cols-3 gap-2">
               <div className="stat-box rounded-lg px-2 py-1">
                 <div className="flex items-center gap-1 justify-center">
@@ -203,7 +213,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
                 </div>
               </div>
             </div>
-
+ 
             {comp.attacks?.length > 0 && (
               <div className="space-y-1">
                 <div className="text-xs font-fantasy tracking-widest mb-1" style={{ color: 'rgba(201,169,110,0.5)', fontSize: '0.6rem' }}>ATTACKS</div>
@@ -227,7 +237,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
                 )}
               </div>
             )}
-
+ 
             {comp.abilities?.length > 0 && (
               <div className="space-y-1 pt-1" style={{ borderTop: '1px solid rgba(180,140,90,0.15)' }}>
                 {comp.abilities.map((ab, i) => (
@@ -241,7 +251,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
           </motion.div>
         );
       })}
-
+ 
       <div className="space-y-1.5">
         <div className="text-xs font-fantasy tracking-widest" style={{ color: 'rgba(201,169,110,0.5)' }}>UNSUMMONED</div>
         {companions.filter(c => !c.is_summoned).map(comp => (
@@ -258,7 +268,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
           </div>
         ))}
       </div>
-
+ 
       <AnimatePresence>
         {showAddModal && (
           <motion.div
@@ -277,7 +287,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
               <h3 className="font-fantasy text-lg font-bold mb-4 text-glow-gold" style={{ color: '#f0c040' }}>
                 Add Companion
               </h3>
-
+ 
               <div className="space-y-3">
                 <div>
                   <label className="text-xs font-fantasy tracking-widest mb-1.5 block" style={{ color: 'rgba(201,169,110,0.6)' }}>TYPE</label>
@@ -288,7 +298,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
                     <option value="mount">Mount / Steed</option>
                   </select>
                 </div>
-
+ 
                 <div>
                   <label className="text-xs font-fantasy tracking-widest mb-1.5 block" style={{ color: 'rgba(201,169,110,0.6)' }}>CREATURE</label>
                   <div className="grid grid-cols-4 gap-2">
@@ -312,7 +322,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
                     })}
                   </div>
                 </div>
-
+ 
                 {selectedPreset && (
                   <>
                     <div className="p-2 rounded-lg text-xs" style={{ background: 'rgba(80,30,120,0.2)', border: '1px solid rgba(140,80,220,0.2)', color: 'rgba(192,132,252,0.7)' }}>
@@ -320,14 +330,14 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
                       {selectedPreset.level_required && ` (Level ${selectedPreset.level_required}+)`}
                       {selectedPreset.spell_required && <div className="mt-0.5">📖 {selectedPreset.spell_required}</div>}
                     </div>
-
+ 
                     <div>
                       <label className="text-xs font-fantasy tracking-widest mb-1.5 block" style={{ color: 'rgba(201,169,110,0.6)' }}>NAME</label>
                       <input value={newCompanion.name || ''} onChange={e => setNewCompanion({ ...newCompanion, name: e.target.value })}
                         placeholder={`e.g. ${selectedPreset.creature_type === 'Owl' ? 'Hoot' : selectedPreset.creature_type === 'Wolf' ? 'Fang' : 'Shadow'}`}
                         className="w-full rounded-lg px-3 py-2 text-sm input-fantasy" />
                     </div>
-
+ 
                     <div className="p-3 rounded-lg" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.15)' }}>
                       <div className="text-xs font-fantasy mb-2" style={{ color: 'rgba(201,169,110,0.7)' }}>STATS</div>
                       <div className="grid grid-cols-3 gap-2 text-xs mb-2">
@@ -343,7 +353,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
                       {selectedPreset.climb && <div className="text-xs" style={{ color: 'rgba(134,239,172,0.6)' }}>🧗 Climb {selectedPreset.climb} ft</div>}
                       {selectedPreset.swim && <div className="text-xs" style={{ color: 'rgba(147,197,253,0.6)' }}>🏊 Swim {selectedPreset.swim} ft</div>}
                     </div>
-
+ 
                     {selectedPreset.abilities?.length > 0 && (
                       <div className="p-3 rounded-lg space-y-1" style={{ background: 'rgba(15,10,5,0.5)', border: '1px solid rgba(180,140,90,0.12)' }}>
                         <div className="text-xs font-fantasy mb-1" style={{ color: 'rgba(201,169,110,0.6)' }}>ABILITIES</div>
@@ -357,7 +367,7 @@ export default function CompanionPanel({ character, companions, onUpdate, onAtta
                     )}
                   </>
                 )}
-
+ 
                 <div className="flex gap-2 pt-2">
                   <button onClick={() => setShowAddModal(false)}
                     className="flex-1 py-2 rounded-lg text-sm font-fantasy"
