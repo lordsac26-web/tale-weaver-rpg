@@ -7,6 +7,7 @@ import {
 } from './itemData';
 import { searchMagicItems } from './open5eApi';
 import { motion, AnimatePresence } from 'framer-motion';
+import { parseItemBonuses } from './itemBonuses';
 
 const RARITIES = Object.keys(ITEM_RARITY);
 
@@ -522,10 +523,10 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
       if (slot === 'mainhand' && isTwoHanded) delete newEquipped.offhand;
     }
 
-    // Recompute AC
-    const newAC = computeAC(character, newEquipped);
+    // Recalculate stats based on equipped items
+    const updates = recalculateStatsFromEquipment(character, newEquipped, inventory);
     setEquipped(newEquipped);
-    onUpdate({ equipped: newEquipped, armor_class: newAC });
+    onUpdate({ ...updates, equipped: newEquipped });
   };
 
   const handleUseConsumable = (item, index) => {
@@ -549,9 +550,9 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
   const handleUnequip = (slot) => {
     const newEquipped = { ...equipped };
     delete newEquipped[slot];
-    const newAC = computeAC(character, newEquipped);
+    const updates = recalculateStatsFromEquipment(character, newEquipped, inventory);
     setEquipped(newEquipped);
-    onUpdate({ equipped: newEquipped, armor_class: newAC });
+    onUpdate({ ...updates, equipped: newEquipped });
   };
 
   const sorted = [...inventory]
@@ -629,6 +630,60 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
            })}
          </div>
       )}
+
+      <ConsumableUseModal
+        item={consumableModal?.item}
+        character={character}
+        onUse={handleConsumableUsed}
+        onClose={() => setConsumableModal(null)}
+      />
     </div>
   );
+}
+
+// Recalculate character stats based on equipped items
+function recalculateStatsFromEquipment(character, equipped, inventory) {
+  const updates = {};
+  let acBonus = 0;
+  let savingThrowBonus = 0;
+  const abilityBonuses = {};
+
+  Object.values(equipped).forEach(item => {
+    if (!item?.bonuses) {
+      // Auto-parse bonuses if not present
+      const parsed = parseItemBonuses(item?.name || '', item?.description || '');
+      if (parsed) item.bonuses = parsed;
+    }
+    
+    const bonuses = item?.bonuses || {};
+    if (bonuses.ac) acBonus += bonuses.ac;
+    if (bonuses.saving_throws) savingThrowBonus += bonuses.saving_throws;
+    if (bonuses.ability_scores) {
+      Object.entries(bonuses.ability_scores).forEach(([stat, val]) => {
+        abilityBonuses[stat] = Math.max(abilityBonuses[stat] || 0, val); // take highest for set abilities
+      });
+    }
+  });
+
+  // Apply ability score bonuses
+  ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].forEach(stat => {
+    if (abilityBonuses[stat]) {
+      updates[stat] = abilityBonuses[stat]; // items like Headband of Intellect SET the stat
+    }
+  });
+
+  // Recalculate AC
+  const newAC = computeAC(character, equipped) + acBonus;
+  updates.armor_class = newAC;
+
+  // Store equipment bonuses as active_modifiers
+  const modifiers = [];
+  if (savingThrowBonus > 0) modifiers.push({ source: 'equipment', applies_to: 'saving_throws', value: savingThrowBonus });
+  
+  updates.active_modifiers = [
+    ...(character.active_modifiers || []).filter(m => m.source !== 'equipment'),
+    ...modifiers
+  ];
+
+  return updates;
 }
