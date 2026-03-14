@@ -16,6 +16,7 @@ import ActionProposalModal from '@/components/game/ActionProposalModal';
 import DeathModal from '@/components/game/DeathModal';
 import LootModal from '@/components/game/LootModal.jsx';
 import CompanionPanel from '@/components/game/CompanionPanel';
+import RestModal from '@/components/game/RestModal';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -45,6 +46,7 @@ export default function Game() {
   const [companions, setCompanions] = useState([]);
   const [showCompanions, setShowCompanions] = useState(false);
   const [showDeathModal, setShowDeathModal] = useState(false);
+  const [showRestModal, setShowRestModal] = useState(false);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate(createPageUrl('Home')); return; }
@@ -590,6 +592,16 @@ export default function Game() {
           <Dices className="w-3.5 h-3.5" /> Dice
         </button>
 
+        {!inCombat && (
+          <button onClick={() => setShowRestModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
+            style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(100,70,180,0.2)', color: 'rgba(168,139,253,0.6)' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(140,100,220,0.45)'; e.currentTarget.style.color = '#c4b5fd'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(100,70,180,0.2)'; e.currentTarget.style.color = 'rgba(168,139,253,0.6)'; }}>
+            🌙 Rest
+          </button>
+        )}
+
         <button onClick={() => setShowCompanions(v => !v)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
           style={showCompanions ? {
@@ -855,6 +867,28 @@ export default function Game() {
             onMiracle={handleMiracle}
             onDeath={handleDeath}
             onClose={() => setShowDeathModal(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Rest Modal */}
+      <AnimatePresence>
+        {showRestModal && character && (
+          <RestModal
+            character={character}
+            onClose={() => setShowRestModal(false)}
+            onRest={async (restType) => {
+              const result = await base44.functions.invoke('handleRest', {
+                character_id: character.id,
+                rest_type: restType
+              });
+              setCharacter(result.data.character);
+              setNarrative(prev => [...prev, {
+                type: 'narration',
+                text: `🌙 You take a ${restType} rest. ${result.data.restorations.join(', ')}.`
+              }]);
+              setShowRestModal(false);
+            }}
           />
         )}
       </AnimatePresence>
