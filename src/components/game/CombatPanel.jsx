@@ -9,6 +9,7 @@ import CombatLog from './CombatLog';
 import InitiativeTracker from './InitiativeTracker';
 import ActionPointBar from './ActionPointBar';
 import CombatFloatingText from './CombatFloatingText';
+import CombatModifiersPanel from './CombatModifiersPanel';
 
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger'];
 
@@ -32,6 +33,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const [selectedSpellLevel, setSelectedSpellLevel] = useState(null);
   const [selectedSpellBaseLevel, setSelectedSpellBaseLevel] = useState(null);
   const [showDice, setShowDice] = useState(false);
+  const [combatModifiers, setCombatModifiers] = useState({});
 
   if (!combat) return null;
 
@@ -74,12 +76,12 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         heal_dice: details.heal_dice || null,
         slot_level: selectedSpellLevel || selectedSpellBaseLevel || 1,
         base_level: selectedSpellBaseLevel || 1,
-      });
+      }, combatModifiers);
     } else if (action === 'attack') {
       const weapon = character?.equipped?.weapon || { damage_dice: '1d6', attack_bonus: 0, damage_bonus: 0, type: 'melee' };
-      onPlayerAttack(selectedTarget, 'attack', weapon);
+      onPlayerAttack(selectedTarget, 'attack', weapon, combatModifiers);
     } else {
-      onPlayerAttack(selectedTarget, action);
+      onPlayerAttack(selectedTarget, action, null, combatModifiers);
     }
   };
 
@@ -209,6 +211,13 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                 actionsUsed={actionsUsed}
                 bonusActionUsed={world_state?.bonus_action_used || false}
                 reactionUsed={world_state?.reaction_used || false}
+              />
+
+              {/* Combat Modifiers */}
+              <CombatModifiersPanel
+                character={character}
+                activeModifiers={combatModifiers}
+                onToggleModifier={(id) => setCombatModifiers(prev => ({ ...prev, [id]: !prev[id] }))}
               />
 
               {/* Action tabs */}

@@ -266,7 +266,7 @@ export default function Game() {
     if (logs[0]) setCombat(logs[0]);
   };
 
-  const handlePlayerAttack = async (targetId, actionType, weaponOrSpell) => {
+  const handlePlayerAttack = async (targetId, actionType, weaponOrSpell, modifiers = {}) => {
     if (!combat?.id && !session?.combat_state?.combat_id) return;
     const combatId = combat?.id || session?.combat_state?.combat_id;
     setCombatLoading(true);
@@ -277,7 +277,7 @@ export default function Game() {
 
     const result = await base44.functions.invoke('combatEngine', {
       action: 'player_attack', session_id: sessionId, combat_id: combatId,
-      character_id: character?.id, payload: { target_id: targetId, weapon, spell }
+      character_id: character?.id, payload: { target_id: targetId, weapon, spell, modifiers }
     });
 
     const data = result.data;

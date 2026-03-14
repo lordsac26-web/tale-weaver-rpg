@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
   };
 
   if (action === 'player_attack') {
-    const { target_id, weapon, spell } = payload;
+    const { target_id, weapon, spell, modifiers = {} } = payload;
     const logs = await base44.asServiceRole.entities.CombatLog.filter({ id: combat_id });
     const combatLog = logs[0];
     const chars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
@@ -116,13 +116,20 @@ Deno.serve(async (req) => {
     const target = combatants.find(c => c.id === target_id);
     if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });
 
-    let attackRoll = rollD20();
+    // Handle advantage/disadvantage
+    let attackRoll1 = rollD20();
+    let attackRoll2 = modifiers.advantage || modifiers.disadvantage ? rollD20() : attackRoll1;
+    let attackRoll = attackRoll1;
+    if (modifiers.advantage) attackRoll = Math.max(attackRoll1, attackRoll2);
+    if (modifiers.disadvantage) attackRoll = Math.min(attackRoll1, attackRoll2);
+
     let attackMod = 0;
     let damageDice = '1d6';
     let damageBonus = 0;
     let attackType = 'melee';
     let isCritical = attackRoll === 20;
     let isMiss = attackRoll === 1;
+    let extraDamageDice = []; // For smite, sneak attack, etc
 
     if (spell) {
       const spellAbilityMap = {
@@ -310,6 +317,24 @@ Deno.serve(async (req) => {
       damageBonus = abilityMod + (weapon.damage_bonus || 0);
       damageDice = weapon.damage_dice || '1d8';
       attackType = isRanged ? 'ranged' : 'melee';
+
+      // Apply Fighting Style bonuses
+      const fightingStyle = character.fighting_style?.toLowerCase();
+      if (fightingStyle === 'archery' && isRanged) attackMod += 2;
+      if (fightingStyle === 'dueling' && !character.equipped?.shield) damageBonus += 2;
+
+      // Barbarian Rage
+      if (modifiers.rage && !isRanged) {
+        const level = character.level || 1;
+        const rageDamage = level < 9 ? 2 : level < 16 ? 3 : 4;
+        damageBonus += rageDamage;
+      }
+
+      // Rogue Sneak Attack (if active and conditions met)
+      if (modifiers.sneak_attack_ready && character.class === 'Rogue') {
+        const sneakDice = Math.ceil((character.level || 1) / 2);
+        extraDamageDice.push({ dice: `${sneakDice}d6`, type: 'sneak', label: 'Sneak Attack' });
+      }
     }
 
     // Apply active modifiers
@@ -327,8 +352,13 @@ Deno.serve(async (req) => {
     const conditions = (character.conditions || []).map(c => c.name || c);
     if (conditions.includes('poisoned')) attackMod -= 2;
 
+    // Target modifiers (cover, etc)
+    let targetACBonus = 0;
+    if (modifiers.half_cover) targetACBonus += 2;
+    if (modifiers.three_quarters_cover) targetACBonus += 5;
+
     const totalAttack = attackRoll + attackMod;
-    let hit = !isMiss && (isCritical || totalAttack >= target.ac);
+    let hit = !isMiss && (isCritical || totalAttack >= (target.ac + targetACBonus));
 
     let damage = 0;
     let damageRolls = [];
@@ -337,14 +367,66 @@ Deno.serve(async (req) => {
 
     if (hit) {
       const dMatch = damageDice.match(/^(\d+)d(\d+)$/);
-      const numDice = isCritical ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1]);
+      let numDice = isCritical ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1]);
       const sides = parseInt(dMatch[2]);
+
+      // Brutal Critical (Barbarian 9+) - add extra crit dice
+      if (isCritical && character.class === 'Barbarian') {
+        const level = character.level || 1;
+        if (level >= 9) numDice += 1;
+        if (level >= 13) numDice += 1;
+        if (level >= 17) numDice += 1;
+      }
+
       for (let i = 0; i < numDice; i++) {
         const r = rollDice(sides);
         damageRolls.push(r);
         damage += r;
       }
       damage += damageBonus;
+
+      // Extra damage dice (Sneak Attack, Divine Smite, etc)
+      for (const extra of extraDamageDice) {
+        const eMatch = extra.dice.match(/^(\d+)d(\d+)$/);
+        if (eMatch) {
+          const eNum = isCritical ? parseInt(eMatch[1]) * 2 : parseInt(eMatch[1]);
+          const eSides = parseInt(eMatch[2]);
+          let eDmg = 0;
+          for (let i = 0; i < eNum; i++) eDmg += rollDice(eSides);
+          damage += eDmg;
+        }
+      }
+
+      // Paladin Divine Smite (if toggled and spell slots available)
+      if (modifiers.divine_smite_ready && character.class === 'Paladin' && attackType === 'melee') {
+        // Find highest available spell slot
+        const slots = character.spell_slots || {};
+        let smiteLevel = 0;
+        for (let i = 5; i >= 1; i--) {
+          const key = `level_${i}`;
+          if ((slots[key] || 0) < i) { // slot available
+            smiteLevel = i;
+            break;
+          }
+        }
+        if (smiteLevel > 0) {
+          const smiteDice = 2 + smiteLevel;
+          let smiteDmg = 0;
+          for (let i = 0; i < smiteDice; i++) smiteDmg += rollDice(8);
+          damage += smiteDmg;
+          // Consume spell slot
+          const slotKey = `level_${smiteLevel}`;
+          await base44.asServiceRole.entities.Character.update(character_id, {
+            spell_slots: { ...slots, [slotKey]: (slots[slotKey] || 0) + 1 }
+          });
+        }
+      }
+
+      // Improved Divine Smite (Paladin 11+) - automatic +1d8 radiant on all melee
+      if (character.class === 'Paladin' && (character.level || 1) >= 11 && attackType === 'melee') {
+        damage += rollDice(8);
+      }
+
       damage = Math.max(0, damage);
 
       target.hp_current = Math.max(0, target.hp_current - damage);
