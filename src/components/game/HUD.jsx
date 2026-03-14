@@ -3,22 +3,22 @@ import { Shield, Heart, Star, MapPin, Clock, Swords, Sparkles } from 'lucide-rea
 import { CONDITIONS } from './gameData';
 import { motion } from 'framer-motion';
 import { getSpellSlotsForLevel } from './spellData';
-
+ 
 export default function HUD({ character, session }) {
   if (!character) return null;
-
+ 
   const hpPct = Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100));
   const hpBarClass = hpPct > 60 ? 'hp-bar-high' : hpPct > 30 ? 'hp-bar-mid' : 'hp-bar-low';
-
-  const xpThresholds = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000];
+ 
+  const xpThresholds = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
   const currentXP = character.xp || 0;
   const level = character.level || 1;
   const xpForNext = xpThresholds[level] || xpThresholds[xpThresholds.length - 1];
   const xpForCurrent = xpThresholds[level - 1] || 0;
   const xpPct = xpForNext > xpForCurrent ? Math.min(100, ((currentXP - xpForCurrent) / (xpForNext - xpForCurrent)) * 100) : 100;
-
+ 
   const initials = character.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
-
+ 
   // Spell slot tracking
   const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Artificer'];
   const isCaster = SPELLCASTING_CLASSES.includes(character.class);
@@ -26,7 +26,7 @@ export default function HUD({ character, session }) {
   const currentSlots = character.spell_slots || {};
   const totalSlotsUsed = Object.keys(currentSlots).reduce((sum, key) => sum + (currentSlots[key] || 0), 0);
   const totalSlotsMax = slotMaxArr.reduce((sum, val) => sum + val, 0);
-
+ 
   return (
     <div className="glass-panel border-b border-gold/30 px-4 py-2.5 relative overflow-hidden flex-shrink-0"
       style={{ borderBottom: '1px solid rgba(201,169,110,0.25)' }}>
@@ -34,7 +34,7 @@ export default function HUD({ character, session }) {
       <div className="absolute top-0 left-0 right-0 h-px" style={{
         background: 'linear-gradient(90deg, transparent, rgba(201,169,110,0.5) 30%, rgba(201,169,110,0.5) 70%, transparent)'
       }} />
-
+ 
       <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-3 md:gap-5">
         {/* Character portrait + name */}
         <div className="flex items-center gap-3 min-w-0">
@@ -64,10 +64,10 @@ export default function HUD({ character, session }) {
             </div>
           </div>
         </div>
-
+ 
         {/* Divider */}
         <div className="hidden md:block w-px h-8 self-center" style={{ background: 'rgba(180,140,90,0.2)' }} />
-
+ 
         {/* HP Bar */}
         <div className="flex items-center gap-2">
           <Heart className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#dc2626' }} />
@@ -87,7 +87,7 @@ export default function HUD({ character, session }) {
             </div>
           </div>
         </div>
-
+ 
         {/* XP Bar */}
         <div className="flex items-center gap-2 hidden sm:flex">
           <Star className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#d97706' }} />
@@ -104,14 +104,14 @@ export default function HUD({ character, session }) {
             </div>
           </div>
         </div>
-
+ 
         {/* AC Badge */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg stat-box">
           <Shield className="w-3.5 h-3.5" style={{ color: '#93c5fd' }} />
           <span className="font-bold text-sm font-fantasy" style={{ color: '#93c5fd' }}>{character.armor_class}</span>
           <span className="text-xs" style={{ color: 'rgba(147,197,253,0.5)', fontFamily: 'EB Garamond, serif' }}>AC</span>
         </div>
-
+ 
         {/* Spell Slots (if caster) */}
         {isCaster && totalSlotsMax > 0 && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg stat-box">
@@ -122,7 +122,7 @@ export default function HUD({ character, session }) {
             <span className="text-xs" style={{ color: 'rgba(167,139,250,0.5)', fontFamily: 'EB Garamond, serif' }}>Slots</span>
           </div>
         )}
-
+ 
         {/* Location & Time */}
         {session && (
           <div className="flex items-center gap-3 ml-auto" style={{ color: 'rgba(201,169,110,0.45)', fontFamily: 'EB Garamond, serif', fontSize: '0.75rem' }}>
@@ -136,7 +136,7 @@ export default function HUD({ character, session }) {
             </span>
           </div>
         )}
-
+ 
         {/* Active Conditions */}
         {(character.conditions || []).length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
@@ -153,7 +153,7 @@ export default function HUD({ character, session }) {
           </div>
         )}
       </div>
-
+ 
       {/* Bottom rune line */}
       <div className="absolute bottom-0 left-0 right-0 h-px" style={{
         background: 'linear-gradient(90deg, transparent, rgba(201,169,110,0.2) 40%, rgba(201,169,110,0.2) 60%, transparent)'
