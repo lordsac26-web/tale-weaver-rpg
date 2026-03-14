@@ -1,32 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Skull, Sparkles, X } from 'lucide-react';
-
+ 
 export default function DeathModal({ character, onMiracle, onDeath, onClose }) {
   const [attempting, setAttempting] = useState(false);
   const [miracleResult, setMiracleResult] = useState(null);
-
+  const timeoutsRef = useRef([]);
+ 
+  const clearTimeouts = () => {
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
+  };
+ 
   const attemptMiracle = async () => {
     setAttempting(true);
     // 5% chance of miracle
     const success = Math.random() < 0.05;
-    
-    setTimeout(() => {
+ 
+    const t1 = setTimeout(() => {
       setMiracleResult(success);
       setAttempting(false);
-      
+ 
       if (success) {
-        setTimeout(() => {
-          onMiracle();
-        }, 2000);
-      } else {
-        setTimeout(() => {
-          onDeath();
-        }, 2000);
+        const t2 = setTimeout(() => { onMiracle(); }, 2000);
+        timeoutsRef.current.push(t2);
       }
+      // Failure: do NOT auto-navigate — player must confirm via the button shown below
     }, 2000);
+    timeoutsRef.current.push(t1);
   };
-
+ 
+  const handleManualDeath = () => {
+    clearTimeouts();
+    onDeath();
+  };
+ 
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -61,7 +69,7 @@ export default function DeathModal({ character, onMiracle, onDeath, onClose }) {
             <X className="w-4 h-4" />
           </button>
         )}
-
+ 
         <div className="p-8 text-center">
           {/* Skull Icon */}
           <motion.div
@@ -77,7 +85,7 @@ export default function DeathModal({ character, onMiracle, onDeath, onClose }) {
             }}>
             <Skull className="w-16 h-16" style={{ color: '#dc2626' }} />
           </motion.div>
-
+ 
           {/* Title */}
           <motion.h2
             initial={{ opacity: 0, y: -10 }}
@@ -87,7 +95,7 @@ export default function DeathModal({ character, onMiracle, onDeath, onClose }) {
             style={{ color: '#fca5a5' }}>
             You Have Fallen
           </motion.h2>
-
+ 
           {/* Message based on state */}
           {miracleResult === null && !attempting && (
             <>
@@ -104,7 +112,7 @@ export default function DeathModal({ character, onMiracle, onDeath, onClose }) {
                 <br /><br />
                 Will you cry out for a miracle, or accept your fate?
               </motion.p>
-
+ 
               {/* Action Buttons */}
               <div className="space-y-3">
                 <motion.button
@@ -125,12 +133,12 @@ export default function DeathModal({ character, onMiracle, onDeath, onClose }) {
                   Pray for a Miracle
                   <span className="block text-xs mt-1 opacity-60">(5% chance)</span>
                 </motion.button>
-
+ 
                 <motion.button
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.7 }}
-                  onClick={onDeath}
+                  onClick={handleManualDeath}
                   className="w-full py-4 rounded-xl font-fantasy font-bold text-base transition-all"
                   style={{
                     background: 'rgba(30,10,10,0.6)',
@@ -146,7 +154,7 @@ export default function DeathModal({ character, onMiracle, onDeath, onClose }) {
               </div>
             </>
           )}
-
+ 
           {/* Attempting Miracle */}
           {attempting && (
             <motion.div
@@ -166,7 +174,7 @@ export default function DeathModal({ character, onMiracle, onDeath, onClose }) {
               </p>
             </motion.div>
           )}
-
+ 
           {/* Miracle Success */}
           {miracleResult === true && (
             <motion.div
@@ -194,7 +202,7 @@ export default function DeathModal({ character, onMiracle, onDeath, onClose }) {
               </p>
             </motion.div>
           )}
-
+ 
           {/* Miracle Failure */}
           {miracleResult === false && (
             <motion.div
@@ -204,12 +212,25 @@ export default function DeathModal({ character, onMiracle, onDeath, onClose }) {
               <h3 className="text-2xl font-fantasy font-bold mb-3" style={{ color: '#dc2626' }}>
                 Your Cries Ring Hollow
               </h3>
-              <p className="text-base mb-4" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'IM Fell English, serif' }}>
+              <p className="text-base mb-6" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'IM Fell English, serif' }}>
                 The darkness claims you. Your tale ends here...
               </p>
-              <p className="text-sm italic" style={{ color: 'rgba(180,100,100,0.5)' }}>
-                Returning to the tavern...
-              </p>
+              <motion.button
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+                onClick={handleManualDeath}
+                className="w-full py-3 rounded-xl font-fantasy font-bold text-sm transition-all"
+                style={{
+                  background: 'rgba(30,10,10,0.7)',
+                  border: '1px solid rgba(180,50,50,0.4)',
+                  color: 'rgba(252,165,165,0.8)',
+                  letterSpacing: '0.05em',
+                }}
+                whileHover={{ scale: 1.02, borderColor: 'rgba(220,80,80,0.6)' }}
+                whileTap={{ scale: 0.98 }}>
+                Return to the Tavern
+              </motion.button>
             </motion.div>
           )}
         </div>
