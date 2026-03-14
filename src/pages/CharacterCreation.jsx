@@ -75,12 +75,22 @@ export default function CharacterCreation() {
   const updateDerivedStats = (char) => {
     const conMod = calcStatMod(char.constitution);
     const dexMod = calcStatMod(char.dexterity);
+    const wisMod = calcStatMod(char.wisdom);
     const profBonus = PROFICIENCY_BY_LEVEL[(char.level || 1) - 1] || 2;
     const hp = calcHP(char.class, char.level || 1, conMod);
+    
+    // Calculate AC based on class — Unarmored Defense for Monk/Barbarian
+    let armorClass = 10 + dexMod;
+    if (char.class === 'Monk') {
+      armorClass = 10 + dexMod + wisMod; // Monk: 10 + DEX + WIS
+    } else if (char.class === 'Barbarian') {
+      armorClass = 10 + dexMod + conMod; // Barbarian: 10 + DEX + CON
+    }
+    
     return {
       ...char,
       hp_max: hp, hp_current: hp,
-      armor_class: 10 + dexMod,
+      armor_class: armorClass,
       initiative: dexMod,
       speed: RACES[char.race]?.speed || 30,
       proficiency_bonus: profBonus

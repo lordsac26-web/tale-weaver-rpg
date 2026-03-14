@@ -7,7 +7,9 @@ export const RACES = {
     speed: 30, size: 'Medium',
     languages: ['Common', 'one extra language'],
     description: 'Versatile and ambitious, humans excel at everything. Their extra feat and skill make them exceptional generalists.',
-    subraces: [],
+    subraces: [
+      { name: 'Variant Human', stat_bonuses: {}, stat_choices: 2, traits: ['Two +1 ability score increases of your choice', 'One bonus skill proficiency', 'One feat at 1st level'], description: 'Variant rule: Choose two different +1 ability score increases, gain one extra skill proficiency, and select one feat at 1st level.' },
+    ],
   },
   Elf: {
     traits: ['Darkvision (60 ft)', 'Fey Ancestry', 'Trance', 'Keen Senses (Perception proficiency)', 'Trance (4hr rest)'],

@@ -39,7 +39,7 @@ export default function StepGenderRace({ character, set }) {
         <p className="text-amber-400/50 text-sm mb-4">Your heritage shapes your natural abilities and traits.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {Object.entries(RACES).map(([race, data]) => (
-            <button key={race} onClick={() => set('race', race)}
+            <button key={race} onClick={() => { set('race', race); set('subrace', ''); }}
               className={`p-4 rounded-xl border text-left transition-all ${character.race === race ? 'border-amber-500 bg-amber-900/30' : 'border-slate-700/50 bg-slate-800/30 hover:border-amber-700/50'}`}>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xl">{RACE_ICONS[race] || '👤'}</span>
@@ -52,6 +52,11 @@ export default function StepGenderRace({ character, set }) {
                     {STAT_LABELS[stat]} {val > 0 ? '+' : ''}{val}
                   </span>
                 ))}
+                {data.stat_choices > 0 && (
+                  <span className="bg-purple-900/40 text-purple-300 text-xs px-2 py-0.5 rounded-full">
+                    +{data.stat_choices} choice{data.stat_choices > 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
               <div className="flex flex-wrap gap-1">
                 {data.traits.slice(0, 3).map(t => (
@@ -61,6 +66,22 @@ export default function StepGenderRace({ character, set }) {
             </button>
           ))}
         </div>
+
+        {/* Subrace selection */}
+        {character.race && RACES[character.race]?.subraces?.length > 0 && (
+          <div className="mt-4">
+            <label className="text-amber-400/80 text-xs uppercase tracking-widest mb-2 block">Subrace (optional)</label>
+            <div className="flex flex-wrap gap-2">
+              {RACES[character.race].subraces.map(sub => (
+                <button key={sub.name} onClick={() => set('subrace', character.subrace === sub.name ? '' : sub.name)}
+                  className={`px-3 py-2 rounded-lg text-sm border transition-all ${character.subrace === sub.name ? 'border-emerald-500 bg-emerald-900/30 text-emerald-200' : 'border-slate-700/50 bg-slate-800/30 text-slate-400 hover:border-emerald-700/50'}`}>
+                  <div className="font-medium mb-0.5">{sub.name}</div>
+                  <div className="text-xs opacity-70">{sub.description || sub.traits.slice(0, 2).join(' · ')}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

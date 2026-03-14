@@ -60,7 +60,27 @@ export default function StepAbilityScores({ character, set }) {
     set(stat, STANDARD_ARRAY[idx]);
   };
 
-  const raceBonuses = character.race ? (RACES[character.race]?.stat_bonuses || {}) : {};
+  // Get racial bonuses including subrace
+  const getRacialBonuses = () => {
+    const race = RACES[character.race];
+    if (!race) return {};
+    
+    let bonuses = { ...race.stat_bonuses };
+    
+    // Apply subrace bonuses
+    if (character.subrace && race.subraces?.length > 0) {
+      const subrace = race.subraces.find(s => s.name === character.subrace);
+      if (subrace?.stat_bonuses) {
+        Object.entries(subrace.stat_bonuses).forEach(([stat, val]) => {
+          bonuses[stat] = (bonuses[stat] || 0) + val;
+        });
+      }
+    }
+    
+    return bonuses;
+  };
+  
+  const raceBonuses = getRacialBonuses();
   const totalPoints = STATS.reduce((t, s) => t + (COST[character[s]] || 0), 0);
 
   return (
