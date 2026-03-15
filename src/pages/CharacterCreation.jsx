@@ -10,7 +10,7 @@ import {
   PROFICIENCY_BY_LEVEL
 } from '@/components/game/gameData';
 import { getSpellSlotsForLevel } from '@/components/game/spellData';
-
+ 
 import StepGenderRace from '@/components/creation/StepGenderRace';
 import StepClassInfo from '@/components/creation/StepClassInfo';
 import StepAbilityScores from '@/components/creation/StepAbilityScores';
@@ -21,7 +21,7 @@ import StepBackstory from '@/components/creation/StepBackstory';
 import StepEquipmentSpells from '@/components/creation/StepEquipmentSpells';
 import StepFeats from '@/components/creation/StepFeats';
 import StepReview from '@/components/creation/StepReview';
-
+ 
 const STEPS = [
   { id: 'identity', label: 'Identity', icon: '👤' },
   { id: 'class', label: 'Class', icon: '⚔️' },
@@ -34,16 +34,16 @@ const STEPS = [
   { id: 'feats', label: 'Feats', icon: '⭐' },
   { id: 'review', label: 'Review', icon: '✅' },
 ];
-
+ 
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
-
+ 
 export default function CharacterCreation() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [generatingBackstory, setGeneratingBackstory] = useState(false);
   const [backstoryPrompt, setBackstoryPrompt] = useState('');
-
+ 
   const [character, setCharacter] = useState({
     name: '', gender: 'male', race: '', subrace: '', class: '', subclass: '', level: 1,
     background: '', backstory: '', alignment: 'True Neutral',
@@ -52,19 +52,19 @@ export default function CharacterCreation() {
     gold: 0, silver: 0, copper: 0, xp: 0, spell_slots: {}, spells_known: [],
     portrait: '', chosen_stat_bonuses: [] // For races with stat_choices (e.g., Variant Human)
   });
-
+ 
   const set = (key, val) => setCharacter(prev => ({ ...prev, [key]: val }));
-
+ 
   const rollAllStats = () => {
     const updates = {};
     STATS.forEach(stat => { updates[stat] = roll4d6DropLowest(); });
     setCharacter(prev => ({ ...prev, ...updates }));
   };
-
+ 
   const pointBuyStats = () => {
     setCharacter(prev => ({ ...prev, strength: 8, dexterity: 8, constitution: 8, intelligence: 8, wisdom: 8, charisma: 8 }));
   };
-
+ 
   const applyRacialBonuses = (char) => {
     const race = RACES[char.race];
     if (!race) return char;
@@ -99,32 +99,56 @@ export default function CharacterCreation() {
     STATS.forEach(stat => { updated[stat] = (updated[stat] || 10) + (bonuses[stat] || 0); });
     return updated;
   };
-
+ 
   const updateDerivedStats = (char) => {
     const conMod = calcStatMod(char.constitution);
     const dexMod = calcStatMod(char.dexterity);
     const wisMod = calcStatMod(char.wisdom);
     const profBonus = PROFICIENCY_BY_LEVEL[(char.level || 1) - 1] || 2;
     const hp = calcHP(char.class, char.level || 1, conMod);
-    
-    // Calculate AC based on class — Unarmored Defense for Monk/Barbarian
+ 
+    // ── Armor Class ────────────────────────────────────────────────────────
+    // Priority: class Unarmored Defense > racial Natural Armor > default 10+DEX
     let armorClass = 10 + dexMod;
+ 
     if (char.class === 'Monk') {
-      armorClass = 10 + dexMod + wisMod; // Monk: 10 + DEX + WIS
+      // Unarmored Defense: 10 + DEX + WIS (PHB p.78)
+      armorClass = 10 + dexMod + wisMod;
     } else if (char.class === 'Barbarian') {
-      armorClass = 10 + dexMod + conMod; // Barbarian: 10 + DEX + CON
+      // Unarmored Defense: 10 + DEX + CON (PHB p.48)
+      armorClass = 10 + dexMod + conMod;
+    } else if (char.race === 'Lizardfolk') {
+      // Natural Armor: 13 + DEX mod (VGTM p.113)
+      armorClass = 13 + dexMod;
+    } else if (char.race === 'Tortle') {
+      // Natural Armor: 17, no DEX bonus (Tortle Package p.2)
+      armorClass = 17;
+    } else if (char.race === 'Warforged') {
+      // Integrated Protection: +1 to AC from any armor category (ERLW p.36)
+      // Unarmored base is 11 + DEX + proficiency (set conservatively to 11+DEX)
+      armorClass = 11 + dexMod;
     }
-    
+ 
+    // ── Saving Throw Proficiencies ─────────────────────────────────────────
+    // Write class saving throw proficiencies so CharacterSheetFull can read
+    // them correctly from character.saving_throws (PHB each class section)
+    const classSaves = CLASSES[char.class]?.saves || [];
+    const ALL_STATS = ['strength','dexterity','constitution','intelligence','wisdom','charisma'];
+    const saving_throws = {};
+    ALL_STATS.forEach(s => { saving_throws[s] = classSaves.includes(s); });
+ 
     return {
       ...char,
-      hp_max: hp, hp_current: hp,
+      hp_max: hp,
+      hp_current: hp,
       armor_class: armorClass,
       initiative: dexMod,
       speed: RACES[char.race]?.speed || 30,
-      proficiency_bonus: profBonus
+      proficiency_bonus: profBonus,
+      saving_throws,
     };
   };
-
+ 
   const buildClassFeatures = (char) => {
     const classData = CLASSES[char.class];
     const features = [];
@@ -133,14 +157,14 @@ export default function CharacterCreation() {
     });
     return { ...char, features };
   };
-
+ 
   const buildSpellSlots = (char) => {
     const slots = getSpellSlotsForLevel(char.class, char.level || 1);
     const spell_slots = {};
     slots.forEach((max, i) => { if (max > 0) spell_slots[`level_${i + 1}`] = 0; }); // track used slots (start at 0 used)
     return { ...char, spell_slots };
   };
-
+ 
   const handleGenerateBackstory = async () => {
     setGeneratingBackstory(true);
     const result = await base44.functions.invoke('generateBackstory', {
@@ -152,7 +176,7 @@ export default function CharacterCreation() {
     if (result.data?.backstory) set('backstory', result.data.backstory);
     setGeneratingBackstory(false);
   };
-
+ 
   const handleSave = async () => {
     setSaving(true);
     let finalChar = applyRacialBonuses(character);
@@ -173,9 +197,9 @@ export default function CharacterCreation() {
     const saved = await base44.entities.Character.create(finalChar);
     navigate(createPageUrl('NewGame') + `?character_id=${saved.id}`);
   };
-
+ 
   const reviewChar = applyRacialBonuses(updateDerivedStats(character));
-
+ 
   const canProceed = () => {
     switch (step) {
       case 0: {
@@ -198,11 +222,11 @@ export default function CharacterCreation() {
       default: return true;
     }
   };
-
+ 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-amber-100">
       <div className="fixed inset-0 bg-gradient-to-br from-[#0a0a0f] via-[#0d0a1a] to-[#0a0a0f] pointer-events-none" />
-
+ 
       <div className="relative z-10 max-w-5xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
@@ -221,7 +245,7 @@ export default function CharacterCreation() {
             </div>
           </div>
         </div>
-
+ 
         {/* Step indicator */}
         <div className="flex gap-1.5 mb-8 overflow-x-auto pb-1">
           {STEPS.map((s, i) => (
@@ -238,7 +262,7 @@ export default function CharacterCreation() {
             </button>
           ))}
         </div>
-
+ 
         {/* Step Content */}
         <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 md:p-8 min-h-[420px]">
           {step === 0 && <StepGenderRace character={character} set={set} />}
@@ -256,14 +280,14 @@ export default function CharacterCreation() {
           {step === 8 && <StepFeats character={character} set={set} />}
           {step === 9 && <StepReview character={reviewChar} />}
         </div>
-
+ 
         {/* Navigation */}
         <div className="flex justify-between items-center mt-6">
           <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-800"
             onClick={() => setStep(s => s - 1)} disabled={step === 0}>
             <ChevronLeft className="w-4 h-4 mr-1" /> Back
           </Button>
-
+ 
           <div className="flex items-center gap-2">
             {step === 5 && (
               <Button variant="ghost" className="text-slate-500 hover:text-slate-300 text-sm"
