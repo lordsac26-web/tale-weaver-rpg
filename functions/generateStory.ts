@@ -23,14 +23,14 @@ Deno.serve(async (req) => {
 
     const { session_id, action, choice_index, custom_input } = await req.json();
 
-  // Load session + character
-  const session = await base44.asServiceRole.entities.GameSession.get(session_id);
+  // Load session + character (user-scoped since they belong to the user)
+  const session = await base44.entities.GameSession.get(session_id);
   if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
 
-  const character = await base44.asServiceRole.entities.Character.get(session.character_id);
+  const character = await base44.entities.Character.get(session.character_id);
 
   // Only load monsters — cap at 8 to reduce prompt size & CPU time
-  const monsters = await base44.asServiceRole.entities.Monster.list('-created_date', 8);
+  const monsters = await base44.entities.Monster.list('-created_date', 8);
   const monsterNames = monsters.map(m =>
     `${m.name} (CR ${m.challenge}, AC ${m.armor_class}, HP ${m.hit_points}, ATK +${m.attack_bonus || 3}, DMG ${m.damage_dice || '1d6'}+${m.damage_bonus || 2}, XP ${m.xp || 50})`
   ).join('; ');
@@ -202,11 +202,11 @@ If it's a combat event, use the enemy schema with real monster stats.`;
     if (result.combat_trigger)    updateData.in_combat = true;
 
     // Single DB write for session
-    await base44.asServiceRole.entities.GameSession.update(session_id, updateData);
+    await base44.entities.GameSession.update(session_id, updateData);
 
     // Award XP using already-loaded character (avoids extra DB round-trip)
     if (result.xp_earned && character) {
-      await base44.asServiceRole.entities.Character.update(character.id, {
+      await base44.entities.Character.update(character.id, {
         xp: (character.xp || 0) + result.xp_earned
       });
     }
