@@ -6,12 +6,12 @@ import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_
 import { base44 } from '@/api/base44Client';
 import SpellbookTab from './SpellbookTab';
 import { SkillTooltip, FeatureTooltip, ConditionTooltip } from './GameTooltip';
-
+ 
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 const STAT_ICONS = { strength: '💪', dexterity: '🏹', constitution: '❤️', intelligence: '📚', wisdom: '🔮', charisma: '✨' };
-
+ 
 // Spell slots by class and level (simplified PHB table)
 const SPELL_SLOTS_TABLE = {
   Wizard:    [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]],
@@ -25,7 +25,7 @@ const SPELL_SLOTS_TABLE = {
   Artificer: [[0],[2],[3],[3,0],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]],
 };
 const SLOT_LEVEL_NAMES = ['1st','2nd','3rd','4th','5th','6th','7th','8th','9th'];
-
+ 
 const EQUIP_SLOT_META = {
   head:      { label: 'Head',       icon: '🪖' },
   neck:      { label: 'Neck',       icon: '📿' },
@@ -40,7 +40,7 @@ const EQUIP_SLOT_META = {
   cloak:     { label: 'Cloak',      icon: '🧣' },
   trinket:   { label: 'Trinket',    icon: '🔮' },
 };
-
+ 
 const TABS = [
   { id: 'stats',      label: 'Stats',      icon: '⚔️' },
   { id: 'skills',     label: 'Skills',     icon: '🎯' },
@@ -50,23 +50,23 @@ const TABS = [
   { id: 'conditions', label: 'Status',     icon: '✨' },
   { id: 'features',   label: 'Features',   icon: '📜' },
 ];
-
+ 
 export default function CharacterSheet({ character: initialCharacter, onClose, onCharacterUpdate }) {
   const [tab, setTab] = useState('stats');
   const [character, setCharacter] = useState(initialCharacter);
   if (!character) return null;
-
+ 
   const isCaster = SPELLCASTING_CLASSES.includes(character.class);
   const profBonus = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
   const visibleTabs = TABS.filter(t => t.id !== 'spells' || isCaster);
-
+ 
   const handleUpdateCharacter = async (updates) => {
     const updated = { ...character, ...updates };
     setCharacter(updated);
     await base44.entities.Character.update(character.id, updates);
     onCharacterUpdate?.(updated);
   };
-
+ 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 md:p-4"
       style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(8px)' }}
@@ -83,10 +83,10 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
           boxShadow: '0 0 60px rgba(0,0,0,0.8), 0 0 30px rgba(201,169,110,0.08)',
         }}
         onClick={e => e.stopPropagation()}>
-
+ 
         {/* Top accent */}
         <div className="h-px w-full flex-shrink-0" style={{ background: 'linear-gradient(90deg, transparent, rgba(201,169,110,0.7) 30%, rgba(201,169,110,0.7) 70%, transparent)' }} />
-
+ 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 flex-shrink-0"
           style={{ background: 'linear-gradient(90deg, rgba(60,40,8,0.5), rgba(20,13,4,0.4))', borderBottom: '1px solid rgba(180,140,90,0.15)' }}>
@@ -112,10 +112,10 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
             <X className="w-5 h-5" />
           </button>
         </div>
-
+ 
         {/* Quick Stats bar */}
         <QuickStatsBar character={character} />
-
+ 
         {/* Tabs */}
         <div className="flex flex-shrink-0 overflow-x-auto"
           style={{ borderBottom: '1px solid rgba(180,140,90,0.12)', background: 'rgba(8,5,2,0.7)' }}>
@@ -132,7 +132,7 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
             </button>
           ))}
         </div>
-
+ 
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto p-4">
           <AnimatePresence mode="wait">
@@ -147,13 +147,13 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
             </motion.div>
           </AnimatePresence>
         </div>
-
+ 
         <div className="h-px w-full flex-shrink-0" style={{ background: 'linear-gradient(90deg, transparent, rgba(201,169,110,0.3) 40%, rgba(201,169,110,0.3) 60%, transparent)' }} />
       </motion.div>
     </div>
   );
 }
-
+ 
 // ─── Quick Stats Bar ───────────────────────────────────────────────────────────
 function QuickStatsBar({ character }) {
   const hpPct = character.hp_max ? Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100)) : 100;
@@ -177,7 +177,7 @@ function QuickStatsBar({ character }) {
     </div>
   );
 }
-
+ 
 // ─── Stats Tab ─────────────────────────────────────────────────────────────────
 function StatsTab({ character, profBonus }) {
   return (
@@ -229,7 +229,7 @@ function StatsTab({ character, profBonus }) {
     </div>
   );
 }
-
+ 
 // ─── Skills Tab ────────────────────────────────────────────────────────────────
 function SkillsTab({ character, profBonus }) {
   return (
@@ -263,30 +263,30 @@ function SkillsTab({ character, profBonus }) {
     </div>
   );
 }
-
+ 
 // ─── Combat Tab (Spell Slots + Equipped) ──────────────────────────────────────
 function CombatTab({ character, profBonus, isCaster, onUpdate }) {
   const equipped = character.equipped || {};
-
+ 
   // Spell slots
   const slotTable = isCaster ? SPELL_SLOTS_TABLE[character.class] : null;
   const maxSlots = slotTable ? (slotTable[(character.level || 1) - 1] || []) : [];
   const usedSlots = character.spell_slots || {};
-
+ 
   const toggleSlot = (level, slotIdx) => {
     const levelKey = `level_${level + 1}`;
     const current = usedSlots[levelKey] || 0;
     const newUsed = slotIdx < current ? slotIdx : slotIdx + 1;
     onUpdate({ spell_slots: { ...usedSlots, [levelKey]: Math.min(newUsed, maxSlots[level]) } });
   };
-
+ 
   const restoreAllSlots = () => {
     onUpdate({ spell_slots: {} });
   };
-
+ 
   const equippedSlots = Object.entries(EQUIP_SLOT_META).filter(([slot]) => equipped[slot]);
   const emptySlots = Object.entries(EQUIP_SLOT_META).filter(([slot]) => !equipped[slot]);
-
+ 
   return (
     <div className="space-y-4">
       {/* Equipped Items */}
@@ -323,7 +323,7 @@ function CombatTab({ character, profBonus, isCaster, onUpdate }) {
           </div>
         )}
       </Section>
-
+ 
       {/* Spell Slots */}
       {isCaster && maxSlots.length > 0 && (
         <Section title="Spell Slots" icon="🔮" action={<button onClick={restoreAllSlots} className="text-xs px-2 py-0.5 rounded-md font-fantasy transition-all" style={{ background: 'rgba(40,25,8,0.6)', border: '1px solid rgba(201,169,110,0.2)', color: 'rgba(201,169,110,0.6)' }}>Long Rest</button>}>
@@ -360,7 +360,7 @@ function CombatTab({ character, profBonus, isCaster, onUpdate }) {
           </div>
         </Section>
       )}
-
+ 
       {/* Combat Stats */}
       <Section title="Combat Statistics" icon="⚔️">
         <div className="grid grid-cols-3 gap-2">
@@ -368,9 +368,17 @@ function CombatTab({ character, profBonus, isCaster, onUpdate }) {
             { label: 'Initiative', val: calcModDisplay(calcStatMod(character.dexterity || 10)), color: '#fde68a' },
             { label: 'Prof Bonus', val: `+${profBonus}`, color: '#c9a96e' },
             { label: 'Speed', val: `${character.speed || 30}ft`, color: '#86efac' },
-            { label: 'STR Save', val: calcModDisplay(calcStatMod(character.strength||10) + (CLASSES[character.class]?.saves?.includes('strength') ? profBonus : 0)), color: '#fca5a5' },
-            { label: 'DEX Save', val: calcModDisplay(calcStatMod(character.dexterity||10) + (CLASSES[character.class]?.saves?.includes('dexterity') ? profBonus : 0)), color: '#fca5a5' },
-            { label: 'CON Save', val: calcModDisplay(calcStatMod(character.constitution||10) + (CLASSES[character.class]?.saves?.includes('constitution') ? profBonus : 0)), color: '#fca5a5' },
+            // All 6 saving throws — read from character.saving_throws (set at creation
+            // from class proficiencies, and updated by feats like Resilient).
+            // Fall back to CLASSES data for characters created before this fix.
+            ...['strength','dexterity','constitution','intelligence','wisdom','charisma'].map(stat => {
+              const abbr = { strength:'STR', dexterity:'DEX', constitution:'CON', intelligence:'INT', wisdom:'WIS', charisma:'CHA' }[stat];
+              const fromChar = character.saving_throws?.[stat];
+              const fromClass = CLASSES[character.class]?.saves?.includes(stat);
+              const isProficient = fromChar ?? fromClass;
+              const saveVal = calcStatMod(character[stat] || 10) + (isProficient ? profBonus : 0);
+              return { label: `${abbr} Save`, val: calcModDisplay(saveVal), color: isProficient ? '#86efac' : '#fca5a5' };
+            }),
           ].map(({ label, val, color }) => (
             <div key={label} className="text-center py-2 rounded-lg stat-box">
               <div className="font-fantasy font-bold text-sm" style={{ color }}>{val}</div>
@@ -382,16 +390,16 @@ function CombatTab({ character, profBonus, isCaster, onUpdate }) {
     </div>
   );
 }
-
+ 
 // ─── Conditions Tab ────────────────────────────────────────────────────────────
 function ConditionsTab({ character, onUpdate }) {
   const conditions = character.conditions || [];
   const modifiers = character.active_modifiers || [];
-
+ 
   const removeCondition = (idx) => {
     onUpdate({ conditions: conditions.filter((_, i) => i !== idx) });
   };
-
+ 
   return (
     <div className="space-y-4">
       <Section title="Active Conditions" icon="⚡">
@@ -434,7 +442,7 @@ function ConditionsTab({ character, onUpdate }) {
           </div>
         )}
       </Section>
-
+ 
       <Section title="Active Buffs & Modifiers" icon="✨">
         {modifiers.length === 0 ? (
           <div className="text-center py-4 text-sm" style={{ color: 'rgba(180,140,90,0.3)', fontFamily: 'EB Garamond, serif' }}>No active buffs</div>
@@ -456,7 +464,7 @@ function ConditionsTab({ character, onUpdate }) {
           </div>
         )}
       </Section>
-
+ 
       {/* Death Saves */}
       {(character.death_saves_success > 0 || character.death_saves_failure > 0 || character.hp_current <= 0) && (
         <Section title="Death Saves" icon="💀">
@@ -485,7 +493,7 @@ function ConditionsTab({ character, onUpdate }) {
     </div>
   );
 }
-
+ 
 // ─── Features Tab ─────────────────────────────────────────────────────────────
 function FeaturesTab({ character }) {
   const [expanded, setExpanded] = useState({});
@@ -496,7 +504,7 @@ function FeaturesTab({ character }) {
       feats.forEach(f => classFeatures.push({ name: f, level: parseInt(lvl) }));
     }
   });
-
+ 
   return (
     <div className="space-y-4">
       {/* Character Features */}
@@ -519,7 +527,7 @@ function FeaturesTab({ character }) {
           </div>
         )}
       </Section>
-
+ 
       {/* Class Features by Level */}
       {classFeatures.length > 0 && (
         <Section title={`${character.class} Class Features`} icon="📖">
@@ -539,7 +547,7 @@ function FeaturesTab({ character }) {
           </div>
         </Section>
       )}
-
+ 
       {/* Feats */}
       {(character.feats || []).length > 0 && (
         <Section title="Feats" icon="🏆">
@@ -558,7 +566,7 @@ function FeaturesTab({ character }) {
           </div>
         </Section>
       )}
-
+ 
       {/* Backstory */}
       {character.backstory && (
         <Section title="Backstory" icon="📜">
@@ -571,7 +579,7 @@ function FeaturesTab({ character }) {
     </div>
   );
 }
-
+ 
 // ─── Section Helper ────────────────────────────────────────────────────────────
 function Section({ title, icon, children, action }) {
   return (
