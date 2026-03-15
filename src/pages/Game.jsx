@@ -82,9 +82,9 @@ export default function Game() {
       if (logs[0]?.is_active) setCombat(logs[0]);
     }
     
-    // Check if character is at 0 HP and in combat with active death saves
-    if (loadedChar?.hp_current === 0 && (loadedChar.death_saves_success > 0 || loadedChar.death_saves_failure > 0) && (loadedChar.death_saves_success < 3 && loadedChar.death_saves_failure < 3)) {
-      // Character is making death saves - show the modal
+    // If character is at 0 HP on load, show death saves modal immediately
+    // (covers both fresh 0HP and mid-save-sequence resumes)
+    if (loadedChar?.hp_current === 0) {
       setShowDeathSaves(true);
     }
     
