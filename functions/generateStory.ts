@@ -30,10 +30,52 @@ Deno.serve(async (req) => {
   const character = await base44.entities.Character.get(session.character_id);
 
   // Only load monsters — cap at 8 to reduce prompt size & CPU time
-  const monsters = await base44.entities.Monster.list('-created_date', 8);
-  const monsterNames = monsters.map(m =>
-    `${m.name} (CR ${m.challenge}, AC ${m.armor_class}, HP ${m.hit_points}, ATK +${m.attack_bonus || 3}, DMG ${m.damage_dice || '1d6'}+${m.damage_bonus || 2}, XP ${m.xp || 50})`
-  ).join('; ');
+  // Filter by appropriate CR range for the character's level
+  const maxCR = Math.max(1, (character?.level || 1));
+  const monsters = await base44.entities.Monster.list('-created_date', 50);
+  
+  // Parse CR from challenge string (e.g., "1/4", "1", "2")
+  const parseCR = (crStr) => {
+    if (!crStr) return 0;
+    if (crStr.includes('/')) {
+      const [num, denom] = crStr.split('/');
+      return parseFloat(num) / parseFloat(denom);
+    }
+    return parseFloat(crStr) || 0;
+  };
+
+  // Parse HP average from strings like "11 (2d8 + 2)"
+  const parseHP = (hpStr) => {
+    if (typeof hpStr === 'number') return hpStr;
+    if (!hpStr) return 10;
+    const match = hpStr.match(/^(\d+)/);
+    return match ? parseInt(match[1]) : 10;
+  };
+
+  // Parse AC from strings like "13 (natural armor)"
+  const parseAC = (acStr) => {
+    if (typeof acStr === 'number') return acStr;
+    if (!acStr) return 10;
+    const match = acStr.match(/^(\d+)/);
+    return match ? parseInt(match[1]) : 10;
+  };
+
+  // Filter monsters appropriate for this level (CR 0 to character level)
+  const appropriateMonsters = monsters
+    .filter(m => {
+      const cr = parseCR(m.challenge);
+      return cr >= 0 && cr <= maxCR;
+    })
+    .slice(0, 12);
+
+  const monsterNames = appropriateMonsters.map(m => {
+    const cr = parseCR(m.challenge);
+    const hp = parseHP(m.hit_points);
+    const ac = parseAC(m.armor_class);
+    const xpByCR = { 0: 10, 0.125: 25, 0.25: 50, 0.5: 100, 1: 200, 2: 450, 3: 700, 4: 1100, 5: 1800, 6: 2300, 7: 2900, 8: 3900, 9: 5000, 10: 5900 };
+    const xp = xpByCR[cr] || Math.floor(cr * 200);
+    return `${m.name} (CR ${m.challenge}, AC ${ac}, HP ${hp}, XP ${xp})`;
+  }).join('; ');
 
   // Build compact character summary
   const charSummary = character ? `${character.name}, Lvl ${character.level} ${character.race} ${character.class} | HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class} | Conditions: ${(character.conditions || []).map(c => c.name || c).join(', ') || 'None'} | Background: ${(character.backstory || 'Unknown').slice(0, 200)}` : '';
@@ -106,7 +148,15 @@ Then provide exactly 4 choices the player can make. Include skill checks and DCs
       ? `IMPORTANT: A skill check outcome is in the action text (SUCCESS or FAILURE). Reflect it directly — do not contradict it. On SUCCESS: describe overcoming the challenge vividly. On FAILURE: describe a setback or consequence.`
       : '';
 
-    const combatNote = `If combat_trigger is true, the enemies array is REQUIRED and MUST use these exact fields: name (string, use monster names from the list above), hp (integer), ac (integer), attack_bonus (integer), damage_dice (string like "1d8"), damage_bonus (integer), dexterity (integer), cr (decimal number), xp (integer). Pull real stats from the available monsters list. Spawn 1-3 enemies appropriate to CR ${Math.max(1, character?.level || 1) - 1}–${character?.level || 1}.`;
+    const combatNote = `If combat_trigger is true, the enemies array is REQUIRED and MUST use these exact fields: name (string, use monster names from the list above), hp (integer - use the HP number shown), ac (integer - use the AC number shown), attack_bonus (integer 2-4), damage_dice (string like "1d6" or "1d8"), damage_bonus (integer 1-3), dexterity (integer 10-14), cr (decimal number from the list), xp (integer from the list). 
+    
+CRITICAL ENCOUNTER BALANCING:
+- Level 1-2: Use ONLY CR 0-0.5 creatures (like Wolf CR 0.25, Goblin CR 0.25, Kobold CR 0.125). Spawn 1-2 enemies MAX.
+- Level 3-4: Use CR 0.5-1 creatures. Spawn 1-3 enemies.
+- Level 5-6: Use CR 1-2 creatures. Spawn 1-3 enemies.
+- Level 7+: Use CR 2-3 creatures. Spawn 2-4 enemies.
+
+NEVER spawn CR ${character?.level || 1}+ enemies for a level ${character?.level || 1} character. Pull exact stats (HP, AC) from the monster list above.`;
 
     prompt = `You are the Dungeon Master. Continue the story based on the player's choice.
 Character: ${charSummary}
