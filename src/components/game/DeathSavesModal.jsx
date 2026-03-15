@@ -1,249 +1,191 @@
-/**
- * DeathSavesModal — D&D 5e Death Saving Throws
- *
- * Rules (PHB p.197):
- *  - At the start of each of your turns while at 0 HP, roll a d20.
- *  - 10 or higher = success. Below 10 = failure.
- *  - Natural 20 = regain 1 HP and stand up immediately.
- *  - Natural 1 = counts as TWO failures.
- *  - 3 successes = stabilised (unconscious but no longer dying).
- *  - 3 failures = character dies.
- *  - Taking damage while at 0 HP = 1 failure (critical hit = 2 failures).
- *
- * Backend note:
- *  The combatEngine function needs to send { player_at_zero_hp: true } instead
- *  of { player_dead: true } when the player reaches 0 HP. The actual death /
- *  stabilisation should be controlled by this client-side tracker, which then
- *  calls back to Game.jsx via onStabilise / onDeath.
- */
-
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Skull, Sparkles } from 'lucide-react';
+import { Skull, Heart, Dices, AlertTriangle } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 
-const DC = 10;
+export default function DeathSavesModal({ character, onStabilize, onDeath, onClose }) {
+  const [rolling, setRolling] = useState(false);
+  const [lastRoll, setLastRoll] = useState(null);
 
-export default function DeathSavesModal({ character, onStabilise, onDeath, onMiracle }) {
-  const [successes, setSuccesses]   = useState(character?.death_saves_success  || 0);
-  const [failures,  setFailures]    = useState(character?.death_saves_failure   || 0);
-  const [lastRoll,  setLastRoll]    = useState(null);   // { roll, isNat20, isNat1, success }
-  const [rolling,   setRolling]     = useState(false);
-  const [resolved,  setResolved]    = useState(false);  // true once 3 successes or 3 failures
+  const successes = character.death_saves_success || 0;
+  const failures = character.death_saves_failure || 0;
 
-  const roll = () => {
-    if (rolling || resolved) return;
+  const rollDeathSave = async () => {
     setRolling(true);
+    setLastRoll(null);
 
-    setTimeout(() => {
-      const d20     = Math.floor(Math.random() * 20) + 1;
-      const isNat20 = d20 === 20;
-      const isNat1  = d20 === 1;
-      const success = d20 >= DC;
+    // Animate roll
+    await new Promise(resolve => setTimeout(resolve, 600));
 
-      setLastRoll({ roll: d20, isNat20, isNat1, success });
-      setRolling(false);
+    const roll = Math.floor(Math.random() * 20) + 1;
+    setLastRoll(roll);
+    setRolling(false);
 
-      if (isNat20) {
-        // Natural 20: immediately regain 1 HP
-        setResolved(true);
-        setTimeout(() => onMiracle?.(), 1800);
-        return;
-      }
+    let newSuccesses = successes;
+    let newFailures = failures;
 
-      let newSuccesses = successes;
-      let newFailures  = failures;
+    if (roll === 1) {
+      // Natural 1 = 2 failures
+      newFailures = Math.min(3, failures + 2);
+    } else if (roll === 20) {
+      // Natural 20 = stabilize and regain 1 HP
+      await base44.entities.Character.update(character.id, {
+        hp_current: 1,
+        death_saves_success: 0,
+        death_saves_failure: 0,
+      });
+      onStabilize(roll);
+      return;
+    } else if (roll >= 10) {
+      // Success
+      newSuccesses = Math.min(3, successes + 1);
+    } else {
+      // Failure
+      newFailures = Math.min(3, failures + 1);
+    }
 
-      if (isNat1) {
-        // Natural 1 counts as 2 failures
-        newFailures = Math.min(3, failures + 2);
-      } else if (success) {
-        newSuccesses = Math.min(3, successes + 1);
-      } else {
-        newFailures = Math.min(3, failures + 1);
-      }
+    // Update character
+    await base44.entities.Character.update(character.id, {
+      death_saves_success: newSuccesses,
+      death_saves_failure: newFailures,
+    });
 
-      setSuccesses(newSuccesses);
-      setFailures(newFailures);
-
-      if (newSuccesses >= 3) {
-        setResolved(true);
-        setTimeout(() => onStabilise?.({ death_saves_success: 0, death_saves_failure: 0 }), 1500);
-      } else if (newFailures >= 3) {
-        setResolved(true);
-        setTimeout(() => onDeath?.(), 1500);
-      }
-    }, 600);
+    // Check for death or stabilization
+    if (newFailures >= 3) {
+      onDeath();
+    } else if (newSuccesses >= 3) {
+      // Stabilized but still at 0 HP
+      await base44.entities.Character.update(character.id, {
+        death_saves_success: 0,
+        death_saves_failure: 0,
+      });
+      onStabilize(roll);
+    }
   };
 
-  const dotColor = (filled, type) =>
-    filled
-      ? type === 'success' ? '#86efac' : '#fca5a5'
-      : 'rgba(40,30,20,0.7)';
-
-  const dotBorder = (filled, type) =>
-    filled
-      ? type === 'success' ? 'rgba(40,160,80,0.6)' : 'rgba(180,30,30,0.6)'
-      : 'rgba(100,80,50,0.2)';
+  const isSuccess = lastRoll && lastRoll >= 10;
+  const isCrit = lastRoll === 20;
+  const isFumble = lastRoll === 1;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(4px)' }}>
-
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(8px)' }}>
       <motion.div
-        initial={{ scale: 0.85, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        className="w-full max-w-sm rounded-2xl overflow-hidden"
+        initial={{ opacity: 0, scale: 0.9, y: 30 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="w-full max-w-md rounded-2xl p-6 rune-border"
         style={{
-          background: 'linear-gradient(160deg, rgba(20,8,8,0.99), rgba(10,4,4,0.99))',
-          border: '1px solid rgba(180,30,30,0.5)',
-          boxShadow: '0 0 60px rgba(180,30,30,0.25)',
+          background: 'linear-gradient(160deg, rgba(40,8,8,0.98), rgba(20,4,4,0.99))',
+          border: '2px solid rgba(200,60,40,0.5)',
+          boxShadow: '0 0 60px rgba(0,0,0,0.9), 0 0 30px rgba(200,60,40,0.2)',
         }}>
-
-        {/* Header */}
-        <div className="px-6 pt-6 pb-4 text-center"
-          style={{ borderBottom: '1px solid rgba(180,30,30,0.2)' }}>
+        
+        {/* Skull Header */}
+        <div className="text-center mb-6">
           <motion.div
-            animate={{ scale: [1, 1.06, 1] }}
-            transition={{ repeat: Infinity, duration: 2.5, ease: 'easeInOut' }}
-            className="w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center"
-            style={{ background: 'radial-gradient(circle, rgba(80,5,5,0.5), transparent)', boxShadow: '0 0 30px rgba(180,30,30,0.2)' }}>
-            <Heart className="w-9 h-9" style={{ color: '#dc2626' }} />
+            animate={{ scale: [1, 1.1, 1] }}
+            transition={{ repeat: Infinity, duration: 2 }}>
+            <Skull className="w-16 h-16 mx-auto mb-3" style={{ color: '#dc2626' }} />
           </motion.div>
-          <h2 className="font-fantasy font-bold text-xl" style={{ color: '#fca5a5' }}>
-            Dying — Death Saving Throws
+          <h2 className="font-fantasy-deco font-bold text-2xl text-glow-blood mb-2" style={{ color: '#fca5a5' }}>
+            Death's Door
           </h2>
-          <p className="text-xs mt-1" style={{ color: 'rgba(232,213,183,0.55)', fontFamily: 'EB Garamond, serif' }}>
-            {character?.name} is at 0 HP. Roll at the start of each turn.
-            3 successes = stabilised. 3 failures = death. Nat 20 = regain 1 HP.
+          <p className="text-sm" style={{ color: 'rgba(252,165,165,0.6)', fontFamily: 'EB Garamond, serif' }}>
+            {character.name} hovers between life and death...
           </p>
         </div>
 
-        <div className="px-6 py-5 space-y-5">
-          {/* Successes / Failures tracker */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Successes */}
-            <div className="text-center">
-              <div className="text-xs font-fantasy tracking-widest mb-2" style={{ color: '#86efac', opacity: 0.7 }}>
-                SUCCESSES
-              </div>
-              <div className="flex justify-center gap-2">
-                {[0,1,2].map(i => (
-                  <motion.div
-                    key={i}
-                    animate={i < successes ? { scale: [1, 1.3, 1], boxShadow: ['0 0 4px #86efac55', '0 0 14px #86efacaa', '0 0 6px #86efac55'] } : {}}
-                    transition={{ duration: 0.4 }}
-                    className="w-5 h-5 rounded-full"
-                    style={{
-                      background: dotColor(i < successes, 'success'),
-                      border: `1px solid ${dotBorder(i < successes, 'success')}`,
-                    }} />
-                ))}
-              </div>
+        {/* Death Saves Tracker */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          {/* Successes */}
+          <div className="rounded-xl p-3" style={{ background: 'rgba(8,40,20,0.4)', border: '1px solid rgba(40,170,80,0.3)' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <Heart className="w-4 h-4" style={{ color: '#86efac' }} />
+              <span className="text-xs font-fantasy" style={{ color: '#86efac' }}>Successes</span>
             </div>
-
-            {/* Failures */}
-            <div className="text-center">
-              <div className="text-xs font-fantasy tracking-widest mb-2" style={{ color: '#fca5a5', opacity: 0.7 }}>
-                FAILURES
-              </div>
-              <div className="flex justify-center gap-2">
-                {[0,1,2].map(i => (
-                  <motion.div
-                    key={i}
-                    animate={i < failures ? { scale: [1, 1.3, 1], boxShadow: ['0 0 4px #fca5a555', '0 0 14px #fca5a5aa', '0 0 6px #fca5a555'] } : {}}
-                    transition={{ duration: 0.4 }}
-                    className="w-5 h-5 rounded-full"
-                    style={{
-                      background: dotColor(i < failures, 'failure'),
-                      border: `1px solid ${dotBorder(i < failures, 'failure')}`,
-                    }} />
-                ))}
-              </div>
+            <div className="flex gap-1">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="flex-1 h-3 rounded-full"
+                  style={{ background: i < successes ? '#22c55e' : 'rgba(20,10,5,0.6)', border: '1px solid rgba(40,170,80,0.3)' }} />
+              ))}
             </div>
           </div>
 
-          {/* Last roll result */}
-          <AnimatePresence mode="wait">
-            {lastRoll && (
-              <motion.div
-                key={lastRoll.roll}
-                initial={{ scale: 0.7, opacity: 0, y: 8 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                className="text-center py-3 rounded-xl"
-                style={{
-                  background: lastRoll.isNat20
-                    ? 'rgba(60,40,5,0.7)'
-                    : lastRoll.success
-                    ? 'rgba(10,40,15,0.7)'
-                    : 'rgba(40,5,5,0.7)',
-                  border: `1px solid ${lastRoll.isNat20 ? 'rgba(240,192,64,0.5)' : lastRoll.success ? 'rgba(40,160,80,0.45)' : 'rgba(180,30,30,0.45)'}`,
-                }}>
-                <div className="text-3xl font-fantasy font-bold"
-                  style={{ color: lastRoll.isNat20 ? '#f0c040' : lastRoll.success ? '#86efac' : '#fca5a5' }}>
-                  {lastRoll.roll}
-                </div>
-                <div className="text-xs mt-1 font-fantasy"
-                  style={{ color: lastRoll.isNat20 ? '#fde68a' : lastRoll.success ? '#86efac' : '#fca5a5', opacity: 0.8 }}>
-                  {lastRoll.isNat20
-                    ? '✨ Natural 20 — You regain 1 HP!'
-                    : lastRoll.isNat1
-                    ? '💀 Natural 1 — Two failures!'
-                    : lastRoll.success
-                    ? `Success (≥${DC})`
-                    : `Failure (<${DC})`}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Failures */}
+          <div className="rounded-xl p-3" style={{ background: 'rgba(40,8,8,0.4)', border: '1px solid rgba(200,60,40,0.4)' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <Skull className="w-4 h-4" style={{ color: '#fca5a5' }} />
+              <span className="text-xs font-fantasy" style={{ color: '#fca5a5' }}>Failures</span>
+            </div>
+            <div className="flex gap-1">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="flex-1 h-3 rounded-full"
+                  style={{ background: i < failures ? '#dc2626' : 'rgba(20,10,5,0.6)', border: '1px solid rgba(200,60,40,0.4)' }} />
+              ))}
+            </div>
+          </div>
+        </div>
 
-          {/* Roll button or resolution */}
-          {!resolved ? (
-            <motion.button
-              onClick={roll}
-              disabled={rolling}
-              whileTap={{ scale: 0.97 }}
-              className="w-full py-3.5 rounded-xl font-fantasy font-bold text-sm flex items-center justify-center gap-2 transition-all"
-              style={rolling ? {
-                background: 'rgba(20,10,10,0.6)',
-                border: '1px solid rgba(100,50,50,0.3)',
-                color: 'rgba(150,80,80,0.4)',
-                cursor: 'not-allowed',
-              } : {
-                background: 'linear-gradient(135deg, rgba(100,10,10,0.9), rgba(70,5,5,0.95))',
-                border: '1px solid rgba(220,50,50,0.6)',
-                color: '#fca5a5',
-                boxShadow: '0 0 12px rgba(180,30,30,0.2)',
-              }}>
-              {rolling
-                ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.6, ease: 'linear' }}
-                    className="w-4 h-4 rounded-full border-2 border-t-transparent" style={{ borderColor: 'rgba(180,80,80,0.4)', borderTopColor: 'transparent' }} />
-                : '🎲'}
-              {rolling ? 'Rolling...' : 'Roll Death Save (d20)'}
-            </motion.button>
-          ) : (
+        {/* Last Roll Result */}
+        <AnimatePresence>
+          {lastRoll && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-3 rounded-xl font-fantasy"
-              style={successes >= 3
-                ? { background: 'rgba(10,40,15,0.7)', border: '1px solid rgba(40,160,80,0.4)', color: '#86efac' }
-                : { background: 'rgba(40,5,5,0.7)', border: '1px solid rgba(180,30,30,0.4)', color: '#fca5a5' }}>
-              {successes >= 3 ? (
-                <><Heart className="w-5 h-5 inline mr-2" />Stabilised — unconscious but no longer dying</>
-              ) : (
-                <><Skull className="w-5 h-5 inline mr-2" />Three failures — the end draws near...</>
-              )}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="rounded-xl p-4 mb-4 text-center"
+              style={{
+                background: isCrit ? 'rgba(40,170,80,0.3)' : isFumble ? 'rgba(120,20,10,0.4)' : isSuccess ? 'rgba(30,100,50,0.3)' : 'rgba(80,20,10,0.3)',
+                border: `1px solid ${isCrit ? '#86efac' : isFumble ? '#dc2626' : isSuccess ? '#22c55e' : '#fca5a5'}`,
+              }}>
+              <div className="text-4xl font-fantasy font-bold mb-1" style={{ color: isSuccess ? '#86efac' : '#fca5a5' }}>
+                {lastRoll}
+              </div>
+              <div className="text-sm font-fantasy" style={{ color: isSuccess ? '#86efac' : '#fca5a5' }}>
+                {isCrit && '💚 Natural 20! You regain 1 HP and stabilize!'}
+                {isFumble && '💀 Natural 1! Two failures!'}
+                {!isCrit && !isFumble && isSuccess && '✓ Success'}
+                {!isCrit && !isFumble && !isSuccess && '✗ Failure'}
+              </div>
             </motion.div>
           )}
+        </AnimatePresence>
+
+        {/* Roll Button */}
+        <button
+          onClick={rollDeathSave}
+          disabled={rolling || successes >= 3 || failures >= 3}
+          className="w-full py-3 rounded-xl btn-combat font-fantasy font-bold text-base flex items-center justify-center gap-2 disabled:opacity-50">
+          {rolling ? (
+            <>
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.6, ease: 'linear' }}>
+                <Dices className="w-5 h-5" />
+              </motion.div>
+              Rolling...
+            </>
+          ) : (
+            <>
+              <Dices className="w-5 h-5" />
+              Roll Death Save
+            </>
+          )}
+        </button>
+
+        {/* Rules Reminder */}
+        <div className="mt-4 rounded-xl p-3" style={{ background: 'rgba(8,5,2,0.7)', border: '1px solid rgba(180,140,90,0.15)' }}>
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'rgba(251,191,36,0.6)' }} />
+            <div className="text-xs space-y-1" style={{ color: 'rgba(201,169,110,0.6)', fontFamily: 'EB Garamond, serif', lineHeight: '1.4' }}>
+              <p><strong>10+:</strong> Success</p>
+              <p><strong>1-9:</strong> Failure</p>
+              <p><strong>Natural 20:</strong> Stabilize + regain 1 HP</p>
+              <p><strong>Natural 1:</strong> Counts as 2 failures</p>
+              <p>3 successes = Stabilized (0 HP, unconscious)</p>
+              <p>3 failures = Death</p>
+            </div>
+          </div>
         </div>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }
