@@ -326,28 +326,16 @@ function CharacterCard({ character, sessions, onViewSheet }) {
       conditions: []
     });
     
-    // Archive the old session (character died - that story is over)
-    if (session) {
-      await base44.entities.GameSession.update(session.id, {
-        is_active: false,
-        in_combat: false
-      });
-      
-      // Mark any active combat logs as resolved
-      const activeCombats = await base44.entities.CombatLog.filter({
-        session_id: session.id,
-        character_id: character.id,
-        is_active: true
-      });
-      for (const combat of activeCombats) {
-        await base44.entities.CombatLog.update(combat.id, {
-          is_active: false,
-          result: 'defeat'
-        });
+    // Archive ALL sessions for this character — their story is over, start fresh
+    const charSessions = await base44.entities.GameSession.filter({ character_id: character.id });
+    for (const s of charSessions) {
+      if (s.is_active) {
+        await base44.entities.GameSession.update(s.id, { is_active: false, in_combat: false });
       }
     }
     
-    window.location.reload();
+    // Send directly to New Game so they start a fresh campaign, not resume the death scene
+    navigate(createPageUrl('NewGame') + `?character_id=${character.id}`);
   };
 
   const handleDelete = async (e) => {
