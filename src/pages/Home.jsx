@@ -325,11 +325,11 @@ function CharacterCard({ character, sessions, onViewSheet }) {
       conditions: []
     });
     
-    // If there's an active session with this character, end any combat
+    // Archive the old session (character died - that story is over)
     if (session) {
       await base44.entities.GameSession.update(session.id, {
-        in_combat: false,
-        combat_state: null
+        is_active: false,
+        in_combat: false
       });
       
       // Mark any active combat logs as resolved
@@ -341,7 +341,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
       for (const combat of activeCombats) {
         await base44.entities.CombatLog.update(combat.id, {
           is_active: false,
-          result: 'resolved'
+          result: 'defeat'
         });
       }
     }
