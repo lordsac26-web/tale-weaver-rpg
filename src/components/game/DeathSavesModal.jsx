@@ -6,28 +6,21 @@ import { base44 } from '@/api/base44Client';
 export default function DeathSavesModal({ character, onStabilize, onDeath, onClose }) {
   const [rolling, setRolling] = useState(false);
   const [lastRoll, setLastRoll] = useState(null);
-
-  const successes = character.death_saves_success || 0;
-  const failures = character.death_saves_failure || 0;
+  // Use local state so UI updates immediately after each roll (not stale prop)
+  const [successes, setSuccesses] = useState(character.death_saves_success || 0);
+  const [failures, setFailures] = useState(character.death_saves_failure || 0);
 
   const rollDeathSave = async () => {
     setRolling(true);
     setLastRoll(null);
 
-    // Animate roll
     await new Promise(resolve => setTimeout(resolve, 600));
 
     const roll = Math.floor(Math.random() * 20) + 1;
     setLastRoll(roll);
     setRolling(false);
 
-    let newSuccesses = successes;
-    let newFailures = failures;
-
-    if (roll === 1) {
-      // Natural 1 = 2 failures
-      newFailures = Math.min(3, failures + 2);
-    } else if (roll === 20) {
+    if (roll === 20) {
       // Natural 20 = stabilize and regain 1 HP
       await base44.entities.Character.update(character.id, {
         hp_current: 1,
@@ -36,15 +29,24 @@ export default function DeathSavesModal({ character, onStabilize, onDeath, onClo
       });
       onStabilize(roll);
       return;
+    }
+
+    let newSuccesses = successes;
+    let newFailures = failures;
+
+    if (roll === 1) {
+      newFailures = Math.min(3, failures + 2);
     } else if (roll >= 10) {
-      // Success
       newSuccesses = Math.min(3, successes + 1);
     } else {
-      // Failure
       newFailures = Math.min(3, failures + 1);
     }
 
-    // Update character
+    // Update local state immediately so UI reflects the new values
+    setSuccesses(newSuccesses);
+    setFailures(newFailures);
+
+    // Persist to DB
     await base44.entities.Character.update(character.id, {
       death_saves_success: newSuccesses,
       death_saves_failure: newFailures,
@@ -54,19 +56,13 @@ export default function DeathSavesModal({ character, onStabilize, onDeath, onClo
     if (newFailures >= 3) {
       onDeath();
     } else if (newSuccesses >= 3) {
-      // Stabilized but still at 0 HP
       await base44.entities.Character.update(character.id, {
         death_saves_success: 0,
         death_saves_failure: 0,
       });
       onStabilize(roll);
-    } else {
-      // Neither death nor stabilization - need to wait for next roll
-      // Force a small delay to ensure DB write completes, then close modal
-      // so the Game page can reload state and continue enemy turns
-      await new Promise(resolve => setTimeout(resolve, 800));
-      onClose();
     }
+    // Otherwise stay open for next roll — no onClose() call needed
   };
 
   const isSuccess = lastRoll && lastRoll >= 10;
