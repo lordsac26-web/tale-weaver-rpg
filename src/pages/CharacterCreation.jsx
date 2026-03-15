@@ -45,12 +45,12 @@ export default function CharacterCreation() {
   const [backstoryPrompt, setBackstoryPrompt] = useState('');
 
   const [character, setCharacter] = useState({
-    name: '', gender: 'male', race: '', class: '', subclass: '', level: 1,
+    name: '', gender: 'male', race: '', subrace: '', class: '', subclass: '', level: 1,
     background: '', backstory: '', alignment: 'True Neutral',
     strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10,
     skills: {}, inventory: [], conditions: [], active_modifiers: [], features: [], feats: [],
     gold: 0, silver: 0, copper: 0, xp: 0, spell_slots: {}, spells_known: [],
-    portrait: ''
+    portrait: '', chosen_stat_bonuses: [] // For races with stat_choices (e.g., Variant Human)
   });
 
   const set = (key, val) => setCharacter(prev => ({ ...prev, [key]: val }));
@@ -79,6 +79,20 @@ export default function CharacterCreation() {
           bonuses[stat] = (bonuses[stat] || 0) + val;
         });
       }
+      
+      // Handle stat_choices for subraces (e.g., Variant Human)
+      if (subrace?.stat_choices && char.chosen_stat_bonuses?.length > 0) {
+        char.chosen_stat_bonuses.forEach(stat => {
+          bonuses[stat] = (bonuses[stat] || 0) + 1;
+        });
+      }
+    }
+    
+    // Handle stat_choices for main race (e.g., Half-Elf)
+    if (race.stat_choices && char.chosen_stat_bonuses?.length > 0 && !char.subrace) {
+      char.chosen_stat_bonuses.forEach(stat => {
+        bonuses[stat] = (bonuses[stat] || 0) + 1;
+      });
     }
     
     const updated = { ...char };
@@ -164,7 +178,14 @@ export default function CharacterCreation() {
 
   const canProceed = () => {
     switch (step) {
-      case 0: return !!character.race && !!character.gender;
+      case 0: {
+        if (!character.race || !character.gender) return false;
+        const race = RACES[character.race];
+        const subrace = character.subrace && race?.subraces ? race.subraces.find(s => s.name === character.subrace) : null;
+        const statChoicesNeeded = (subrace?.stat_choices || race?.stat_choices || 0);
+        const chosenStats = character.chosen_stat_bonuses || [];
+        return chosenStats.length === statChoicesNeeded;
+      }
       case 1: return !!character.class && !!character.name;
       case 2: return STATS.every(s => character[s] >= 3 && character[s] <= 20);
       case 3: return true;

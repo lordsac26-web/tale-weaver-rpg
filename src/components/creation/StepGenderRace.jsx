@@ -16,6 +16,20 @@ const RACE_ICONS = {
 };
 
 export default function StepGenderRace({ character, set }) {
+  const race = character.race ? RACES[character.race] : null;
+  const subrace = character.subrace && race?.subraces ? race.subraces.find(s => s.name === character.subrace) : null;
+  const statChoicesNeeded = (subrace?.stat_choices || race?.stat_choices || 0);
+  const chosenStats = character.chosen_stat_bonuses || [];
+
+  const toggleStatChoice = (stat) => {
+    const current = character.chosen_stat_bonuses || [];
+    if (current.includes(stat)) {
+      set('chosen_stat_bonuses', current.filter(s => s !== stat));
+    } else if (current.length < statChoicesNeeded) {
+      set('chosen_stat_bonuses', [...current, stat]);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Gender */}
@@ -73,10 +87,31 @@ export default function StepGenderRace({ character, set }) {
             <label className="text-amber-400/80 text-xs uppercase tracking-widest mb-2 block">Subrace (optional)</label>
             <div className="flex flex-wrap gap-2">
               {RACES[character.race].subraces.map(sub => (
-                <button key={sub.name} onClick={() => set('subrace', character.subrace === sub.name ? '' : sub.name)}
+                <button key={sub.name} onClick={() => { set('subrace', character.subrace === sub.name ? '' : sub.name); set('chosen_stat_bonuses', []); }}
                   className={`px-3 py-2 rounded-lg text-sm border transition-all ${character.subrace === sub.name ? 'border-emerald-500 bg-emerald-900/30 text-emerald-200' : 'border-slate-700/50 bg-slate-800/30 text-slate-400 hover:border-emerald-700/50'}`}>
                   <div className="font-medium mb-0.5">{sub.name}</div>
                   <div className="text-xs opacity-70">{sub.description || sub.traits.slice(0, 2).join(' · ')}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Stat Choice Selector (for Variant Human, Half-Elf, etc.) */}
+        {statChoicesNeeded > 0 && (
+          <div className="mt-4 p-4 border border-purple-700/50 bg-purple-900/20 rounded-lg">
+            <label className="text-purple-300 text-sm font-medium mb-2 block">
+              Choose {statChoicesNeeded} Ability Score{statChoicesNeeded > 1 ? 's' : ''} for +1 Bonus ({chosenStats.length}/{statChoicesNeeded} selected)
+            </label>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {Object.keys(STAT_LABELS).map(stat => (
+                <button key={stat} onClick={() => toggleStatChoice(stat)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
+                    chosenStats.includes(stat) 
+                      ? 'border-purple-500 bg-purple-900/50 text-purple-200' 
+                      : 'border-slate-700/50 bg-slate-800/30 text-slate-400 hover:border-purple-700/50'
+                  }`}>
+                  {STAT_LABELS[stat]}
                 </button>
               ))}
             </div>
