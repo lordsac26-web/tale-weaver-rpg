@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
 /**
  * Combat Engine - handles initiative, turns, damage, conditions
@@ -518,8 +518,11 @@ Deno.serve(async (req) => {
     }
 
     // Enemy attacks player
-    const player = combatants.find(c => c.type === 'player' && c.is_conscious);
-    if (!player) return Response.json({ no_target: true });
+    const player = combatants.find(c => c.type === 'player');
+    if (!player || !player.is_conscious) {
+      // Player is dead/unconscious - skip enemy turn
+      return Response.json({ no_target: true, player_unconscious: true });
+    }
 
     // === AI Strategy System ===
     const enemyHpPct = currentCombatant.hp_max ? currentCombatant.hp_current / currentCombatant.hp_max : 1;

@@ -489,20 +489,18 @@ export default function Game() {
     
     setCombatLoading(true);
     
-    // Reset temporary resources for end of round
-    const logs = await base44.entities.CombatLog.filter({ id: combatId });
-    if (logs[0]) {
-      await base44.entities.CombatLog.update(combatId, {
-        world_state: {
-          ...logs[0].world_state,
-          actions_used_this_turn: 0,
-          bonus_action_used: false,
-          reaction_used: false
-        }
-      });
-    }
+    // Advance to next turn and reset action tracking
+    await base44.functions.invoke('combatEngine', {
+      action: 'next_turn',
+      session_id: sessionId,
+      combat_id: combatId,
+      character_id: character?.id,
+      payload: {}
+    });
     
     await reloadCombat(combatId);
+    await processEnemyTurns(combatId);
+    await loadState();
     setCombatLoading(false);
   };
 
