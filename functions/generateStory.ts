@@ -23,15 +23,11 @@ Deno.serve(async (req) => {
 
     const { session_id, action, choice_index, custom_input } = await req.json();
 
-  // Load session + character in parallel
-  const [sessions, ] = await Promise.all([
-    base44.asServiceRole.entities.GameSession.filter({ id: session_id }),
-  ]);
-  const session = sessions[0];
+  // Load session + character
+  const session = await base44.asServiceRole.entities.GameSession.get(session_id);
   if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
 
-  const chars = await base44.asServiceRole.entities.Character.filter({ id: session.character_id });
-  const character = chars[0];
+  const character = await base44.asServiceRole.entities.Character.get(session.character_id);
 
   // Only load monsters — cap at 8 to reduce prompt size & CPU time
   const monsters = await base44.asServiceRole.entities.Monster.list('-created_date', 8);
