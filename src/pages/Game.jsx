@@ -407,7 +407,7 @@ export default function Game() {
               damage: data.log_entry.damage || 0,
             });
           }
-        if (data.player_dead) {
+        if (data.player_at_zero_hp) {
           // Per 5e: dropping to 0 HP triggers death saving throws, not instant death
           // (unless the damage was from a massive hit equal to or exceeding max HP)
           setShowDeathSaves(true);
@@ -946,18 +946,14 @@ export default function Game() {
         {showDeathSaves && character && (
           <DeathSavesModal
             character={character}
-            onStabilise={async (saveUpdates) => {
-              // 3 successes: character is stabilised (unconscious, no longer dying)
-              await base44.entities.Character.update(character.id, {
-                hp_current: 0,
-                conditions: [...(character.conditions || []).filter(c => c !== 'dying'), 'unconscious'],
-                death_saves_success: 0,
-                death_saves_failure: 0,
-              });
+            onStabilize={async (roll) => {
+              // Natural 20 or 3 successes
               setShowDeathSaves(false);
               setNarrative(prev => [...prev, {
                 type: 'narration',
-                text: `${character.name} stabilises — unconscious but breathing. The immediate danger has passed.`
+                text: roll === 20 
+                  ? `✨ Natural 20! ${character.name} surges back to life with 1 HP — fate is not done with them yet.`
+                  : `${character.name} stabilizes — unconscious but breathing. The immediate danger has passed.`
               }]);
               await loadState();
             }}
@@ -966,21 +962,7 @@ export default function Game() {
               setShowDeathSaves(false);
               setShowDeathModal(true);
             }}
-            onMiracle={async () => {
-              // Natural 20 on death save: regain 1 HP and stand up
-              await base44.entities.Character.update(character.id, {
-                hp_current: 1,
-                conditions: (character.conditions || []).filter(c => c !== 'dying' && c !== 'unconscious'),
-                death_saves_success: 0,
-                death_saves_failure: 0,
-              });
-              setShowDeathSaves(false);
-              setNarrative(prev => [...prev, {
-                type: 'narration',
-                text: `✨ Natural 20! ${character.name} surges back to life with 1 HP — fate is not done with them yet.`
-              }]);
-              await loadState();
-            }}
+            onClose={() => setShowDeathSaves(false)}
           />
         )}
       </AnimatePresence>
