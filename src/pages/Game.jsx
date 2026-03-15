@@ -392,6 +392,9 @@ export default function Game() {
       if (current?.type === 'player') break;
 
       if (current?.type === 'enemy' && current?.is_conscious) {
+        // Add delay between enemy actions to prevent rate limiting
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
         const result = await base44.functions.invoke('combatEngine', {
           action: 'enemy_turn', session_id: sessionId, combat_id: combatId, character_id: character?.id, payload: {}
         });
@@ -417,6 +420,7 @@ export default function Game() {
         await reloadCombat(combatId);
         await loadState();
       } else {
+        await new Promise(resolve => setTimeout(resolve, 500));
         await base44.functions.invoke('combatEngine', {
           action: 'next_turn', session_id: sessionId, combat_id: combatId, character_id: character?.id, payload: {}
         });
