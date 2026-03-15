@@ -441,6 +441,14 @@ function CharacterCard({ character, sessions, onViewSheet }) {
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(130,70,210,0.25)'; e.currentTarget.style.color = 'rgba(190,155,255,0.7)'; }}>
                 <Scroll className="w-3 h-3" />
               </button>
+              <button onClick={handleDelete}
+                className="py-1.5 px-2.5 rounded-lg text-xs transition-all"
+                title="Delete character"
+                style={{ background: 'rgba(60,20,20,0.5)', border: '1px solid rgba(180,50,50,0.3)', color: 'rgba(252,165,165,0.7)' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(220,80,80,0.5)'; e.currentTarget.style.color = '#fca5a5'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,50,50,0.3)'; e.currentTarget.style.color = 'rgba(252,165,165,0.7)'; }}>
+                <Skull className="w-3 h-3" />
+              </button>
             </>
           )}
           {!isDead && (
