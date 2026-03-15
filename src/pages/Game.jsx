@@ -799,7 +799,8 @@ export default function Game() {
                 onEndTurn={handleEndTurn}
                 onFlee={handleFlee}
                 loading={combatLoading}
-                lastCombatEvent={lastCombatEvent} />
+                lastCombatEvent={lastCombatEvent}
+                onCharacterUpdate={setCharacter} />
             </div>
           </div>
         ) : (
