@@ -9,6 +9,7 @@ import {
   calcStatMod, calcHP, roll4d6DropLowest,
   PROFICIENCY_BY_LEVEL
 } from '@/components/game/gameData';
+import { FEATS } from '@/components/game/featData';
 import { getSpellSlotsForLevel } from '@/components/game/spellData';
  
 import StepGenderRace from '@/components/creation/StepGenderRace';
@@ -50,7 +51,7 @@ export default function CharacterCreation() {
     strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10,
     skills: {}, inventory: [], conditions: [], active_modifiers: [], features: [], feats: [],
     gold: 0, silver: 0, copper: 0, xp: 0, spell_slots: {}, spells_known: [],
-    portrait: '', chosen_stat_bonuses: [], feat_stat_choices: {} // For feats with stat_choices (e.g., Athlete +1 STR or DEX)
+    portrait: '', chosen_stat_bonuses: [], feat_stat_choices: {}  // { [featName]: chosenStat } for choice-based ASI feats
   });
  
   const set = (key, val) => setCharacter(prev => ({ ...prev, [key]: val }));
@@ -164,47 +165,70 @@ export default function CharacterCreation() {
     slots.forEach((max, i) => { if (max > 0) spell_slots[`level_${i + 1}`] = 0; }); // track used slots (start at 0 used)
     return { ...char, spell_slots };
   };
-
+ 
   // Apply racial skill proficiencies (e.g. Elf → Perception, Tortle → Survival)
   // Uses the structured skill_proficiencies field on each race entry.
   // Does not overwrite skills the player already chose.
   const buildRacialSkills = (char) => {
-   const raceData = RACES[char.race];
-   if (!raceData?.skill_proficiencies?.length) return char;
-   const skills = { ...char.skills };
-   raceData.skill_proficiencies.forEach(skill => {
-     if (!skills[skill]) skills[skill] = 'proficient';
-   });
-   return { ...char, skills };
+    const raceData = RACES[char.race];
+    if (!raceData?.skill_proficiencies?.length) return char;
+    const skills = { ...char.skills };
+    raceData.skill_proficiencies.forEach(skill => {
+      if (!skills[skill]) skills[skill] = 'proficient';
+    });
+    return { ...char, skills };
   };
-
+ 
+  // Apply stat bonuses from selected feats (e.g. Actor +1 CHA, Athlete +1 STR or DEX).
+  // Fixed bonuses come from feat.asi_bonus; player choices come from feat.asi_choices
+  // stored in character.feat_stat_choices[featName].
+  // Also handles Resilient's saving throw proficiency grant.
   const applyFeatBonuses = (char) => {
-   const selectedFeats = char.feats || [];
-   let bonuses = {};
-
-   selectedFeats.forEach(featName => {
-     const feat = FEATS.find(f => f.name === featName);
-     if (!feat) return;
-
-     // Fixed ASI bonuses (e.g., +1 CON)
-     if (feat.asi_bonus) {
-       Object.entries(feat.asi_bonus).forEach(([stat, val]) => {
-         bonuses[stat] = (bonuses[stat] || 0) + val;
-       });
-     }
-
-     // Choice-based ASI bonuses (e.g., +1 STR or DEX)
-     if (feat.asi_choices && char.feat_stat_choices?.[featName]) {
-       const chosen = char.feat_stat_choices[featName];
-       bonuses[chosen] = (bonuses[chosen] || 0) + 1;
-     }
-   });
-
-   const updated = { ...char };
-   STATS.forEach(stat => {
-     if (bonuses[stat]) updated[stat] = (updated[stat] || 10) + bonuses[stat];
-   });
-   return updated;
+    const selectedFeats = char.feats || [];
+    const statBonuses = {};
+    const extraSaveProfs = {};
+ 
+    selectedFeats.forEach(featName => {
+      const feat = FEATS.find(f => f.name === featName);
+      if (!feat) return;
+ 
+      // Fixed ASI (e.g. Actor +1 CHA, Durable +1 CON, Grappler +1 STR)
+      if (feat.asi_bonus) {
+        Object.entries(feat.asi_bonus).forEach(([stat, val]) => {
+          statBonuses[stat] = (statBonuses[stat] || 0) + val;
+        });
+      }
+ 
+      // Choice-based ASI (e.g. Athlete +1 STR or DEX, Resilient +1 any)
+      // Player's choice is stored in character.feat_stat_choices[featName]
+      if (feat.asi_choices && char.feat_stat_choices?.[featName]) {
+        const chosen = char.feat_stat_choices[featName];
+        if (feat.asi_choices.includes(chosen)) {
+          statBonuses[chosen] = (statBonuses[chosen] || 0) + 1;
+        }
+      }
+ 
+      // Resilient: also grants saving throw proficiency in the chosen stat
+      if (feat.grants_save_proficiency && char.feat_stat_choices?.[featName]) {
+        extraSaveProfs[char.feat_stat_choices[featName]] = true;
+      }
+    });
+ 
+    const updated = { ...char };
+ 
+    // Apply stat bonuses — cap at 20 per D&D 5e rules (PHB p.173)
+    STATS.forEach(stat => {
+      if (statBonuses[stat]) {
+        updated[stat] = Math.min(20, (updated[stat] || 10) + statBonuses[stat]);
+      }
+    });
+ 
+    // Merge feat-granted saving throw proficiencies into saving_throws object
+    if (Object.keys(extraSaveProfs).length > 0) {
+      updated.saving_throws = { ...(updated.saving_throws || {}), ...extraSaveProfs };
+    }
+ 
+    return updated;
   };
  
   const handleGenerateBackstory = async () => {
@@ -220,26 +244,26 @@ export default function CharacterCreation() {
   };
  
   const handleSave = async () => {
-   setSaving(true);
-   let finalChar = applyRacialBonuses(character);
-   finalChar = applyFeatBonuses(finalChar);
-   finalChar = updateDerivedStats(finalChar);
-   finalChar = buildClassFeatures(finalChar);
-   finalChar = buildSpellSlots(finalChar);
-   finalChar = buildRacialSkills(finalChar);
-   // Apply background skills
-   const bgData = BACKGROUNDS.find(b => b.name === finalChar.background);
-   if (bgData) {
-     const skills = { ...finalChar.skills };
-     bgData.skills.forEach(s => { if (!skills[s]) skills[s] = 'proficient'; });
-     finalChar = { ...finalChar, skills };
-     // Background equipment if inventory empty
-     if (!finalChar.inventory?.length) {
-       finalChar.inventory = bgData.equipment.map(e => ({ name: e, type: 'gear', weight: 1 }));
-     }
-   }
-   const saved = await base44.entities.Character.create(finalChar);
-   navigate(createPageUrl('NewGame') + `?character_id=${saved.id}`);
+    setSaving(true);
+    let finalChar = applyRacialBonuses(character);
+    finalChar = applyFeatBonuses(finalChar);      // feats before derived stats so HP/AC use final values
+    finalChar = updateDerivedStats(finalChar);
+    finalChar = buildClassFeatures(finalChar);
+    finalChar = buildSpellSlots(finalChar);
+    finalChar = buildRacialSkills(finalChar);
+    // Apply background skills
+    const bgData = BACKGROUNDS.find(b => b.name === finalChar.background);
+    if (bgData) {
+      const skills = { ...finalChar.skills };
+      bgData.skills.forEach(s => { if (!skills[s]) skills[s] = 'proficient'; });
+      finalChar = { ...finalChar, skills };
+      // Background equipment if inventory empty
+      if (!finalChar.inventory?.length) {
+        finalChar.inventory = bgData.equipment.map(e => ({ name: e, type: 'gear', weight: 1 }));
+      }
+    }
+    const saved = await base44.entities.Character.create(finalChar);
+    navigate(createPageUrl('NewGame') + `?character_id=${saved.id}`);
   };
  
   const reviewChar = updateDerivedStats(applyFeatBonuses(applyRacialBonuses(character)));
