@@ -2,26 +2,34 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sword, Shield, Shirt, Crown, Gem, X, Check, Info } from 'lucide-react';
 import EquipmentSlots from './EquipmentSlots';
-
+ 
 export default function EquipmentManager({ character, onUpdateCharacter }) {
   const [showEquipModal, setShowEquipModal] = useState(null); // { slot: string }
   const [selectedItem, setSelectedItem] = useState(null);
-
+ 
   const inventory = character?.inventory || [];
   const equipped = character?.equipped || {};
-
+ 
   const handleEquip = async (slot, item) => {
+    // Tortles cannot benefit from worn armor — their natural shell is their armor
+    if ((slot === 'chest' || slot === 'armor') && character.race === 'Tortle') {
+      // Use a console warn since EquipmentManager doesn't import toast
+      console.warn('Tortles cannot wear armor — natural shell provides AC 17.');
+      setShowEquipModal(null);
+      return;
+    }
+ 
     const newEquipped = { ...equipped, [slot]: item.id || item.name };
-    
+ 
     // Calculate and apply bonuses
     const updates = { equipped: newEquipped };
     const recalc = recalculateStats(character, newEquipped, inventory);
     Object.assign(updates, recalc);
-    
+ 
     await onUpdateCharacter(updates);
     setShowEquipModal(null);
   };
-
+ 
   const handleUnequip = async (slot) => {
     const newEquipped = { ...equipped };
     delete newEquipped[slot];
@@ -32,7 +40,7 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
     
     await onUpdateCharacter(updates);
   };
-
+ 
   const getEligibleItems = (slot) => {
     return inventory.filter(item => {
       if (slot === 'weapon') return ['weapon', 'melee', 'ranged'].includes(item.type || item.category);
@@ -46,7 +54,7 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
       return false;
     });
   };
-
+ 
   return (
     <div className="space-y-4">
       <EquipmentSlots
@@ -55,7 +63,7 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
         onEquip={(slot) => setShowEquipModal({ slot })}
         onUnequip={handleUnequip}
       />
-
+ 
       {/* Equip Modal */}
       <AnimatePresence>
         {showEquipModal && (
@@ -84,7 +92,7 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-
+ 
               <div className="p-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 80px)' }}>
                 {getEligibleItems(showEquipModal.slot).map((item, i) => {
                   const bonuses = item.bonuses || {};
@@ -154,7 +162,7 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
     </div>
   );
 }
-
+ 
 // Recalculate character stats based on equipped items
 function recalculateStats(character, equipped, inventory) {
   const updates = {};
@@ -163,11 +171,11 @@ function recalculateStats(character, equipped, inventory) {
   let damageBonus = 0;
   let savingThrowBonus = 0;
   const abilityBonuses = {};
-
+ 
   Object.values(equipped).forEach(itemIdOrName => {
     const item = inventory.find(i => i.id === itemIdOrName || i.name === itemIdOrName);
     if (!item?.bonuses) return;
-
+ 
     if (item.bonuses.ac) acBonus += item.bonuses.ac;
     if (item.bonuses.attack) attackBonus += item.bonuses.attack;
     if (item.bonuses.damage) damageBonus += item.bonuses.damage;
@@ -178,7 +186,7 @@ function recalculateStats(character, equipped, inventory) {
       });
     }
   });
-
+ 
   // Apply ability score bonuses to stats
   if (Object.keys(abilityBonuses).length > 0) {
     ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].forEach(stat => {
@@ -187,19 +195,28 @@ function recalculateStats(character, equipped, inventory) {
       }
     });
   }
-
+ 
   // Recalculate AC (base 10 + DEX + bonuses + armor)
   const dexMod = Math.floor(((updates.dexterity || character.dexterity || 10) - 10) / 2);
   const wisMod = Math.floor(((updates.wisdom || character.wisdom || 10) - 10) / 2);
   const conMod = Math.floor(((updates.constitution || character.constitution || 10) - 10) / 2);
   
   let baseAC = 10 + dexMod;
-  
+ 
   // Class-specific unarmored defense
   if (character.class === 'Monk') {
     baseAC = 10 + dexMod + wisMod;
   } else if (character.class === 'Barbarian') {
     baseAC = 10 + dexMod + conMod;
+  } else if (character.race === 'Tortle') {
+    // Natural Armor: flat 17 — never changes with DEX
+    baseAC = 17;
+  } else if (character.race === 'Lizardfolk') {
+    // Natural Armor: 13 + DEX mod
+    baseAC = 13 + dexMod;
+  } else if (character.race === 'Warforged') {
+    // Integrated Protection: 11 + DEX mod (unarmored)
+    baseAC = 11 + dexMod;
   }
   
   // Check for equipped armor
@@ -214,7 +231,7 @@ function recalculateStats(character, equipped, inventory) {
   }
   
   updates.armor_class = baseAC + acBonus;
-
+ 
   // Store bonuses as active_modifiers for combat calculations
   const modifiers = [];
   if (attackBonus > 0) modifiers.push({ source: 'equipment', applies_to: 'attack', value: attackBonus });
@@ -225,6 +242,6 @@ function recalculateStats(character, equipped, inventory) {
     ...(character.active_modifiers || []).filter(m => m.source !== 'equipment'),
     ...modifiers
   ];
-
+ 
   return updates;
 }
