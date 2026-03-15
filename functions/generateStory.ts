@@ -16,11 +16,12 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
  * - XP award uses character data already loaded (avoids extra DB fetch)
  */
 Deno.serve(async (req) => {
-  const base44 = createClientFromRequest(req);
-  const user = await base44.auth.me();
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { session_id, action, choice_index, custom_input } = await req.json();
+    const { session_id, action, choice_index, custom_input } = await req.json();
 
   // Load session + character in parallel
   const [sessions, ] = await Promise.all([
@@ -215,5 +216,9 @@ If it's a combat event, use the enemy schema with real monster stats.`;
     }
   }
 
-  return Response.json(result);
+    return Response.json(result);
+  } catch (error) {
+    console.error('Story generation error:', error);
+    return Response.json({ error: error.message || 'Story generation failed' }, { status: 500 });
+  }
 });
