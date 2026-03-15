@@ -242,7 +242,7 @@ export default function CharacterCreation() {
    navigate(createPageUrl('NewGame') + `?character_id=${saved.id}`);
   };
  
-  const reviewChar = applyRacialBonuses(updateDerivedStats(character));
+  const reviewChar = updateDerivedStats(applyFeatBonuses(applyRacialBonuses(character)));
  
   const canProceed = () => {
     switch (step) {
