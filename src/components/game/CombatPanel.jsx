@@ -101,7 +101,14 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         base_level: selectedSpellBaseLevel || 1,
       }, combatModifiers);
     } else if (action === 'attack') {
-      const weapon = character?.equipped?.weapon || { damage_dice: '1d6', attack_bonus: 0, damage_bonus: 0, type: 'melee' };
+      const weapon = character?.equipped?.weapon || { 
+        name: 'Unarmed Strike',
+        damage_dice: '1d4', 
+        attack_bonus: 0, 
+        damage_bonus: 0, 
+        type: 'melee',
+        properties: []
+      };
       onPlayerAttack(selectedTarget, 'attack', weapon, combatModifiers);
     } else {
       onPlayerAttack(selectedTarget, action, null, combatModifiers);

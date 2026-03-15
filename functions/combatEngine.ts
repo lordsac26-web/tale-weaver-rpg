@@ -45,6 +45,7 @@ Deno.serve(async (req) => {
     for (const enemy of enemies) {
       const initRoll = rollD20();
       const initMod = statMod(enemy.dexterity || 10);
+      const enemyHP = parseInt(enemy.hp) || enemy.hp_current || 10;
       combatants.push({
         id: `enemy_${Math.random().toString(36).substr(2, 9)}`,
         name: enemy.name || enemy.monster_name || `Enemy`,
@@ -52,8 +53,8 @@ Deno.serve(async (req) => {
         initiative_roll: initRoll,
         initiative_mod: initMod,
         initiative_total: initRoll + initMod,
-        hp_current: parseInt(enemy.hp) || enemy.hp_current || 10,
-        hp_max: parseInt(enemy.hp) || enemy.hp_max || 10,
+        hp_current: enemyHP,
+        hp_max: enemyHP,
         ac: enemy.ac || 12,
         attack_bonus: enemy.attack_bonus || 3,
         damage_dice: enemy.damage_dice || '1d6',
@@ -331,6 +332,11 @@ Deno.serve(async (req) => {
       if (modifiers.sneak_attack_ready && character.class === 'Rogue') {
         const sneakDice = Math.ceil((character.level || 1) / 2);
         extraDamageDice.push({ dice: `${sneakDice}d6`, type: 'sneak', label: 'Sneak Attack' });
+      }
+
+      // Fighter Action Surge — grant extra attack this turn (already consumed by CombatPanel, apply here)
+      if (modifiers.action_surge_active && charClass === 'fighter') {
+        attacks = (getActionsPerTurn(character) || 1) + 1;
       }
     }
 

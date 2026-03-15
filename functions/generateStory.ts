@@ -299,6 +299,11 @@ If it's a combat event, use the enemy schema with real monster stats.`;
         xp: (character.xp || 0) + result.xp_earned
       });
     }
+
+    // Validate combat trigger: if true, enemies must exist and be non-empty
+    if (result.combat_trigger && (!result.enemies || result.enemies.length === 0)) {
+      result.combat_trigger = false;
+    }
   }
 
     return Response.json(result);
