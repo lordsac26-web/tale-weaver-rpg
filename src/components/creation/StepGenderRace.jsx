@@ -12,7 +12,10 @@ const GENDERS = [
 
 const RACE_ICONS = {
   Human: '🧑', Elf: '🧝', Dwarf: '⛏️', Halfling: '🌿', Gnome: '⚙️',
-  'Half-Elf': '🌟', 'Half-Orc': '💪', Tiefling: '😈', Dragonborn: '🐉'
+  'Half-Elf': '🌟', 'Half-Orc': '💪', Tiefling: '😈', Dragonborn: '🐉',
+  Aasimar: '😇', Genasi: '🌊', Goliath: '🏔️', Firbolg: '🌲', Tabaxi: '🐱',
+  Kenku: '🐦', Triton: '🔱', Lizardfolk: '🦎', 'Yuan-ti Pureblood': '🐍',
+  Minotaur: '🐂', Tortle: '🐢'
 };
 
 export default function StepGenderRace({ character, set }) {

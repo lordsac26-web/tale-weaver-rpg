@@ -181,6 +181,14 @@ export const RACES = {
     description: 'Powerful bull-headed warriors with an innate sense of direction. Minotaurs are fierce in battle and never forget a path they\'ve traveled.',
     subraces: [],
   },
+  Tortle: {
+    traits: ['Natural Armor (AC 17 base, can\'t wear armor)', 'Shell Defense (withdraw into shell: AC +4, prone, speed 0, advantage on STR/CON saves, bonus action)', 'Hold Breath (1 hour)', 'Claws (1d4 slashing unarmed attack)', 'Survival Instinct (proficiency in Survival)', 'Tortles Live Off the Land (don\'t need to sleep, meditate 4 hours)'],
+    stat_bonuses: { strength: 2, wisdom: 1 },
+    speed: 30, size: 'Medium',
+    languages: ['Common', 'Aquan'],
+    description: 'Peaceful turtle-folk with impenetrable shells. Tortles wander the world seeking enlightenment and protecting nature. Their natural armor makes them formidable without equipment.',
+    subraces: [],
+  },
 };
  
 export const CLASSES = {
