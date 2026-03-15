@@ -315,6 +315,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
     : { background: 'linear-gradient(90deg, #7f1d1d, #dc2626)' };
   const hpTextColor = hpPct > 60 ? '#90f4b0' : hpPct > 30 ? '#fde68a' : '#fca5a5';
   const initials = character.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+  const isDead = character.hp_current === 0;
 
   const handleHeal = async (e) => {
     e.stopPropagation();
