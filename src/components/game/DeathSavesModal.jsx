@@ -55,11 +55,20 @@ export default function DeathSavesModal({ character, onStabilize, onDeath, onClo
 
     // Check for death or stabilization
     if (newFailures >= 3) {
-      onDeath();
-    } else if (newSuccesses >= 3) {
+      // Mark character as truly dead (hp stays 0, clear saves)
       await base44.entities.Character.update(character.id, {
+        hp_current: 0,
         death_saves_success: 0,
         death_saves_failure: 0,
+      });
+      onDeath();
+    } else if (newSuccesses >= 3) {
+      // Stabilized: set to 1 HP, clear saves and conditions
+      await base44.entities.Character.update(character.id, {
+        hp_current: 1,
+        death_saves_success: 0,
+        death_saves_failure: 0,
+        conditions: [],
       });
       onStabilize(roll);
     }
