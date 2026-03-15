@@ -44,7 +44,7 @@ function getActionsPerTurn(character) {
   return attacks;
 }
 
-export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent }) {
+export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent, onCharacterUpdate }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [action, setAction] = useState('attack');
   const [selectedSpell, setSelectedSpell] = useState(null);
@@ -52,6 +52,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const [selectedSpellBaseLevel, setSelectedSpellBaseLevel] = useState(null);
   const [showDice, setShowDice] = useState(false);
   const [combatModifiers, setCombatModifiers] = useState({});
+  const [abilityMessages, setAbilityMessages] = useState([]);
 
   if (!combat) return null;
 
