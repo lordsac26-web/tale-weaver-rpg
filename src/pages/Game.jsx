@@ -390,6 +390,10 @@ export default function Game() {
       if (log.round > startRound) break;
       const current = log.combatants[log.current_turn_index];
       if (current?.type === 'player') break;
+      
+      // Stop if player is dead
+      const playerCombatant = log.combatants.find(c => c.type === 'player');
+      if (!playerCombatant?.is_conscious) break;
 
       if (current?.type === 'enemy' && current?.is_conscious) {
         // Add delay between enemy actions to prevent rate limiting
@@ -459,6 +463,13 @@ export default function Game() {
   const handleNextTurn = async () => {
     const combatId = combat?.id || session?.combat_state?.combat_id;
     if (!combatId) return;
+    
+    // Check if player is dead
+    if (character?.hp_current <= 0) {
+      setShowDeathSaves(true);
+      return;
+    }
+    
     setCombatLoading(true);
     await processEnemyTurns(combatId);
     await reloadCombat(combatId);
@@ -469,6 +480,13 @@ export default function Game() {
   const handleEndTurn = async () => {
     const combatId = combat?.id || session?.combat_state?.combat_id;
     if (!combatId) return;
+    
+    // Check if player is dead
+    if (character?.hp_current <= 0) {
+      setShowDeathSaves(true);
+      return;
+    }
+    
     setCombatLoading(true);
     
     // Reset temporary resources for end of round
