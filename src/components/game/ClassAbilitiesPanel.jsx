@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Wind, Shield, Flame, Eye, Swords, Heart, ChevronDown } from 'lucide-react';
+import { Zap, Wind, Shield, Flame, Eye, Swords, Heart, ChevronDown, Sparkles } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { calcStatMod, PROFICIENCY_BY_LEVEL } from './gameData';
 
