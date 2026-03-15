@@ -602,7 +602,12 @@ export function calcPassiveScore(character, skill) {
  
 // ─── Carry Capacity ──────────────────────────────────────────────────────────
 export function calcCarryCapacity(character) {
-  return (character.strength || 10) * 15;
+  const baseCapacity = (character.strength || 10) * 15;
+  // Powerful Build (Goliath, Firbolg) — count as one size larger for carry capacity
+  if (['Goliath', 'Firbolg'].includes(character.race)) {
+    return baseCapacity * 2;
+  }
+  return baseCapacity;
 }
  
 export function getEncumbrance(character) {
@@ -612,4 +617,39 @@ export function getEncumbrance(character) {
   if (totalWeight > cap) return { level: 'heavily', label: 'Heavily Encumbered', penalty: '-20 ft speed, disadvantage STR/DEX/CON checks' };
   if (totalWeight > cap * 0.666) return { level: 'encumbered', label: 'Encumbered', penalty: '-10 ft speed' };
   return { level: 'normal', label: 'Unencumbered', penalty: null };
+}
+
+// ─── Racial Ability Helpers ─────────────────────────────────────────────────
+export function getRacialAbilities(race) {
+  const raceData = RACES[race];
+  if (!raceData) return [];
+  
+  const abilities = [];
+  
+  // Tortle-specific abilities
+  if (race === 'Tortle') {
+    abilities.push({
+      name: 'Natural Armor',
+      desc: 'AC 17 (cannot wear armor)',
+      type: 'passive'
+    });
+    abilities.push({
+      name: 'Shell Defense',
+      desc: 'Bonus action: withdraw into shell. AC +4, prone, speed 0, advantage on STR/CON saves. Cannot move but gain defensive boost.',
+      type: 'bonus_action',
+      usage: 'at-will'
+    });
+    abilities.push({
+      name: 'Claws',
+      desc: '1d4 slashing unarmed attack',
+      type: 'attack'
+    });
+    abilities.push({
+      name: 'Hold Breath',
+      desc: 'Can hold breath for up to 1 hour',
+      type: 'passive'
+    });
+  }
+  
+  return abilities;
 }
