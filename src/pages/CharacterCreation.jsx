@@ -50,7 +50,7 @@ export default function CharacterCreation() {
     strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10,
     skills: {}, inventory: [], conditions: [], active_modifiers: [], features: [], feats: [],
     gold: 0, silver: 0, copper: 0, xp: 0, spell_slots: {}, spells_known: [],
-    portrait: '', chosen_stat_bonuses: [] // For races with stat_choices (e.g., Variant Human)
+    portrait: '', chosen_stat_bonuses: [], feat_stat_choices: {} // For feats with stat_choices (e.g., Athlete +1 STR or DEX)
   });
  
   const set = (key, val) => setCharacter(prev => ({ ...prev, [key]: val }));
@@ -169,13 +169,42 @@ export default function CharacterCreation() {
   // Uses the structured skill_proficiencies field on each race entry.
   // Does not overwrite skills the player already chose.
   const buildRacialSkills = (char) => {
-    const raceData = RACES[char.race];
-    if (!raceData?.skill_proficiencies?.length) return char;
-    const skills = { ...char.skills };
-    raceData.skill_proficiencies.forEach(skill => {
-      if (!skills[skill]) skills[skill] = 'proficient';
-    });
-    return { ...char, skills };
+   const raceData = RACES[char.race];
+   if (!raceData?.skill_proficiencies?.length) return char;
+   const skills = { ...char.skills };
+   raceData.skill_proficiencies.forEach(skill => {
+     if (!skills[skill]) skills[skill] = 'proficient';
+   });
+   return { ...char, skills };
+  };
+
+  const applyFeatBonuses = (char) => {
+   const selectedFeats = char.feats || [];
+   let bonuses = {};
+
+   selectedFeats.forEach(featName => {
+     const feat = FEATS.find(f => f.name === featName);
+     if (!feat) return;
+
+     // Fixed ASI bonuses (e.g., +1 CON)
+     if (feat.asi_bonus) {
+       Object.entries(feat.asi_bonus).forEach(([stat, val]) => {
+         bonuses[stat] = (bonuses[stat] || 0) + val;
+       });
+     }
+
+     // Choice-based ASI bonuses (e.g., +1 STR or DEX)
+     if (feat.asi_choices && char.feat_stat_choices?.[featName]) {
+       const chosen = char.feat_stat_choices[featName];
+       bonuses[chosen] = (bonuses[chosen] || 0) + 1;
+     }
+   });
+
+   const updated = { ...char };
+   STATS.forEach(stat => {
+     if (bonuses[stat]) updated[stat] = (updated[stat] || 10) + bonuses[stat];
+   });
+   return updated;
   };
  
   const handleGenerateBackstory = async () => {
@@ -191,25 +220,26 @@ export default function CharacterCreation() {
   };
  
   const handleSave = async () => {
-    setSaving(true);
-    let finalChar = applyRacialBonuses(character);
-    finalChar = updateDerivedStats(finalChar);
-    finalChar = buildClassFeatures(finalChar);
-    finalChar = buildSpellSlots(finalChar);
-    finalChar = buildRacialSkills(finalChar);
-    // Apply background skills
-    const bgData = BACKGROUNDS.find(b => b.name === finalChar.background);
-    if (bgData) {
-      const skills = { ...finalChar.skills };
-      bgData.skills.forEach(s => { if (!skills[s]) skills[s] = 'proficient'; });
-      finalChar = { ...finalChar, skills };
-      // Background equipment if inventory empty
-      if (!finalChar.inventory?.length) {
-        finalChar.inventory = bgData.equipment.map(e => ({ name: e, type: 'gear', weight: 1 }));
-      }
-    }
-    const saved = await base44.entities.Character.create(finalChar);
-    navigate(createPageUrl('NewGame') + `?character_id=${saved.id}`);
+   setSaving(true);
+   let finalChar = applyRacialBonuses(character);
+   finalChar = applyFeatBonuses(finalChar);
+   finalChar = updateDerivedStats(finalChar);
+   finalChar = buildClassFeatures(finalChar);
+   finalChar = buildSpellSlots(finalChar);
+   finalChar = buildRacialSkills(finalChar);
+   // Apply background skills
+   const bgData = BACKGROUNDS.find(b => b.name === finalChar.background);
+   if (bgData) {
+     const skills = { ...finalChar.skills };
+     bgData.skills.forEach(s => { if (!skills[s]) skills[s] = 'proficient'; });
+     finalChar = { ...finalChar, skills };
+     // Background equipment if inventory empty
+     if (!finalChar.inventory?.length) {
+       finalChar.inventory = bgData.equipment.map(e => ({ name: e, type: 'gear', weight: 1 }));
+     }
+   }
+   const saved = await base44.entities.Character.create(finalChar);
+   navigate(createPageUrl('NewGame') + `?character_id=${saved.id}`);
   };
  
   const reviewChar = applyRacialBonuses(updateDerivedStats(character));
