@@ -21,11 +21,12 @@ export default function DeathSavesModal({ character, onStabilize, onDeath, onClo
     setRolling(false);
 
     if (roll === 20) {
-      // Natural 20 = stabilize and regain 1 HP
+      // Natural 20 = stabilize and regain 1 HP, clear conditions
       await base44.entities.Character.update(character.id, {
         hp_current: 1,
         death_saves_success: 0,
         death_saves_failure: 0,
+        conditions: [],
       });
       onStabilize(roll);
       return;
