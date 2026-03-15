@@ -1,5 +1,5 @@
 // D&D 5E Core Data — Expanded with Subclasses, Multiclassing, Subraces, Skills
-
+ 
 export const RACES = {
   Human: {
     traits: ['Extra Skill Proficiency', 'Extra Feat', 'Versatile'],
@@ -182,7 +182,7 @@ export const RACES = {
     subraces: [],
   },
 };
-
+ 
 export const CLASSES = {
   Fighter: {
     hit_die: 10, primary_stat: 'strength', saves: ['strength', 'constitution'],
@@ -505,7 +505,7 @@ export const CLASSES = {
     },
   },
 };
-
+ 
 export const BACKGROUNDS = [
   { name: 'Acolyte', skills: ['Insight', 'Religion'], feature: 'Shelter of the Faithful', equipment: ['Holy symbol', 'Prayer book', '15 gp'], tool_profs: [], languages: 2 },
   { name: 'Criminal', skills: ['Deception', 'Stealth'], feature: 'Criminal Contact', equipment: ["Crowbar", "Dark clothes", '15 gp'], tool_profs: ["Thieves' tools", 'one gaming set'] },
@@ -522,14 +522,14 @@ export const BACKGROUNDS = [
   { name: 'Guild Artisan', skills: ['Insight', 'Persuasion'], feature: 'Guild Membership', equipment: ['Artisan tools', 'Letter of introduction', '15 gp'], tool_profs: ["one artisan's tools"], languages: 1 },
   { name: 'Urchin', skills: ['Sleight of Hand', 'Stealth'], feature: 'City Secrets', equipment: ['Small knife', 'City map', '10 gp'], tool_profs: ["Disguise kit", "Thieves' tools"] },
 ];
-
+ 
 export const XP_THRESHOLDS = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
 export const PROFICIENCY_BY_LEVEL = [2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6];
-
+ 
 export const calcStatMod = (stat) => Math.floor(((stat || 10) - 10) / 2);
 export const calcModDisplay = (mod) => mod >= 0 ? `+${mod}` : `${mod}`;
 export const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Artificer'];
-
+ 
 export const calcHP = (charClass, level, conMod) => {
   const hd = CLASSES[charClass]?.hit_die || 8;
   return hd + conMod + (level - 1) * (Math.floor(hd / 2) + 1 + conMod);
@@ -539,7 +539,7 @@ export const roll4d6DropLowest = () => {
   const rolls = [rollDie(6), rollDie(6), rollDie(6), rollDie(6)];
   return [...rolls].sort((a, b) => a - b).slice(1).reduce((a, b) => a + b, 0);
 };
-
+ 
 export const CONDITIONS = {
   blinded:     { icon: '👁️',  color: 'text-gray-400',    description: 'Cannot see, auto-fail sight checks, attacks vs you have advantage.' },
   charmed:     { icon: '💕',  color: 'text-pink-400',    description: 'Cannot attack charmer, charmer has advantage on social checks vs you.' },
@@ -558,7 +558,7 @@ export const CONDITIONS = {
   grappled:    { icon: '🤼',  color: 'text-amber-400',   description: 'Speed becomes 0. Ends if grappler is incapacitated or you are moved away.' },
   concentration_broken: { icon: '🔮', color: 'text-purple-400', description: 'Concentration spell was disrupted.' },
 };
-
+ 
 export const SKILL_STAT_MAP = {
   Athletics: 'strength',
   Acrobatics: 'dexterity', 'Sleight of Hand': 'dexterity', Stealth: 'dexterity',
@@ -566,25 +566,37 @@ export const SKILL_STAT_MAP = {
   'Animal Handling': 'wisdom', Insight: 'wisdom', Medicine: 'wisdom', Perception: 'wisdom', Survival: 'wisdom',
   Deception: 'charisma', Intimidation: 'charisma', Performance: 'charisma', Persuasion: 'charisma',
 };
-
+ 
 export const ALL_SKILLS = Object.keys(SKILL_STAT_MAP);
-
+ 
 export const ALIGNMENTS = ['Lawful Good', 'Neutral Good', 'Chaotic Good', 'Lawful Neutral', 'True Neutral', 'Chaotic Neutral', 'Lawful Evil', 'Neutral Evil', 'Chaotic Evil'];
-
+ 
 // ─── Passive Scores ─────────────────────────────────────────────────────────
 export function calcPassiveScore(character, skill) {
-  const stat = SKILL_STAT_MAP[skill];
-  const mod = calcStatMod(character[stat]);
-  const prof = (character.skills || {})[skill] ? (PROFICIENCY_BY_LEVEL[character.level - 1] || 2) : 0;
-  const expertise = (character.skills || {})[`${skill}_expertise`] ? prof : 0;
-  return 10 + mod + prof + expertise;
+  const stat    = SKILL_STAT_MAP[skill];
+  const mod     = calcStatMod(character[stat]);
+  const profBonus = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
+  const skills  = character.skills || {};
+  const profLevel = skills[skill];
+  const hasExpertise = skills[`${skill}_expertise`];
+ 
+  // Bard level 2+: Jack of All Trades — add half proficiency (rounded down)
+  // to any ability check not already using proficiency (PHB p.54)
+  const isJoat = character.class === 'Bard' && (character.level || 1) >= 2;
+ 
+  let profContrib = 0;
+  if (hasExpertise)                              profContrib = profBonus * 2;
+  else if (profLevel === 'proficient' || profLevel === true) profContrib = profBonus;
+  else if (isJoat)                               profContrib = Math.floor(profBonus / 2);
+ 
+  return 10 + mod + profContrib;
 }
-
+ 
 // ─── Carry Capacity ──────────────────────────────────────────────────────────
 export function calcCarryCapacity(character) {
   return (character.strength || 10) * 15;
 }
-
+ 
 export function getEncumbrance(character) {
   const inv = character.inventory || [];
   const totalWeight = inv.reduce((t, it) => t + ((it.weight || 0) * (it.quantity || 1)), 0);
