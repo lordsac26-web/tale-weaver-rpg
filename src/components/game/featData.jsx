@@ -15,6 +15,7 @@ export const FEATS = [
     description: "You have undergone extensive physical training to gain the following benefits: +1 STR or DEX, when you are prone, standing up uses only 5 feet of movement, climbing doesn't halve your speed, running long jump or high jump only requires 5 feet of movement beforehand.",
     benefits: ["+1 STR or DEX", "Stand from prone with 5 ft", "Climb at full speed"],
     tags: ["strength", "dexterity", "mobility"],
+    asi: true,
     asi_choices: ["strength", "dexterity"],
   },
   {
@@ -24,6 +25,7 @@ export const FEATS = [
     description: "+1 CHA. Skilled at mimicry and misdirection, you can mimic the speech of another person or sounds made by other creatures. You gain advantage on Deception and Performance checks when trying to pass yourself off as a different person, and you can mimic another person's speech if you've heard them speak for at least 1 minute.",
     benefits: ["+1 CHA", "Advantage on Deception/Performance (disguise)", "Mimic voices"],
     tags: ["charisma", "social", "deception"],
+    asi: true,
     asi_bonus: { charisma: 1 },
   },
   {
@@ -74,6 +76,7 @@ export const FEATS = [
     description: "+1 CON. When you roll a Hit Die to regain hit points, the minimum number of HP you regain from the roll equals twice your Constitution modifier (minimum of 2).",
     benefits: ["+1 CON", "Minimum 2× CON mod HP on hit dice"],
     tags: ["constitution", "healing", "survival"],
+    asi: true,
     asi_bonus: { constitution: 1 },
   },
   {
@@ -93,6 +96,7 @@ export const FEATS = [
     benefits: ["+1 STR", "Adv. attacks vs grappled target", "Can restrain grappled creature"],
     tags: ["combat", "melee", "strength", "grapple"],
     stat_req: { strength: 13 },
+    asi: true,
     asi_bonus: { strength: 1 },
   },
   {
@@ -118,6 +122,7 @@ export const FEATS = [
     description: "+1 STR. Gain proficiency with heavy armor.",
     benefits: ["+1 STR", "Heavy armor proficiency"],
     tags: ["armor", "strength"],
+    asi: true,
     asi_bonus: { strength: 1 },
   },
   {
@@ -127,6 +132,7 @@ export const FEATS = [
     description: "+1 STR. While wearing heavy armor, bludgeoning, piercing, and slashing damage from non-magical attacks is reduced by 3.",
     benefits: ["+1 STR", "-3 nonmagical physical damage in heavy armor"],
     tags: ["armor", "defense", "strength"],
+    asi: true,
     asi_bonus: { strength: 1 },
   },
   {
@@ -145,6 +151,7 @@ export const FEATS = [
     description: "+1 INT. You always know which way is north. You always know the number of hours left before the next sunrise or sunset. You can accurately recall anything you have seen or heard within the past month.",
     benefits: ["+1 INT", "Perfect navigation sense", "Perfect month-long recall"],
     tags: ["intelligence", "utility"],
+    asi: true,
     asi_bonus: { intelligence: 1 },
   },
   {
@@ -154,6 +161,7 @@ export const FEATS = [
     description: "+1 STR or DEX. Gain proficiency with light armor.",
     benefits: ["+1 STR or DEX", "Light armor proficiency"],
     tags: ["armor"],
+    asi: true,
     asi_choices: ["strength", "dexterity"],
   },
   {
@@ -163,6 +171,7 @@ export const FEATS = [
     description: "+1 INT. You learn three languages of your choice. You can imbue hidden messages in your writing; a DC 15 INT check is needed to decipher the coded message.",
     benefits: ["+1 INT", "Learn 3 languages", "Create coded messages"],
     tags: ["intelligence", "languages", "utility"],
+    asi: true,
     asi_bonus: { intelligence: 1 },
   },
   {
@@ -220,6 +229,7 @@ export const FEATS = [
     description: "+1 STR or DEX. Gain proficiency with medium armor and shields.",
     benefits: ["+1 STR or DEX", "Medium armor and shield proficiency"],
     tags: ["armor"],
+    asi: true,
     asi_choices: ["strength", "dexterity"],
   },
   {
@@ -237,6 +247,7 @@ export const FEATS = [
     description: "+1 INT or WIS. If you can see a creature's mouth while it is speaking a language you understand, you can interpret what it's saying by reading its lips. You have a +5 bonus to your passive Perception and passive Investigation scores.",
     benefits: ["+1 INT or WIS", "Lip reading", "+5 passive Perception & Investigation"],
     tags: ["perception", "intelligence", "wisdom", "utility"],
+    asi: true,
     asi_choices: ["intelligence", "wisdom"],
   },
   {
@@ -254,7 +265,9 @@ export const FEATS = [
     description: "Choose one ability score. +1 to that ability score. Gain proficiency in saving throws using the chosen ability score.",
     benefits: ["+1 to chosen ability", "Saving throw proficiency in chosen ability"],
     tags: ["saving throw", "defense"],
+    asi: true,
     asi_choices: ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"],
+    grants_save_proficiency: true, // chosen stat also gets saving throw proficiency
   },
   {
     name: "Ritual Caster",
@@ -330,6 +343,7 @@ export const FEATS = [
     description: "+1 STR or CON. Proficient with improvised weapons. Unarmed strike uses d4 for damage. When you hit with an unarmed strike or improvised weapon, you can use a bonus action to attempt a grapple.",
     benefits: ["+1 STR or CON", "Improvised weapon proficiency", "d4 unarmed damage", "Bonus grapple on hit"],
     tags: ["combat", "melee", "unarmed"],
+    asi: true,
     asi_choices: ["strength", "constitution"],
   },
   {
@@ -356,6 +370,7 @@ export const FEATS = [
     description: "+1 STR or DEX. Gain proficiency with four weapons of your choice.",
     benefits: ["+1 STR or DEX", "4 weapon proficiencies"],
     tags: ["combat", "weapons"],
+    asi: true,
     asi_choices: ["strength", "dexterity"],
   },
   // Xanathar's Guide feats
@@ -376,6 +391,7 @@ export const FEATS = [
     benefits: ["+1 STR, CON, or CHA", "Breath weapon becomes fear aura"],
     tags: ["racial", "dragonborn", "fear"],
     race_req: ["Dragonborn"],
+    asi: true,
     asi_choices: ["strength", "constitution", "charisma"],
   },
   {
@@ -386,6 +402,7 @@ export const FEATS = [
     benefits: ["+1 STR, CON, or CHA", "Natural AC 13+DEX", "1d4 claw attacks"],
     tags: ["racial", "dragonborn", "armor"],
     race_req: ["Dragonborn"],
+    asi: true,
     asi_choices: ["strength", "constitution", "charisma"],
   },
   {
@@ -405,6 +422,7 @@ export const FEATS = [
     benefits: ["+1 DEX/INT/WIS/CHA", "Triple advantage reroll on qualifying attacks"],
     tags: ["racial", "elf", "accuracy"],
     race_req: ["Elf", "Half-Elf"],
+    asi: true,
     asi_choices: ["dexterity", "intelligence", "wisdom", "charisma"],
   },
   {
@@ -415,6 +433,7 @@ export const FEATS = [
     benefits: ["+1 DEX or INT", "Reaction: become invisible when damaged (1/SR)"],
     tags: ["racial", "gnome", "stealth"],
     race_req: ["Gnome"],
+    asi: true,
     asi_choices: ["dexterity", "intelligence"],
   },
   {
@@ -425,6 +444,7 @@ export const FEATS = [
     benefits: ["+1 INT or CHA", "Learn Sylvan", "Misty Step 1/SR"],
     tags: ["racial", "elf", "teleportation"],
     race_req: ["Elf"],
+    asi: true,
     asi_choices: ["intelligence", "charisma"],
   },
   {
@@ -435,6 +455,7 @@ export const FEATS = [
     benefits: ["+1 INT or CHA", "Reroll 1s on fire damage", "Flame aura on fire spells"],
     tags: ["racial", "tiefling", "fire", "magic"],
     race_req: ["Tiefling"],
+    asi: true,
     asi_choices: ["intelligence", "charisma"],
   },
   {
@@ -445,6 +466,7 @@ export const FEATS = [
     benefits: ["+1 CON", "Cold and poison resistance", "Adv. vs poison saves"],
     tags: ["racial", "tiefling", "defense"],
     race_req: ["Tiefling"],
+    asi: true,
     asi_bonus: { constitution: 1 },
   },
   {
@@ -455,6 +477,7 @@ export const FEATS = [
     benefits: ["+1 STR or CON", "Extra damage die 1/SR", "Counterattack after Relentless Endurance"],
     tags: ["racial", "half-orc", "combat"],
     race_req: ["Half-Orc"],
+    asi: true,
     asi_choices: ["strength", "constitution"],
   },
   {
@@ -474,6 +497,7 @@ export const FEATS = [
     benefits: ["+1 DEX/CON/CHA", "Reaction: force attack reroll (1/SR)"],
     tags: ["racial", "halfling", "defense"],
     race_req: ["Halfling"],
+    asi: true,
     asi_choices: ["dexterity", "constitution", "charisma"],
   },
   {
@@ -484,6 +508,7 @@ export const FEATS = [
     benefits: ["+1 STR or DEX", "+5 speed", "Acrobatics or Athletics proficiency"],
     tags: ["racial", "dwarf", "mobility"],
     race_req: ["Dwarf", "Halfling", "Gnome"],
+    asi: true,
     asi_choices: ["strength", "dexterity"],
   },
   {
@@ -496,9 +521,9 @@ export const FEATS = [
     race_req: ["Elf"],
   },
 ];
-
+ 
 export const FEAT_CATEGORIES = ["General", "Combat", "Magic", "Armor", "Support", "Utility", "Exploration", "Survival", "Social", "Stealth", "Racial"];
-
+ 
 export const CATEGORY_COLORS = {
   General: "text-slate-300 bg-slate-700/40 border-slate-600/40",
   Combat: "text-red-300 bg-red-900/20 border-red-700/30",
@@ -512,7 +537,7 @@ export const CATEGORY_COLORS = {
   Stealth: "text-indigo-300 bg-indigo-900/20 border-indigo-700/30",
   Racial: "text-yellow-300 bg-yellow-900/20 border-yellow-700/30",
 };
-
+ 
 // Check if character meets prerequisite for a feat
 export function meetsPrerequisite(feat, character) {
   if (!feat.stat_req) return true;
@@ -525,20 +550,20 @@ export function meetsPrerequisite(feat, character) {
     .filter(([k]) => k !== 'type')
     .every(([stat, min]) => (character[stat] || 10) >= min);
 }
-
+ 
 // Check if character's race meets racial requirement
 export function meetsRaceReq(feat, character) {
   if (!feat.race_req) return true;
   return feat.race_req.includes(character.race);
 }
-
+ 
 // Check if character can take a feat (caster-only)
 export function meetsCasterReq(feat, character) {
   const CASTERS = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger'];
   if (!feat.caster_only) return true;
   return CASTERS.includes(character.class);
 }
-
+ 
 export function canTakeFeat(feat, character) {
   return meetsPrerequisite(feat, character) && meetsRaceReq(feat, character) && meetsCasterReq(feat, character);
 }
