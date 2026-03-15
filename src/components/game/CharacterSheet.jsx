@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Shield, Heart, Zap, Star, Swords, FlaskConical, BookOpen, Layers, Sparkles, ShieldCheck, CircleDot, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import InventoryTab from './InventoryTab';
-import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS } from './gameData';
+import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS, getRacialAbilities } from './gameData';
 import { base44 } from '@/api/base44Client';
 import SpellbookTab from './SpellbookTab';
 import { SkillTooltip, FeatureTooltip, ConditionTooltip } from './GameTooltip';
