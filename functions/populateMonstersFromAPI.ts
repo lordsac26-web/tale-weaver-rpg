@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
 
   try {
     // Fetch monsters from Open5E, sorted by CR
-    const response = await fetch('https://api.open5e.com/monsters/?limit=100&ordering=cr&document__slug=wotc-srd');
+    const response = await fetch('https://api.open5e.com/monsters/?limit=200&ordering=cr&document__slug=wotc-srd');
     const data = await response.json();
 
     // Filter for CR 0-5 and select diverse creatures
@@ -25,11 +25,11 @@ Deno.serve(async (req) => {
     for (const cr of targetCRs) {
       const matches = data.results.filter(m => m.cr === cr && !addedNames.has(m.name));
       
-      // Take 2-3 creatures per CR tier
-      const selected = matches.slice(0, cr <= 0.25 ? 3 : 2);
+      // Take more creatures per tier for variety
+      const selected = matches.slice(0, cr <= 0.5 ? 4 : 3);
       
       for (const monster of selected) {
-        if (monstersToAdd.length >= 30) break;
+        if (monstersToAdd.length >= 50) break;
         
         // Parse attack info from actions
         let attackBonus = 2;
