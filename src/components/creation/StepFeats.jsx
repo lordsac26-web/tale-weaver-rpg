@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Check, ChevronDown, ChevronUp, Search, Info, Lock } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Search, Info, Lock, X } from 'lucide-react';
 import { FEATS, FEAT_CATEGORIES, CATEGORY_COLORS, canTakeFeat, meetsPrerequisite, meetsRaceReq, meetsCasterReq } from '@/components/game/featData';
 import { CLASSES } from '@/components/game/gameData';
 
@@ -40,10 +40,20 @@ export default function StepFeats({ character, set }) {
     const idx = current.indexOf(featName);
     if (idx !== -1) {
       current.splice(idx, 1);
+      // Remove associated stat choice
+      const choices = { ...character.feat_stat_choices };
+      delete choices[featName];
+      set('feat_stat_choices', choices);
     } else if (current.length < maxFeats) {
       current.push(featName);
     }
     set('feats', current);
+  };
+
+  const setFeatStatChoice = (featName, stat) => {
+    const choices = { ...character.feat_stat_choices };
+    choices[featName] = stat;
+    set('feat_stat_choices', choices);
   };
 
   const filtered = useMemo(() => {
@@ -180,6 +190,25 @@ export default function StepFeats({ character, set }) {
                       ))}
                     </div>
                   </div>
+                  {isSelected && feat.asi_choices && (
+                    <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg px-3 py-2">
+                      <div className="text-xs text-amber-400 font-medium mb-2">Choose ability score increase:</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {feat.asi_choices.map(stat => (
+                          <button
+                            key={stat}
+                            onClick={() => setFeatStatChoice(feat.name, stat)}
+                            className={`px-2 py-1 rounded text-xs font-medium transition-all ${
+                              character.feat_stat_choices?.[feat.name] === stat
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            }`}>
+                            +1 {stat.charAt(0).toUpperCase() + stat.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {feat.tags && (
                     <div className="flex flex-wrap gap-1">
                       {feat.tags.map(tag => (
