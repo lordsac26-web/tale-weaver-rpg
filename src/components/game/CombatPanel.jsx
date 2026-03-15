@@ -10,6 +10,7 @@ import InitiativeTracker from './InitiativeTracker';
 import ActionPointBar from './ActionPointBar';
 import CombatFloatingText from './CombatFloatingText';
 import CombatModifiersPanel from './CombatModifiersPanel';
+import ClassAbilitiesPanel from './ClassAbilitiesPanel';
 
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger'];
 
