@@ -13,6 +13,7 @@ import Progression from '@/pages/Progression';
 import NPCManager from '@/pages/NPCManager';
 import InventoryPage from '@/pages/InventoryPage';
 import CharacterSheetFull from '@/pages/CharacterSheetFull';
+import Market from '@/pages/Market';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -97,6 +98,11 @@ const AuthenticatedApp = () => {
       <Route path="/CharacterSheetFull" element={
         <LayoutWrapper currentPageName="CharacterSheetFull">
           <CharacterSheetFull />
+        </LayoutWrapper>
+      } />
+      <Route path="/Market" element={
+        <LayoutWrapper currentPageName="Market">
+          <Market />
         </LayoutWrapper>
       } />
       <Route path="*" element={<PageNotFound />} />

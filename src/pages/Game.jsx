@@ -990,12 +990,42 @@ export default function Game() {
                 character_id: character.id,
                 rest_type: restType
               });
+
+              // Check for interrupted rest
+              if (result.data.interrupted) {
+                setNarrative(prev => [...prev, {
+                  type: 'narration',
+                  text: `⚠️ ${result.data.encounter_message}`
+                }]);
+                setShowRestModal(false);
+                // Trigger random encounter
+                const encounterResult = await base44.functions.invoke('generateStory', {
+                  session_id: sessionId,
+                  action: 'generate_event',
+                  custom_input: 'random_encounter'
+                });
+                if (encounterResult.data?.narrative) {
+                  setNarrative(prev => [...prev, { type: 'narration', text: encounterResult.data.narrative }]);
+                }
+                if (encounterResult.data?.combat_trigger && encounterResult.data?.enemies) {
+                  await startCombat(encounterResult.data.enemies);
+                } else if (encounterResult.data?.choices) {
+                  setChoices(encounterResult.data.choices);
+                }
+                return;
+              }
+
               setCharacter(result.data.character);
+              const restText = result.data.narrative 
+                ? `🌙 ${result.data.narrative} ${result.data.restorations.join(', ')}.`
+                : `🌙 You take a ${restType} rest. ${result.data.restorations.join(', ')}.`;
+              
               setNarrative(prev => [...prev, {
                 type: 'narration',
-                text: `🌙 You take a ${restType} rest. ${result.data.restorations.join(', ')}.`
+                text: restText
               }]);
               setShowRestModal(false);
+              await loadState();
             }}
           />
         )}

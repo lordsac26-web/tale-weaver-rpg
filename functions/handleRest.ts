@@ -68,6 +68,26 @@ Deno.serve(async (req) => {
 
   } else if (rest_type === 'long') {
     // LONG REST (8 hours)
+    
+    // Random encounter check (20% chance)
+    const encounterRoll = Math.random();
+    if (encounterRoll < 0.2) {
+      return Response.json({
+        interrupted: true,
+        encounter_message: 'Your rest is interrupted! A creature stirs in the darkness...'
+      });
+    }
+
+    // Generate narrative summary
+    const narratives = [
+      'You find a sheltered spot and settle in for the night. The crackling of your campfire keeps the darkness at bay.',
+      'As you rest, you dream of past victories and future challenges. You awaken refreshed and ready.',
+      'The night passes peacefully. Birdsong greets the dawn, and you rise with renewed vigor.',
+      'You make camp under the stars. The quiet of the wilderness soothes your weary soul.',
+      'Your rest is deep and dreamless. When you wake, you feel completely restored.',
+    ];
+    const restNarrative = narratives[Math.floor(Math.random() * narratives.length)];
+    // LONG REST (8 hours)
     updates.hp_current = character.hp_max;
     restorations.push('Full HP restored');
 
@@ -107,6 +127,7 @@ Deno.serve(async (req) => {
     character: updatedChars[0],
     healing: updates.hp_current - (character.hp_current || 0),
     rest_type,
-    restorations
+    restorations,
+    narrative: rest_type === 'long' ? restNarrative : undefined
   });
 });
