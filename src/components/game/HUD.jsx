@@ -8,7 +8,7 @@ import { ConditionTooltip } from './GameTooltip';
 export default function HUD({ character, session }) {
   if (!character) return null;
  
-  const hpPct = Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100));
+  const hpPct = character.hp_max > 0 ? Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100)) : 0;
   const hpBarClass = hpPct > 60 ? 'hp-bar-high' : hpPct > 30 ? 'hp-bar-mid' : 'hp-bar-low';
  
   const xpThresholds = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
