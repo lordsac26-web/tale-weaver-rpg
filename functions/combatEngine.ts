@@ -660,13 +660,13 @@ Deno.serve(async (req) => {
       world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0 }
     });
 
-    const playerDead = !player.is_conscious;
-    if (playerDead) {
-      await base44.entities.GameSession.update(session_id, { in_combat: false });
-      await base44.entities.CombatLog.update(combat_id, { is_active: false, result: 'defeat' });
+    const playerAtZero = !player.is_conscious;
+    if (playerAtZero && player.hp_current === 0) {
+      // Don't end combat immediately - let death saves play out
+      // Only mark as defeat if death saves are failed (handled elsewhere)
     }
 
-    return Response.json({ log_entry: logEntry, player_hp: player.hp_current, player_dead: playerDead, next_turn_index: nextIndex, round, ai_strategy: strategy });
+    return Response.json({ log_entry: logEntry, player_hp: player.hp_current, player_at_zero_hp: playerAtZero, next_turn_index: nextIndex, round, ai_strategy: strategy });
   }
 
   if (action === 'next_turn') {
