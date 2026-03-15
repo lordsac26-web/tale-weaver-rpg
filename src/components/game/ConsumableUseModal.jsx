@@ -55,8 +55,8 @@ function rollDice(notation) {
 export default function ConsumableUseModal({ item, character, onUse, onClose }) {
   const [result, setResult] = useState(null);
   const [used, setUsed] = useState(false);
-  const rarity = ITEM_RARITY[item.rarity] || ITEM_RARITY.common;
-  const effect = parseConsumableEffect(item);
+  const rarity = ITEM_RARITY[item?.rarity] || ITEM_RARITY.common;
+  const effect = parseConsumableEffect(item || {});
 
   const handleUse = () => {
     let outcome = { effect, updates: {} };
