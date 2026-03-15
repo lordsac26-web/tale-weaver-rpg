@@ -17,10 +17,9 @@ Deno.serve(async (req) => {
 
   if (action === 'start_combat') {
     const { enemies } = payload;
-    const sessions = await base44.asServiceRole.entities.GameSession.filter({ id: session_id });
-    const session = sessions[0];
-    const chars = await base44.asServiceRole.entities.Character.filter({ id: session.character_id });
-    const character = chars[0];
+    const session = await base44.entities.GameSession.get(session_id);
+    if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
+    const character = await base44.entities.Character.get(session.character_id);
 
     // Roll initiative for all combatants
     const combatants = [];
@@ -72,7 +71,7 @@ Deno.serve(async (req) => {
       return b.initiative_mod - a.initiative_mod;
     });
 
-    const combatLog = await base44.asServiceRole.entities.CombatLog.create({
+    const combatLog = await base44.entities.CombatLog.create({
       session_id,
       round: 1,
       combatants,
@@ -84,7 +83,7 @@ Deno.serve(async (req) => {
       world_state: { actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false }
     });
 
-    await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: combatLog.id } });
+    await base44.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: combatLog.id } });
 
     return Response.json({ combat_id: combatLog.id, combatants, initiative_order: combatants });
   }
@@ -107,10 +106,8 @@ Deno.serve(async (req) => {
 
   if (action === 'player_attack') {
     const { target_id, weapon, spell, modifiers = {} } = payload;
-    const logs = await base44.asServiceRole.entities.CombatLog.filter({ id: combat_id });
-    const combatLog = logs[0];
-    const chars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
-    const character = chars[0];
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
 
     const combatants = [...combatLog.combatants];
     const target = combatants.find(c => c.id === target_id);
@@ -165,7 +162,7 @@ Deno.serve(async (req) => {
       if (spell.slot_level && spell.slot_level > 0) {
         const slotsKey = `level_${spell.slot_level}`;
         const currentUsed = (character.spell_slots || {})[slotsKey] || 0;
-        await base44.asServiceRole.entities.Character.update(character_id, {
+        await base44.entities.Character.update(character_id, {
           spell_slots: { ...(character.spell_slots || {}), [slotsKey]: currentUsed + 1 }
         });
       }
@@ -195,7 +192,7 @@ Deno.serve(async (req) => {
           }
           newWorldState2.actions_used_this_turn = 0;
         }
-        await base44.asServiceRole.entities.CombatLog.update(combat_id, {
+        await base44.entities.CombatLog.update(combat_id, {
           log_entries: updatedLog, current_turn_index: nextIndex2, round: nextRound2, world_state: newWorldState2
         });
         return Response.json({ hit: null, damage: 0, log_entry: utilEntry, result: 'ongoing', combat_ended: false, actions_remaining: actionsRemaining2, next_turn_index: nextIndex2 });
@@ -214,7 +211,7 @@ Deno.serve(async (req) => {
         const player2 = combatants.find(c => c.type === 'player');
         if (player2) {
           player2.hp_current = Math.min(player2.hp_max, player2.hp_current + healAmt);
-          await base44.asServiceRole.entities.Character.update(character_id, { hp_current: player2.hp_current });
+          await base44.entities.Character.update(character_id, { hp_current: player2.hp_current });
         }
         const healEntry = {
           round: combatLog.round, actor: character.name, action: 'spell', target: character.name,
@@ -233,7 +230,7 @@ Deno.serve(async (req) => {
           if (ni3 === 0) nr3++;
           ws3.actions_used_this_turn = 0;
         }
-        await base44.asServiceRole.entities.CombatLog.update(combat_id, {
+        await base44.entities.CombatLog.update(combat_id, {
           combatants: updatedCombatants2, log_entries: [...(combatLog.log_entries || []), healEntry],
           current_turn_index: ni3, round: nr3, world_state: ws3
         });
@@ -288,16 +285,16 @@ Deno.serve(async (req) => {
           }
           ws.actions_used_this_turn = 0;
         }
-        await base44.asServiceRole.entities.CombatLog.update(combat_id, {
+        await base44.entities.CombatLog.update(combat_id, {
           combatants: updatedC, log_entries: [...(combatLog.log_entries || []), saveEntry],
           current_turn_index: ni, round: nr, world_state: ws, is_active: result2 === 'ongoing', result: result2
         });
         if (result2 !== 'ongoing') {
-          await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
+          await base44.entities.GameSession.update(session_id, { in_combat: false });
           if (result2 === 'victory') {
             const totalXP2 = updatedC.filter(c => c.type === 'enemy').reduce((s2, e) => s2 + (e.xp || 0), 0);
-            const ch2 = (await base44.asServiceRole.entities.Character.filter({ id: character_id }))[0];
-            await base44.asServiceRole.entities.Character.update(character_id, { xp: (ch2.xp || 0) + totalXP2 });
+            const ch2 = await base44.entities.Character.get(character_id);
+            await base44.entities.Character.update(character_id, { xp: (ch2.xp || 0) + totalXP2 });
           }
         }
         return Response.json({ hit: saveFailed, damage: finalDmg, log_entry: saveEntry, result: result2, combat_ended: result2 !== 'ongoing', actions_remaining: Math.max(0, ar2), next_turn_index: ni });
@@ -416,7 +413,7 @@ Deno.serve(async (req) => {
           damage += smiteDmg;
           // Consume spell slot
           const slotKey = `level_${smiteLevel}`;
-          await base44.asServiceRole.entities.Character.update(character_id, {
+          await base44.entities.Character.update(character_id, {
             spell_slots: { ...slots, [slotKey]: (slots[slotKey] || 0) + 1 }
           });
         }
@@ -482,7 +479,7 @@ Deno.serve(async (req) => {
       newWorldState.actions_used_this_turn = 0; // reset for next turn
     }
 
-    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
+    await base44.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants,
       log_entries: updatedLog,
       current_turn_index: nextIndex,
@@ -493,12 +490,11 @@ Deno.serve(async (req) => {
     });
 
     if (result !== 'ongoing') {
-      await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
+      await base44.entities.GameSession.update(session_id, { in_combat: false });
       if (result === 'victory') {
         const totalXP = updatedCombatants.filter(c => c.type === 'enemy').reduce((s, e) => s + (e.xp || 0), 0);
-        const chars2 = await base44.asServiceRole.entities.Character.filter({ id: character_id });
-        const ch = chars2[0];
-        await base44.asServiceRole.entities.Character.update(character_id, { xp: (ch.xp || 0) + totalXP });
+        const ch = await base44.entities.Character.get(character_id);
+        await base44.entities.Character.update(character_id, { xp: (ch.xp || 0) + totalXP });
       }
     }
 
@@ -512,8 +508,7 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'enemy_turn') {
-    const logs = await base44.asServiceRole.entities.CombatLog.filter({ id: combat_id });
-    const combatLog = logs[0];
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
     const combatants = [...combatLog.combatants];
 
     // Find current enemy turn
@@ -620,7 +615,7 @@ Deno.serve(async (req) => {
     if (totalDamage > 0) {
       player.hp_current = Math.max(0, player.hp_current - totalDamage);
       if (player.hp_current === 0) player.is_conscious = false;
-      await base44.asServiceRole.entities.Character.update(player.id, { hp_current: player.hp_current });
+      await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
     }
 
     // Build log entry
@@ -657,7 +652,7 @@ Deno.serve(async (req) => {
     if (nextIndex <= combatLog.current_turn_index) round += 1;
 
     const updatedCombatants = combatants.map(c => c.id === player.id ? player : c);
-    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
+    await base44.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants,
       log_entries: [...(combatLog.log_entries || []), logEntry],
       current_turn_index: nextIndex,
@@ -667,20 +662,19 @@ Deno.serve(async (req) => {
 
     const playerDead = !player.is_conscious;
     if (playerDead) {
-      await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
-      await base44.asServiceRole.entities.CombatLog.update(combat_id, { is_active: false, result: 'defeat' });
+      await base44.entities.GameSession.update(session_id, { in_combat: false });
+      await base44.entities.CombatLog.update(combat_id, { is_active: false, result: 'defeat' });
     }
 
     return Response.json({ log_entry: logEntry, player_hp: player.hp_current, player_dead: playerDead, next_turn_index: nextIndex, round, ai_strategy: strategy });
   }
 
   if (action === 'next_turn') {
-    const logs = await base44.asServiceRole.entities.CombatLog.filter({ id: combat_id });
-    const combatLog = logs[0];
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
     const nextIndex = (combatLog.current_turn_index + 1) % combatLog.combatants.length;
     let round = combatLog.round;
     if (nextIndex === 0) round += 1;
-    await base44.asServiceRole.entities.CombatLog.update(combat_id, { current_turn_index: nextIndex, round });
+    await base44.entities.CombatLog.update(combat_id, { current_turn_index: nextIndex, round });
     return Response.json({ next_turn_index: nextIndex, round, current_combatant: combatLog.combatants[nextIndex] });
   }
 
