@@ -5,9 +5,15 @@ import { CLASSES, calcStatMod, PROFICIENCY_BY_LEVEL } from './gameData';
 
 const XP_THRESHOLDS = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
 
+const ASI_LEVELS = [4, 8, 12, 16, 19]; // Standard ASI levels for most classes
+const FIGHTER_ROGUE_ASI = [4, 6, 8, 10, 12, 14, 16, 19]; // Fighter/Rogue get extra ASIs
+
 export default function LevelUpModal({ character, onLevelUp, onClose }) {
   const [selectedSubclass, setSelectedSubclass] = useState('');
   const [hpRoll, setHpRoll] = useState(null);
+  const [asiChoice, setAsiChoice] = useState('stats'); // 'stats' or 'feat'
+  const [statIncreases, setStatIncreases] = useState({ first: '', second: '' });
+  const [selectedFeat, setSelectedFeat] = useState('');
   
   const currentLevel = character.level || 1;
   const newLevel = currentLevel + 1;
@@ -20,8 +26,25 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
   // Check if this level grants subclass selection
   const needsSubclass = !character.subclass && newLevel >= 3 && classData.subclasses?.length > 0;
   
+  // Check if this level grants ASI/Feat
+  const asiLevels = ['Fighter', 'Rogue'].includes(character.class) ? FIGHTER_ROGUE_ASI : ASI_LEVELS;
+  const grantsASI = asiLevels.includes(newLevel);
+  
   // Get new features for this level
   const newFeatures = classData.features?.[newLevel] || [];
+  
+  // Simple feat options (most common)
+  const COMMON_FEATS = [
+    { name: 'Lucky', desc: '3 luck points per long rest - reroll d20s or force enemy rerolls' },
+    { name: 'Alert', desc: '+5 Initiative, cannot be surprised, hidden attackers get no advantage' },
+    { name: 'Tough', desc: '+2 HP per level (retroactive)' },
+    { name: 'War Caster', desc: 'Advantage on Concentration saves, cast spells as opportunity attacks' },
+    { name: 'Mobile', desc: '+10 speed, Dash ignores difficult terrain, no opportunity attacks after melee' },
+    { name: 'Sharpshooter', desc: '-5 attack / +10 damage, ignore half/¾ cover, no long range disadvantage' },
+    { name: 'Great Weapon Master', desc: '-5 attack / +10 damage, bonus attack on crit/kill' },
+    { name: 'Resilient', desc: 'Pick a stat: +1 to that stat and gain saving throw proficiency' },
+    { name: 'Observant', desc: '+5 passive Perception/Investigation, read lips, +1 INT or WIS' },
+  ];
   
   // Roll HP or take average
   const rollHP = () => {
@@ -40,7 +63,23 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
       return;
     }
     
-    const hpGain = hpRoll !== null ? hpRoll + conMod : (Math.floor(hitDie / 2) + 1 + conMod);
+    if (hpRoll === null) {
+      alert('Please roll for HP or take the average.');
+      return;
+    }
+    
+    if (grantsASI) {
+      if (asiChoice === 'stats' && (!statIncreases.first || !statIncreases.second)) {
+        alert('Please select two ability scores to increase.');
+        return;
+      }
+      if (asiChoice === 'feat' && !selectedFeat) {
+        alert('Please select a feat.');
+        return;
+      }
+    }
+    
+    const hpGain = hpRoll + conMod;
     const updates = {
       level: newLevel,
       hp_max: (character.hp_max || 0) + hpGain,
@@ -52,12 +91,34 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
       updates.subclass = selectedSubclass;
     }
     
+    // Apply ASI
+    if (grantsASI && asiChoice === 'stats') {
+      updates[statIncreases.first] = (character[statIncreases.first] || 10) + 1;
+      updates[statIncreases.second] = (character[statIncreases.second] || 10) + 1;
+    }
+    
+    // Apply Feat
+    if (grantsASI && asiChoice === 'feat') {
+      updates.feats = [...(character.feats || []), selectedFeat];
+      
+      // Apply feat bonuses
+      if (selectedFeat === 'Tough') {
+        const toughBonus = newLevel * 2; // +2 HP per level (retroactive)
+        updates.hp_max = (character.hp_max || 0) + hpGain + toughBonus;
+        updates.hp_current = (character.hp_current || 0) + hpGain + toughBonus;
+      } else if (selectedFeat === 'Resilient' && statIncreases.first) {
+        updates[statIncreases.first] = (character[statIncreases.first] || 10) + 1;
+      } else if (selectedFeat === 'Observant' && statIncreases.first) {
+        updates[statIncreases.first] = (character[statIncreases.first] || 10) + 1;
+      }
+    }
+    
     // Add new features to character
     if (newFeatures.length > 0) {
       updates.features = [...(character.features || []), ...newFeatures];
     }
     
-    await onLevelUp(updates, { hpGain, newFeatures });
+    await onLevelUp(updates, { hpGain, newFeatures, asi: grantsASI });
     onClose();
   };
   
@@ -216,6 +277,113 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
             </div>
           )}
           
+          {/* ASI / Feat Selection */}
+          {grantsASI && (
+            <div className="rounded-xl p-4 rune-border"
+              style={{ background: 'rgba(60,30,80,0.3)', border: '1px solid rgba(180,100,255,0.3)' }}>
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="w-4 h-4" style={{ color: '#c4b5fd' }} />
+                <span className="font-fantasy text-sm tracking-widest" style={{ color: 'rgba(196,181,253,0.7)' }}>ABILITY SCORE IMPROVEMENT</span>
+              </div>
+              
+              <div className="flex gap-2 mb-4">
+                <button onClick={() => setAsiChoice('stats')}
+                  className="flex-1 py-2 rounded-lg text-xs font-fantasy transition-all"
+                  style={asiChoice === 'stats' ? {
+                    background: 'rgba(100,50,150,0.6)', border: '1px solid rgba(180,100,255,0.6)', color: '#dfc8ff'
+                  } : {
+                    background: 'rgba(30,15,40,0.5)', border: '1px solid rgba(140,80,200,0.2)', color: 'rgba(192,132,252,0.5)'
+                  }}>
+                  +2 Ability Scores
+                </button>
+                <button onClick={() => setAsiChoice('feat')}
+                  className="flex-1 py-2 rounded-lg text-xs font-fantasy transition-all"
+                  style={asiChoice === 'feat' ? {
+                    background: 'rgba(100,50,150,0.6)', border: '1px solid rgba(180,100,255,0.6)', color: '#dfc8ff'
+                  } : {
+                    background: 'rgba(30,15,40,0.5)', border: '1px solid rgba(140,80,200,0.2)', color: 'rgba(192,132,252,0.5)'
+                  }}>
+                  Take a Feat
+                </button>
+              </div>
+              
+              {asiChoice === 'stats' ? (
+                <div className="space-y-2">
+                  <p className="text-xs mb-2" style={{ color: 'rgba(196,181,253,0.6)', fontFamily: 'EB Garamond, serif' }}>
+                    Choose two ability scores to increase by +1 each (max 20):
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map(stat => (
+                      <button key={stat}
+                        onClick={() => {
+                          if (!statIncreases.first) setStatIncreases(p => ({ ...p, first: stat }));
+                          else if (!statIncreases.second && stat !== statIncreases.first) setStatIncreases(p => ({ ...p, second: stat }));
+                          else if (statIncreases.first === stat) setStatIncreases(p => ({ ...p, first: '' }));
+                          else if (statIncreases.second === stat) setStatIncreases(p => ({ ...p, second: '' }));
+                        }}
+                        disabled={(character[stat] || 10) >= 20}
+                        className="py-2 px-3 rounded-lg text-sm font-fantasy transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                        style={statIncreases.first === stat || statIncreases.second === stat ? {
+                          background: 'rgba(120,60,180,0.6)', border: '1px solid rgba(180,100,255,0.6)', color: '#dfc8ff'
+                        } : {
+                          background: 'rgba(20,10,30,0.5)', border: '1px solid rgba(140,80,200,0.2)', color: 'rgba(192,132,252,0.6)'
+                        }}>
+                        {stat.toUpperCase()} ({character[stat] || 10})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs mb-2" style={{ color: 'rgba(196,181,253,0.6)', fontFamily: 'EB Garamond, serif' }}>
+                    Select a feat to gain:
+                  </p>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {COMMON_FEATS.map(feat => (
+                      <button key={feat.name}
+                        onClick={() => setSelectedFeat(feat.name)}
+                        className="w-full text-left p-2.5 rounded-lg text-sm transition-all"
+                        style={selectedFeat === feat.name ? {
+                          background: 'rgba(120,60,180,0.6)', border: '1px solid rgba(180,100,255,0.6)', color: '#dfc8ff'
+                        } : {
+                          background: 'rgba(20,10,30,0.5)', border: '1px solid rgba(140,80,200,0.2)', color: 'rgba(192,132,252,0.6)'
+                        }}>
+                        <div className="font-fantasy font-bold mb-0.5">{feat.name}</div>
+                        <div className="text-xs" style={{ color: 'rgba(196,181,253,0.5)', fontFamily: 'EB Garamond, serif' }}>
+                          {feat.desc}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {(selectedFeat === 'Resilient' || selectedFeat === 'Observant') && (
+                    <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(140,80,200,0.2)' }}>
+                      <p className="text-xs mb-2" style={{ color: 'rgba(196,181,253,0.6)' }}>
+                        {selectedFeat === 'Resilient' ? 'Choose stat for +1 and save proficiency:' : 'Choose INT or WIS for +1:'}
+                      </p>
+                      <div className="grid grid-cols-6 gap-2">
+                        {(selectedFeat === 'Resilient' 
+                          ? ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma']
+                          : ['intelligence', 'wisdom']
+                        ).map(stat => (
+                          <button key={stat}
+                            onClick={() => setStatIncreases({ first: stat, second: '' })}
+                            className="py-1.5 rounded text-xs font-fantasy transition-all"
+                            style={statIncreases.first === stat ? {
+                              background: 'rgba(120,60,180,0.6)', border: '1px solid rgba(180,100,255,0.6)', color: '#dfc8ff'
+                            } : {
+                              background: 'rgba(20,10,30,0.5)', border: '1px solid rgba(140,80,200,0.2)', color: 'rgba(192,132,252,0.6)'
+                            }}>
+                            {stat.slice(0, 3).toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          
           {/* New Features */}
           {newFeatures.length > 0 && (
             <div className="rounded-xl p-4"
@@ -262,7 +430,12 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
             Cancel
           </button>
           <button onClick={confirmLevelUp}
-            disabled={hpRoll === null || (needsSubclass && !selectedSubclass)}
+            disabled={
+              hpRoll === null || 
+              (needsSubclass && !selectedSubclass) ||
+              (grantsASI && asiChoice === 'stats' && (!statIncreases.first || !statIncreases.second)) ||
+              (grantsASI && asiChoice === 'feat' && !selectedFeat)
+            }
             className="flex-1 py-3 rounded-xl font-fantasy font-bold text-sm btn-fantasy flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
             <Star className="w-4 h-4" />
             Advance to Level {newLevel}
