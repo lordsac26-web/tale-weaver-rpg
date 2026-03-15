@@ -285,3 +285,55 @@ export function RaceTooltip({ raceName, children, position = 'top' }) {
     </GameTooltip>
   );
 }
+
+/** Tooltip for equipment/items */
+export function EquipmentTooltip({ itemName, children, position = 'top' }) {
+  // Basic equipment data for common items
+  const BASIC_EQUIPMENT = {
+    'Chain Mail': { type: 'armor', armor_type: 'heavy', ac: 16, weight: 55, cost: 75, desc: 'Made of interlocking metal rings. Disadvantage on Stealth. Requires STR 13.' },
+    'Scale Mail': { type: 'armor', armor_type: 'medium', ac: 14, weight: 45, cost: 50, desc: 'Coat of leather with overlapping metal pieces. Disadvantage on Stealth.' },
+    'Leather Armor': { type: 'armor', armor_type: 'light', ac: 11, weight: 10, cost: 10, desc: 'Boiled leather breastplate and shoulder protectors.' },
+    'Longsword': { type: 'weapon', damage: '1d8 slashing', versatile: '1d10', weight: 3, cost: 15, desc: 'Versatile (1d10 two-handed). Finesse for Dex builds.' },
+    'Short Sword': { type: 'weapon', damage: '1d6 piercing', weight: 2, cost: 10, desc: 'Light, finesse. Good for dual wielding.' },
+    'Greataxe': { type: 'weapon', damage: '1d12 slashing', weight: 7, cost: 30, desc: 'Two-handed. Heavy. High damage ceiling.' },
+    'Shortbow': { type: 'weapon', damage: '1d6 piercing', range: '80/320 ft', weight: 2, cost: 25, desc: 'Ammunition, two-handed. Ideal for mobile rangers.' },
+    'Shield': { type: 'armor', armor_type: 'shield', ac: 2, weight: 6, cost: 10, desc: '+2 AC bonus. Cannot be used with two-handed weapons.' },
+    'Handaxe': { type: 'weapon', damage: '1d6 slashing', range: '20/60 ft', weight: 2, cost: 5, desc: 'Light, thrown. Can be dual wielded or thrown.' },
+    'Dagger': { type: 'weapon', damage: '1d4 piercing', range: '20/60 ft', weight: 1, cost: 2, desc: 'Finesse, light, thrown. Versatile backup weapon.' },
+    'Mace': { type: 'weapon', damage: '1d6 bludgeoning', weight: 4, cost: 5, desc: 'Simple weapon favored by clerics.' },
+    'Quarterstaff': { type: 'weapon', damage: '1d6 bludgeoning', versatile: '1d8', weight: 4, cost: 0.2, desc: 'Versatile (1d8 two-handed). Monk weapon.' },
+    'Rapier': { type: 'weapon', damage: '1d8 piercing', weight: 2, cost: 25, desc: 'Finesse. Best damage for Dex builds.' },
+    'Scimitar': { type: 'weapon', damage: '1d6 slashing', weight: 3, cost: 25, desc: 'Finesse, light. Popular with druids and rogues.' },
+    'Light Crossbow': { type: 'weapon', damage: '1d8 piercing', range: '80/320 ft', weight: 5, cost: 25, desc: 'Ammunition, loading, two-handed.' },
+  };
+
+  const item = BASIC_EQUIPMENT[itemName];
+  if (!item) return children;
+
+  const subtitle = item.type === 'armor' 
+    ? `${item.armor_type} armor · AC ${item.ac || '?'}${item.ac === 2 ? ' bonus' : ''}${item.weight ? ` · ${item.weight}lb` : ''}`
+    : item.type === 'weapon'
+    ? `${item.damage || '?'}${item.range ? ` · ${item.range}` : ''}${item.weight ? ` · ${item.weight}lb` : ''}`
+    : item.weight ? `${item.weight}lb` : '';
+
+  return (
+    <GameTooltip
+      position={position}
+      maxWidth={300}
+      title={itemName}
+      subtitle={subtitle}
+      icon={item.type === 'armor' ? '🛡️' : item.type === 'weapon' ? '⚔️' : '📦'}
+      content={
+        <div className="space-y-1">
+          <p className="text-xs leading-relaxed">{item.desc}</p>
+          {item.cost && (
+            <div className="text-xs" style={{ color: 'rgba(251,191,36,0.7)' }}>
+              Value: {item.cost} gp
+            </div>
+          )}
+        </div>
+      }>
+      {children}
+    </GameTooltip>
+  );
+}

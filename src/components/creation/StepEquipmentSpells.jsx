@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Package, Sparkles, Check } from 'lucide-react';
 import { CLASSES, BACKGROUNDS } from '@/components/game/gameData';
 import { SPELLS_BY_CLASS, SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS, CANTRIPS_KNOWN } from '@/components/game/spellData';
+import { EquipmentTooltip } from '@/components/game/GameTooltip';
 
 const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger'];
 
@@ -203,14 +204,16 @@ export default function StepEquipmentSpells({ character, set }) {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[...classEquipment, ...bgEquipment].map((item, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl">
-                <span className="text-xl">{ITEM_ICONS[item.type] || '📦'}</span>
-                <div>
-                  <div className="text-amber-200 text-sm font-medium">{item.name}</div>
-                  <div className="text-slate-500 text-xs capitalize">{item.type} · {item.weight}lb</div>
+              <EquipmentTooltip key={i} itemName={item.name} position="top">
+                <div className="flex items-center gap-3 p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl hover:border-slate-600 transition-all cursor-help">
+                  <span className="text-xl">{ITEM_ICONS[item.type] || '📦'}</span>
+                  <div>
+                    <div className="text-amber-200 text-sm font-medium">{item.name}</div>
+                    <div className="text-slate-500 text-xs capitalize">{item.type} · {item.weight}lb</div>
+                  </div>
+                  {bgEquipment.includes(item) && <span className="ml-auto text-xs text-blue-400">Background</span>}
                 </div>
-                {bgEquipment.includes(item) && <span className="ml-auto text-xs text-blue-400">Background</span>}
-              </div>
+              </EquipmentTooltip>
             ))}
           </div>
         </div>
