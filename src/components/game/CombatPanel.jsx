@@ -238,6 +238,29 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                 reactionUsed={world_state?.reaction_used || false}
               />
 
+              {/* Class Abilities — Second Wind, Action Surge, Rage, etc. */}
+              <ClassAbilitiesPanel
+                character={character}
+                combat={combat}
+                worldState={world_state}
+                onCharacterUpdate={onCharacterUpdate}
+                onMessage={(msg) => setAbilityMessages(prev => [...prev.slice(-2), { id: Date.now(), text: msg }])}
+                onAbilityUsed={(id, data) => {
+                  // Action Surge: grant extra action this turn
+                  if (id === 'action_surge') {
+                    setCombatModifiers(prev => ({ ...prev, action_surge_active: true }));
+                  }
+                }}
+              />
+
+              {/* Ability message toasts */}
+              {abilityMessages.map(msg => (
+                <div key={msg.id} className="px-3 py-2 rounded-lg text-xs"
+                  style={{ background: 'rgba(8,40,18,0.8)', border: '1px solid rgba(40,180,80,0.3)', color: '#86efac', fontFamily: 'EB Garamond, serif' }}>
+                  {msg.text}
+                </div>
+              ))}
+
               {/* Combat Modifiers */}
               <CombatModifiersPanel
                 character={character}
