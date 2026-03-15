@@ -833,9 +833,14 @@ export default function Game() {
                 </motion.div>
               </div>
             ) : (
-              <StoryPanel narrative={narrative} choices={choices} loading={storyLoading}
-                onChoice={handleChoice} customInput={customInput}
-                setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} />
+              <StoryPanel 
+                narrative={narrative} 
+                choices={character?.hp_current <= 0 ? [] : choices} 
+                loading={storyLoading}
+                onChoice={character?.hp_current <= 0 ? () => {} : handleChoice} 
+                customInput={customInput}
+                setCustomInput={character?.hp_current <= 0 ? () => {} : setCustomInput} 
+                onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} />
             )}
           </div>
         )}
