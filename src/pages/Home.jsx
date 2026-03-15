@@ -306,7 +306,9 @@ function SectionHeader({ icon, title, color }) {
 // ─── Character Card ────────────────────────────────────────────────────────────
 function CharacterCard({ character, sessions, onViewSheet }) {
   const navigate = useNavigate();
-  const session = sessions.find(s => s.character_id === character.id);
+  // Only show an active session if the character is alive — dead characters have no valid session to resume
+  const isDead = character.hp_current === 0;
+  const session = !isDead ? sessions.find(s => s.character_id === character.id) : null;
   const hpPct = character.hp_max ? Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100)) : 100;
   const hpBarStyle = hpPct > 60 ? { background: 'linear-gradient(90deg, #16a34a, #22c55e)' }
     : hpPct > 30 ? { background: 'linear-gradient(90deg, #b45309, #e8732a)' }
