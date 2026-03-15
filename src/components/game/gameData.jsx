@@ -14,6 +14,7 @@ export const RACES = {
   Elf: {
     traits: ['Darkvision (60 ft)', 'Fey Ancestry', 'Trance', 'Keen Senses (Perception proficiency)', 'Trance (4hr rest)'],
     stat_bonuses: { dexterity: 2 },
+    skill_proficiencies: ['Perception'],
     speed: 30, size: 'Medium',
     languages: ['Common', 'Elvish'],
     description: 'Ancient and graceful, elves are deeply connected to magic and nature. They resist being charmed and never sleep.',
@@ -134,6 +135,7 @@ export const RACES = {
   Tabaxi: {
     traits: ['Darkvision (60 ft)', 'Feline Agility (double speed until you move 0 ft, then recharge)', 'Cat\'s Claws (climb speed 20 ft, 1d4 slashing unarmed)', 'Cat\'s Talent (proficiency in Perception and Stealth)'],
     stat_bonuses: { dexterity: 2, charisma: 1 },
+    skill_proficiencies: ['Perception', 'Stealth'],
     speed: 30, size: 'Medium',
     languages: ['Common', 'one extra'],
     description: 'Curious cat-folk from a distant land, Tabaxi are driven by an insatiable hunger for stories, secrets, and shiny trinkets. They travel the world collecting experiences.',
@@ -142,6 +144,8 @@ export const RACES = {
   Kenku: {
     traits: ['Expert Forgery (copy handwriting/craftwork with advantage)', 'Mimicry (mimic sounds/voices heard, WIS insight contest to detect)', 'Kenku Training (proficiency in 2 of: Acrobatics, Deception, Stealth, Sleight of Hand)'],
     stat_bonuses: { dexterity: 2, wisdom: 1 },
+    skill_proficiencies: ['Acrobatics', 'Stealth'],
+    skill_choices: { count: 2, options: ['Acrobatics', 'Deception', 'Stealth', 'Sleight of Hand'] },
     speed: 30, size: 'Medium',
     languages: ['Common', 'Auran'],
     description: 'Flightless avian humanoids who communicate through mimicry of sounds and voices. Once cursed by their master, Kenku now wander the world in search of their lost voices.',
@@ -159,6 +163,8 @@ export const RACES = {
   Lizardfolk: {
     traits: ['Bite (1d6 piercing unarmed attack)', 'Cunning Artisan (craft simple items from slain creatures using bonus action)', 'Hold Breath (15 minutes)', 'Hunter\'s Lore (2 proficiencies from: Animal Handling, Nature, Perception, Stealth, Survival)', 'Natural Armor (AC 13+DEX unarmored)', 'Hungry Jaws (bonus action bite as bonus action after biting; gain temp HP = CON mod, 1/short rest)'],
     stat_bonuses: { constitution: 2, wisdom: 1 },
+    skill_proficiencies: ['Perception', 'Stealth'],
+    skill_choices: { count: 2, options: ['Animal Handling', 'Nature', 'Perception', 'Stealth', 'Survival'] },
     speed: 30, size: 'Medium',
     swim_speed: 30,
     languages: ['Common', 'Draconic'],
@@ -182,8 +188,10 @@ export const RACES = {
     subraces: [],
   },
   Tortle: {
-    traits: ['Natural Armor (AC 17 base, can\'t wear armor)', 'Shell Defense (withdraw into shell: AC +4, prone, speed 0, advantage on STR/CON saves, bonus action)', 'Hold Breath (1 hour)', 'Claws (1d4 slashing unarmed attack)', 'Survival Instinct (proficiency in Survival)', 'Tortles Live Off the Land (don\'t need to sleep, meditate 4 hours)'],
+    traits: ['Natural Armor (AC 17, cannot benefit from worn armor)', 'Shell Defense (bonus action: AC becomes 19, prone, speed 0, advantage on STR/CON saves; action to emerge)', 'Hold Breath (1 hour)', 'Claws (1d4 slashing unarmed attack)', 'Survival Instinct (proficiency in Survival)'],
     stat_bonuses: { strength: 2, wisdom: 1 },
+    skill_proficiencies: ['Survival'],
+    natural_armor: 17,
     speed: 30, size: 'Medium',
     languages: ['Common', 'Aquan'],
     description: 'Peaceful turtle-folk with impenetrable shells. Tortles wander the world seeking enlightenment and protecting nature. Their natural armor makes them formidable without equipment.',
@@ -635,7 +643,7 @@ export function getRacialAbilities(race) {
     });
     abilities.push({
       name: 'Shell Defense',
-      desc: 'Bonus action: withdraw into shell. AC +4, prone, speed 0, advantage on STR/CON saves. Cannot move but gain defensive boost.',
+      desc: 'Bonus action: withdraw into shell. AC becomes 19, prone, speed 0, advantage on STR/CON saves. Use your action to emerge.',
       type: 'bonus_action',
       usage: 'at-will'
     });
