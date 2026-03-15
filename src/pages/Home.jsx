@@ -317,7 +317,35 @@ function CharacterCard({ character, sessions, onViewSheet }) {
 
   const handleHeal = async (e) => {
     e.stopPropagation();
-    await base44.entities.Character.update(character.id, { hp_current: character.hp_max });
+    // Full resurrection: restore HP, clear death saves, remove conditions
+    await base44.entities.Character.update(character.id, {
+      hp_current: character.hp_max,
+      death_saves_success: 0,
+      death_saves_failure: 0,
+      conditions: []
+    });
+    
+    // If there's an active session with this character, end any combat
+    if (session) {
+      await base44.entities.GameSession.update(session.id, {
+        in_combat: false,
+        combat_state: null
+      });
+      
+      // Mark any active combat logs as resolved
+      const activeCombats = await base44.entities.CombatLog.filter({
+        session_id: session.id,
+        character_id: character.id,
+        is_active: true
+      });
+      for (const combat of activeCombats) {
+        await base44.entities.CombatLog.update(combat.id, {
+          is_active: false,
+          result: 'resolved'
+        });
+      }
+    }
+    
     window.location.reload();
   };
 
