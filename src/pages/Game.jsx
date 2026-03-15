@@ -981,13 +981,14 @@ export default function Game() {
           <DeathSavesModal
             character={character}
             onStabilize={async (roll) => {
-              // Natural 20 or 3 successes
               setShowDeathSaves(false);
+              // Update local state immediately so HUD reflects the change without waiting for loadState
+              setCharacter(prev => prev ? { ...prev, hp_current: 1, death_saves_success: 0, death_saves_failure: 0, conditions: [] } : prev);
               setNarrative(prev => [...prev, {
                 type: 'narration',
-                text: roll === 20 
+                text: roll === 20
                   ? `✨ Natural 20! ${character.name} surges back to life with 1 HP — fate is not done with them yet.`
-                  : `${character.name} stabilizes — unconscious but breathing. The immediate danger has passed.`
+                  : `${character.name} stabilizes and regains 1 HP — the immediate danger has passed.`
               }]);
               await loadState();
             }}
