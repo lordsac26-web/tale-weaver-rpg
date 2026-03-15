@@ -217,7 +217,7 @@ export default function SpellManagement() {
                       }} />
                   ))}
                 </div>
-                <div className="text-xs mt-1 font-fantasy" style={{ color: i < used ? 'rgba(180,140,90,0.4)' : '#c084fc' }}>
+                <div className="text-xs mt-1 font-fantasy" style={{ color: used > 0 ? 'rgba(180,140,90,0.4)' : '#c084fc' }}>
                   {max - used}/{max}
                 </div>
               </div>
