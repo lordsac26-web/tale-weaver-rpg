@@ -136,7 +136,9 @@ Story Seed: ${session.story_seed || 'A mysterious summons has drawn our hero to 
 
 Write an immersive opening narrative (3-4 paragraphs) that sets the scene vividly, introduces the situation, and ends with tension or a decision point.${session.adult_mode ? ' Mature/gritty tone permitted.' : ''}
 
-Then provide exactly 4 choices the player can make. Include skill checks and DCs on risky choices (at least 2-3 of 4 should have checks). Use diverse skills — Persuasion, Deception, Intimidation, Perception, Investigation, Athletics, Stealth, Insight, Acrobatics, Survival, Arcana, History, Medicine, Religion. DCs: 10=trivial, 15=moderate, 20=hard, 25=extreme.`;
+Then provide exactly 4 choices the player can make. Include skill checks and DCs on risky choices (at least 2-3 of 4 should have checks). Use diverse skills — Persuasion, Deception, Intimidation, Perception, Investigation, Athletics, Stealth, Insight, Acrobatics, Survival, Arcana, History, Medicine, Religion. DCs: 10=trivial, 15=moderate, 20=hard, 25=extreme.
+
+CRITICAL: Do NOT trigger combat in the opening scene. The first story beats should focus on exploration, NPC interaction, discovery, or investigation. Combat should only emerge after at least 3-5 player choices when it makes narrative sense.`;
 
     responseSchema = {
       type: 'object',
@@ -158,15 +160,42 @@ Then provide exactly 4 choices the player can make. Include skill checks and DCs
       ? `IMPORTANT: A skill check outcome is in the action text (SUCCESS or FAILURE). Reflect it directly — do not contradict it. On SUCCESS: describe overcoming the challenge vividly. On FAILURE: describe a setback or consequence.`
       : '';
 
-    const combatNote = `If combat_trigger is true, the enemies array is REQUIRED and MUST use these exact fields: name (string, use monster names from the list above), hp (integer - use the HP number shown), ac (integer - use the AC number shown), attack_bonus (integer 2-4), damage_dice (string like "1d6" or "1d8"), damage_bonus (integer 1-3), dexterity (integer 10-14), cr (decimal number from the list), xp (integer from the list). 
-    
-CRITICAL ENCOUNTER BALANCING:
-- Level 1-2: Use ONLY CR 0-0.5 creatures (like Wolf CR 0.25, Goblin CR 0.25, Kobold CR 0.125). Spawn 1-2 enemies MAX.
-- Level 3-4: Use CR 0.5-1 creatures. Spawn 1-3 enemies.
-- Level 5-6: Use CR 1-2 creatures. Spawn 1-3 enemies.
-- Level 7+: Use CR 2-3 creatures. Spawn 2-4 enemies.
+    const combatNote = `COMBAT PACING AND BALANCING RULES — READ CAREFULLY:
 
-NEVER spawn CR ${character?.level || 1}+ enemies for a level ${character?.level || 1} character. Pull exact stats (HP, AC) from the monster list above.`;
+1. COMBAT FREQUENCY: Combat should be RARE and MEANINGFUL, not constant. The story should feature:
+   - Rich exploration and NPC interactions (60-70% of gameplay)
+   - Environmental puzzles and discovery (15-20%)
+   - Combat encounters (10-15% — roughly 1 in every 6-8 player choices)
+   
+2. EARLY GAME PROTECTION: For level 1-2 characters, avoid combat in:
+   - The opening scene (first choice)
+   - The first 3-5 player actions
+   - Scenarios where the player is deliberately avoiding conflict
+   - Unless the player explicitly seeks out danger or attacks first
+
+3. ENCOUNTER DESIGN — IF combat_trigger becomes true:
+   The enemies array is REQUIRED and MUST use these exact fields:
+   - name (string, use monster names from the list above)
+   - hp (integer - use the HP number shown)
+   - ac (integer - use the AC number shown)
+   - attack_bonus (integer 2-4)
+   - damage_dice (string like "1d6" or "1d8")
+   - damage_bonus (integer 1-3)
+   - dexterity (integer 10-14)
+   - cr (decimal number from the list)
+   - xp (integer from the list)
+
+4. STRICT CR LIMITS BY LEVEL:
+   - Level 1: ONLY CR 0-0.125 creatures (Rat, Kobold, etc.). Spawn 1 enemy ONLY.
+   - Level 2: CR 0.125-0.25 creatures (Goblin, Wolf). Spawn 1-2 enemies MAX.
+   - Level 3-4: CR 0.25-0.5 creatures. Spawn 1-2 enemies.
+   - Level 5-6: CR 0.5-1 creatures. Spawn 2-3 enemies.
+   - Level 7+: CR 1-2 creatures. Spawn 2-4 enemies.
+
+5. NEVER spawn CR ${character?.level || 1}+ enemies for a level ${character?.level || 1} character.
+6. Pull exact stats (HP, AC, attack bonus, damage) from the monster list above — do not invent values.
+
+REMEMBER: A level 1 character has ~10 HP. Two bandits (CR 0.125 each with 11 HP, +3 attack, 1d6+1 damage) can easily kill them in 2 rounds. Be conservative with early encounters.`;
 
     prompt = `You are the Dungeon Master. Continue the story based on the player's choice.
 Character: ${charSummary}

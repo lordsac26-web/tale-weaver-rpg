@@ -60,6 +60,12 @@ export default function DeathSavesModal({ character, onStabilize, onDeath, onClo
         death_saves_failure: 0,
       });
       onStabilize(roll);
+    } else {
+      // Neither death nor stabilization - need to wait for next roll
+      // Force a small delay to ensure DB write completes, then close modal
+      // so the Game page can reload state and continue enemy turns
+      await new Promise(resolve => setTimeout(resolve, 800));
+      onClose();
     }
   };
 

@@ -58,7 +58,8 @@ export default function Game() {
     setSession(sess);
 
     const chars = await base44.entities.Character.filter({ id: sess.character_id });
-    setCharacter(chars[0] || null);
+    const loadedChar = chars[0] || null;
+    setCharacter(loadedChar);
 
     if (chars[0]) {
       const comps = await base44.entities.Companion.filter({ character_id: chars[0].id });
@@ -80,6 +81,13 @@ export default function Game() {
       const logs = await base44.entities.CombatLog.filter({ id: sess.combat_state.combat_id });
       if (logs[0]?.is_active) setCombat(logs[0]);
     }
+    
+    // Check if character is at 0 HP and in combat with active death saves
+    if (loadedChar?.hp_current === 0 && (loadedChar.death_saves_success > 0 || loadedChar.death_saves_failure > 0) && (loadedChar.death_saves_success < 3 && loadedChar.death_saves_failure < 3)) {
+      // Character is making death saves - show the modal
+      setShowDeathSaves(true);
+    }
+    
     setLoading(false);
   }, [sessionId]);
 
