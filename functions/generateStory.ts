@@ -29,22 +29,24 @@ Deno.serve(async (req) => {
 
   const character = await base44.entities.Character.get(session.character_id);
 
-  // Only load monsters — cap at 8 to reduce prompt size & CPU time
-  // Filter by appropriate CR range for the character's level
-  const maxCR = Math.max(1, (character?.level || 1));
+  // Load low-CR monsters appropriate for character level
+  const charLevel = character?.level || 1;
   const monsters = await base44.entities.Monster.list('-created_date', 50);
   
-  // Parse CR from challenge string (e.g., "1/4", "1", "2")
+  // Parse CR from challenge string (e.g., "0.25 (50 XP)", "1 (200 XP)")
   const parseCR = (crStr) => {
-    if (!crStr) return 0;
-    if (crStr.includes('/')) {
-      const [num, denom] = crStr.split('/');
+    if (!crStr) return 999;
+    const match = crStr.match(/^([\d.\/]+)/);
+    if (!match) return 999;
+    const crPart = match[1];
+    if (crPart.includes('/')) {
+      const [num, denom] = crPart.split('/');
       return parseFloat(num) / parseFloat(denom);
     }
-    return parseFloat(crStr) || 0;
+    return parseFloat(crPart) || 999;
   };
 
-  // Parse HP average from strings like "11 (2d8 + 2)"
+  // Parse HP average from strings like "11 (2d8+2)"
   const parseHP = (hpStr) => {
     if (typeof hpStr === 'number') return hpStr;
     if (!hpStr) return 10;
@@ -60,20 +62,28 @@ Deno.serve(async (req) => {
     return match ? parseInt(match[1]) : 10;
   };
 
-  // Filter monsters appropriate for this level (CR 0 to character level)
+  // Strict CR filtering based on character level
+  const maxCR = charLevel <= 2 ? 0.5 : charLevel <= 4 ? 1 : charLevel <= 6 ? 2 : Math.floor(charLevel / 2);
+  
   const appropriateMonsters = monsters
-    .filter(m => {
-      const cr = parseCR(m.challenge);
-      return cr >= 0 && cr <= maxCR;
-    })
-    .slice(0, 12);
+    .map(m => ({ ...m, cr_numeric: parseCR(m.challenge) }))
+    .filter(m => m.cr_numeric <= maxCR)
+    .sort((a, b) => a.cr_numeric - b.cr_numeric)
+    .slice(0, 15);
+
+  if (appropriateMonsters.length === 0) {
+    // Fallback if no monsters in DB
+    return Response.json({ 
+      narrative: 'The wilds seem unusually quiet... No threats emerge.', 
+      choices: [{ text: 'Continue onward', risk_level: 'low' }] 
+    });
+  }
 
   const monsterNames = appropriateMonsters.map(m => {
-    const cr = parseCR(m.challenge);
     const hp = parseHP(m.hit_points);
     const ac = parseAC(m.armor_class);
-    const xpByCR = { 0: 10, 0.125: 25, 0.25: 50, 0.5: 100, 1: 200, 2: 450, 3: 700, 4: 1100, 5: 1800, 6: 2300, 7: 2900, 8: 3900, 9: 5000, 10: 5900 };
-    const xp = xpByCR[cr] || Math.floor(cr * 200);
+    const xpByCR = { 0: 10, 0.125: 25, 0.25: 50, 0.5: 100, 1: 200, 2: 450, 3: 700, 4: 1100, 5: 1800 };
+    const xp = xpByCR[m.cr_numeric] || Math.floor(m.cr_numeric * 200);
     return `${m.name} (CR ${m.challenge}, AC ${ac}, HP ${hp}, XP ${xp})`;
   }).join('; ');
 
