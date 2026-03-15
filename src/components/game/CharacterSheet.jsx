@@ -504,9 +504,33 @@ function FeaturesTab({ character }) {
       feats.forEach(f => classFeatures.push({ name: f, level: parseInt(lvl) }));
     }
   });
- 
+
+  const racialAbilities = getRacialAbilities(character.race);
+
   return (
     <div className="space-y-4">
+      {/* Racial Abilities */}
+      {racialAbilities.length > 0 && (
+        <Section title={`${character.race} Racial Abilities`} icon="🧬">
+          <div className="space-y-1.5">
+            {racialAbilities.map((ability, i) => (
+              <div key={i} className="p-2.5 rounded-lg"
+                style={{ background: 'rgba(10,30,15,0.5)', border: '1px solid rgba(40,160,80,0.15)' }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-fantasy" style={{ color: '#86efac' }}>{ability.name}</span>
+                  {ability.usage && (
+                    <span className="text-xs badge-green">{ability.usage}</span>
+                  )}
+                </div>
+                <div className="text-xs mt-1" style={{ color: 'rgba(200,220,180,0.6)', fontFamily: 'EB Garamond, serif' }}>
+                  {ability.desc}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
       {/* Character Features */}
       <Section title="Character Features" icon="⚡">
         {(character.features || []).length === 0 && classFeatures.length === 0 ? (
