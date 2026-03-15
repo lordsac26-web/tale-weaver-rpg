@@ -9,10 +9,10 @@ function parseConsumableEffect(item) {
   const desc = item.description?.toLowerCase() || '';
 
   if (name.includes('healing') || desc.includes('heal') || desc.includes('hit point')) {
-    if (name.includes('supreme') || name.includes('supreme')) return { type: 'heal', dice: '4d4+4', label: 'Heals 4d4+4 HP', icon: '❤️' };
-    if (name.includes('greater')) return { type: 'heal', dice: '4d4+4', label: 'Heals 4d4+4 HP', icon: '❤️' };
-    if (name.includes('superior')) return { type: 'heal', dice: '8d4+8', label: 'Heals 8d4+8 HP', icon: '❤️' };
-    if (name.includes('supreme')) return { type: 'heal', dice: '10d4+20', label: 'Heals 10d4+20 HP', icon: '❤️' };
+    // Order matters — check most specific names first (supreme contains 'superior' substring check fails, so order: supreme > superior > greater > default)
+    if (name.includes('supreme'))  return { type: 'heal', dice: '10d4+20', label: 'Heals 10d4+20 HP', icon: '❤️' };
+    if (name.includes('superior')) return { type: 'heal', dice: '8d4+8',   label: 'Heals 8d4+8 HP',   icon: '❤️' };
+    if (name.includes('greater'))  return { type: 'heal', dice: '4d4+4',   label: 'Heals 4d4+4 HP',   icon: '❤️' };
     return { type: 'heal', dice: '2d4+2', label: 'Heals 2d4+2 HP', icon: '❤️' };
   }
   if (name.includes('mana') || name.includes('arcane') || desc.includes('spell slot')) {
