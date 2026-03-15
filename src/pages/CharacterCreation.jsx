@@ -164,6 +164,19 @@ export default function CharacterCreation() {
     slots.forEach((max, i) => { if (max > 0) spell_slots[`level_${i + 1}`] = 0; }); // track used slots (start at 0 used)
     return { ...char, spell_slots };
   };
+
+  // Apply racial skill proficiencies (e.g. Elf → Perception, Tortle → Survival)
+  // Uses the structured skill_proficiencies field on each race entry.
+  // Does not overwrite skills the player already chose.
+  const buildRacialSkills = (char) => {
+    const raceData = RACES[char.race];
+    if (!raceData?.skill_proficiencies?.length) return char;
+    const skills = { ...char.skills };
+    raceData.skill_proficiencies.forEach(skill => {
+      if (!skills[skill]) skills[skill] = 'proficient';
+    });
+    return { ...char, skills };
+  };
  
   const handleGenerateBackstory = async () => {
     setGeneratingBackstory(true);
@@ -183,6 +196,7 @@ export default function CharacterCreation() {
     finalChar = updateDerivedStats(finalChar);
     finalChar = buildClassFeatures(finalChar);
     finalChar = buildSpellSlots(finalChar);
+    finalChar = buildRacialSkills(finalChar);
     // Apply background skills
     const bgData = BACKGROUNDS.find(b => b.name === finalChar.background);
     if (bgData) {
