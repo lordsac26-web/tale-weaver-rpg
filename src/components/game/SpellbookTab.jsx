@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Zap, Info, Search, BookOpen, Star, CheckCircle } from 'lucide-react';
+import { Zap, Info, Search, BookOpen, Star, CheckCircle, Moon, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { base44 } from '@/api/base44Client';
+import SpellSlotTracker from './SpellSlotTracker';
 import {
   SPELLS_BY_CLASS, SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS,
   getSpellSlotsForLevel, calcSpellSaveDC, calcSpellAttackBonus,
-  getSpellcastingAbility
+  getSpellcastingAbility, getCantripDamageDice
 } from './spellData';
 
 const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
@@ -19,51 +21,75 @@ const ATTACK_ICONS = {
   utility: '🔧',
 };
 
-function SpellCard({ spell, spellName, character, isKnown, onToggleKnown, compact = false }) {
+function SpellCard({ spell, spellName, character, isKnown, isPrepared, onToggleKnown, onTogglePrepared, compact = false }) {
   const [showDetail, setShowDetail] = useState(false);
   const details = SPELL_DETAILS[spellName] || spell || {};
   const schoolColor = SCHOOL_COLORS[details.school] || 'text-slate-400';
   const dmgColor = DAMAGE_TYPE_COLORS[details.damage_type] || 'text-amber-300';
   const attackIcon = ATTACK_ICONS[details.attack_type || 'utility'];
+  const charLevel = character?.level || 1;
   
   // Check for concentration and ritual from multiple sources
   const isConcentration = details.requires_concentration || details.concentration;
   const isRitual = details.is_reaction || details.ritual;
+  
+  // Get cantrip scaling
+  const isCantrip = details.level === 0;
+  const displayDice = isCantrip ? getCantripDamageDice(spellName, charLevel) : details.damage_dice;
 
   return (
-    <div className={`rounded-xl border transition-all ${isKnown ? 'border-amber-600/50 bg-amber-900/10' : 'border-slate-700/40 bg-slate-800/30'}`}>
-      <div className="flex items-start gap-2 p-3">
-        <span className="text-lg flex-shrink-0 mt-0.5">{attackIcon}</span>
+    <div className={`rounded-xl transition-all ${
+      isPrepared ? 'glass-panel border-glow-gold' : 
+      isKnown ? 'glass-panel-light' : 
+      'glass-panel-light opacity-60'
+    }`}>
+      <div className="flex items-start gap-2.5 p-3">
+        <span className="text-base flex-shrink-0 mt-0.5">{attackIcon}</span>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-sm font-medium ${isKnown ? 'text-amber-200' : 'text-slate-300'}`}>{spellName}</span>
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className={`text-sm font-fantasy font-medium ${isPrepared ? 'text-glow-gold' : isKnown ? 'text-amber-200' : 'text-slate-300'}`} style={{ color: isPrepared ? '#f0c040' : undefined }}>
+              {spellName}
+            </span>
+            {isPrepared && <span className="px-1.5 py-0.5 rounded-full text-xs badge-gold">READY</span>}
             {details.school && <span className={`text-xs ${schoolColor} opacity-70`}>{details.school}</span>}
-            {isConcentration && <span className="text-xs text-blue-400 opacity-70">Conc.</span>}
+            {isConcentration && <span className="text-xs px-1.5 py-0.5 rounded badge-arcane">Concentration</span>}
             {isRitual && <span className="text-xs text-yellow-400 opacity-70">Ritual</span>}
-            {details.damage_type && <span className={`text-xs ${dmgColor} opacity-70`}>{details.damage_type}</span>}
           </div>
           {!compact && (
-            <div className="flex items-center gap-3 mt-1 flex-wrap">
-              {details.casting_time && <span className="text-xs text-slate-500">{details.casting_time}</span>}
-              {details.range && <span className="text-xs text-slate-500">📍 {details.range}</span>}
-              {details.damage_dice && details.damage_dice !== '0' && (
-                <span className={`text-xs font-mono ${dmgColor}`}>{details.damage_dice}</span>
+            <div className="flex items-center gap-3 mt-1.5 flex-wrap text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>
+              {details.casting_time && <span>⏱️ {details.casting_time}</span>}
+              {details.range && <span>📍 {details.range}</span>}
+              {displayDice && displayDice !== '0' && (
+                <span className={`font-mono font-bold ${dmgColor}`}>
+                  {displayDice} {details.damage_type}
+                  {isCantrip && charLevel >= 5 && <span className="text-xs opacity-50 ml-1">(lv{charLevel})</span>}
+                </span>
               )}
               {details.attack_type === 'healing' && details.heal_dice && (
-                <span className="text-xs font-mono text-green-400">{details.heal_dice} heal</span>
+                <span className="font-mono font-bold text-green-400">{details.heal_dice} heal</span>
               )}
-              {details.save_type && <span className="text-xs text-yellow-400">{details.save_type} save</span>}
+              {details.save_type && <span className="text-yellow-400 font-bold">{details.save_type.toUpperCase()} save</span>}
             </div>
           )}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button onClick={() => setShowDetail(v => !v)} className="p-1 text-slate-500 hover:text-slate-300 transition-colors">
+          <button onClick={() => setShowDetail(v => !v)} 
+            className="p-1 rounded transition-colors" 
+            style={{ color: 'rgba(180,140,90,0.4)' }}
+            onMouseEnter={e => e.currentTarget.style.color = '#c9a96e'}
+            onMouseLeave={e => e.currentTarget.style.color = 'rgba(180,140,90,0.4)'}>
             <Info className="w-3.5 h-3.5" />
           </button>
-          {onToggleKnown && (
+          {onTogglePrepared && isKnown && (
+            <button onClick={() => onTogglePrepared(spellName)}
+              className={`p-1 rounded transition-colors ${isPrepared ? 'text-amber-400 hover:text-amber-300' : 'text-slate-500 hover:text-amber-400'}`}>
+              <CheckCircle className={`w-3.5 h-3.5 ${isPrepared ? 'fill-current' : ''}`} />
+            </button>
+          )}
+          {onToggleKnown && !isKnown && (
             <button onClick={() => onToggleKnown(spellName)}
-              className={`p-1 rounded transition-colors ${isKnown ? 'text-amber-400 hover:text-amber-300' : 'text-slate-500 hover:text-amber-400'}`}>
-              <Star className={`w-3.5 h-3.5 ${isKnown ? 'fill-current' : ''}`} />
+              className="p-1 rounded transition-colors text-slate-500 hover:text-amber-400">
+              <Star className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
@@ -72,21 +98,30 @@ function SpellCard({ spell, spellName, character, isKnown, onToggleKnown, compac
       <AnimatePresence>
         {showDetail && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden border-t border-slate-700/30 px-3 pb-3 pt-2">
+            className="overflow-hidden px-4 pb-3 pt-2"
+            style={{ borderTop: '1px solid rgba(180,140,90,0.1)', background: 'rgba(8,5,2,0.5)' }}>
             {details.visual_summary && (
-              <p className="text-xs text-purple-400/80 leading-relaxed italic mb-2">✨ {details.visual_summary}</p>
+              <p className="text-xs leading-relaxed italic mb-2" style={{ color: 'rgba(192,132,252,0.75)' }}>✨ {details.visual_summary}</p>
             )}
             {details.effect_summary && (
-              <p className="text-xs text-blue-300/80 leading-relaxed font-medium mb-2">⚡ {details.effect_summary}</p>
+              <p className="text-xs leading-relaxed font-medium mb-2" style={{ color: 'rgba(147,197,253,0.8)' }}>⚡ {details.effect_summary}</p>
             )}
-            <p className="text-xs text-slate-400 leading-relaxed">{details.description || 'No description available.'}</p>
+            <p className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
+              {details.description || 'No description available.'}
+            </p>
             {details.higher_level_scaling && (
-              <p className="text-xs text-amber-400/70 mt-1.5 italic">At higher levels: {details.higher_level_scaling}</p>
+              <p className="text-xs italic mb-1" style={{ color: 'rgba(240,192,64,0.7)' }}>
+                <strong>At Higher Levels:</strong> {details.higher_level_scaling}
+              </p>
             )}
-            {details.components && <p className="text-xs text-slate-500 mt-1">Components: {details.components}</p>}
-            {details.duration && <p className="text-xs text-slate-500">Duration: {details.duration}</p>}
+            <div className="flex flex-wrap gap-2 mt-2 text-xs" style={{ color: 'rgba(180,140,90,0.45)' }}>
+              {details.components && <span>Components: {details.components}</span>}
+              {details.duration && <span>Duration: {details.duration}</span>}
+            </div>
             {details.conditions_caused && details.conditions_caused.length > 0 && (
-              <p className="text-xs text-red-400/70 mt-1">Conditions: {details.conditions_caused.join(', ')}</p>
+              <p className="text-xs mt-2 px-2 py-1 rounded" style={{ background: 'rgba(80,5,5,0.3)', border: '1px solid rgba(180,30,30,0.2)', color: '#fca5a5' }}>
+                <strong>Conditions:</strong> {details.conditions_caused.join(', ')}
+              </p>
             )}
           </motion.div>
         )}
@@ -343,7 +378,9 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
                   </div>
                   <div className="space-y-2">
                     {levelSpells.map(({ name }) => (
-                      <SpellCard key={name} spellName={name} character={character} isKnown={true} onToggleKnown={togglePrepared} />
+                      <SpellCard key={name} spellName={name} character={character} 
+                        isKnown={true} isPrepared={false}
+                        onTogglePrepared={togglePrepared} />
                     ))}
                   </div>
                 </div>
