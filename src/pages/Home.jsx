@@ -485,37 +485,57 @@ function SessionCard({ session, characters }) {
   const LinkOrDiv = canResume ? Link : 'div';
   const linkProps = canResume ? { to: createPageUrl('Game') + `?session_id=${session.id}` } : {};
   
+  const handleDeleteSession = async (e) => {
+    e.stopPropagation();
+    if (confirm(`Delete campaign "${session.title || 'Unnamed Campaign'}" permanently? This cannot be undone.`)) {
+      await base44.entities.GameSession.update(session.id, { is_active: false });
+      window.location.reload();
+    }
+  };
+  
   return (
-    <LinkOrDiv {...linkProps}>
-      <motion.div whileHover={canResume ? { y: -3 } : {}} transition={{ type: 'spring', stiffness: 300 }}
-        className={`rounded-xl fantasy-card overflow-hidden ${canResume ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
-        style={{ background: 'linear-gradient(160deg, rgba(22,10,35,0.95), rgba(14,6,22,0.98))', border: '1px solid rgba(140,80,220,0.22)',
-          boxShadow: 'inset 0 1px 0 rgba(196,181,253,0.05), 0 4px 20px rgba(0,0,0,0.6)' }}>
-        <div className="px-4 py-3 flex items-center justify-between"
-          style={{ background: 'linear-gradient(90deg, rgba(50,20,80,0.5), rgba(30,12,50,0.4))', borderBottom: '1px solid rgba(140,80,220,0.15)' }}>
-          <h3 className="font-fantasy font-bold text-sm" style={{ color: '#dfc8ff', textShadow: '0 1px 4px rgba(0,0,0,0.9)' }}>
-            {session.title || 'Unnamed Campaign'}
-          </h3>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-fantasy ${!canResume ? 'badge-blood' : session.in_combat ? 'badge-blood' : 'badge-arcane'}`}>
-            {!canResume ? '💀 Dead' : session.in_combat ? '⚔️ Combat' : '📖 Exploring'}
-          </span>
-        </div>
-        <div className="px-4 py-3 space-y-1">
-          <p className="text-sm italic font-serif" style={{ color: 'rgba(196,181,253,0.65)' }}>
-            📍 {session.current_location || 'Unknown Location'}
-          </p>
-          {char && (
-            <p className="text-xs font-body" style={{ color: 'rgba(212,149,90,0.55)' }}>
-              Playing as <span style={{ color: 'var(--brass-gold)', fontWeight: 600 }}>{char.name}</span>
+    <div onClick={e => canResume || e.stopPropagation()}>
+      <LinkOrDiv {...linkProps}>
+        <motion.div whileHover={canResume ? { y: -3 } : {}} transition={{ type: 'spring', stiffness: 300 }}
+          className={`rounded-xl fantasy-card overflow-hidden ${canResume ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+          style={{ background: 'linear-gradient(160deg, rgba(22,10,35,0.95), rgba(14,6,22,0.98))', border: '1px solid rgba(140,80,220,0.22)',
+            boxShadow: 'inset 0 1px 0 rgba(196,181,253,0.05), 0 4px 20px rgba(0,0,0,0.6)' }}>
+          <div className="px-4 py-3 flex items-center justify-between"
+            style={{ background: 'linear-gradient(90deg, rgba(50,20,80,0.5), rgba(30,12,50,0.4))', borderBottom: '1px solid rgba(140,80,220,0.15)' }}>
+            <h3 className="font-fantasy font-bold text-sm" style={{ color: '#dfc8ff', textShadow: '0 1px 4px rgba(0,0,0,0.9)' }}>
+              {session.title || 'Unnamed Campaign'}
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-0.5 rounded-full text-xs font-fantasy ${!canResume ? 'badge-blood' : session.in_combat ? 'badge-blood' : 'badge-arcane'}`}>
+                {!canResume ? '💀 Dead' : session.in_combat ? '⚔️ Combat' : '📖 Exploring'}
+              </span>
+              <button onClick={handleDeleteSession}
+                className="p-1.5 rounded-lg text-xs transition-all"
+                title="Delete campaign"
+                style={{ background: 'rgba(60,20,20,0.4)', border: '1px solid rgba(180,50,50,0.2)', color: 'rgba(252,165,165,0.6)' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(220,80,80,0.4)'; e.currentTarget.style.color = '#fca5a5'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,50,50,0.2)'; e.currentTarget.style.color = 'rgba(252,165,165,0.6)'; }}>
+                <Skull className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+          <div className="px-4 py-3 space-y-1">
+            <p className="text-sm italic font-serif" style={{ color: 'rgba(196,181,253,0.65)' }}>
+              📍 {session.current_location || 'Unknown Location'}
             </p>
-          )}
-          {(session.season || session.time_of_day) && (
-            <p className="text-xs font-body" style={{ color: 'rgba(160,130,200,0.4)' }}>
-              {[session.season, session.time_of_day].filter(Boolean).join(' · ')}
-            </p>
-          )}
-        </div>
-      </motion.div>
-    </LinkOrDiv>
+            {char && (
+              <p className="text-xs font-body" style={{ color: 'rgba(212,149,90,0.55)' }}>
+                Playing as <span style={{ color: 'var(--brass-gold)', fontWeight: 600 }}>{char.name}</span>
+              </p>
+            )}
+            {(session.season || session.time_of_day) && (
+              <p className="text-xs font-body" style={{ color: 'rgba(160,130,200,0.4)' }}>
+                {[session.season, session.time_of_day].filter(Boolean).join(' · ')}
+              </p>
+            )}
+          </div>
+        </motion.div>
+      </LinkOrDiv>
+    </div>
   );
 }
