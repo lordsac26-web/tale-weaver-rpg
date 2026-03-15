@@ -75,7 +75,8 @@ Deno.serve(async (req) => {
     // Fallback if no monsters in DB
     return Response.json({ 
       narrative: 'The wilds seem unusually quiet... No threats emerge.', 
-      choices: [{ text: 'Continue onward', risk_level: 'low' }] 
+      choices: [{ text: 'Continue onward', risk_level: 'low' }],
+      combat_trigger: false
     });
   }
 
