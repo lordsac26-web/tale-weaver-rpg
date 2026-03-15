@@ -424,9 +424,10 @@ export default function Game() {
           }
         if (data.player_at_zero_hp) {
           // Per 5e: dropping to 0 HP triggers death saving throws, not instant death
-          // (unless the damage was from a massive hit equal to or exceeding max HP)
           setShowDeathSaves(true);
           setCombat(null);
+          // Clear the in_combat flag on the session so resume doesn't loop back into combat
+          await base44.entities.GameSession.update(sessionId, { in_combat: false });
           break;
         }
         await reloadCombat(combatId);
