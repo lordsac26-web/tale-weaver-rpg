@@ -37,7 +37,7 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
       bgColor: 'rgba(8,45,18,0.7)',
       activeBg: 'rgba(15,70,30,0.85)',
       type: 'bonus_action',
-      description: `Bonus Action: Regain 1d10+${level} HP (${Math.floor(Math.random() * 10) + 1 + level} avg). 1/short rest.`,
+      description: `Bonus Action: Regain 1d10+${level} HP (avg ${Math.floor(level / 2) + 5 + level}). 1/short rest.`,
       shortDesc: `Heal 1d10+${level} HP`,
       restType: 'short',
       used: secondWindUsed,
