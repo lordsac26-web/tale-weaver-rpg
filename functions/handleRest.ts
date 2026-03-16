@@ -122,10 +122,11 @@ Deno.serve(async (req) => {
   await base44.asServiceRole.entities.Character.update(character_id, updates);
 
   const updatedChars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
+  const healing = updates.hp_current != null ? updates.hp_current - (character.hp_current || 0) : 0;
   
   return Response.json({
     character: updatedChars[0],
-    healing: updates.hp_current - (character.hp_current || 0),
+    healing,
     rest_type,
     restorations,
     narrative: rest_type === 'long' ? restNarrative : undefined
