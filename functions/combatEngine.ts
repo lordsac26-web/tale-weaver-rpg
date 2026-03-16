@@ -399,12 +399,17 @@ Deno.serve(async (req) => {
 
       // Paladin Divine Smite (if toggled and spell slots available)
       if (modifiers.divine_smite_ready && character.class === 'Paladin' && attackType === 'melee') {
-        // Find highest available spell slot
+        // Find LOWEST available spell slot (Paladin should choose lowest to conserve resources)
+        // spell_slots tracks USED counts. A slot at level i is available if used < max_slots[i].
+        // Paladin half-caster table: level 1-2=0, level 3-4=2/3 slots per level, etc.
+        // We compare used vs a safe max of 4 (which covers all Paladin slot maxes at any level).
         const slots = character.spell_slots || {};
         let smiteLevel = 0;
-        for (let i = 5; i >= 1; i--) {
+        for (let i = 1; i <= 5; i++) {
           const key = `level_${i}`;
-          if ((slots[key] || 0) < i) { // slot available
+          const used = slots[key] || 0;
+          // Available if fewer than 4 used at this level (conservative safe max for half-casters)
+          if (used < 4) {
             smiteLevel = i;
             break;
           }
