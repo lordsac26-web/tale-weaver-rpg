@@ -384,9 +384,10 @@ export default function Game() {
 
   const processEnemyTurns = async (combatId) => {
     // Record the starting round — enemies should only act once per round.
-    // When the round advances (turn wraps around), stop and let the player go next.
+    // When the round advances, stop and let the player go next.
     const initialLogs = await base44.entities.CombatLog.filter({ id: combatId });
     const startRound = initialLogs[0]?.round || 1;
+    if (!initialLogs[0]) return; // combat log gone — bail out cleanly
 
     let attempts = 0;
     while (attempts < 10) {
