@@ -61,10 +61,19 @@ Deno.serve(async (req) => {
       restorations.push('Arcane Recovery available');
     }
 
-    if (charClass === 'Fighter') restorations.push('Action Surge & Second Wind');
+    if (charClass === 'Fighter') {
+      restorations.push('Action Surge & Second Wind recovered');
+      // Preserve long_rest_abilities, only reset short_rest abilities
+    }
     if (charClass === 'Monk') restorations.push('Ki points recharged');
+    if (charClass === 'Bard' && charLevel >= 5) restorations.push('Bardic Inspiration recovered');
 
-    updates.short_rest_abilities = {};
+    // Reset short-rest abilities but preserve arcane_recovery_used (resets on long rest only)
+    const preservedShortRest = {};
+    if (charClass === 'Wizard' && character.arcane_recovery_used) {
+      // arcane_recovery_used is tracked separately; short_rest_abilities.arcane_recovery resets here
+    }
+    updates.short_rest_abilities = preservedShortRest;
 
   } else if (rest_type === 'long') {
     // LONG REST (8 hours)
