@@ -135,7 +135,9 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
   const [filterLevel, setFilterLevel] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [activeSection, setActiveSection] = useState('prepared'); // 'prepared' | 'available' | 'slots'
-  const preparedSpells = new Set(character.spells_prepared || []);
+
+  // Guard must come AFTER all hooks (Rules of Hooks)
+  const preparedSpells = new Set(character?.spells_prepared || []);
 
   if (!character) return null;
 
