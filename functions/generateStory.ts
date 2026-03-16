@@ -71,14 +71,8 @@ Deno.serve(async (req) => {
     .sort((a, b) => a.cr_numeric - b.cr_numeric)
     .slice(0, 15);
 
-  if (appropriateMonsters.length === 0) {
-    // Fallback if no monsters in DB
-    return Response.json({ 
-      narrative: 'The wilds seem unusually quiet... No threats emerge.', 
-      choices: [{ text: 'Continue onward', risk_level: 'low' }],
-      combat_trigger: false
-    });
-  }
+  // If no monsters available, allow story to continue — just disable combat triggers
+  const combatBlocked = appropriateMonsters.length === 0;
 
   const monsterNames = appropriateMonsters.map(m => {
     const hp = parseHP(m.hit_points);
