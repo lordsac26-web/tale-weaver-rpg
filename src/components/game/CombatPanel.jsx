@@ -237,7 +237,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                             }} />
                         </div>
                         <span className="text-xs font-mono font-bold flex-shrink-0" style={{ color: '#fca5a5' }}>
-                          {enemy.hp || enemy.hp_current}/{enemy.hp_max}
+                          {currentHp}/{enemy.hp_max}
                         </span>
                       </div>
                       {enemy.ai_behavior && (
