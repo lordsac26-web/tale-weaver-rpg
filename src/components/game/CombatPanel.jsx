@@ -293,6 +293,26 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                 onToggleModifier={(id) => setCombatModifiers(prev => ({ ...prev, [id]: !prev[id] }))}
               />
 
+              {/* Weapon selector */}
+              {action === 'attack' && (
+                <div>
+                  <div className="font-fantasy text-xs mb-1" style={{ color: 'rgba(180,100,100,0.5)', fontSize: '0.62rem', letterSpacing: '0.08em' }}>WEAPON</div>
+                  <select
+                    value={selectedWeaponIdx}
+                    onChange={e => setSelectedWeaponIdx(e.target.value === 'equipped' || e.target.value === 'unarmed' ? e.target.value : parseInt(e.target.value))}
+                    className="w-full rounded-lg px-2 py-1.5 text-xs"
+                    style={{ background: 'rgba(15,5,5,0.7)', border: '1px solid rgba(180,50,50,0.3)', color: '#fca5a5', fontFamily: 'EB Garamond, serif' }}>
+                    {character?.equipped?.weapon && (
+                      <option value="equipped">⚔️ {character.equipped.weapon.name} (equipped) — {character.equipped.weapon.damage || character.equipped.weapon.damage_dice || '?'}</option>
+                    )}
+                    {weaponOptions.map((w, i) => (
+                      <option key={i} value={i}>🗡 {w.name} — {w.damage || w.damage_dice || '?'}</option>
+                    ))}
+                    <option value="unarmed">👊 Unarmed Strike — 1d4</option>
+                  </select>
+                </div>
+              )}
+
               {/* Action tabs */}
               <div className="flex gap-1.5">
                 <button onClick={() => { setAction('attack'); setSelectedSpell(null); }}
