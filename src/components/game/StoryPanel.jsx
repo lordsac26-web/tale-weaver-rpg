@@ -357,9 +357,8 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
         <div ref={endRef} />
       </div>
  
-      {/* Choices + Input */}
-      {(
-        <div className="flex-shrink-0 p-4 space-y-2.5"
+      {/* Choices + Input — always rendered so player can type freely even while loading */}
+      <div className="flex-shrink-0 p-4 space-y-2.5"
           style={{
             background: 'rgba(8,5,2,0.85)',
             backdropFilter: 'blur(12px)',
