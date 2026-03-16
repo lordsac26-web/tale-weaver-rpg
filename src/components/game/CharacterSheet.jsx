@@ -139,7 +139,7 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
           <AnimatePresence mode="wait">
             <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
               {tab === 'stats' && <StatsTab character={character} profBonus={profBonus} />}
-              {tab === 'skills' && <SkillsTab character={character} profBonus={profBonus} />}
+              {tab === 'skills' && <SkillsTab character={character} profBonus={profBonus} onUpdate={handleUpdateCharacter} />}
               {tab === 'combat' && <CombatTab character={character} profBonus={profBonus} isCaster={isCaster} onUpdate={handleUpdateCharacter} />}
               {tab === 'inventory' && <InventoryTab character={character} onUpdate={handleUpdateCharacter} onIdentify={null} />}
               {tab === 'spells' && <SpellbookTab character={character} onUpdateCharacter={handleUpdateCharacter} />}
