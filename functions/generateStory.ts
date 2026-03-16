@@ -90,7 +90,9 @@ Deno.serve(async (req) => {
   // Only last 3 log entries to reduce token usage and speed up response
   const recentLog = (session.story_log || []).slice(-3).map(e => e.text).join('\n');
 
-  const gameDataContext = `Available monsters (use EXACT stats when spawning enemies): ${monsterNames}`;
+  const gameDataContext = combatBlocked
+    ? `No monsters available in the database — do NOT trigger combat in this scene.`
+    : `Available monsters (use EXACT stats when spawning enemies): ${monsterNames}`;
 
   // Strict enemy schema — enforces all fields combatEngine needs
   const enemyItemSchema = {
