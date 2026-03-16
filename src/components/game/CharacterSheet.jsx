@@ -6,6 +6,7 @@ import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_
 import { base44 } from '@/api/base44Client';
 import SpellbookTab from './SpellbookTab';
 import { SkillTooltip, FeatureTooltip, ConditionTooltip } from './GameTooltip';
+import SkillProficiencyRow from './SkillProficiencyRow';
  
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
