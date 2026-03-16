@@ -491,7 +491,7 @@ export default function Game() {
     const combatId = combat?.id || session?.combat_state?.combat_id;
     if (!combatId) return;
     
-    // Check if player is dead
+    // Check if player is at 0 HP
     if (character?.hp_current <= 0) {
       setShowDeathSaves(true);
       return;
@@ -499,7 +499,7 @@ export default function Game() {
     
     setCombatLoading(true);
     
-    // Advance to next turn and reset action tracking
+    // Advance past the player turn and reset action tracking
     await base44.functions.invoke('combatEngine', {
       action: 'next_turn',
       session_id: sessionId,
@@ -508,8 +508,15 @@ export default function Game() {
       payload: {}
     });
     
+    // Reload to get the updated turn index before processing enemies
     await reloadCombat(combatId);
-    await processEnemyTurns(combatId);
+    
+    // Only process enemy turns if combat is still active
+    const freshLogs = await base44.entities.CombatLog.filter({ id: combatId });
+    if (freshLogs[0]?.is_active) {
+      await processEnemyTurns(combatId);
+    }
+    
     await loadState();
     setCombatLoading(false);
   };
