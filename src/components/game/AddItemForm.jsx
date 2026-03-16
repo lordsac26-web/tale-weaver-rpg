@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import {
   ITEM_RARITY, CATEGORY_TO_SLOT, ALL_ITEM_CATEGORIES, CATEGORY_ICONS,
