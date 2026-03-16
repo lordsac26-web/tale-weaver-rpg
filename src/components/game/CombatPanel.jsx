@@ -80,6 +80,23 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const statMod     = isRanged ? dexMod : isFinesse ? Math.max(strMod, dexMod) : strMod;
   const attackMod   = statMod + profBonus + (equippedWeapon?.attack_bonus || 0);
 
+  // Build list of weapons the player can attack with
+  const weaponOptions = [
+    ...(character?.inventory || []).filter(it =>
+      it.category === 'Weapon' || it.damage || it.damage_dice
+    ),
+  ];
+  // The actively selected weapon for attack
+  const getActiveWeapon = () => {
+    if (selectedWeaponIdx === 'unarmed') {
+      return { name: 'Unarmed Strike', damage_dice: '1d4', attack_bonus: 0, damage_bonus: 0, type: 'melee', properties: [] };
+    }
+    if (selectedWeaponIdx === 'equipped' || selectedWeaponIdx === null) {
+      return character?.equipped?.weapon || null;
+    }
+    return weaponOptions[selectedWeaponIdx] || null;
+  };
+
   const handleSelectSpell = (spellName, baseLevel) => {
     setSelectedSpell(spellName);
     setSelectedSpellBaseLevel(baseLevel);
@@ -102,7 +119,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         base_level: selectedSpellBaseLevel || 1,
       }, combatModifiers);
     } else if (action === 'attack') {
-      const weapon = character?.equipped?.weapon || { 
+      const weapon = getActiveWeapon() || { 
         name: 'Unarmed Strike',
         damage_dice: '1d4', 
         attack_bonus: 0, 
