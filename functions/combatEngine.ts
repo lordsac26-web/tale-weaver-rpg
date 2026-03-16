@@ -415,14 +415,16 @@ Deno.serve(async (req) => {
           }
         }
         if (smiteLevel > 0) {
-          const smiteDice = 2 + smiteLevel;
+          // Divine Smite: 2d8 + 1d8 per slot level above 1st, max 5d8 total (cap at slot level 4)
+          const effectiveLevel = Math.min(smiteLevel, 4);
+          const smiteDice = 1 + effectiveLevel; // 2d8 at level 1, up to 5d8 at level 4+
           let smiteDmg = 0;
           for (let i = 0; i < smiteDice; i++) smiteDmg += rollDice(8);
           damage += smiteDmg;
-          // Consume spell slot (spell_slots tracks USED count)
+          // Consume spell slot (increment used count)
           const slotKey = `level_${smiteLevel}`;
           await base44.entities.Character.update(character_id, {
-            spell_slots: { ...slots, [slotKey]: Math.min(smiteLevel, (slots[slotKey] || 0) + 1) }
+            spell_slots: { ...slots, [slotKey]: (slots[slotKey] || 0) + 1 }
           });
         }
       }
