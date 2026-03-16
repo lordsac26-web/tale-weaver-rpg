@@ -683,41 +683,64 @@ function recalculateStatsFromEquipment(character, equipped, inventory) {
   let savingThrowBonus = 0;
   const abilityBonuses = {};
 
-  Object.values(equipped).forEach(item => {
-    if (!item?.bonuses) {
-      // Auto-parse bonuses if not present
-      const parsed = parseItemBonuses(item?.name || '', item?.description || '');
+  Object.entries(equipped).forEach(([slot, item]) => {
+    if (!item) return;
+
+    // Auto-parse bonuses from name/description if not cached
+    if (!item.bonuses) {
+      const parsed = parseItemBonuses(item.name || '', item.description || '');
       if (parsed) item.bonuses = parsed;
     }
-    
-    const bonuses = item?.bonuses || {};
+
+    const bonuses = item.bonuses || {};
     if (bonuses.ac) acBonus += bonuses.ac;
     if (bonuses.saving_throws) savingThrowBonus += bonuses.saving_throws;
     if (bonuses.ability_scores) {
       Object.entries(bonuses.ability_scores).forEach(([stat, val]) => {
-        abilityBonuses[stat] = Math.max(abilityBonuses[stat] || 0, val); // take highest for set abilities
+        abilityBonuses[stat] = Math.max(abilityBonuses[stat] || 0, val);
       });
     }
   });
 
-  // Apply ability score bonuses
+  // Apply ability score bonuses (set-type items like Headband of Intellect)
   ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].forEach(stat => {
     if (abilityBonuses[stat]) {
-      updates[stat] = abilityBonuses[stat]; // items like Headband of Intellect SET the stat
+      updates[stat] = abilityBonuses[stat];
     }
   });
 
-  // Recalculate AC
-  const newAC = computeAC(character, equipped) + acBonus;
-  updates.armor_class = newAC;
+  // Recalculate AC from armor/shield
+  updates.armor_class = computeAC(character, equipped) + acBonus;
+
+  // Expose equipped weapon on character.equipped.weapon for CombatPanel to read
+  // Normalize: weapon slot can be 'mainhand' or 'weapon' depending on item
+  const weaponItem = equipped.mainhand || equipped.weapon || null;
+  if (weaponItem) {
+    // Build a combat-ready weapon descriptor
+    const dmgStr = weaponItem.damage || weaponItem.damage_dice || '1d6';
+    const [dice, ...rest] = dmgStr.split(' ');
+    updates.equipped = {
+      ...equipped,
+      weapon: {
+        ...weaponItem,
+        damage_dice: dice || '1d6',
+        damage_type: weaponItem.damage_type || rest.join(' ') || 'slashing',
+        attack_bonus: weaponItem.attack_bonus || 0,
+        damage_bonus: weaponItem.damage_bonus || 0,
+        type: weaponItem.type || 'melee',
+        finesse: weaponItem.finesse || ['rapier','shortsword','dagger','hand crossbow','whip','scimitar'].includes((weaponItem.name || '').toLowerCase()),
+      }
+    };
+  } else {
+    updates.equipped = equipped;
+  }
 
   // Store equipment bonuses as active_modifiers
   const modifiers = [];
   if (savingThrowBonus > 0) modifiers.push({ source: 'equipment', applies_to: 'saving_throws', value: savingThrowBonus });
-  
   updates.active_modifiers = [
     ...(character.active_modifiers || []).filter(m => m.source !== 'equipment'),
-    ...modifiers
+    ...modifiers,
   ];
 
   return updates;
