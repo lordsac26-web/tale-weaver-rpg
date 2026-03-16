@@ -512,10 +512,10 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
       if (slot === 'mainhand' && isTwoHanded) delete newEquipped.offhand;
     }
 
-    // Recalculate stats based on equipped items
+    // Recalculate stats — recalculateStatsFromEquipment sets updates.equipped internally
     const updates = recalculateStatsFromEquipment(character, newEquipped, inventory);
     setEquipped(newEquipped);
-    onUpdate({ ...updates, equipped: newEquipped });
+    onUpdate(updates);
   };
 
   const handleUseConsumable = (item, index) => {
