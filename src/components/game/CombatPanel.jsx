@@ -53,6 +53,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const [showDice, setShowDice] = useState(false);
   const [combatModifiers, setCombatModifiers] = useState({});
   const [abilityMessages, setAbilityMessages] = useState([]);
+  const [selectedWeaponIdx, setSelectedWeaponIdx] = useState('equipped'); // 'equipped' | index into weaponOptions
 
   if (!combat) return null;
 
