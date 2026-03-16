@@ -572,9 +572,44 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
   const totalWeight = inventory.reduce((t, it) => t + ((it.weight || 0) * (it.quantity || 1)), 0);
   const magicCount = inventory.filter(it => it.is_magic || it.rarity !== 'common').length;
 
+  // Encumbrance thresholds (D&D 5e)
+  const carryCapacity = (character.strength || 10) * 15;
+  const encumberedThreshold = carryCapacity * 0.666;
+  const heavilyEncumberedThreshold = carryCapacity;
+  const encumbranceLevel = totalWeight > heavilyEncumberedThreshold ? 'heavy'
+    : totalWeight > encumberedThreshold ? 'encumbered' : 'normal';
+
   return (
     <div className="space-y-2">
       <CurrencyPanel character={character} onUpdate={onUpdate} />
+
+      {/* Encumbrance bar */}
+      <div className="rounded-xl p-3" style={{ background: 'rgba(20,13,5,0.7)', border: `1px solid ${encumbranceLevel === 'heavy' ? 'rgba(220,50,50,0.4)' : encumbranceLevel === 'encumbered' ? 'rgba(220,150,20,0.3)' : 'rgba(180,140,90,0.15)'}` }}>
+        <div className="flex justify-between items-center mb-1.5">
+          <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(201,169,110,0.5)', fontSize: '0.62rem' }}>CARRY WEIGHT</span>
+          <span className="text-xs font-fantasy" style={{ color: encumbranceLevel === 'heavy' ? '#fca5a5' : encumbranceLevel === 'encumbered' ? '#fde68a' : 'rgba(134,239,172,0.7)' }}>
+            {totalWeight.toFixed(1)} / {carryCapacity} lb
+            {encumbranceLevel === 'heavy' && ' ⚠ Heavily Encumbered'}
+            {encumbranceLevel === 'encumbered' && ' ⚠ Encumbered'}
+          </span>
+        </div>
+        <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(8,4,1,0.7)' }}>
+          <div className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${Math.min(100, (totalWeight / carryCapacity) * 100)}%`,
+              background: encumbranceLevel === 'heavy' ? 'linear-gradient(90deg, #7f1d1d, #dc2626)'
+                : encumbranceLevel === 'encumbered' ? 'linear-gradient(90deg, #b45309, #d97706)'
+                : 'linear-gradient(90deg, #166534, #22c55e)'
+            }} />
+        </div>
+        {encumbranceLevel === 'encumbered' && (
+          <p className="text-xs mt-1" style={{ color: 'rgba(253,230,138,0.6)', fontFamily: 'EB Garamond, serif' }}>−10 ft speed penalty</p>
+        )}
+        {encumbranceLevel === 'heavy' && (
+          <p className="text-xs mt-1" style={{ color: 'rgba(252,165,165,0.6)', fontFamily: 'EB Garamond, serif' }}>−20 ft speed, disadvantage on STR/DEX/CON checks</p>
+        )}
+      </div>
+
       <EquipmentPaperdoll equipped={equipped} onUnequip={handleUnequip} />
 
       {/* Toolbar */}
