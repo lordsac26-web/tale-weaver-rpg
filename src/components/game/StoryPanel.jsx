@@ -366,7 +366,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
             borderTop: '1px solid rgba(180,140,90,0.2)',
             boxShadow: 'inset 0 1px 0 rgba(201,169,110,0.08)'
           }}>
-          {choices.length > 0 && (
+          {!loading && choices.length > 0 && (
             <>
               <div className="flex items-center gap-2 mb-2" style={{ color: 'rgba(201,169,110,0.5)' }}>
                 <Scroll className="w-3 h-3" />
