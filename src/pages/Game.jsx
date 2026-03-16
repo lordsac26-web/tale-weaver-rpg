@@ -358,7 +358,7 @@ export default function Game() {
         // Grab combatants from the freshly reloaded log (not stale combat state)
         const freshLogs = await base44.entities.CombatLog.filter({ id: combatId });
         const freshCombat = freshLogs[0];
-        const victoriousEnemies = (freshCombat?.combatants || combat?.combatants || []).filter(c => c.type === 'enemy');
+        const victoriousEnemies = (freshCombat?.combatants || []).filter(c => c.type === 'enemy');
         setDefeatedEnemies(victoriousEnemies);
         setShowLootModal(true);
         setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! The battle is won. Your enemies lie defeated.' }]);
