@@ -1,22 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Package, ChevronDown, ChevronUp, Search, Sparkles, ShieldCheck, X, FlaskConical } from 'lucide-react';
+import { Plus, Trash2, Package, ChevronDown, ChevronUp, Sparkles, ShieldCheck, X, FlaskConical } from 'lucide-react';
 import ConsumableUseModal from './ConsumableUseModal';
+import AddItemForm from './AddItemForm';
 import {
   ITEM_RARITY, EQUIP_SLOTS, CATEGORY_TO_SLOT, ALL_ITEM_CATEGORIES, CATEGORY_ICONS,
-  MAGIC_PROPERTIES, SRD_MAGIC_ITEMS, getEquipConstraints, computeAC
+  MAGIC_PROPERTIES, getEquipConstraints, computeAC
 } from './itemData';
-import { searchMagicItems } from './open5eApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { parseItemBonuses } from './itemBonuses';
 
 const RARITIES = Object.keys(ITEM_RARITY);
-
-const DEFAULT_ITEM = {
-  name: '', category: 'Other', equip_slot: null, quantity: 1, weight: 0,
-  cost: 0, cost_unit: 'gp', damage: '', damage_type: '', armor_class: 0,
-  armor_type: 'light', attack_bonus: 0, description: '', rarity: 'common',
-  requires_attunement: false, magic_properties: [], is_magic: false,
-};
 
 // ─── Currency Panel ────────────────────────────────────────────────────────────
 function CurrencyPanel({ character, onUpdate }) {
