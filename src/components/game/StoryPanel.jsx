@@ -358,7 +358,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
       </div>
  
       {/* Choices + Input */}
-      {!loading && (
+      {(
         <div className="flex-shrink-0 p-4 space-y-2.5"
           style={{
             background: 'rgba(8,5,2,0.85)',
