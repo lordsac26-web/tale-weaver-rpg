@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import {
   ITEM_RARITY, CATEGORY_TO_SLOT, ALL_ITEM_CATEGORIES, CATEGORY_ICONS,
   MAGIC_PROPERTIES, SRD_MAGIC_ITEMS
 } from './itemData';
 import { searchMagicItems } from './open5eApi';
-import { motion, AnimatePresence } from 'framer-motion';
 
 const RARITIES = Object.keys(ITEM_RARITY);
 
