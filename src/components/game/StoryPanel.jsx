@@ -437,8 +437,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
               Act
             </button>
           </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
