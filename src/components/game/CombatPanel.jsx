@@ -189,7 +189,9 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
           <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
             <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(180,100,100,0.5)', fontSize: '0.65rem' }}>SELECT TARGET</div>
             {enemies.map(enemy => {
-              const hpPct = Math.max(0, ((enemy.hp || enemy.hp_current) / enemy.hp_max) * 100);
+              // hp_current is the live value updated during combat; hp is the initial value set at start
+              const currentHp = enemy.hp_current ?? enemy.hp ?? 0;
+              const hpPct = Math.max(0, (currentHp / enemy.hp_max) * 100);
               const isSelected = selectedTarget === enemy.id;
               return (
                 <motion.button key={enemy.id}
