@@ -334,10 +334,7 @@ Deno.serve(async (req) => {
         extraDamageDice.push({ dice: `${sneakDice}d6`, type: 'sneak', label: 'Sneak Attack' });
       }
 
-      // Fighter Action Surge — grant extra attack this turn (already consumed by CombatPanel, apply here)
-      if (modifiers.action_surge_active && charClass === 'fighter') {
-        attacks = (getActionsPerTurn(character) || 1) + 1;
-      }
+      // Fighter Action Surge — handled by action tracking in world_state; no extra variable needed here
     }
 
     // Apply active modifiers
@@ -417,10 +414,10 @@ Deno.serve(async (req) => {
           let smiteDmg = 0;
           for (let i = 0; i < smiteDice; i++) smiteDmg += rollDice(8);
           damage += smiteDmg;
-          // Consume spell slot
+          // Consume spell slot (spell_slots tracks USED count)
           const slotKey = `level_${smiteLevel}`;
           await base44.entities.Character.update(character_id, {
-            spell_slots: { ...slots, [slotKey]: (slots[slotKey] || 0) + 1 }
+            spell_slots: { ...slots, [slotKey]: Math.min(smiteLevel, (slots[slotKey] || 0) + 1) }
           });
         }
       }
@@ -680,11 +677,19 @@ Deno.serve(async (req) => {
 
   if (action === 'next_turn') {
     const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const nextIndex = (combatLog.current_turn_index + 1) % combatLog.combatants.length;
+    const combatants = combatLog.combatants;
+    let nextIndex = (combatLog.current_turn_index + 1) % combatants.length;
     let round = combatLog.round;
     if (nextIndex === 0) round += 1;
-    await base44.entities.CombatLog.update(combat_id, { current_turn_index: nextIndex, round });
-    return Response.json({ next_turn_index: nextIndex, round, current_combatant: combatLog.combatants[nextIndex] });
+    // Skip unconscious/dead combatants
+    let safety = 0;
+    while (!combatants[nextIndex]?.is_conscious && safety < combatants.length) {
+      nextIndex = (nextIndex + 1) % combatants.length;
+      if (nextIndex === 0) round += 1;
+      safety++;
+    }
+    await base44.entities.CombatLog.update(combat_id, { current_turn_index: nextIndex, round, world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0 } });
+    return Response.json({ next_turn_index: nextIndex, round, current_combatant: combatants[nextIndex] });
   }
 
   return Response.json({ error: 'Unknown action' }, { status: 400 });
