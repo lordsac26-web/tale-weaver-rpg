@@ -297,8 +297,13 @@ If it's a combat event, use the enemy schema with real monster stats.`;
     }
 
     // Validate combat trigger: if true, enemies must exist and be non-empty
+    // Also block combat if no appropriate monsters are in the database
     if (result.combat_trigger && (!result.enemies || result.enemies.length === 0)) {
       result.combat_trigger = false;
+    }
+    if (combatBlocked && result.combat_trigger) {
+      result.combat_trigger = false;
+      result.enemies = [];
     }
   }
 
