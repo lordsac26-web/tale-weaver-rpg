@@ -541,7 +541,7 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
     delete newEquipped[slot];
     const updates = recalculateStatsFromEquipment(character, newEquipped, inventory);
     setEquipped(newEquipped);
-    onUpdate({ ...updates, equipped: newEquipped });
+    onUpdate(updates);
   };
 
   const sorted = [...inventory]
