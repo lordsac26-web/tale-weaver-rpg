@@ -653,16 +653,17 @@ Deno.serve(async (req) => {
       text: logText
     };
 
-    // Advance turn
-    let nextIndex = (combatLog.current_turn_index + 1) % combatants.length;
+    // Advance turn — use UPDATED combatants (player HP may have changed)
+    let nextIndex = (combatLog.current_turn_index + 1) % updatedCombatants.length;
     let round = combatLog.round;
+    if (nextIndex === 0) round += 1;
     // Skip dead combatants
     let safety = 0;
-    while (!combatants[nextIndex]?.is_conscious && safety < combatants.length) {
-      nextIndex = (nextIndex + 1) % combatants.length;
+    while (!updatedCombatants[nextIndex]?.is_conscious && safety < updatedCombatants.length) {
+      nextIndex = (nextIndex + 1) % updatedCombatants.length;
+      if (nextIndex === 0) round += 1;
       safety++;
     }
-    if (nextIndex <= combatLog.current_turn_index) round += 1;
 
     const updatedCombatants = combatants.map(c => c.id === player.id ? player : c);
     await base44.entities.CombatLog.update(combat_id, {
