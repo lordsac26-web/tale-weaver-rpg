@@ -232,35 +232,47 @@ function StatsTab({ character, profBonus }) {
 }
  
 // ─── Skills Tab ────────────────────────────────────────────────────────────────
-function SkillsTab({ character, profBonus }) {
+function SkillsTab({ character, profBonus, onUpdate }) {
+  const handleToggle = (skill, newLevel) => {
+    const updated = { ...(character.skills || {}) };
+    if (newLevel === null) {
+      delete updated[skill];
+    } else {
+      updated[skill] = newLevel;
+    }
+    onUpdate({ skills: updated });
+  };
+
   return (
-    <div className="space-y-0.5">
-      {Object.entries(SKILL_STAT_MAP).map(([skill, stat]) => {
-        const statMod = calcStatMod(character[stat] || 10);
-        const profLevel = character.skills?.[skill];
-        const bonus = profLevel === 'expert' ? profBonus * 2 : (profLevel === 'proficient' || profLevel === true) ? profBonus : 0;
-        const total = statMod + bonus;
-        return (
-          <div key={skill}
-            className="flex items-center justify-between py-1.5 px-3 rounded-lg transition-all"
-            style={{ borderBottom: '1px solid rgba(180,140,90,0.06)' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(30,20,8,0.5)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <div className="flex items-center gap-2.5">
-              <div className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{
-                  background: profLevel === 'expert' ? '#f0c040' : (profLevel === 'proficient' || profLevel === true) ? '#86efac' : 'rgba(80,60,30,0.4)',
-                  boxShadow: profLevel ? '0 0 4px ' + (profLevel === 'expert' ? 'rgba(240,192,64,0.3)' : 'rgba(134,239,172,0.3)') : 'none',
-                }} />
-              <SkillTooltip name={skill} position="right">
-                <span className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{skill}</span>
-              </SkillTooltip>
-              <span className="text-xs" style={{ color: 'rgba(180,140,90,0.35)' }}>({STAT_LABELS[stat]})</span>
-            </div>
-            <span className="font-fantasy font-bold text-sm" style={{ color: total >= 0 ? '#86efac' : '#fca5a5' }}>{calcModDisplay(total)}</span>
-          </div>
-        );
-      })}
+    <div>
+      {/* Legend */}
+      <div className="flex items-center gap-4 px-3 pb-2 mb-1" style={{ borderBottom: '1px solid rgba(180,140,90,0.1)' }}>
+        <span className="text-xs" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>Click dot to toggle:</span>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3.5 h-3.5 rounded-full" style={{ background: 'rgba(80,60,30,0.4)', border: '1px solid rgba(180,140,90,0.2)' }} />
+          <span className="text-xs" style={{ color: 'rgba(180,140,90,0.4)' }}>None</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3.5 h-3.5 rounded-full" style={{ background: '#86efac', boxShadow: '0 0 4px rgba(134,239,172,0.3)' }} />
+          <span className="text-xs" style={{ color: 'rgba(180,140,90,0.4)' }}>Proficient</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3.5 h-3.5 rounded-full" style={{ background: '#f0c040', boxShadow: '0 0 4px rgba(240,192,64,0.4)' }} />
+          <span className="text-xs" style={{ color: 'rgba(180,140,90,0.4)' }}>Expert (×2)</span>
+        </div>
+      </div>
+      <div className="space-y-0">
+        {Object.entries(SKILL_STAT_MAP).map(([skill, stat]) => (
+          <SkillProficiencyRow
+            key={skill}
+            skill={skill}
+            stat={stat}
+            character={character}
+            profBonus={profBonus}
+            onToggle={handleToggle}
+          />
+        ))}
+      </div>
     </div>
   );
 }
