@@ -290,6 +290,7 @@ If it's a combat event, use the enemy schema with real monster stats.`;
     if (result.reputation_change) updateData.reputation = (session.reputation || 0) + result.reputation_change;
     if (result.plot_flag)         updateData.plot_flags = { ...(session.plot_flags || {}), [result.plot_flag]: true };
     if (result.combat_trigger)    updateData.in_combat = true;
+    else if (action === 'choice') updateData.in_combat = false; // clear stale combat flag after non-combat choices
 
     // Single DB write for session
     await base44.entities.GameSession.update(session_id, updateData);

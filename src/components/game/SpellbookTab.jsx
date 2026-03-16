@@ -354,7 +354,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
                   </div>
                   <div className="space-y-2">
                     {levelSpells.map(({ name }) => (
-                      <SpellCard key={name} spellName={name} character={character} isKnown={true} onToggleKnown={togglePrepared} />
+                      <SpellCard key={name} spellName={name} character={character} isKnown={true} isPrepared={true} onTogglePrepared={togglePrepared} />
                     ))}
                   </div>
                 </div>

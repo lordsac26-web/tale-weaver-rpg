@@ -20,27 +20,24 @@ export default function DeathSavesModal({ character, onStabilize, onDeath, onClo
     setLastRoll(roll);
     setRolling(false);
 
+    let newSuccesses = successes;
+    let newFailures = failures;
+
     if (roll === 20) {
-      // Natural 20 = stabilize and regain 1 HP, clear conditions
+      // Natural 20 = stabilize and regain 1 HP immediately
       await base44.entities.Character.update(character.id, {
         hp_current: 1,
         death_saves_success: 0,
         death_saves_failure: 0,
         conditions: [],
       });
+      setLastRoll(roll);
+      setRolling(false);
       onStabilize(roll);
       return;
-    }
-
-    let newSuccesses = successes;
-    let newFailures = failures;
-
-    if (roll === 1) {
+    } else if (roll === 1) {
       // Natural 1 = 2 failures per D&D 5e rules
       newFailures = Math.min(3, failures + 2);
-    } else if (roll === 20) {
-      // Natural 20 = 1 success (will stabilize if this is 3rd success)
-      newSuccesses = Math.min(3, successes + 1);
     } else if (roll >= 10) {
       newSuccesses = Math.min(3, successes + 1);
     } else {

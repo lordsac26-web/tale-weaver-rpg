@@ -133,7 +133,7 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
   if (charClass === 'Barbarian') {
     const RAGE_USES = [2,2,3,3,3,4,4,4,4,4,4,5,5,5,5,6,6,6,6,Infinity];
     const maxRages = RAGE_USES[level - 1] ?? 2;
-    const usedRages = shortRestAbilities.rage_uses_spent || 0; // tracked via short_rest_abilities
+    const usedRages = longRestAbilities.rage_uses_spent || 0; // rages reset on long rest
     const rageDamage = level < 9 ? 2 : level < 16 ? 3 : 4;
     const ragesLeft = maxRages === Infinity ? '∞' : Math.max(0, maxRages - usedRages);
     abilities.push({
