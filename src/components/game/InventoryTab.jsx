@@ -560,13 +560,9 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
 
   const totalWeight = inventory.reduce((t, it) => t + ((it.weight || 0) * (it.quantity || 1)), 0);
   const magicCount = inventory.filter(it => it.is_magic || it.rarity !== 'common').length;
-
-  // Encumbrance thresholds (D&D 5e)
   const carryCapacity = (character.strength || 10) * 15;
-  const encumberedThreshold = carryCapacity * 0.666;
-  const heavilyEncumberedThreshold = carryCapacity;
-  const encumbranceLevel = totalWeight > heavilyEncumberedThreshold ? 'heavy'
-    : totalWeight > encumberedThreshold ? 'encumbered' : 'normal';
+  const encumbranceLevel = totalWeight > carryCapacity ? 'heavy'
+    : totalWeight > carryCapacity * 0.666 ? 'encumbered' : 'normal';
 
   return (
     <div className="space-y-2">
