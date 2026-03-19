@@ -30,7 +30,7 @@ ${mature_content ? '- User has enabled 18+ content: you may include violence, go
 Output ONLY the enhanced prompt, nothing else.`;
 
     const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `User's description: "${prompt}"\n\nEnhance this into a detailed D&D fantasy art prompt:`,
+      prompt: `${systemPrompt}\n\nUser's description: "${prompt}"\n\nEnhance this into a detailed D&D fantasy art prompt:`,
       response_json_schema: {
         type: 'object',
         properties: {
