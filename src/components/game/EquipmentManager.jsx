@@ -3,19 +3,22 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sword, Shield, X, Check, Info } from 'lucide-react';
 import EquipmentSlots from './EquipmentSlots';
 
-// Unified slot definitions — these must match what CombatPanel, HUD, and CharacterSheet all read
+// Unified slot definitions — keys match itemData.js EQUIP_SLOTS and itemData CATEGORY_TO_SLOT
+// 'mainhand' is the canonical weapon slot; combatEngine reads character.equipped.weapon which
+// recalculateStatsFromEquipment writes by aliasing mainhand → weapon
 export const EQUIPMENT_SLOTS = {
-  weapon:   { label: 'Weapon',    icon: '⚔️',  cats: ['weapon', 'melee', 'ranged'] },
-  offhand:  { label: 'Off Hand',  icon: '🛡️',  cats: ['shield', 'weapon'] },
-  chest:    { label: 'Armor',     icon: '🧥',  cats: ['armor', 'chest'] },
-  head:     { label: 'Helmet',    icon: '🪖',  cats: ['helmet', 'head', 'headgear'] },
-  neck:     { label: 'Amulet',    icon: '📿',  cats: ['amulet', 'necklace', 'neck'] },
-  cloak:    { label: 'Cloak',     icon: '🧣',  cats: ['cloak', 'back'] },
-  hands:    { label: 'Gloves',    icon: '🧤',  cats: ['gloves', 'gauntlets', 'hands'] },
-  feet:     { label: 'Boots',     icon: '👢',  cats: ['boots', 'feet'] },
-  ring1:    { label: 'Ring 1',    icon: '💍',  cats: ['ring'] },
-  ring2:    { label: 'Ring 2',    icon: '💍',  cats: ['ring'] },
-  trinket:  { label: 'Trinket',   icon: '🔮',  cats: ['trinket', 'magical', 'accessory'] },
+  mainhand: { label: 'Weapon',    icon: '⚔️',  cats: ['weapon', 'Weapon', 'melee', 'ranged'] },
+  offhand:  { label: 'Off Hand',  icon: '🛡️',  cats: ['shield', 'Shield', 'weapon', 'Weapon'] },
+  armor:    { label: 'Armor',     icon: '🥋',  cats: ['armor', 'Armor'] },
+  helmet:   { label: 'Helmet',    icon: '⛑️',  cats: ['helmet', 'Helmet', 'head', 'headgear'] },
+  amulet:   { label: 'Amulet',    icon: '📿',  cats: ['amulet', 'Amulet', 'necklace', 'neck'] },
+  cloak:    { label: 'Cloak',     icon: '🧥',  cats: ['cloak', 'Cloak', 'back'] },
+  gloves:   { label: 'Gloves',    icon: '🧤',  cats: ['gloves', 'Gloves', 'gauntlets', 'hands'] },
+  boots:    { label: 'Boots',     icon: '👢',  cats: ['boots', 'Boots', 'feet'] },
+  ring:     { label: 'Ring 1',    icon: '💍',  cats: ['ring', 'Ring'] },
+  ring2:    { label: 'Ring 2',    icon: '💍',  cats: ['ring', 'Ring'] },
+  belt:     { label: 'Belt',      icon: '🔗',  cats: ['belt', 'Belt'] },
+  trinket:  { label: 'Trinket',   icon: '🔮',  cats: ['trinket', 'Wondrous Item', 'magical', 'accessory'] },
 };
 
 const RARITY_COLORS = {
