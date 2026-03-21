@@ -300,17 +300,36 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
               {/* Weapon selector */}
               {action === 'attack' && (
                 <div>
-                  <div className="font-fantasy text-xs mb-1" style={{ color: 'rgba(180,100,100,0.5)', fontSize: '0.62rem', letterSpacing: '0.08em' }}>WEAPON</div>
+                  <div className="font-fantasy text-xs mb-1 flex items-center justify-between"
+                    style={{ color: 'rgba(180,100,100,0.5)', fontSize: '0.62rem', letterSpacing: '0.08em' }}>
+                    <span>WEAPON</span>
+                    {!equippedWeaponObj && (
+                      <span style={{ color: 'rgba(252,165,165,0.5)', fontSize: '0.6rem', fontFamily: 'EB Garamond, serif' }}>
+                        Tip: Equip a weapon in Character Sheet → Gear
+                      </span>
+                    )}
+                  </div>
                   <select
                     value={selectedWeaponIdx}
-                    onChange={e => setSelectedWeaponIdx(e.target.value === 'equipped' || e.target.value === 'unarmed' ? e.target.value : parseInt(e.target.value))}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setSelectedWeaponIdx(v === 'equipped' || v === 'unarmed' ? v : parseInt(v));
+                    }}
                     className="w-full rounded-lg px-2 py-1.5 text-xs"
                     style={{ background: 'rgba(15,5,5,0.7)', border: '1px solid rgba(180,50,50,0.3)', color: '#fca5a5', fontFamily: 'EB Garamond, serif' }}>
-                    {character?.equipped?.weapon && (
-                      <option value="equipped">⚔️ {character.equipped.weapon.name} (equipped) — {character.equipped.weapon.damage || character.equipped.weapon.damage_dice || '?'}</option>
+                    {equippedWeaponObj ? (
+                      <option value="equipped">
+                        ⚔️ {equippedWeaponObj.name} [EQUIPPED] — {equippedWeaponObj.damage || equippedWeaponObj.damage_dice || '?'}
+                        {equippedWeaponObj.attack_bonus ? ` (+${equippedWeaponObj.attack_bonus})` : ''}
+                      </option>
+                    ) : (
+                      <option value="equipped" disabled>⚔️ No weapon equipped</option>
                     )}
                     {weaponOptions.map((w, i) => (
-                      <option key={i} value={i}>🗡 {w.name} — {w.damage || w.damage_dice || '?'}</option>
+                      <option key={i} value={i}>
+                        🗡 {w.name} — {w.damage || w.damage_dice || '?'}
+                        {w.attack_bonus ? ` (+${w.attack_bonus})` : ''}
+                      </option>
                     ))}
                     <option value="unarmed">👊 Unarmed Strike — 1d4</option>
                   </select>
