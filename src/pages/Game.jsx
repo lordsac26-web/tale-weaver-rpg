@@ -95,6 +95,13 @@ export default function Game() {
 
   useEffect(() => { loadState(); }, [sessionId]);
 
+  // Listen for HUD quick-rest button event (Suggestion #7)
+  useEffect(() => {
+    const handler = () => setShowRestModal(true);
+    window.addEventListener('open-rest-modal', handler);
+    return () => window.removeEventListener('open-rest-modal', handler);
+  }, []);
+
   const startAdventure = async () => {
     setStoryLoading(true);
     setStarted(true);
