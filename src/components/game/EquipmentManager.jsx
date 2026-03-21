@@ -233,12 +233,13 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
   };
 
   const handleEquip = async (slot, item) => {
-    if ((slot === 'chest') && character.race === 'Tortle') return; // Tortle natural armor
+    if (slot === 'armor' && character.race === 'Tortle') return; // Tortle natural armor
 
     // Store the full item object — CombatPanel reads equipped.weapon directly
     const newEquipped = { ...equipped, [slot]: item };
     const recalc = recalculateStats(character, newEquipped, inventory);
-    await onUpdateCharacter({ equipped: newEquipped, ...recalc });
+    // recalc.equipped includes the weapon alias (mainhand → weapon)
+    await onUpdateCharacter({ ...recalc, equipped: recalc.equipped || newEquipped });
     setShowEquipModal(null);
   };
 
