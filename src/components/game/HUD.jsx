@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Heart, Star, MapPin, Clock, Swords, Sparkles } from 'lucide-react';
+import { Shield, Heart, Star, MapPin, Clock, Swords, Sparkles, Moon } from 'lucide-react';
 import { CONDITIONS } from './gameData';
 import { motion } from 'framer-motion';
 import { getSpellSlotsForLevel } from './spellData';
@@ -113,6 +113,17 @@ export default function HUD({ character, session }) {
           <span className="text-xs" style={{ color: 'rgba(147,197,253,0.5)', fontFamily: 'EB Garamond, serif' }}>AC</span>
         </div>
  
+        {/* Quick Rest in HUD — Suggestion #7 */}
+        {!session?.in_combat && (
+          <button onClick={() => window.dispatchEvent(new CustomEvent('open-rest-modal'))}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg stat-box transition-all md:hidden"
+            title="Rest"
+            style={{ cursor: 'pointer' }}>
+            <Moon className="w-3.5 h-3.5" style={{ color: '#a78bfa' }} />
+            <span className="text-xs font-fantasy" style={{ color: 'rgba(167,139,250,0.7)' }}>Rest</span>
+          </button>
+        )}
+
         {/* Spell Slots (if caster) */}
         {isCaster && totalSlotsMax > 0 && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg stat-box">
