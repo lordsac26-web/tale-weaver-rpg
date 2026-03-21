@@ -75,7 +75,7 @@ function CurrencyPanel({ character, onUpdate }) {
 
 // ─── Equipped Paperdoll ────────────────────────────────────────────────────────
 function EquipmentPaperdoll({ equipped, onUnequip }) {
-  const slotOrder = ['helmet','cloak','amulet','mainhand','armor','offhand','gloves','ring','belt','boots','trinket'];
+  const slotOrder = ['helmet','cloak','amulet','mainhand','armor','offhand','gloves','ring','ring2','belt','boots','trinket'];
   const hasAny = Object.values(equipped).some(Boolean);
   if (!hasAny) return null;
 

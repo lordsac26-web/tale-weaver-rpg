@@ -188,8 +188,15 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
     if (!item) return;
     setSaving(true);
     const equipped = { ...(character.equipped || {}) };
-    const slot = item.category === 'weapon' ? 'weapon' : item.category === 'armor' ? 'armor' : item.category === 'accessory' ? 'accessory' : null;
+    // Use correct unified slot keys: mainhand for weapons, armor for armor
+    const catLower = (item.category || '').toLowerCase();
+    const slot = catLower.includes('weapon') ? 'mainhand' : catLower.includes('armor') ? 'armor' : catLower.includes('shield') ? 'offhand' : catLower.includes('ring') ? 'ring' : catLower.includes('helmet') ? 'helmet' : catLower.includes('cloak') ? 'cloak' : catLower.includes('boot') ? 'boots' : catLower.includes('glove') ? 'gloves' : catLower.includes('amulet') ? 'amulet' : catLower.includes('belt') ? 'belt' : null;
     if (slot) equipped[slot] = item;
+    // Write the weapon alias for CombatPanel
+    if (slot === 'mainhand') {
+      const dmgStr = item.damage || item.damage_dice || '1d6';
+      equipped.weapon = { ...item, damage_dice: dmgStr.split(' ')[0] || '1d6', type: item.type || 'melee', attack_bonus: item.attack_bonus || 0, damage_bonus: item.damage_bonus || 0, properties: item.properties || [] };
+    }
 
     const newInventory = [...(character.inventory || []), { ...item, magic_properties: [] }];
     const updates = {
@@ -223,7 +230,8 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
 
   // Get the currently equipped item in the same category for comparison
   const getEquippedForSlot = (item) => {
-    const slot = item.category === 'weapon' ? 'weapon' : item.category === 'armor' ? 'armor' : item.category === 'accessory' ? 'accessory' : null;
+    const catLower = (item.category || '').toLowerCase();
+    const slot = catLower.includes('weapon') ? 'mainhand' : catLower.includes('armor') ? 'armor' : catLower.includes('shield') ? 'offhand' : catLower.includes('ring') ? 'ring' : catLower.includes('helmet') ? 'helmet' : catLower.includes('cloak') ? 'cloak' : null;
     return slot ? (character.equipped?.[slot] || null) : null;
   };
 

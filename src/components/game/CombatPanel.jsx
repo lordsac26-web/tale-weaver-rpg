@@ -68,17 +68,6 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const actionsUsed = world_state?.actions_used_this_turn || 0;
   const actionsRemaining = Math.max(0, actionsPerTurn - actionsUsed);
 
-  // Derive attack modifier for dice roller display
-  const charLevel   = character?.level || 1;
-  const profBonus   = PROFICIENCY_BY_LEVEL[(charLevel - 1)] || 2;
-  const strMod      = calcStatMod(character?.strength   || 10);
-  const dexMod      = calcStatMod(character?.dexterity  || 10);
-  const activeWeaponForMod = getActiveWeapon?.() || equippedWeaponObj;
-  const isRangedMod    = activeWeaponForMod?.type === 'ranged';
-  const isFinesseMod   = (activeWeaponForMod?.properties || []).includes('finesse') || ['rapier','shortsword','dagger','hand crossbow','whip','scimitar'].includes((activeWeaponForMod?.name || '').toLowerCase());
-  const statMod     = isRangedMod ? dexMod : isFinesseMod ? Math.max(strMod, dexMod) : strMod;
-  const attackMod   = statMod + profBonus + (activeWeaponForMod?.attack_bonus || 0);
-
   // The equipped weapon — stored as full object. 'weapon' is the alias written by recalculateStats;
   // 'mainhand' is the raw slot key used by InventoryTab/EquipmentManager
   const equippedWeaponObj = character?.equipped?.weapon || character?.equipped?.mainhand || null;
