@@ -5,6 +5,7 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import OfflineIndicator from '@/components/OfflineIndicator';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Inventory from '@/pages/Inventory';
 import SpellManagement from '@/pages/SpellManagement';
@@ -120,6 +121,7 @@ function App() {
           <AuthenticatedApp />
         </Router>
         <Toaster />
+        <OfflineIndicator />
       </QueryClientProvider>
     </AuthProvider>
   )
