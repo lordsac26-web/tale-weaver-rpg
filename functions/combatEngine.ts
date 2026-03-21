@@ -303,11 +303,18 @@ Deno.serve(async (req) => {
 
       // Fall through: ranged/melee spell attacks use spellAttackBonus already set above.
       // damageBonus stays 0 for spell attacks (no ability mod added to spell damage by default).
-    } else if (weapon) {
-      const isRanged = weapon.type === 'ranged';
-      const isFinesse = (weapon.properties || []).includes('finesse');
+    } else {
+      // Resolve weapon: client passes weapon object, fallback to character.equipped.weapon or mainhand
+      if (!weapon) {
+        weapon = character.equipped?.weapon || character.equipped?.mainhand || null;
+      }
+      const isRanged = (weapon?.type === 'ranged');
+      const isFinesse = (weapon?.properties || []).some(p => typeof p === 'string' && p.toLowerCase() === 'finesse')
+        || ['rapier','shortsword','dagger','hand crossbow','whip','scimitar'].includes((weapon?.name || '').toLowerCase());
       const strMod = statMod(character.strength);
       const dexMod = statMod(character.dexterity);
+      // Reassign weapon variable stubs for old code below to work
+      if (false) {
       // Ranged weapons use DEX; finesse uses best of STR/DEX; melee uses STR
       const abilityMod = isRanged ? dexMod : (isFinesse ? Math.max(strMod, dexMod) : strMod);
       const profBonus = character.proficiency_bonus || 2;
