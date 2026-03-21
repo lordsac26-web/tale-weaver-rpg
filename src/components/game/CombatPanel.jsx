@@ -51,7 +51,8 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const [selectedSpellLevel, setSelectedSpellLevel] = useState(null);
   const [selectedSpellBaseLevel, setSelectedSpellBaseLevel] = useState(null);
   const [showDice, setShowDice] = useState(false);
-  const [combatModifiers, setCombatModifiers] = useState({});
+  // Persist combat modifiers in world_state so they survive across turns (Suggestion #8)
+  const [combatModifiers, setCombatModifiers] = useState(() => combat?.world_state?.player_modifiers || {});
   const [abilityMessages, setAbilityMessages] = useState([]);
   // Default to 'equipped' if character has an equipped weapon, else first inventory weapon
   const [selectedWeaponIdx, setSelectedWeaponIdx] = useState('equipped');
