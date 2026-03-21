@@ -78,7 +78,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
     return (cat === 'weapon' || cat === 'melee' || cat === 'ranged' || it.damage || it.damage_dice);
   });
 
-  // The actively selected weapon for attack
+  // The actively selected weapon for attack — defined before attackMod calc that depends on it
   const getActiveWeapon = () => {
     if (selectedWeaponIdx === 'unarmed') {
       return { name: 'Unarmed Strike', damage_dice: '1d4', attack_bonus: 0, damage_bonus: 0, type: 'melee', properties: [] };
@@ -88,6 +88,17 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
     }
     return weaponOptions[selectedWeaponIdx] || null;
   };
+
+  // Derive attack modifier for dice roller display (must be after getActiveWeapon definition)
+  const charLevel   = character?.level || 1;
+  const profBonus   = PROFICIENCY_BY_LEVEL[(charLevel - 1)] || 2;
+  const strMod      = calcStatMod(character?.strength   || 10);
+  const dexMod      = calcStatMod(character?.dexterity  || 10);
+  const activeWeaponForMod = getActiveWeapon() || equippedWeaponObj;
+  const isRangedMod    = activeWeaponForMod?.type === 'ranged';
+  const isFinesseMod   = (activeWeaponForMod?.properties || []).includes('finesse') || ['rapier','shortsword','dagger','hand crossbow','whip','scimitar'].includes((activeWeaponForMod?.name || '').toLowerCase());
+  const statMod     = isRangedMod ? dexMod : isFinesseMod ? Math.max(strMod, dexMod) : strMod;
+  const attackMod   = statMod + profBonus + (activeWeaponForMod?.attack_bonus || 0);
 
   const handleSelectSpell = (spellName, baseLevel) => {
     setSelectedSpell(spellName);
