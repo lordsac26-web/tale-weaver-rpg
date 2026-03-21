@@ -330,7 +330,7 @@ export default function Game() {
 
     const data = result.data;
 
-    // Emit floating combat text event
+    // Emit floating combat text event + haptic feedback
     if (data.log_entry) {
       setLastCombatEvent({
         key: Date.now(),
@@ -338,6 +338,12 @@ export default function Game() {
         critical: data.log_entry.critical,
         damage: data.damage || 0,
       });
+      // Haptic feedback on mobile (Suggestion #4)
+      if (navigator.vibrate) {
+        if (data.log_entry.critical) navigator.vibrate([50, 30, 50, 30, 80]);
+        else if (data.hit) navigator.vibrate(40);
+        else navigator.vibrate([20, 40, 20]);
+      }
     }
 
     setNarrative(prev => [...prev, {
