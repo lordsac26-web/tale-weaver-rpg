@@ -50,6 +50,7 @@ export default function Game() {
   const [showDeathModal, setShowDeathModal] = useState(false);
   const [showDeathSaves, setShowDeathSaves] = useState(false);
   const [showRestModal, setShowRestModal] = useState(false);
+  const [combatViewTab, setCombatViewTab] = useState('combat'); // 'story' | 'combat' — for mobile
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate(createPageUrl('Home')); return; }
@@ -716,21 +717,41 @@ export default function Game() {
       {/* Main Game Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {inCombat ? (
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden min-h-0">
-            <div className="overflow-hidden flex flex-col min-h-0" style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
-              <StoryPanel narrative={narrative} choices={[]} loading={storyLoading}
-                onChoice={() => {}} customInput={customInput}
-                setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} />
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+            {/* Mobile tab switcher — only visible on small screens */}
+            <div className="flex lg:hidden flex-shrink-0" style={{ borderBottom: '1px solid rgba(180,30,30,0.2)', background: 'rgba(10,3,3,0.8)' }}>
+              {['story', 'combat'].map(tab => (
+                <button key={tab} onClick={() => setCombatViewTab(tab)}
+                  className="flex-1 py-2 text-xs font-fantasy uppercase tracking-widest transition-all"
+                  style={combatViewTab === tab ? {
+                    color: tab === 'combat' ? '#fca5a5' : '#f0c040',
+                    borderBottom: `2px solid ${tab === 'combat' ? '#dc2626' : '#c9a96e'}`,
+                    background: tab === 'combat' ? 'rgba(60,5,5,0.4)' : 'rgba(40,25,8,0.4)',
+                  } : {
+                    color: 'rgba(180,120,100,0.4)', borderBottom: '2px solid transparent',
+                  }}>
+                  {tab === 'combat' ? '⚔️ Combat' : '📜 Story'}
+                </button>
+              ))}
             </div>
-            <div className="overflow-hidden">
-              <CombatPanel combat={combat} character={character}
-                onPlayerAttack={handlePlayerAttack}
-                onNextTurn={handleNextTurn}
-                onEndTurn={handleEndTurn}
-                onFlee={handleFlee}
-                loading={combatLoading}
-                lastCombatEvent={lastCombatEvent}
-                onCharacterUpdate={setCharacter} />
+            {/* Desktop: side-by-side. Mobile: tabbed */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden min-h-0">
+              <div className={`overflow-hidden flex flex-col min-h-0 ${combatViewTab !== 'story' ? 'hidden lg:flex' : ''}`}
+                style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
+                <StoryPanel narrative={narrative} choices={[]} loading={storyLoading}
+                  onChoice={() => {}} customInput={customInput}
+                  setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} />
+              </div>
+              <div className={`overflow-hidden ${combatViewTab !== 'combat' ? 'hidden lg:block' : ''}`}>
+                <CombatPanel combat={combat} character={character}
+                  onPlayerAttack={handlePlayerAttack}
+                  onNextTurn={handleNextTurn}
+                  onEndTurn={handleEndTurn}
+                  onFlee={handleFlee}
+                  loading={combatLoading}
+                  lastCombatEvent={lastCombatEvent}
+                  onCharacterUpdate={setCharacter} />
+              </div>
             </div>
           </div>
         ) : (
