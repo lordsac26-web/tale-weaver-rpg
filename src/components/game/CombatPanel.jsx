@@ -81,19 +81,22 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const statMod     = isRanged ? dexMod : isFinesse ? Math.max(strMod, dexMod) : strMod;
   const attackMod   = statMod + profBonus + (equippedWeapon?.attack_bonus || 0);
 
-  // Build list of weapons the player can attack with
-  const weaponOptions = [
-    ...(character?.inventory || []).filter(it =>
-      it.category === 'Weapon' || it.damage || it.damage_dice
-    ),
-  ];
+  // The equipped weapon — stored as full object in character.equipped.weapon
+  const equippedWeaponObj = character?.equipped?.weapon || null;
+
+  // Build list of weapons the player can attack with (inventory weapons not already equipped)
+  const weaponOptions = (character?.inventory || []).filter(it => {
+    const cat = (it.category || it.type || '').toLowerCase();
+    return (cat === 'weapon' || cat === 'melee' || cat === 'ranged' || it.damage || it.damage_dice);
+  });
+
   // The actively selected weapon for attack
   const getActiveWeapon = () => {
     if (selectedWeaponIdx === 'unarmed') {
       return { name: 'Unarmed Strike', damage_dice: '1d4', attack_bonus: 0, damage_bonus: 0, type: 'melee', properties: [] };
     }
     if (selectedWeaponIdx === 'equipped' || selectedWeaponIdx === null) {
-      return character?.equipped?.weapon || null;
+      return equippedWeaponObj;
     }
     return weaponOptions[selectedWeaponIdx] || null;
   };
