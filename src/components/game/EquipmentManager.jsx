@@ -325,15 +325,44 @@ export function recalculateStats(character, equipped, inventory) {
   else if (character.race === 'Tortle')  baseAC = 17;
   else if (character.race === 'Lizardfolk') baseAC = 13 + dexMod;
 
-  // Equipped chest armor
-  const armor = equipped.chest;
-  if (armor?.armor_class) {
-    baseAC = armor.armor_class;
-    if (armor.max_dex_bonus !== undefined) baseAC += Math.min(dexMod, armor.max_dex_bonus);
-    else baseAC += dexMod;
+  // Equipped armor (slot key: 'armor')
+  const armorItem = equipped.armor;
+  if (armorItem?.armor_class) {
+    const acVal = parseInt(armorItem.armor_class) || 10;
+    const type = armorItem.armor_type || 'light';
+    if (type === 'heavy') baseAC = acVal;
+    else if (type === 'medium') baseAC = acVal + Math.min(dexMod, 2);
+    else baseAC = acVal + dexMod;
   }
 
+  // Shield bonus
+  if (equipped.offhand?.category === 'Shield') baseAC += 2;
+  // Cloak/ring AC bonus
+  if (equipped.cloak?.ac_bonus) baseAC += equipped.cloak.ac_bonus;
+  if (equipped.ring?.ac_bonus)  baseAC += equipped.ring.ac_bonus;
+  if (equipped.ring2?.ac_bonus) baseAC += equipped.ring2.ac_bonus;
+
   updates.armor_class = baseAC + acBonus;
+
+  // Alias mainhand → weapon so CombatPanel can always read character.equipped.weapon
+  if (equipped.mainhand) {
+    const w = equipped.mainhand;
+    const dmgStr = w.damage || w.damage_dice || '1d6';
+    updates.equipped = {
+      ...equipped,
+      weapon: {
+        ...w,
+        damage_dice: dmgStr.split(' ')[0] || '1d6',
+        damage_type: w.damage_type || 'slashing',
+        attack_bonus: w.attack_bonus || 0,
+        damage_bonus: w.damage_bonus || 0,
+        type: w.type || 'melee',
+        properties: w.properties || [],
+      }
+    };
+  } else {
+    updates.equipped = equipped;
+  }
 
   // Store bonuses as active_modifiers for the combat engine
   const modifiers = [];
