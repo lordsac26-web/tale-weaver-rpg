@@ -19,11 +19,14 @@ function ParticleCanvas({ enabled }) {
     resize();
     window.addEventListener('resize', resize);
 
-    // Initialize particles
-    const COUNT = 60;
+    // Reduce particle count on mobile for better performance
+    const isMobile = window.innerWidth < 768;
+    const COUNT = isMobile ? 25 : 60;
     particlesRef.current = Array.from({ length: COUNT }, () => createParticle(canvas));
 
     const animate = () => {
+      // Skip rendering when tab is not visible to save battery/CPU on mobile
+      if (document.hidden) { animRef.current = requestAnimationFrame(animate); return; }
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       particlesRef.current.forEach((p, i) => {
         p.y -= p.vy;
