@@ -20,7 +20,7 @@ export default function GameToolbar({
   // Primary buttons (always visible)
   const primaryActions = [
     { icon: Dices, label: 'Dice', active: showDiceRoller, onClick: () => setShowDiceRoller(v => !v), color: 'rgba(201,169,110,0.6)', activeColor: '#f0c040' },
-    { icon: () => <span className="text-sm">🐾</span>, label: 'Pets', active: showCompanions, onClick: () => setShowCompanions(v => !v), color: 'rgba(201,169,110,0.6)', activeColor: '#f0c040' },
+    { emoji: '🐾', label: 'Pets', active: showCompanions, onClick: () => setShowCompanions(v => !v), color: 'rgba(201,169,110,0.6)', activeColor: '#f0c040' },
     ...(!inCombat ? [{ icon: Moon, label: 'Rest', onClick: () => setShowRestModal(true), color: 'rgba(168,139,253,0.6)', activeColor: '#c4b5fd' }] : []),
     { icon: Scroll, label: 'Sheet', onClick: () => setShowCharSheet(true), color: 'rgba(201,169,110,0.6)', activeColor: '#c9a96e' },
   ];
@@ -48,9 +48,7 @@ export default function GameToolbar({
             } : {
               background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(180,140,90,0.2)', color: btn.color,
             }}>
-            {typeof Icon === 'function' && Icon.prototype?.isReactComponent === undefined && typeof Icon({}) === 'object' && !Icon.$$typeof
-              ? <Icon />
-              : <Icon className="w-3.5 h-3.5" />}
+            {btn.emoji ? <span className="text-sm">{btn.emoji}</span> : <Icon className="w-3.5 h-3.5" />}
             <span className="hidden sm:inline">{btn.label}</span>
           </button>
         );
