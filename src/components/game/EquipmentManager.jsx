@@ -246,8 +246,10 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
   const handleUnequip = async (slot) => {
     const newEquipped = { ...equipped };
     delete newEquipped[slot];
+    // Also remove the weapon alias if unequipping mainhand
+    if (slot === 'mainhand') delete newEquipped.weapon;
     const recalc = recalculateStats(character, newEquipped, inventory);
-    await onUpdateCharacter({ equipped: newEquipped, ...recalc });
+    await onUpdateCharacter({ ...recalc, equipped: recalc.equipped || newEquipped });
   };
 
   return (
