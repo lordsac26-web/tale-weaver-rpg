@@ -53,7 +53,8 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const [showDice, setShowDice] = useState(false);
   const [combatModifiers, setCombatModifiers] = useState({});
   const [abilityMessages, setAbilityMessages] = useState([]);
-  const [selectedWeaponIdx, setSelectedWeaponIdx] = useState('equipped'); // 'equipped' | index into weaponOptions
+  // Default to 'equipped' if character has an equipped weapon, else first inventory weapon
+  const [selectedWeaponIdx, setSelectedWeaponIdx] = useState('equipped');
 
   if (!combat) return null;
 
