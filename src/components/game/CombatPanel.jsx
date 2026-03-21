@@ -79,8 +79,9 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const statMod     = isRangedMod ? dexMod : isFinesseMod ? Math.max(strMod, dexMod) : strMod;
   const attackMod   = statMod + profBonus + (activeWeaponForMod?.attack_bonus || 0);
 
-  // The equipped weapon — stored as full object in character.equipped.weapon
-  const equippedWeaponObj = character?.equipped?.weapon || null;
+  // The equipped weapon — stored as full object. 'weapon' is the alias written by recalculateStats;
+  // 'mainhand' is the raw slot key used by InventoryTab/EquipmentManager
+  const equippedWeaponObj = character?.equipped?.weapon || character?.equipped?.mainhand || null;
 
   // Build list of weapons the player can attack with (inventory weapons not already equipped)
   const weaponOptions = (character?.inventory || []).filter(it => {
