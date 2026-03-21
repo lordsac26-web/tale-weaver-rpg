@@ -672,125 +672,45 @@ export default function Game() {
       <HUD character={character} session={session} />
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 px-4 py-2 flex-shrink-0"
+      <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
         style={{
           background: 'rgba(8,5,2,0.9)',
           borderBottom: '1px solid rgba(180,140,90,0.15)',
           backdropFilter: 'blur(8px)',
         }}>
         <button onClick={() => navigate(createPageUrl('Home'))}
-          className="p-1.5 rounded-lg transition-all"
+          className="p-1.5 rounded-lg transition-all flex-shrink-0"
           style={{ color: 'rgba(201,169,110,0.5)' }}
           onMouseEnter={e => e.currentTarget.style.color = '#c9a96e'}
           onMouseLeave={e => e.currentTarget.style.color = 'rgba(201,169,110,0.5)'}>
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <span className="text-sm flex-1 italic" style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'IM Fell English, serif' }}>
+        <span className="text-sm italic truncate min-w-0 flex-shrink" style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'IM Fell English, serif' }}>
           {session?.title || 'Adventure'}
         </span>
 
         {inCombat && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full font-fantasy text-xs badge-blood combat-active">
-            <Swords className="w-3 h-3" /> In Combat
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full font-fantasy text-xs badge-blood combat-active flex-shrink-0">
+            <Swords className="w-3 h-3" /> <span className="hidden sm:inline">In Combat</span>
           </div>
         )}
 
-        <button onClick={() => setShowDiceRoller(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-          style={showDiceRoller ? {
-            background: 'rgba(80,50,10,0.7)',
-            border: '1px solid rgba(201,169,110,0.5)',
-            color: '#f0c040',
-          } : {
-            background: 'rgba(20,13,5,0.7)',
-            border: '1px solid rgba(180,140,90,0.2)',
-            color: 'rgba(201,169,110,0.6)',
-          }}>
-          <Dices className="w-3.5 h-3.5" /> Dice
-        </button>
-
-        {!inCombat && (
-          <button onClick={() => setShowRestModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-            style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(100,70,180,0.2)', color: 'rgba(168,139,253,0.6)' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(140,100,220,0.45)'; e.currentTarget.style.color = '#c4b5fd'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(100,70,180,0.2)'; e.currentTarget.style.color = 'rgba(168,139,253,0.6)'; }}>
-            🌙 Rest
-          </button>
-        )}
-
-        <button onClick={() => setShowCompanions(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-          style={showCompanions ? {
-            background: 'rgba(80,50,10,0.7)',
-            border: '1px solid rgba(201,169,110,0.5)',
-            color: '#f0c040',
-          } : {
-            background: 'rgba(20,13,5,0.7)',
-            border: '1px solid rgba(180,140,90,0.2)',
-            color: 'rgba(201,169,110,0.6)',
-          }}>
-          🐾 Pets
-        </button>
-
-
-        <button onClick={() => navigate(createPageUrl('CombatHistory'))}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-          style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(180,60,40,0.2)', color: 'rgba(252,165,165,0.55)' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(220,80,60,0.45)'; e.currentTarget.style.color = '#fca5a5'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,60,40,0.2)'; e.currentTarget.style.color = 'rgba(252,165,165,0.55)'; }}>
-          <BookMarked className="w-3.5 h-3.5" /> History
-        </button>
-
-        <button onClick={() => navigate(createPageUrl('Market') + `?session_id=${sessionId}&character_id=${character?.id}`)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-          style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(200,150,20,0.2)', color: 'rgba(240,192,64,0.6)' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.5)'; e.currentTarget.style.color = '#f0c040'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(200,150,20,0.2)'; e.currentTarget.style.color = 'rgba(240,192,64,0.6)'; }}>
-          <ShoppingBag className="w-3.5 h-3.5" /> Market
-        </button>
-
-        <button onClick={() => navigate(createPageUrl('WorldMap') + `?session_id=${sessionId}&character_id=${character?.id}`)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-          style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(140,60,220,0.2)', color: 'rgba(192,132,252,0.6)' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(140,60,220,0.45)'; e.currentTarget.style.color = '#c084fc'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(140,60,220,0.2)'; e.currentTarget.style.color = 'rgba(192,132,252,0.6)'; }}>
-          <Map className="w-3.5 h-3.5" /> Travel
-        </button>
-
-        {started && !inCombat && (
-          <button onClick={() => setShowSceneVisualizer(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-            style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(120,60,180,0.25)', color: 'rgba(192,132,252,0.6)' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,100,240,0.5)'; e.currentTarget.style.color = '#d8b4fe'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(120,60,180,0.25)'; e.currentTarget.style.color = 'rgba(192,132,252,0.6)'; }}>
-            <Eye className="w-3.5 h-3.5" /> Visualize
-          </button>
-        )}
-
-        <button onClick={() => setShowPortraitGen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-          style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(201,169,110,0.2)', color: 'rgba(201,169,110,0.6)' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.45)'; e.currentTarget.style.color = '#c9a96e'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.2)'; e.currentTarget.style.color = 'rgba(201,169,110,0.6)'; }}>
-          <Paintbrush className="w-3.5 h-3.5" /> Portrait
-        </button>
-
-        <button onClick={() => navigate(createPageUrl('CharacterSheetPage') + `?character_id=${character?.id}&session_id=${sessionId}`)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-          style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(140,100,220,0.2)', color: 'rgba(180,140,255,0.6)' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,120,255,0.5)'; e.currentTarget.style.color = '#c4b5fd'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(140,100,220,0.2)'; e.currentTarget.style.color = 'rgba(180,140,255,0.6)'; }}>
-          <Scroll className="w-3.5 h-3.5" /> Full Sheet
-        </button>
-
-        <button onClick={() => setShowCharSheet(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-fantasy transition-all"
-          style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(180,140,90,0.2)', color: 'rgba(201,169,110,0.6)' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.45)'; e.currentTarget.style.color = '#c9a96e'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,140,90,0.2)'; e.currentTarget.style.color = 'rgba(201,169,110,0.6)'; }}>
-          <User className="w-3.5 h-3.5" /> Sheet
-        </button>
+        <div className="ml-auto">
+          <GameToolbar
+            sessionId={sessionId}
+            characterId={character?.id}
+            inCombat={inCombat}
+            started={started}
+            showDiceRoller={showDiceRoller}
+            setShowDiceRoller={setShowDiceRoller}
+            showCompanions={showCompanions}
+            setShowCompanions={setShowCompanions}
+            setShowRestModal={setShowRestModal}
+            setShowSceneVisualizer={setShowSceneVisualizer}
+            setShowPortraitGen={setShowPortraitGen}
+            setShowCharSheet={setShowCharSheet}
+          />
+        </div>
       </div>
 
       {/* Main Game Area */}
