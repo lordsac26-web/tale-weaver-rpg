@@ -8,6 +8,7 @@ import CombatDiceRoller from './CombatDiceRoller';
 import CombatLog from './CombatLog';
 import InitiativeTracker from './InitiativeTracker';
 import ActionPointBar from './ActionPointBar';
+import { useEffect } from 'react';
 import CombatFloatingText from './CombatFloatingText';
 import CombatModifiersPanel from './CombatModifiersPanel';
 import ClassAbilitiesPanel from './ClassAbilitiesPanel';
