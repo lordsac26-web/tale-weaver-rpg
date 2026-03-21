@@ -425,7 +425,12 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                   !selectedTarget ? 'Select a Target' :
                   action === 'spell' && !selectedSpell ? 'Select a Spell' :
                   action === 'spell' ? `Cast ${selectedSpell}` :
-                  `Strike ${combatants?.find(c => c.id === selectedTarget)?.name || ''}`}
+                  (() => {
+                    const w = getActiveWeapon();
+                    const wName = w ? w.name : 'Unarmed';
+                    const target = combatants?.find(c => c.id === selectedTarget)?.name || '';
+                    return `${wName} → ${target}`;
+                  })()}
               </motion.button>
             </div>
           ) : (
