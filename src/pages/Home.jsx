@@ -25,6 +25,16 @@ export default function Home() {
       setSessions(sess.filter(s => s.is_active));
       setLoading(false);
     });
+
+    // Listen for delete events to update state without full reload
+    const onCharDelete = (e) => setCharacters(prev => prev.filter(c => c.id !== e.detail));
+    const onSessDelete = (e) => setSessions(prev => prev.filter(s => s.id !== e.detail));
+    window.addEventListener('character-deleted', onCharDelete);
+    window.addEventListener('session-deleted', onSessDelete);
+    return () => {
+      window.removeEventListener('character-deleted', onCharDelete);
+      window.removeEventListener('session-deleted', onSessDelete);
+    };
   }, []);
 
   const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.1 } } };
@@ -342,7 +352,8 @@ function CharacterCard({ character, sessions, onViewSheet }) {
     e.stopPropagation();
     if (confirm(`Delete ${character.name} permanently? This cannot be undone.`)) {
       await base44.entities.Character.update(character.id, { is_active: false });
-      window.location.reload();
+      // Remove from React state instead of full page reload
+      window.dispatchEvent(new CustomEvent('character-deleted', { detail: character.id }));
     }
   };
 
@@ -489,7 +500,7 @@ function SessionCard({ session, characters }) {
     e.stopPropagation();
     if (confirm(`Delete campaign "${session.title || 'Unnamed Campaign'}" permanently? This cannot be undone.`)) {
       await base44.entities.GameSession.update(session.id, { is_active: false });
-      window.location.reload();
+      window.dispatchEvent(new CustomEvent('session-deleted', { detail: session.id }));
     }
   };
   
