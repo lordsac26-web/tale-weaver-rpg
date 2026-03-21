@@ -78,6 +78,7 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ type: 'spring', stiffness: 320, damping: 28 }}
         className="w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col rounded-2xl"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
         style={{
           background: 'rgba(12,8,4,0.98)',
           border: '1px solid rgba(180,140,90,0.3)',

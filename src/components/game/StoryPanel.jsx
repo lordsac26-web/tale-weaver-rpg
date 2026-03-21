@@ -34,6 +34,14 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [narrative, loading]);
+
+  // Cleanup speech synthesis on unmount to prevent orphaned audio
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis.cancel();
+      currentUtterance.current = null;
+    };
+  }, []);
  
   // Trigger narration on new narration entries — non-blocking
   useEffect(() => {

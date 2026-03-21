@@ -36,9 +36,9 @@ export default function HUD({ character, session }) {
         background: 'linear-gradient(90deg, transparent, rgba(201,169,110,0.5) 30%, rgba(201,169,110,0.5) 70%, transparent)'
       }} />
  
-      <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-3 md:gap-5">
+      <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-2 md:gap-4">
         {/* Character portrait + name */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
           <div className="relative flex-shrink-0">
             <div className="w-10 h-10 rounded-full flex items-center justify-center font-fantasy font-bold text-sm"
               style={{
@@ -70,9 +70,9 @@ export default function HUD({ character, session }) {
         <div className="hidden md:block w-px h-8 self-center" style={{ background: 'rgba(180,140,90,0.2)' }} />
  
         {/* HP Bar */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <Heart className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#dc2626' }} />
-          <div className="w-28">
+          <div className="w-20 md:w-28">
             <div className="flex justify-between text-xs mb-1">
               <span className="font-bold" style={{ color: '#fca5a5', fontFamily: 'Cinzel, serif', fontSize: '0.7rem' }}>
                 {character.hp_current}
@@ -124,12 +124,12 @@ export default function HUD({ character, session }) {
           </div>
         )}
  
-        {/* Location & Time */}
+        {/* Location & Time — hidden on small screens to prevent overflow */}
         {session && (
-          <div className="flex items-center gap-3 ml-auto" style={{ color: 'rgba(201,169,110,0.45)', fontFamily: 'EB Garamond, serif', fontSize: '0.75rem' }}>
-            <span className="hidden md:flex items-center gap-1.5">
+          <div className="hidden md:flex items-center gap-3 ml-auto" style={{ color: 'rgba(201,169,110,0.45)', fontFamily: 'EB Garamond, serif', fontSize: '0.75rem' }}>
+            <span className="flex items-center gap-1.5">
               <MapPin className="w-3 h-3" />
-              <span className="italic">{session.current_location || 'Unknown'}</span>
+              <span className="italic truncate max-w-[120px]">{session.current_location || 'Unknown'}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <Clock className="w-3 h-3" />

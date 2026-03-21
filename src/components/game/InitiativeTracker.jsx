@@ -83,7 +83,7 @@ export default function InitiativeTracker({ combatants = [], currentTurnIndex, r
             const isDead = !c.is_conscious;
             const isPlayer = c.type === 'player';
             const isExpanded = expandedCombatant === c.id;
-            const hpPct = c.hp_max ? Math.max(0, Math.min(100, (c.hp / c.hp_max) * 100)) : 100;
+            const hpPct = c.hp_max ? Math.max(0, Math.min(100, ((c.hp_current ?? c.hp ?? 0) / c.hp_max) * 100)) : 100;
             const activeEffects = c.active_effects || [];
             const conditions = c.conditions || [];
 
