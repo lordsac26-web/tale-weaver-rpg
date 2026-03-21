@@ -226,8 +226,8 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
       const matches = cats.some(c => itemCat.includes(c) || c.includes(itemCat));
       if (!matches) return false;
       // Prevent equipping same item in both ring slots
-      if (slot === 'ring2' && equipped.ring1?.name === item.name) return false;
-      if (slot === 'ring1' && equipped.ring2?.name === item.name) return false;
+      if (slot === 'ring2' && equipped.ring?.name === item.name) return false;
+      if (slot === 'ring' && equipped.ring2?.name === item.name) return false;
       return true;
     });
   };
