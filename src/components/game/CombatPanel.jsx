@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Loader2, SkipForward, Swords, Dices } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { calcStatMod, PROFICIENCY_BY_LEVEL } from './gameData';
@@ -8,7 +8,6 @@ import CombatDiceRoller from './CombatDiceRoller';
 import CombatLog from './CombatLog';
 import InitiativeTracker from './InitiativeTracker';
 import ActionPointBar from './ActionPointBar';
-import { useEffect } from 'react';
 import CombatFloatingText from './CombatFloatingText';
 import CombatModifiersPanel from './CombatModifiersPanel';
 import ClassAbilitiesPanel from './ClassAbilitiesPanel';
