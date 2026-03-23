@@ -653,7 +653,10 @@ Deno.serve(async (req) => {
       text: logText
     };
 
-    // Advance turn — use UPDATED combatants (player HP may have changed)
+    // Build updated combatants with player HP changes BEFORE using them
+    const updatedCombatants = combatants.map(c => c.id === player.id ? player : c);
+
+    // Advance turn
     let nextIndex = (combatLog.current_turn_index + 1) % updatedCombatants.length;
     let round = combatLog.round;
     if (nextIndex === 0) round += 1;
@@ -664,8 +667,6 @@ Deno.serve(async (req) => {
       if (nextIndex === 0) round += 1;
       safety++;
     }
-
-    const updatedCombatants = combatants.map(c => c.id === player.id ? player : c);
     await base44.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants,
       log_entries: [...(combatLog.log_entries || []), logEntry],
