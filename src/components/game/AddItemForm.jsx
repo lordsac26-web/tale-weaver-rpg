@@ -222,7 +222,7 @@ export default function AddItemForm({ onAdd, onCancel }) {
         </>
       )}
 
-      {tab !== 'srd' && tab !== 'lookup' && (
+      {tab === 'custom' && (
         <div className="flex gap-2 pt-1">
           <button onClick={() => { if (item.name) onAdd(item); }} disabled={!item.name}
             className="flex-1 py-2 rounded-lg text-sm btn-fantasy disabled:opacity-40">
@@ -234,10 +234,10 @@ export default function AddItemForm({ onAdd, onCancel }) {
           </button>
         </div>
       )}
-      {(tab === 'srd' || tab === 'lookup') && (
+      {tab !== 'custom' && (
         <button onClick={onCancel} className="w-full py-2 rounded-lg text-sm text-center"
           style={{ border: '1px solid rgba(180,140,90,0.15)', color: 'rgba(201,169,110,0.4)' }}>
-          Cancel
+          Close
         </button>
       )}
     </div>
