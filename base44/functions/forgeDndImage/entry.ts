@@ -1,10 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
-
-const QUALITY_SIZES = {
-  '1k': '1024x1024',
-  '2k': '2048x2048',
-  '4k': '4096x4096',
-};
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 Deno.serve(async (req) => {
   try {
@@ -38,29 +32,61 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Sexual content is not allowed' }, { status: 400 });
     }
 
-    // Generate image using Core integration
-    const imageData = reference_image_url 
-      ? await base44.integrations.Core.GenerateImage({
-          prompt: finalPrompt,
-          existing_image_urls: [reference_image_url],
-        })
-      : await base44.integrations.Core.GenerateImage({
-          prompt: finalPrompt,
-        });
+    // Try generating with up to 2 attempts — content filters can be flaky
+    let lastError = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const imageData = reference_image_url 
+          ? await base44.integrations.Core.GenerateImage({
+              prompt: finalPrompt,
+              existing_image_urls: [reference_image_url],
+            })
+          : await base44.integrations.Core.GenerateImage({
+              prompt: finalPrompt,
+            });
 
-    if (!imageData?.url) {
-      return Response.json({ error: 'Image generation failed' }, { status: 500 });
+        if (imageData?.url) {
+          return Response.json({
+            success: true,
+            image_url: imageData.url,
+            prompt_used: finalPrompt,
+            quality,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch (genError) {
+        lastError = genError;
+        const msg = (genError.message || '').toLowerCase();
+        
+        // If content filter triggered, soften the prompt and retry
+        if (msg.includes('filtered') || msg.includes('usage guidelines') || msg.includes('violated')) {
+          // Strip aggressive terms and retry with softer phrasing
+          finalPrompt = finalPrompt
+            .replace(/gore|blood|grit|violent|intense|dark fantasy|gritty/gi, '')
+            .replace(/battle-worn|battle worn|weathered|harsh/gi, '')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+          finalPrompt += ', family-friendly fantasy illustration, safe content';
+          continue;
+        }
+        // For non-filter errors, don't retry
+        break;
+      }
     }
 
-    return Response.json({
-      success: true,
-      image_url: imageData.url,
-      prompt_used: finalPrompt,
-      quality,
-      timestamp: new Date().toISOString(),
-    });
+    // If we exhausted retries, return a user-friendly message
+    const errorMsg = lastError?.message || 'Image generation failed';
+    const isFilterError = errorMsg.toLowerCase().includes('filtered') || errorMsg.toLowerCase().includes('usage guidelines');
+    
+    if (isFilterError) {
+      return Response.json({ 
+        error: 'The image was blocked by the AI content filter. Try rephrasing your prompt — remove any violent, dark, or potentially sensitive terms and try again.' 
+      }, { status: 422 });
+    }
+
+    return Response.json({ error: errorMsg }, { status: 500 });
   } catch (error) {
     console.error('Image forge error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: error.message || 'Unexpected error' }, { status: 500 });
   }
 });
