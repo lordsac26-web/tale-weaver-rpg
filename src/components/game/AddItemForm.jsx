@@ -5,6 +5,7 @@ import {
   MAGIC_PROPERTIES, SRD_MAGIC_ITEMS
 } from './itemData';
 import { searchMagicItems } from './open5eApi';
+import ItemDatabaseSearch from './ItemDatabaseSearch';
 
 const RARITIES = Object.keys(ITEM_RARITY);
 
@@ -31,7 +32,7 @@ export default function AddItemForm({ onAdd, onCancel }) {
   const [searching, setSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [tab, setTab] = useState('custom');
+  const [tab, setTab] = useState('database');
 
   const set = (k, v) => setItem(prev => ({ ...prev, [k]: v }));
 
@@ -67,7 +68,7 @@ export default function AddItemForm({ onAdd, onCancel }) {
     <div className="rounded-xl p-4 space-y-3" style={{ background: 'rgba(15,10,4,0.9)', border: '1px solid rgba(180,140,90,0.2)' }}>
       {/* Tabs */}
       <div className="flex gap-1 mb-1">
-        {[['custom','Custom Item'],['srd','SRD Presets'],['lookup','Open5e Search']].map(([t,label]) => (
+        {[['database','📦 Item Database'],['custom','Custom Item'],['srd','SRD Magic'],['lookup','Open5e Search']].map(([t,label]) => (
           <button key={t} onClick={() => setTab(t)}
             className="text-xs px-2 py-1 rounded font-fantasy transition-all"
             style={tab === t ? { background: 'rgba(80,50,10,0.8)', border: '1px solid rgba(201,169,110,0.4)', color: '#f0c040' } :
@@ -76,6 +77,11 @@ export default function AddItemForm({ onAdd, onCancel }) {
           </button>
         ))}
       </div>
+
+      {/* Item Database Browser */}
+      {tab === 'database' && (
+        <ItemDatabaseSearch compact onSelectItem={(item) => { onAdd(item); }} />
+      )}
 
       {/* SRD Presets */}
       {tab === 'srd' && (
