@@ -262,6 +262,8 @@ export default function CharacterCreation() {
         finalChar.inventory = bgData.equipment.map(e => ({ name: e, type: 'gear', weight: 1 }));
       }
     }
+    // Remove temporary creation-only fields
+    delete finalChar._gear_customized;
     const saved = await base44.entities.Character.create(finalChar);
     navigate(createPageUrl('NewGame') + `?character_id=${saved.id}`);
   };
