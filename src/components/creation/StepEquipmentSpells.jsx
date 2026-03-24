@@ -275,3 +275,78 @@ export default function StepEquipmentSpells({ character, set }) {
     </div>
   );
 }
+
+// ─── Equipment Sub-Tab with Default vs Custom choice ──────────────────────────
+function EquipmentSubTab({ character, set, classEquipment, bgEquipment }) {
+  const [mode, setMode] = useState('default'); // 'default' | 'custom'
+  const allDefaultGear = [...classEquipment, ...bgEquipment];
+  const hasCustomized = character._gear_customized;
+
+  const acceptDefault = () => {
+    set('inventory', allDefaultGear);
+    set('gold', STARTING_GOLD[character.class] || 50);
+    set('_gear_customized', false);
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Mode toggle */}
+      <div className="flex gap-2">
+        <button onClick={() => { setMode('default'); acceptDefault(); }}
+          className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+            mode === 'default'
+              ? 'bg-amber-900/40 text-amber-200 border border-amber-700/40'
+              : 'text-slate-400 border border-slate-700/30 hover:border-slate-600'
+          }`}>
+          <Package className="w-4 h-4" />
+          Accept Default Gear
+        </button>
+        <button onClick={() => setMode('custom')}
+          className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+            mode === 'custom'
+              ? 'bg-amber-900/40 text-amber-200 border border-amber-700/40'
+              : 'text-slate-400 border border-slate-700/30 hover:border-slate-600'
+          }`}>
+          <ShoppingCart className="w-4 h-4" />
+          Pick Your Own
+        </button>
+      </div>
+
+      {mode === 'default' && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-yellow-400 font-bold">💰 {STARTING_GOLD[character.class] || 50} gp</span>
+            <span className="text-slate-500">starting gold</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {allDefaultGear.map((item, i) => (
+              <EquipmentTooltip key={i} itemName={item.name} position="top">
+                <div className="flex items-center gap-3 p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl hover:border-slate-600 transition-all cursor-help">
+                  <span className="text-xl">{ITEM_ICONS[item.type] || '📦'}</span>
+                  <div>
+                    <div className="text-amber-200 text-sm font-medium">{item.name}</div>
+                    <div className="text-slate-500 text-xs capitalize">{item.type} · {item.weight}lb</div>
+                  </div>
+                  {bgEquipment.includes(item) && <span className="ml-auto text-xs text-blue-400">Background</span>}
+                </div>
+              </EquipmentTooltip>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500 italic">This is the standard starting equipment for your class and background.</p>
+        </div>
+      )}
+
+      {mode === 'custom' && (
+        <div>
+          <p className="text-xs text-amber-400/60 mb-3">Spend your starting gold on any equipment you want. Leftover gold is yours to keep.</p>
+          <StartingGearPicker
+            character={character}
+            classGold={STARTING_GOLD[character.class] || 150}
+            onUpdateInventory={(items) => { set('inventory', items); set('_gear_customized', true); }}
+            onUpdateGold={(gold) => set('gold', gold)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
