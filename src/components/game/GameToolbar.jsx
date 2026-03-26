@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 import { Dices, Swords, Map, ShoppingBag, Eye, Paintbrush, Scroll, BookMarked, MoreHorizontal, Moon } from 'lucide-react';
@@ -16,6 +17,18 @@ export default function GameToolbar({
 }) {
   const navigate = useNavigate();
   const [showMore, setShowMore] = useState(false);
+  const moreBtnRef = useRef(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+
+  useEffect(() => {
+    if (showMore && moreBtnRef.current) {
+      const rect = moreBtnRef.current.getBoundingClientRect();
+      setMenuPos({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
+  }, [showMore]);
 
   // Primary buttons (always visible)
   const primaryActions = [
@@ -56,7 +69,7 @@ export default function GameToolbar({
 
       {/* More button */}
       <div className="relative flex-shrink-0">
-        <button onClick={() => setShowMore(v => !v)}
+        <button ref={moreBtnRef} onClick={() => setShowMore(v => !v)}
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-fantasy transition-all"
           style={showMore ? {
             background: 'rgba(80,50,10,0.7)', border: '1px solid rgba(201,169,110,0.5)', color: '#f0c040',
@@ -67,35 +80,36 @@ export default function GameToolbar({
           <span className="hidden sm:inline">More</span>
         </button>
 
-        <AnimatePresence>
-          {showMore && (
-            <>
-              {/* Backdrop */}
-              <div className="fixed inset-0 z-30" onClick={() => setShowMore(false)} />
-              <motion.div
-                initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                transition={{ duration: 0.15 }}
-                className="absolute right-0 top-full mt-2 z-40 rounded-xl overflow-hidden shadow-2xl"
-                style={{
-                  background: 'rgba(12,6,2,0.98)', border: '1px solid rgba(184,115,51,0.35)',
-                  minWidth: '200px', boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
-                }}>
-                {overflowActions.map((action, i) => (
-                  <button key={i} onClick={() => { action.onClick(); setShowMore(false); }}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-fantasy transition-all"
-                    style={{ borderBottom: i < overflowActions.length - 1 ? '1px solid rgba(184,115,51,0.1)' : 'none', color: action.color }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(60,30,10,0.6)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <action.icon className="w-4 h-4 flex-shrink-0" />
-                    {action.label}
-                  </button>
-                ))}
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
+        {showMore && createPortal(
+          <>
+            {/* Backdrop */}
+            <div className="fixed inset-0 z-[9998]" onClick={() => setShowMore(false)} />
+            <motion.div
+              initial={{ opacity: 0, y: -8, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              className="fixed z-[9999] rounded-xl overflow-hidden shadow-2xl"
+              style={{
+                top: menuPos.top,
+                right: menuPos.right,
+                background: 'rgba(12,6,2,0.98)', border: '1px solid rgba(184,115,51,0.35)',
+                minWidth: '200px', boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
+              }}>
+              {overflowActions.map((action, i) => (
+                <button key={i} onClick={() => { action.onClick(); setShowMore(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-fantasy transition-all"
+                  style={{ borderBottom: i < overflowActions.length - 1 ? '1px solid rgba(184,115,51,0.1)' : 'none', color: action.color }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(60,30,10,0.6)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <action.icon className="w-4 h-4 flex-shrink-0" />
+                  {action.label}
+                </button>
+              ))}
+            </motion.div>
+          </>,
+          document.body
+        )}
       </div>
     </div>
   );
