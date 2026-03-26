@@ -27,6 +27,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   const [audioLoading, setAudioLoading] = useState(false);
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState(() => localStorage.getItem('narratorVoice') || 'eloquent');
+  const [volume, setVolume] = useState(() => parseFloat(localStorage.getItem('narratorVolume') ?? '1'));
   const lastNarratedIndex = useRef(-1);
   const currentUtterance = useRef(null);
  
@@ -126,7 +127,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
           utterance.voice = voice;
           utterance.rate = preset.rate;
           utterance.pitch = preset.pitch;
-          utterance.volume = 1.0;
+          utterance.volume = volume;
           
           currentUtterance.current = utterance;
  
@@ -192,44 +193,70 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
       <div className="flex-shrink-0 px-4 py-2 flex items-center justify-end gap-2 relative"
         style={{ background: 'rgba(8,5,2,0.6)', borderBottom: '1px solid rgba(180,140,90,0.15)' }}>
         
-        {/* Voice selector dropdown */}
+        {/* Voice selector dropdown + volume slider */}
         {narrationEnabled && (
-          <div className="relative">
-            <button onClick={(e) => { e.stopPropagation(); setShowVoiceMenu(v => !v); }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-fantasy transition-all"
-              style={{ background: 'rgba(30,20,8,0.6)', border: '1px solid rgba(180,140,90,0.25)', color: 'rgba(201,169,110,0.6)' }}>
-              🎭 {VOICE_PRESETS[selectedVoice]?.name || 'Voice'}
-            </button>
-            
-            <AnimatePresence>
-              {showVoiceMenu && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                  className="absolute right-0 top-full mt-1 rounded-xl overflow-hidden shadow-2xl z-50 min-w-[200px]"
-                  style={{ background: 'rgba(15,8,3,0.98)', border: '1px solid rgba(180,140,90,0.3)' }}>
-                  {Object.entries(VOICE_PRESETS).map(([key, preset], i) => (
-                    <button key={key}
-                      onClick={() => handleVoiceChange(key)}
-                      className="w-full text-left px-3 py-2.5 transition-all"
-                      style={{ 
-                        borderBottom: i < Object.keys(VOICE_PRESETS).length - 1 ? '1px solid rgba(180,140,90,0.08)' : 'none',
-                        background: selectedVoice === key ? 'rgba(80,50,10,0.5)' : 'transparent'
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(60,35,10,0.5)'}
-                      onMouseLeave={e => e.currentTarget.style.background = selectedVoice === key ? 'rgba(80,50,10,0.5)' : 'transparent'}>
-                      <div className="text-xs font-fantasy" style={{ color: selectedVoice === key ? '#f0c040' : 'rgba(232,213,183,0.8)' }}>
-                        {preset.name}
-                      </div>
-                      <div className="text-xs mt-0.5" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>
-                        {preset.desc}
-                      </div>
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <button onClick={(e) => { e.stopPropagation(); setShowVoiceMenu(v => !v); }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-fantasy transition-all"
+                style={{ background: 'rgba(30,20,8,0.6)', border: '1px solid rgba(180,140,90,0.25)', color: 'rgba(201,169,110,0.6)' }}>
+                🎭 {VOICE_PRESETS[selectedVoice]?.name || 'Voice'}
+              </button>
+              
+              <AnimatePresence>
+                {showVoiceMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                    className="absolute right-0 top-full mt-1 rounded-xl overflow-hidden shadow-2xl z-50 min-w-[200px]"
+                    style={{ background: 'rgba(15,8,3,0.98)', border: '1px solid rgba(180,140,90,0.3)' }}>
+                    {Object.entries(VOICE_PRESETS).map(([key, preset], i) => (
+                      <button key={key}
+                        onClick={() => handleVoiceChange(key)}
+                        className="w-full text-left px-3 py-2.5 transition-all"
+                        style={{ 
+                          borderBottom: i < Object.keys(VOICE_PRESETS).length - 1 ? '1px solid rgba(180,140,90,0.08)' : 'none',
+                          background: selectedVoice === key ? 'rgba(80,50,10,0.5)' : 'transparent'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(60,35,10,0.5)'}
+                        onMouseLeave={e => e.currentTarget.style.background = selectedVoice === key ? 'rgba(80,50,10,0.5)' : 'transparent'}>
+                        <div className="text-xs font-fantasy" style={{ color: selectedVoice === key ? '#f0c040' : 'rgba(232,213,183,0.8)' }}>
+                          {preset.name}
+                        </div>
+                        <div className="text-xs mt-0.5" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>
+                          {preset.desc}
+                        </div>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Volume slider */}
+            <div className="flex items-center gap-1.5">
+              <VolumeX className="w-3 h-3 flex-shrink-0" style={{ color: 'rgba(201,169,110,0.35)' }} />
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={volume}
+                onChange={e => {
+                  const v = parseFloat(e.target.value);
+                  setVolume(v);
+                  localStorage.setItem('narratorVolume', String(v));
+                }}
+                className="w-16 h-1 rounded-full appearance-none cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, rgba(201,169,110,0.7) ${volume * 100}%, rgba(60,40,15,0.5) ${volume * 100}%)`,
+                  accentColor: '#c9a96e',
+                }}
+                title={`Volume: ${Math.round(volume * 100)}%`}
+              />
+              <Volume2 className="w-3 h-3 flex-shrink-0" style={{ color: 'rgba(201,169,110,0.35)' }} />
+            </div>
           </div>
         )}
         
