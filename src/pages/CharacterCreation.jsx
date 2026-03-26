@@ -21,6 +21,7 @@ import StepPortrait from '@/components/creation/StepPortrait';
 import StepBackstory from '@/components/creation/StepBackstory';
 import StepEquipmentSpells from '@/components/creation/StepEquipmentSpells';
 import StepFeats from '@/components/creation/StepFeats';
+import StepClassChoices from '@/components/creation/StepClassChoices';
 import StepReview from '@/components/creation/StepReview';
  
 const STEPS = [
@@ -28,6 +29,7 @@ const STEPS = [
   { id: 'class', label: 'Class', icon: '⚔️' },
   { id: 'stats', label: 'Stats', icon: '🎲' },
   { id: 'skills', label: 'Skills', icon: '📋' },
+  { id: 'choices', label: 'Choices', icon: '🎯' },
   { id: 'background', label: 'Background', icon: '📖' },
   { id: 'portrait', label: 'Portrait', icon: '🎨' },
   { id: 'backstory', label: 'Backstory', icon: '✍️' },
@@ -51,7 +53,8 @@ export default function CharacterCreation() {
     strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10,
     skills: {}, inventory: [], conditions: [], active_modifiers: [], features: [], feats: [],
     gold: 0, silver: 0, copper: 0, xp: 0, spell_slots: {}, spells_known: [],
-    portrait: '', chosen_stat_bonuses: [], feat_stat_choices: {}  // { [featName]: chosenStat } for choice-based ASI feats
+    portrait: '', chosen_stat_bonuses: [], feat_stat_choices: {},
+    class_choices: {}  // { favored_enemy, favored_terrain, fighting_style, expertise, draconic_ancestry, ... }
   });
  
   const set = (key, val) => setCharacter(prev => ({ ...prev, [key]: val }));
@@ -158,6 +161,26 @@ export default function CharacterCreation() {
     });
     return { ...char, features };
   };
+
+  // Apply class_choices to the character (fighting style, expertise, etc.)
+  const applyClassChoices = (char) => {
+    const cc = char.class_choices || {};
+    const updated = { ...char };
+
+    // Fighting Style → stored on character.fighting_style (combat engine reads it)
+    if (cc.fighting_style) {
+      updated.fighting_style = cc.fighting_style;
+    }
+
+    // Expertise → mark skills as 'expert' in skills object
+    if (cc.expertise && Array.isArray(cc.expertise)) {
+      const skills = { ...updated.skills };
+      cc.expertise.forEach(s => { if (skills[s]) skills[s] = 'expert'; });
+      updated.skills = skills;
+    }
+
+    return updated;
+  };
  
   const buildSpellSlots = (char) => {
     const slots = getSpellSlotsForLevel(char.class, char.level || 1);
@@ -247,6 +270,7 @@ export default function CharacterCreation() {
     setSaving(true);
     let finalChar = applyRacialBonuses(character);
     finalChar = applyFeatBonuses(finalChar);      // feats before derived stats so HP/AC use final values
+    finalChar = applyClassChoices(finalChar);      // fighting style, expertise, etc.
     finalChar = updateDerivedStats(finalChar);
     finalChar = buildClassFeatures(finalChar);
     finalChar = buildSpellSlots(finalChar);
@@ -264,6 +288,8 @@ export default function CharacterCreation() {
     }
     // Remove temporary creation-only fields
     delete finalChar._gear_customized;
+    delete finalChar.chosen_stat_bonuses;
+    delete finalChar.feat_stat_choices;
     const saved = await base44.entities.Character.create(finalChar);
     navigate(createPageUrl('NewGame') + `?character_id=${saved.id}`);
   };
@@ -282,13 +308,14 @@ export default function CharacterCreation() {
       }
       case 1: return !!character.class && !!character.name;
       case 2: return STATS.every(s => character[s] >= 3 && character[s] <= 20);
-      case 3: return true;
-      case 4: return !!character.background;
-      case 5: return true; // portrait is optional
-      case 6: return !!character.backstory;
-      case 7: return true;
-      case 8: return true; // feats
-      case 9: return true;
+      case 3: return true; // skills
+      case 4: return true; // class choices (optional selections)
+      case 5: return !!character.background;
+      case 6: return true; // portrait is optional
+      case 7: return !!character.backstory;
+      case 8: return true; // equipment
+      case 9: return true; // feats
+      case 10: return true;
       default: return true;
     }
   };
@@ -339,16 +366,17 @@ export default function CharacterCreation() {
           {step === 1 && <StepClassInfo character={character} set={set} />}
           {step === 2 && <StepAbilityScores character={character} set={set} rollAll={rollAllStats} pointBuy={pointBuyStats} />}
           {step === 3 && <StepSkillsFeatures character={character} set={set} />}
-          {step === 4 && <StepBackground character={character} set={set} />}
-          {step === 5 && <StepPortrait character={character} set={set} />}
-          {step === 6 && (
+          {step === 4 && <StepClassChoices character={character} set={set} />}
+          {step === 5 && <StepBackground character={character} set={set} />}
+          {step === 6 && <StepPortrait character={character} set={set} />}
+          {step === 7 && (
             <StepBackstory character={character} set={set}
               backstoryPrompt={backstoryPrompt} setBackstoryPrompt={setBackstoryPrompt}
               onGenerate={handleGenerateBackstory} generating={generatingBackstory} />
           )}
-          {step === 7 && <StepEquipmentSpells character={character} set={set} />}
-          {step === 8 && <StepFeats character={character} set={set} />}
-          {step === 9 && <StepReview character={reviewChar} />}
+          {step === 8 && <StepEquipmentSpells character={character} set={set} />}
+          {step === 9 && <StepFeats character={character} set={set} />}
+          {step === 10 && <StepReview character={reviewChar} />}
         </div>
  
         {/* Navigation */}
@@ -359,7 +387,7 @@ export default function CharacterCreation() {
           </Button>
  
           <div className="flex items-center gap-2">
-            {step === 5 && (
+            {step === 6 && (
               <Button variant="ghost" className="text-slate-500 hover:text-slate-300 text-sm"
                 onClick={() => setStep(s => s + 1)}>
                 Skip Portrait

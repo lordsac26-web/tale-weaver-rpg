@@ -129,6 +129,25 @@ export default function StepReview({ character }) {
             </div>
           )}
 
+          {/* Class/Race Choices */}
+          {Object.keys(character.class_choices || {}).length > 0 && (
+            <div className="bg-slate-800/40 border border-slate-700/40 rounded-xl p-4">
+              <div className="text-amber-400/80 text-xs uppercase tracking-widest mb-2">Class & Race Choices</div>
+              <div className="space-y-1.5">
+                {Object.entries(character.class_choices || {}).map(([key, val]) => {
+                  const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                  const display = Array.isArray(val) ? val.join(', ') : (typeof val === 'string' ? val.replace(/_/g, ' ') : String(val));
+                  return (
+                    <div key={key} className="flex items-center justify-between text-sm">
+                      <span className="text-slate-400">{label}</span>
+                      <span className="text-amber-200 font-medium capitalize">{display}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Feats */}
           {(character.feats || []).length > 0 && (
             <div className="bg-amber-900/10 border border-amber-700/30 rounded-xl p-4">
