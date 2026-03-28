@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Loader2, Scroll, Feather, Volume2, VolumeX } from 'lucide-react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { Loader2, Scroll, Feather, Volume2, VolumeX, Pause, Play, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SkillCheckResult from './SkillCheckResult';
 import { base44 } from '@/api/base44Client';
@@ -24,12 +24,14 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   const endRef = useRef(null);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [isNarrating, setIsNarrating] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [audioLoading, setAudioLoading] = useState(false);
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState(() => localStorage.getItem('narratorVoice') || 'eloquent');
   const [volume, setVolume] = useState(() => parseFloat(localStorage.getItem('narratorVolume') ?? '1'));
   const lastNarratedIndex = useRef(-1);
   const currentUtterance = useRef(null);
+  const cancelledRef = useRef(false);
  
   // Auto-scroll on new narrative entries
   useEffect(() => {
@@ -41,8 +43,16 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     return () => {
       window.speechSynthesis.cancel();
       currentUtterance.current = null;
+      cancelledRef.current = true;
     };
   }, []);
+
+  // Apply volume changes to the currently playing utterance in real-time
+  useEffect(() => {
+    if (currentUtterance.current) {
+      currentUtterance.current.volume = volume;
+    }
+  }, [volume]);
  
   // Trigger narration on new narration entries — non-blocking
   useEffect(() => {
@@ -66,7 +76,10 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
  
   const narrateText = async (text) => {
     if (!text?.trim()) return;
- 
+
+    cancelledRef.current = false;
+    setIsPaused(false);
+
     // Stop any currently playing speech
     if (window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
@@ -120,8 +133,9 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
  
       // Speak chunks sequentially with resumption to prevent Chrome cutoff
       for (let i = 0; i < chunks.length; i++) {
-        await new Promise((resolve, reject) => {
-          if (!narrationEnabled) { resolve(); return; }
+        if (cancelledRef.current) break;
+        await new Promise((resolve) => {
+          if (cancelledRef.current) { resolve(); return; }
           
           const utterance = new SpeechSynthesisUtterance(chunks[i]);
           utterance.voice = voice;
@@ -130,24 +144,24 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
           utterance.volume = volume;
           
           currentUtterance.current = utterance;
- 
+
           // Workaround for Chrome bug: resume every 10 seconds to prevent silence cutoff
           const resumeInterval = setInterval(() => {
-            if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
+            if (window.speechSynthesis.speaking && window.speechSynthesis.paused && !isPaused) {
               window.speechSynthesis.resume();
             }
           }, 10000);
- 
+
           utterance.onend = () => {
             clearInterval(resumeInterval);
             resolve();
           };
           utterance.onerror = (e) => {
-            console.error('Speech error:', e);
+            if (e.error !== 'canceled') console.error('Speech error:', e);
             clearInterval(resumeInterval);
             resolve(); // continue to next chunk
           };
- 
+
           window.speechSynthesis.speak(utterance);
         });
       }
@@ -165,12 +179,34 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     const newState = !narrationEnabled;
     setNarrationEnabled(newState);
     if (!newState) {
-      window.speechSynthesis.cancel();
-      currentUtterance.current = null;
-      setIsNarrating(false);
-      setAudioLoading(false);
+      stopNarration();
     }
   };
+
+  const stopNarration = useCallback(() => {
+    cancelledRef.current = true;
+    window.speechSynthesis.cancel();
+    currentUtterance.current = null;
+    setIsNarrating(false);
+    setIsPaused(false);
+    setAudioLoading(false);
+  }, []);
+
+  const togglePause = useCallback(() => {
+    if (isPaused) {
+      window.speechSynthesis.resume();
+      setIsPaused(false);
+    } else {
+      window.speechSynthesis.pause();
+      setIsPaused(true);
+    }
+  }, [isPaused]);
+
+  const replayLast = useCallback(() => {
+    const narrationEntries = narrative.filter(e => e.type === 'narration');
+    if (narrationEntries.length === 0) return;
+    narrateText(narrationEntries[narrationEntries.length - 1].text);
+  }, [narrative, selectedVoice, volume]);
  
   const handleVoiceChange = (voiceKey) => {
     setSelectedVoice(voiceKey);
@@ -181,6 +217,8 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   // Narration button label
   const narrationLabel = audioLoading
     ? 'Loading...'
+    : isNarrating && isPaused
+    ? 'Paused'
     : isNarrating
     ? 'Playing ♪'
     : narrationEnabled
@@ -193,9 +231,35 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
       <div className="flex-shrink-0 px-4 py-2 flex items-center justify-end gap-2 relative"
         style={{ background: 'rgba(8,5,2,0.6)', borderBottom: '1px solid rgba(180,140,90,0.15)' }}>
         
-        {/* Voice selector dropdown + volume slider */}
+        {/* Voice selector dropdown + playback controls + volume slider */}
         {narrationEnabled && (
           <div className="flex items-center gap-2">
+            {/* Playback controls when narrating */}
+            {isNarrating && (
+              <div className="flex items-center gap-1">
+                <button onClick={togglePause}
+                  className="p-1.5 rounded-lg transition-all"
+                  title={isPaused ? 'Resume' : 'Pause'}
+                  style={{ background: 'rgba(30,20,8,0.6)', border: '1px solid rgba(180,140,90,0.25)', color: 'rgba(201,169,110,0.7)' }}>
+                  {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                </button>
+                <button onClick={stopNarration}
+                  className="p-1.5 rounded-lg transition-all"
+                  title="Stop"
+                  style={{ background: 'rgba(30,20,8,0.6)', border: '1px solid rgba(180,140,90,0.25)', color: 'rgba(201,169,110,0.7)' }}>
+                  <Square className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+            {/* Replay last narration when idle */}
+            {!isNarrating && narrative.some(e => e.type === 'narration') && (
+              <button onClick={replayLast}
+                className="p-1.5 rounded-lg transition-all"
+                title="Replay last narration"
+                style={{ background: 'rgba(30,20,8,0.6)', border: '1px solid rgba(180,140,90,0.25)', color: 'rgba(201,169,110,0.7)' }}>
+                <Play className="w-3.5 h-3.5" />
+              </button>
+            )}
             <div className="relative">
               <button onClick={(e) => { e.stopPropagation(); setShowVoiceMenu(v => !v); }}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-fantasy transition-all"
@@ -247,8 +311,12 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                   const v = parseFloat(e.target.value);
                   setVolume(v);
                   localStorage.setItem('narratorVolume', String(v));
+                  // Apply to currently playing utterance immediately
+                  if (currentUtterance.current) {
+                    currentUtterance.current.volume = v;
+                  }
                 }}
-                className="w-16 h-1 rounded-full appearance-none cursor-pointer"
+                className="w-20 h-1.5 rounded-full appearance-none cursor-pointer"
                 style={{
                   background: `linear-gradient(to right, rgba(201,169,110,0.7) ${volume * 100}%, rgba(60,40,15,0.5) ${volume * 100}%)`,
                   accentColor: '#c9a96e',
