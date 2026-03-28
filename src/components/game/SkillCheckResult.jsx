@@ -11,7 +11,7 @@ const SKILL_ICONS = {
 };
 
 export default function SkillCheckResult({ entry }) {
-  const { skill, dc, raw, modifier, final, success, character_name, feedback } = entry;
+  const { skill, dc, raw, modifier, final, success, character_name, feedback, allRolls, hadAdvantage, hadDisadvantage, advantageSources } = entry;
   const icon = SKILL_ICONS[skill] || '🎲';
   const margin = final - dc;
 
@@ -56,14 +56,30 @@ export default function SkillCheckResult({ entry }) {
         {/* Roll breakdown */}
         <div className="px-4 py-3 flex items-center gap-3">
           {/* Die */}
-          <div className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center font-fantasy font-bold text-xl"
-            style={{
-              background: 'rgba(0,0,0,0.5)',
-              border: `2px solid ${success ? 'rgba(40,160,80,0.5)' : 'rgba(180,30,30,0.5)'}`,
-              color: raw === 20 ? '#f0c040' : raw === 1 ? '#ef4444' : success ? '#86efac' : '#fca5a5',
-              textShadow: raw === 20 ? '0 0 12px rgba(240,192,64,0.8)' : 'none',
-            }}>
-            {raw}
+          <div className="flex flex-col items-center gap-1 flex-shrink-0">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center font-fantasy font-bold text-xl"
+              style={{
+                background: 'rgba(0,0,0,0.5)',
+                border: `2px solid ${success ? 'rgba(40,160,80,0.5)' : 'rgba(180,30,30,0.5)'}`,
+                color: raw === 20 ? '#f0c040' : raw === 1 ? '#ef4444' : success ? '#86efac' : '#fca5a5',
+                textShadow: raw === 20 ? '0 0 12px rgba(240,192,64,0.8)' : 'none',
+              }}>
+              {raw}
+            </div>
+            {allRolls && allRolls.length > 1 && (
+              <div className="flex items-center gap-1">
+                {allRolls.map((r, i) => (
+                  <span key={i} className="text-xs font-fantasy px-1 rounded"
+                    style={{
+                      color: r === raw ? (success ? '#86efac' : '#fca5a5') : 'rgba(180,140,90,0.35)',
+                      background: r === raw ? 'rgba(255,255,255,0.05)' : 'transparent',
+                      textDecoration: r !== raw ? 'line-through' : 'none',
+                    }}>
+                    {r}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Breakdown */}
@@ -74,7 +90,7 @@ export default function SkillCheckResult({ entry }) {
                 {final}
               </span>
               <span className="text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>
-                = d20({raw}) {modifier >= 0 ? `+${modifier}` : modifier}
+                = d20({raw}{hadAdvantage ? ', adv' : ''}{hadDisadvantage ? ', dis' : ''}) {modifier >= 0 ? `+${modifier}` : modifier}
               </span>
               <span className="text-xs" style={{ color: 'rgba(180,140,90,0.35)' }}>
                 vs DC {dc}
@@ -95,6 +111,25 @@ export default function SkillCheckResult({ entry }) {
             <div className="font-fantasy font-bold text-lg" style={{ color: 'rgba(201,169,110,0.7)' }}>{dc}</div>
           </div>
         </div>
+
+        {/* Advantage/Disadvantage Source */}
+        {(hadAdvantage || hadDisadvantage) && advantageSources?.length > 0 && (
+          <div className="px-4 pb-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-fantasy px-2 py-0.5 rounded-full"
+                style={{
+                  background: hadAdvantage ? 'rgba(40,100,60,0.3)' : 'rgba(100,40,40,0.3)',
+                  border: `1px solid ${hadAdvantage ? 'rgba(40,160,80,0.3)' : 'rgba(180,30,30,0.3)'}`,
+                  color: hadAdvantage ? '#86efac' : '#fca5a5',
+                }}>
+                {hadAdvantage ? '⬆ Advantage' : '⬇ Disadvantage'}
+              </span>
+              <span className="text-xs" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>
+                from {advantageSources.join(', ')}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Feedback */}
         {feedback && (

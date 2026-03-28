@@ -4,6 +4,7 @@ import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 import { User, Loader2, ChevronLeft, Swords } from 'lucide-react';
 import { SKILL_STAT_MAP, calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
+import { getEquipmentAdvantage, rollD20WithAdvantage } from '@/components/game/equipmentAdvantage';
 import { motion, AnimatePresence } from 'framer-motion';
 import HUD from '@/components/game/HUD';
 import StoryPanel from '@/components/game/StoryPanel';
@@ -183,7 +184,9 @@ export default function Game() {
 
     if (choice.skill_check && choice.dc) {
       setStoryLoading(true);
-      const raw = Math.floor(Math.random() * 20) + 1;
+      // Check equipped items for advantage/disadvantage on this skill
+      const equipAdv = getEquipmentAdvantage(character?.equipped, choice.skill_check);
+      const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
       const modifier = computeSkillModifier(choice.skill_check);
       const final = raw + modifier;
       const success = final >= choice.dc;
@@ -194,6 +197,10 @@ export default function Game() {
         skill: choice.skill_check,
         dc: choice.dc,
         raw,
+        allRolls,
+        hadAdvantage,
+        hadDisadvantage,
+        advantageSources: equipAdv.sources,
         modifier,
         final,
         success,
@@ -264,13 +271,14 @@ export default function Game() {
 
     let checkResult = '';
     if (requires_check && skill && dc) {
-      const raw = Math.floor(Math.random() * 20) + 1;
+      const equipAdv = getEquipmentAdvantage(character?.equipped, skill);
+      const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
       const modifier = computeSkillModifier(skill);
       const final = raw + modifier;
       const success = final >= dc;
       const feedback = getSkillFeedback(skill, success, final, dc, raw);
-      setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, modifier, final, success, feedback, character_name: character?.name }]);
-      checkResult = ` [Skill Check: ${skill} DC${dc} — ${success ? 'SUCCESS' : 'FAILURE'} (rolled ${final})]`;
+      setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success, feedback, character_name: character?.name }]);
+      checkResult = ` [Skill Check: ${skill} DC${dc} — ${success ? 'SUCCESS' : 'FAILURE'} (rolled ${final}${hadAdvantage ? ', with advantage' : ''}${hadDisadvantage ? ', with disadvantage' : ''})]`;
     }
 
     setStoryLoading(true);
