@@ -29,6 +29,8 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState(() => localStorage.getItem('narratorVoice') || 'eloquent');
   const [volume, setVolume] = useState(() => parseFloat(localStorage.getItem('narratorVolume') ?? '1'));
+  const [speedMultiplier, setSpeedMultiplier] = useState(() => parseFloat(localStorage.getItem('narratorSpeed') ?? '1'));
+  const speedRef = useRef(parseFloat(localStorage.getItem('narratorSpeed') ?? '1'));
   const lastNarratedIndex = useRef(-1);
   const currentUtterance = useRef(null);
   const cancelledRef = useRef(false);
@@ -139,7 +141,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
           
           const utterance = new SpeechSynthesisUtterance(chunks[i]);
           utterance.voice = voice;
-          utterance.rate = preset.rate;
+          utterance.rate = preset.rate * speedRef.current;
           utterance.pitch = preset.pitch;
           utterance.volume = volume;
           
@@ -298,6 +300,26 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
               </AnimatePresence>
             </div>
 
+            {/* Speed selector */}
+            <div className="flex items-center gap-0.5">
+              {[{ label: '1×', value: 1 }, { label: '2×', value: 2 }, { label: '3×', value: 3 }].map(opt => (
+                <button key={opt.value}
+                  onClick={() => {
+                    setSpeedMultiplier(opt.value);
+                    speedRef.current = opt.value;
+                    localStorage.setItem('narratorSpeed', String(opt.value));
+                  }}
+                  className="px-1.5 py-0.5 rounded text-xs font-fantasy transition-all"
+                  style={speedMultiplier === opt.value ? {
+                    background: 'rgba(80,50,10,0.7)', border: '1px solid rgba(201,169,110,0.5)', color: '#f0c040',
+                  } : {
+                    background: 'transparent', border: '1px solid rgba(180,140,90,0.15)', color: 'rgba(201,169,110,0.4)',
+                  }}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
             {/* Volume slider */}
             <div className="flex items-center gap-1.5">
               <VolumeX className="w-3 h-3 flex-shrink-0" style={{ color: 'rgba(201,169,110,0.35)' }} />
@@ -311,7 +333,6 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                   const v = parseFloat(e.target.value);
                   setVolume(v);
                   localStorage.setItem('narratorVolume', String(v));
-                  // Apply to currently playing utterance immediately
                   if (currentUtterance.current) {
                     currentUtterance.current.volume = v;
                   }
