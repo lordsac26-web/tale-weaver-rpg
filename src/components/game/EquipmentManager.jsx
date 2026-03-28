@@ -291,7 +291,8 @@ export function recalculateStats(character, equipped, inventory) {
   let attackBonus = 0;
   let damageBonus = 0;
   let savingThrowBonus = 0;
-  const abilityBonuses = {};
+  const abilitySetScores = {};   // "set to X" items
+  const abilityAddBonuses = {};  // "+N" items
 
   // Iterate over equipped slot values (full item objects)
   Object.values(equipped).forEach(item => {
@@ -302,50 +303,78 @@ export function recalculateStats(character, equipped, inventory) {
     if (b.attack_bonus)  attackBonus += b.attack_bonus;
     if (b.damage)        damageBonus += b.damage;
     if (b.saving_throws) savingThrowBonus += b.saving_throws;
+
+    // "Set" ability scores (e.g. CON becomes 19)
     if (b.ability_scores) {
       Object.entries(b.ability_scores).forEach(([stat, val]) => {
-        abilityBonuses[stat] = (abilityBonuses[stat] || 0) + val;
+        abilitySetScores[stat] = Math.max(abilitySetScores[stat] || 0, val);
+      });
+    }
+    // Additive ability scores (e.g. +1 DEX)
+    if (b.ability_score_adds) {
+      Object.entries(b.ability_score_adds).forEach(([stat, val]) => {
+        abilityAddBonuses[stat] = (abilityAddBonuses[stat] || 0) + val;
       });
     }
   });
 
-  // Apply ability score bonuses
-  if (Object.keys(abilityBonuses).length > 0) {
-    ['strength','dexterity','constitution','intelligence','wisdom','charisma'].forEach(stat => {
-      if (abilityBonuses[stat]) {
-        updates[stat] = (character[stat] || 10) + abilityBonuses[stat];
-      }
-    });
+  // Apply ability score changes
+  ['strength','dexterity','constitution','intelligence','wisdom','charisma'].forEach(stat => {
+    const baseStat = character[`_base_${stat}`] || character[stat] || 10;
+    let finalStat = baseStat;
+
+    // "Set" items override to a fixed value (only if higher)
+    if (abilitySetScores[stat]) {
+      finalStat = Math.max(baseStat, abilitySetScores[stat]);
+    }
+
+    // Additive bonuses stack on top
+    if (abilityAddBonuses[stat]) {
+      finalStat += abilityAddBonuses[stat];
+    }
+
+    if (finalStat !== (character[stat] || 10)) {
+      updates[stat] = Math.min(30, finalStat);
+    }
+  });
+
+  // Compute AC using effective stats (with equipment-modified ability scores)
+  const effectiveChar = { ...character, ...updates };
+  const dexMod = Math.floor(((effectiveChar.dexterity || 10) - 10) / 2);
+  const wisMod = Math.floor(((effectiveChar.wisdom    || 10) - 10) / 2);
+  const conMod = Math.floor(((effectiveChar.constitution || 10) - 10) / 2);
+
+  // Best unarmored AC
+  let bestAC = 10 + dexMod;
+  if (!equipped.armor) {
+    if (character.class === 'Monk')        bestAC = Math.max(bestAC, 10 + dexMod + wisMod);
+    else if (character.class === 'Barbarian') bestAC = Math.max(bestAC, 10 + dexMod + conMod);
   }
 
-  const dexMod = Math.floor(((updates.dexterity || character.dexterity || 10) - 10) / 2);
-  const wisMod = Math.floor(((updates.wisdom    || character.wisdom    || 10) - 10) / 2);
-  const conMod = Math.floor(((updates.constitution || character.constitution || 10) - 10) / 2);
-
-  let baseAC = 10 + dexMod;
-  if (character.class === 'Monk')        baseAC = 10 + dexMod + wisMod;
-  else if (character.class === 'Barbarian') baseAC = 10 + dexMod + conMod;
-  else if (character.race === 'Tortle')  baseAC = 17;
-  else if (character.race === 'Lizardfolk') baseAC = 13 + dexMod;
+  // Racial natural armor — always available as an alternative
+  if (character.race === 'Tortle')       bestAC = Math.max(bestAC, 17);
+  else if (character.race === 'Lizardfolk') bestAC = Math.max(bestAC, 13 + dexMod);
 
   // Equipped armor (slot key: 'armor')
   const armorItem = equipped.armor;
   if (armorItem?.armor_class) {
     const acVal = parseInt(armorItem.armor_class) || 10;
     const type = armorItem.armor_type || 'light';
-    if (type === 'heavy') baseAC = acVal;
-    else if (type === 'medium') baseAC = acVal + Math.min(dexMod, 2);
-    else baseAC = acVal + dexMod;
+    let armorAC;
+    if (type === 'heavy') armorAC = acVal;
+    else if (type === 'medium') armorAC = acVal + Math.min(dexMod, 2);
+    else armorAC = acVal + dexMod;
+    bestAC = Math.max(bestAC, armorAC);
   }
 
   // Shield bonus
-  if (equipped.offhand?.category === 'Shield') baseAC += 2;
+  if (equipped.offhand?.category === 'Shield') bestAC += 2;
   // Cloak/ring AC bonus
-  if (equipped.cloak?.ac_bonus) baseAC += equipped.cloak.ac_bonus;
-  if (equipped.ring?.ac_bonus)  baseAC += equipped.ring.ac_bonus;
-  if (equipped.ring2?.ac_bonus) baseAC += equipped.ring2.ac_bonus;
+  if (equipped.cloak?.ac_bonus) bestAC += equipped.cloak.ac_bonus;
+  if (equipped.ring?.ac_bonus)  bestAC += equipped.ring.ac_bonus;
+  if (equipped.ring2?.ac_bonus) bestAC += equipped.ring2.ac_bonus;
 
-  updates.armor_class = baseAC + acBonus;
+  updates.armor_class = bestAC + acBonus;
 
   // Alias mainhand → weapon so CombatPanel can always read character.equipped.weapon
   if (equipped.mainhand) {

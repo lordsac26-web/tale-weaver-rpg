@@ -112,25 +112,23 @@ export default function CharacterCreation() {
     const hp = calcHP(char.class, char.level || 1, conMod);
  
     // ── Armor Class ────────────────────────────────────────────────────────
-    // Priority: class Unarmored Defense > racial Natural Armor > default 10+DEX
+    // Per D&D 5e: choose the BEST applicable AC formula
     let armorClass = 10 + dexMod;
- 
+
+    // Class Unarmored Defense
     if (char.class === 'Monk') {
-      // Unarmored Defense: 10 + DEX + WIS (PHB p.78)
-      armorClass = 10 + dexMod + wisMod;
+      armorClass = Math.max(armorClass, 10 + dexMod + wisMod);
     } else if (char.class === 'Barbarian') {
-      // Unarmored Defense: 10 + DEX + CON (PHB p.48)
-      armorClass = 10 + dexMod + conMod;
+      armorClass = Math.max(armorClass, 10 + dexMod + conMod);
+    }
+
+    // Racial Natural Armor — always an option, pick highest
+    if (char.race === 'Tortle') {
+      armorClass = Math.max(armorClass, 17);
     } else if (char.race === 'Lizardfolk') {
-      // Natural Armor: 13 + DEX mod (VGTM p.113)
-      armorClass = 13 + dexMod;
-    } else if (char.race === 'Tortle') {
-      // Natural Armor: 17, no DEX bonus (Tortle Package p.2)
-      armorClass = 17;
+      armorClass = Math.max(armorClass, 13 + dexMod);
     } else if (char.race === 'Warforged') {
-      // Integrated Protection: +1 to AC from any armor category (ERLW p.36)
-      // Unarmored base is 11 + DEX + proficiency (set conservatively to 11+DEX)
-      armorClass = 11 + dexMod;
+      armorClass = Math.max(armorClass, 11 + dexMod);
     }
  
     // ── Saving Throw Proficiencies ─────────────────────────────────────────

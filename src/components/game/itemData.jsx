@@ -220,30 +220,51 @@ export function getEquipConstraints(equipped, newItem) {
   return { canEquip: true, reason: null };
 }
 
-// Compute total AC from equipped items
+// Compute total AC from equipped items — handles class unarmored defense & racial natural armor
 export function computeAC(character, equipped) {
-  let base = 10;
   const dexMod = Math.floor(((character.dexterity || 10) - 10) / 2);
+  const wisMod = Math.floor(((character.wisdom || 10) - 10) / 2);
+  const conMod = Math.floor(((character.constitution || 10) - 10) / 2);
 
+  // Start with default
+  let base = 10 + dexMod;
+
+  // Class unarmored defense (only when not wearing armor)
   const armor = equipped?.armor;
-  const shield = equipped?.offhand;
-  const cloak = equipped?.cloak;
-  const ring = equipped?.ring;
+  if (!armor) {
+    if (character.class === 'Monk') {
+      base = Math.max(base, 10 + dexMod + wisMod);
+    } else if (character.class === 'Barbarian') {
+      base = Math.max(base, 10 + dexMod + conMod);
+    }
+  }
 
+  // Racial natural armor — always an option
+  if (character.race === 'Tortle') {
+    base = Math.max(base, 17);
+  } else if (character.race === 'Lizardfolk') {
+    base = Math.max(base, 13 + dexMod);
+  }
+
+  // Equipped armor
   if (armor) {
     const acVal = parseInt(armor.armor_class) || 10;
     const type = armor.armor_type || 'light';
-    if (type === 'heavy') base = acVal;
-    else if (type === 'medium') base = acVal + Math.min(dexMod, 2);
-    else base = acVal + dexMod;
+    let armorAC;
+    if (type === 'heavy') armorAC = acVal;
+    else if (type === 'medium') armorAC = acVal + Math.min(dexMod, 2);
+    else armorAC = acVal + dexMod;
+    base = Math.max(base, armorAC);
     // magic bonus
     (armor.magic_properties || []).forEach(p => {
       const prop = MAGIC_PROPERTIES[p];
       if (prop?.effect?.ac_bonus) base += prop.effect.ac_bonus;
     });
-  } else {
-    base = 10 + dexMod;
   }
+
+  const shield = equipped?.offhand;
+  const cloak = equipped?.cloak;
+  const ring = equipped?.ring;
 
   if (shield && shield.category === 'Shield') base += 2;
   if (cloak?.ac_bonus) base += cloak.ac_bonus;

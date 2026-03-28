@@ -443,7 +443,8 @@ function recalculateStatsFromEquipment(character, equipped, inventory) {
   const updates = {};
   let acBonus = 0;
   let savingThrowBonus = 0;
-  const abilityBonuses = {};
+  const abilitySetScores = {};   // "set to X" items (Amulet of Health, Belt of Giant Strength)
+  const abilityAddBonuses = {};  // "+N" items (Hand Wraps +1 DEX)
 
   Object.entries(equipped).forEach(([slot, item]) => {
     if (!item) return;
@@ -457,28 +458,52 @@ function recalculateStatsFromEquipment(character, equipped, inventory) {
     const bonuses = item.bonuses || {};
     if (bonuses.ac) acBonus += bonuses.ac;
     if (bonuses.saving_throws) savingThrowBonus += bonuses.saving_throws;
+
+    // "Set" ability scores (e.g. CON becomes 19) — take highest set value
     if (bonuses.ability_scores) {
       Object.entries(bonuses.ability_scores).forEach(([stat, val]) => {
-        abilityBonuses[stat] = Math.max(abilityBonuses[stat] || 0, val);
+        abilitySetScores[stat] = Math.max(abilitySetScores[stat] || 0, val);
+      });
+    }
+
+    // Additive ability score bonuses (e.g. +1 DEX) — stack them
+    if (bonuses.ability_score_adds) {
+      Object.entries(bonuses.ability_score_adds).forEach(([stat, val]) => {
+        abilityAddBonuses[stat] = (abilityAddBonuses[stat] || 0) + val;
       });
     }
   });
 
-  // Apply ability score bonuses (set-type items like Headband of Intellect)
+  // Apply ability score changes
+  // "Set" items override the base stat to a fixed value (only if higher than base)
+  // "Add" items add to the base (or set) value
   ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].forEach(stat => {
-    if (abilityBonuses[stat]) {
-      updates[stat] = abilityBonuses[stat];
+    const baseStat = character[`_base_${stat}`] || character[stat] || 10;
+    let finalStat = baseStat;
+
+    // Apply "set" (use the set value only if it's higher than base)
+    if (abilitySetScores[stat]) {
+      finalStat = Math.max(baseStat, abilitySetScores[stat]);
+    }
+
+    // Apply additive bonuses on top
+    if (abilityAddBonuses[stat]) {
+      finalStat += abilityAddBonuses[stat];
+    }
+
+    // Only write update if different from current
+    if (finalStat !== (character[stat] || 10)) {
+      updates[stat] = Math.min(30, finalStat); // D&D hard cap
     }
   });
 
-  // Recalculate AC from armor/shield
-  updates.armor_class = computeAC(character, equipped) + acBonus;
+  // Recalculate AC — use the proper function that handles class/race
+  const effectiveChar = { ...character, ...updates };
+  updates.armor_class = computeACWithClassRace(effectiveChar, equipped) + acBonus;
 
   // Expose equipped weapon on character.equipped.weapon for CombatPanel to read
-  // Normalize: weapon slot can be 'mainhand' or 'weapon' depending on item
   const weaponItem = equipped.mainhand || equipped.weapon || null;
   if (weaponItem) {
-    // Build a combat-ready weapon descriptor
     const dmgStr = weaponItem.damage || weaponItem.damage_dice || '1d6';
     const [dice, ...rest] = dmgStr.split(' ');
     updates.equipped = {
@@ -506,4 +531,55 @@ function recalculateStatsFromEquipment(character, equipped, inventory) {
   ];
 
   return updates;
+}
+
+/**
+ * Compute AC considering class unarmored defense, racial natural armor, AND equipped armor.
+ * Picks the best option per D&D 5e rules: you choose the highest applicable AC calculation.
+ */
+function computeACWithClassRace(character, equipped) {
+  const dexMod = Math.floor(((character.dexterity || 10) - 10) / 2);
+  const wisMod = Math.floor(((character.wisdom || 10) - 10) / 2);
+  const conMod = Math.floor(((character.constitution || 10) - 10) / 2);
+
+  // Start with base 10 + DEX
+  let bestAC = 10 + dexMod;
+
+  // Class unarmored defense (only when not wearing armor)
+  if (!equipped?.armor) {
+    if (character.class === 'Monk') {
+      bestAC = Math.max(bestAC, 10 + dexMod + wisMod);
+    } else if (character.class === 'Barbarian') {
+      bestAC = Math.max(bestAC, 10 + dexMod + conMod);
+    }
+  }
+
+  // Racial natural armor (Tortle=17 flat, Lizardfolk=13+DEX)
+  // Per D&D rules, natural armor is an alternative you can always choose
+  if (character.race === 'Tortle') {
+    bestAC = Math.max(bestAC, 17);
+  } else if (character.race === 'Lizardfolk') {
+    bestAC = Math.max(bestAC, 13 + dexMod);
+  }
+
+  // Equipped armor overrides base (if wearing armor)
+  const armor = equipped?.armor;
+  if (armor?.armor_class) {
+    const acVal = parseInt(armor.armor_class) || 10;
+    const type = armor.armor_type || 'light';
+    let armorAC;
+    if (type === 'heavy') armorAC = acVal;
+    else if (type === 'medium') armorAC = acVal + Math.min(dexMod, 2);
+    else armorAC = acVal + dexMod;
+    bestAC = Math.max(bestAC, armorAC);
+  }
+
+  // Shield
+  if (equipped?.offhand?.category === 'Shield') bestAC += 2;
+  // Cloak/ring AC bonuses
+  if (equipped?.cloak?.ac_bonus) bestAC += equipped.cloak.ac_bonus;
+  if (equipped?.ring?.ac_bonus) bestAC += equipped.ring.ac_bonus;
+  if (equipped?.ring2?.ac_bonus) bestAC += equipped.ring2.ac_bonus;
+
+  return bestAC;
 }

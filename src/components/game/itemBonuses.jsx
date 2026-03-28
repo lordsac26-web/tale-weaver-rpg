@@ -115,14 +115,16 @@ export const COMMON_MAGIC_ITEMS = {
 };
 
 /**
- * Parse item bonuses from description text using common patterns
+ * Parse item bonuses from description text using common patterns.
+ * ability_scores = "set" values (e.g. CON becomes 19).
+ * ability_score_adds = "+N" additive bonuses (e.g. +1 DEX).
  */
 export function parseItemBonuses(itemName, description) {
   const bonuses = {};
   const text = (itemName + ' ' + (description || '')).toLowerCase();
 
-  // AC bonuses
-  const acMatch = text.match(/\+(\d+).*?(ac|armor class)/i);
+  // AC bonuses — match "+N ... AC/armor class" but NOT "score ... N"
+  const acMatch = text.match(/\+(\d+).*?(?:ac|armor class)/i);
   if (acMatch) bonuses.ac = parseInt(acMatch[1]);
 
   // Attack bonuses
@@ -130,20 +132,41 @@ export function parseItemBonuses(itemName, description) {
   if (atkMatch) bonuses.attack = parseInt(atkMatch[1]);
 
   // Damage bonuses
-  const dmgMatch = text.match(/\+(\d+).*?damage/i);
+  const dmgMatch = text.match(/\+(\d+).*?(?:dmg|damage)/i);
   if (dmgMatch) bonuses.damage = parseInt(dmgMatch[1]);
 
   // Saving throw bonuses
   const saveMatch = text.match(/\+(\d+).*?saving throw/i);
   if (saveMatch) bonuses.saving_throws = parseInt(saveMatch[1]);
 
-  // Ability score bonuses
+  // Ability score handling — distinguish "set" from "add"
   const stats = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
   stats.forEach(stat => {
-    const statMatch = text.match(new RegExp(`${stat}.*?(\\d+)`, 'i'));
-    if (statMatch) {
-      if (!bonuses.ability_scores) bonuses.ability_scores = {};
-      bonuses.ability_scores[stat] = parseInt(statMatch[1]);
+    // "Set" pattern: "Your [stat] score is/becomes N" (Amulet of Health, Belt of Giant Strength, etc.)
+    const setPattern = new RegExp(`${stat}[^.]*?(?:score|becomes|is)\\s*(?:is|becomes)?\\s*(\\d+)`, 'i');
+    const setMatch = text.match(setPattern);
+    if (setMatch) {
+      const val = parseInt(setMatch[1]);
+      if (val >= 13) { // "set" items are always 13+ (Headband=19, Gauntlets=19, Belt=21+)
+        if (!bonuses.ability_scores) bonuses.ability_scores = {};
+        bonuses.ability_scores[stat] = val;
+        return; // don't also parse as additive
+      }
+    }
+
+    // "Add" pattern: "+N to [stat]" or "+N [stat]"
+    const addPattern = new RegExp(`\\+(\\d+)\\s*(?:to\\s+)?${stat}`, 'i');
+    const addMatch = text.match(addPattern);
+    // Also match "[stat] +N" or "+N [stat]"
+    const addPattern2 = new RegExp(`${stat}.*?\\+(\\d+)`, 'i');
+    const addMatch2 = !addMatch ? text.match(addPattern2) : null;
+    const finalAdd = addMatch || addMatch2;
+    if (finalAdd) {
+      const val = parseInt(finalAdd[1]);
+      if (val <= 5) { // reasonable additive range
+        if (!bonuses.ability_score_adds) bonuses.ability_score_adds = {};
+        bonuses.ability_score_adds[stat] = val;
+      }
     }
   });
 
