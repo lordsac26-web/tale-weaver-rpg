@@ -7,7 +7,7 @@ import {
   MAGIC_PROPERTIES, getEquipConstraints, computeAC
 } from './itemData';
 import { motion, AnimatePresence } from 'framer-motion';
-import { parseItemBonuses } from './itemBonuses';
+import { resolveItemBonuses } from './itemBonuses';
 
 const RARITIES = Object.keys(ITEM_RARITY);
 
@@ -456,13 +456,8 @@ function recalculateStatsFromEquipment(character, equipped, inventory) {
   Object.entries(equipped).forEach(([slot, item]) => {
     if (!item) return;
 
-    // Auto-parse bonuses from name/description if not cached
-    if (!item.bonuses) {
-      const parsed = parseItemBonuses(item.name || '', item.description || '');
-      if (parsed) item.bonuses = parsed;
-    }
-
-    const bonuses = item.bonuses || {};
+    // Resolve bonuses using the centralized resolver (known items > form fields > regex)
+    const bonuses = resolveItemBonuses(item);
     if (bonuses.ac) acBonus += bonuses.ac;
     if (bonuses.saving_throws) savingThrowBonus += bonuses.saving_throws;
 

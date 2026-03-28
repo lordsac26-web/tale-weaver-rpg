@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sword, Shield, X, Check, Info } from 'lucide-react';
 import EquipmentSlots from './EquipmentSlots';
+import { resolveItemBonuses } from './itemBonuses';
 
 // Unified slot definitions — keys match itemData.js EQUIP_SLOTS and itemData CATEGORY_TO_SLOT
 // 'mainhand' is the canonical weapon slot; combatEngine reads character.equipped.weapon which
@@ -30,7 +31,7 @@ const RARITY_COLORS = {
 };
 
 function getBonusTags(item) {
-  const b = item?.bonuses || item?.modifiers || {};
+  const b = item ? resolveItemBonuses(item) : {};
   const tags = [];
   if (b.ac)             tags.push(`🛡️ +${b.ac} AC`);
   if (b.attack)         tags.push(`⚔️ +${b.attack} Atk`);
@@ -297,7 +298,8 @@ export function recalculateStats(character, equipped, inventory) {
   // Iterate over equipped slot values (full item objects)
   Object.values(equipped).forEach(item => {
     if (!item || typeof item !== 'object') return;
-    const b = item.bonuses || item.modifiers || {};
+    // Use centralized resolver: known items > form fields > regex
+    const b = resolveItemBonuses(item);
     if (b.ac)            acBonus += b.ac;
     if (b.attack)        attackBonus += b.attack;
     if (b.attack_bonus)  attackBonus += b.attack_bonus;

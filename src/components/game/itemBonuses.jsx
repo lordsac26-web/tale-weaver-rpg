@@ -3,6 +3,9 @@
  * Used for parsing and applying equipment bonuses
  */
 
+// Normalise a name to lowercase, trimmed, no extra spaces
+const norm = (s) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+
 export const COMMON_MAGIC_ITEMS = {
   '+1 Ring of Protection': {
     type: 'ring',
@@ -127,6 +130,12 @@ export function parseItemBonuses(itemName, description) {
   const acMatch = text.match(/\+(\d+).*?(?:ac|armor class)/i);
   if (acMatch) bonuses.ac = parseInt(acMatch[1]);
 
+  // Also match "bonus to AC" patterns like "grants +1 bonus to AC"
+  if (!bonuses.ac) {
+    const acMatch2 = text.match(/\+(\d+)\s*bonus.*?(?:ac|armor class)/i);
+    if (acMatch2) bonuses.ac = parseInt(acMatch2[1]);
+  }
+
   // Attack bonuses
   const atkMatch = text.match(/\+(\d+).*?attack/i);
   if (atkMatch) bonuses.attack = parseInt(atkMatch[1]);
@@ -135,9 +144,13 @@ export function parseItemBonuses(itemName, description) {
   const dmgMatch = text.match(/\+(\d+).*?(?:dmg|damage)/i);
   if (dmgMatch) bonuses.damage = parseInt(dmgMatch[1]);
 
-  // Saving throw bonuses
+  // Saving throw bonuses — broader matching
   const saveMatch = text.match(/\+(\d+).*?saving throw/i);
   if (saveMatch) bonuses.saving_throws = parseInt(saveMatch[1]);
+  if (!bonuses.saving_throws) {
+    const saveMatch2 = text.match(/\+(\d+)\s*bonus.*?saving/i);
+    if (saveMatch2) bonuses.saving_throws = parseInt(saveMatch2[1]);
+  }
 
   // Ability score handling — distinguish "set" from "add"
   const stats = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
@@ -171,4 +184,62 @@ export function parseItemBonuses(itemName, description) {
   });
 
   return Object.keys(bonuses).length > 0 ? bonuses : null;
+}
+
+/**
+ * Resolve bonuses for an item.
+ * Priority:
+ * 1. item.bonuses (if already set explicitly)
+ * 2. COMMON_MAGIC_ITEMS lookup by name (fuzzy match)
+ * 3. Explicit numeric fields on item (attack_bonus, armor_class from custom form)
+ * 4. parseItemBonuses regex on name+description
+ *
+ * Always returns a bonuses object (may be empty {}).
+ * Also mutates item.bonuses as cache for future calls.
+ */
+export function resolveItemBonuses(item) {
+  if (!item) return {};
+
+  // 1. Already has explicit bonuses object with content
+  if (item.bonuses && Object.keys(item.bonuses).length > 0) return item.bonuses;
+
+  // 2. Try COMMON_MAGIC_ITEMS lookup (exact and fuzzy)
+  const itemName = norm(item.name);
+  let knownBonuses = null;
+  for (const [key, val] of Object.entries(COMMON_MAGIC_ITEMS)) {
+    const normKey = norm(key);
+    // Exact match or contains
+    if (itemName === normKey || itemName.includes(normKey) || normKey.includes(itemName)) {
+      knownBonuses = { ...val.bonuses };
+      break;
+    }
+  }
+  if (knownBonuses && Object.keys(knownBonuses).length > 0) {
+    item.bonuses = knownBonuses;
+    return knownBonuses;
+  }
+
+  // 3. Check explicit numeric fields from custom form / item data
+  const formBonuses = {};
+  if (item.ac_bonus && item.ac_bonus > 0) formBonuses.ac = item.ac_bonus;
+  if (item.attack_bonus && item.attack_bonus > 0) formBonuses.attack = item.attack_bonus;
+  if (item.damage_bonus && item.damage_bonus > 0) formBonuses.damage = item.damage_bonus;
+
+  // 4. Regex parse from name + description
+  const parsed = parseItemBonuses(item.name || '', item.description || '') || {};
+
+  // Merge: explicit form fields take priority over regex
+  const merged = { ...parsed, ...formBonuses };
+  if (Object.keys(merged).length > 0) {
+    item.bonuses = merged;
+    return merged;
+  }
+
+  // 5. Check modifiers field (some items store bonuses there)
+  if (item.modifiers && typeof item.modifiers === 'object' && Object.keys(item.modifiers).length > 0) {
+    item.bonuses = item.modifiers;
+    return item.modifiers;
+  }
+
+  return {};
 }
