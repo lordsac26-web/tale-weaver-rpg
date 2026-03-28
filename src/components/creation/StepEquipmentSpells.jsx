@@ -3,94 +3,138 @@ import { Package, Sparkles, Check, ShoppingCart } from 'lucide-react';
 import { CLASSES, BACKGROUNDS } from '@/components/game/gameData';
 import { SPELLS_BY_CLASS, SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS, CANTRIPS_KNOWN } from '@/components/game/spellData';
 import { EquipmentTooltip } from '@/components/game/GameTooltip';
+import { ALL_STANDARD_ITEMS } from '@/components/game/standardItems';
 import StartingGearPicker from './StartingGearPicker';
 
 const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger'];
 
-const STARTING_EQUIPMENT = {
+// Starting equipment defined by item name + quantity.
+// resolveStartingGear() below matches these to the full standardItems database.
+const STARTING_EQUIPMENT_DEFS = {
   Fighter: [
-    { name: 'Chain Mail', type: 'armor', weight: 55 },
-    { name: 'Longsword', type: 'weapon', weight: 3 },
-    { name: "Explorer's Pack", type: 'gear', weight: 59 },
-    { name: 'Shield', type: 'armor', weight: 6 },
-    { name: 'Handaxe ×2', type: 'weapon', weight: 4 },
+    { name: 'Chain Mail', qty: 1 },
+    { name: 'Longsword', qty: 1 },
+    { name: "Explorer's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 59 } },
+    { name: 'Shield', qty: 1 },
+    { name: 'Handaxe', qty: 2 },
   ],
   Rogue: [
-    { name: "Thieves' Tools", type: 'tool', weight: 1 },
-    { name: 'Short Sword', type: 'weapon', weight: 2 },
-    { name: 'Dagger ×2', type: 'weapon', weight: 2 },
-    { name: "Burglar's Pack", type: 'gear', weight: 44 },
-    { name: 'Leather Armor', type: 'armor', weight: 10 },
+    { name: "Thieves' Tools", qty: 1 },
+    { name: 'Shortsword', qty: 1 },
+    { name: 'Dagger', qty: 2 },
+    { name: "Burglar's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 44 } },
+    { name: 'Leather Armor', qty: 1 },
   ],
   Wizard: [
-    { name: 'Quarterstaff', type: 'weapon', weight: 4 },
-    { name: 'Spellbook', type: 'focus', weight: 3 },
-    { name: "Scholar's Pack", type: 'gear', weight: 22 },
-    { name: 'Component Pouch', type: 'focus', weight: 2 },
-    { name: 'Arcane Focus', type: 'focus', weight: 1 },
+    { name: 'Quarterstaff', qty: 1 },
+    { name: 'Spellbook', qty: 1 },
+    { name: "Scholar's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 22 } },
+    { name: 'Component Pouch', qty: 1 },
+    { name: 'Arcane Focus (Crystal)', qty: 1 },
   ],
   Cleric: [
-    { name: 'Mace', type: 'weapon', weight: 4 },
-    { name: 'Chain Mail', type: 'armor', weight: 55 },
-    { name: 'Holy Symbol', type: 'focus', weight: 1 },
-    { name: "Priest's Pack", type: 'gear', weight: 24 },
-    { name: 'Shield', type: 'armor', weight: 6 },
+    { name: 'Mace', qty: 1 },
+    { name: 'Chain Mail', qty: 1 },
+    { name: 'Holy Symbol', qty: 1 },
+    { name: "Priest's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 24 } },
+    { name: 'Shield', qty: 1 },
   ],
   Ranger: [
-    { name: 'Scale Mail', type: 'armor', weight: 45 },
-    { name: 'Shortbow + 20 Arrows', type: 'weapon', weight: 3 },
-    { name: 'Short Sword ×2', type: 'weapon', weight: 4 },
-    { name: "Dungeoneer's Pack", type: 'gear', weight: 61 },
+    { name: 'Scale Mail', qty: 1 },
+    { name: 'Shortbow', qty: 1 },
+    { name: 'Arrows (20)', qty: 1 },
+    { name: 'Shortsword', qty: 2 },
+    { name: "Dungeoneer's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 61 } },
   ],
   Paladin: [
-    { name: 'Chain Mail', type: 'armor', weight: 55 },
-    { name: 'Longsword', type: 'weapon', weight: 3 },
-    { name: 'Shield', type: 'armor', weight: 6 },
-    { name: 'Holy Symbol', type: 'focus', weight: 1 },
-    { name: "Priest's Pack", type: 'gear', weight: 24 },
+    { name: 'Chain Mail', qty: 1 },
+    { name: 'Longsword', qty: 1 },
+    { name: 'Shield', qty: 1 },
+    { name: 'Holy Symbol', qty: 1 },
+    { name: "Priest's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 24 } },
   ],
   Barbarian: [
-    { name: 'Greataxe', type: 'weapon', weight: 7 },
-    { name: 'Handaxe ×2', type: 'weapon', weight: 4 },
-    { name: "Explorer's Pack", type: 'gear', weight: 59 },
-    { name: 'Javelin ×4', type: 'weapon', weight: 8 },
+    { name: 'Greataxe', qty: 1 },
+    { name: 'Handaxe', qty: 2 },
+    { name: "Explorer's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 59 } },
+    { name: 'Javelin', qty: 4 },
   ],
   Bard: [
-    { name: 'Rapier', type: 'weapon', weight: 2 },
-    { name: 'Lute', type: 'focus', weight: 2 },
-    { name: "Diplomat's Pack", type: 'gear', weight: 36 },
-    { name: 'Leather Armor', type: 'armor', weight: 10 },
-    { name: 'Dagger', type: 'weapon', weight: 1 },
+    { name: 'Rapier', qty: 1 },
+    { name: 'Lute', qty: 1 },
+    { name: "Diplomat's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 36 } },
+    { name: 'Leather Armor', qty: 1 },
+    { name: 'Dagger', qty: 1 },
   ],
   Druid: [
-    { name: 'Wooden Shield', type: 'armor', weight: 6 },
-    { name: 'Scimitar', type: 'weapon', weight: 3 },
-    { name: 'Druidic Focus', type: 'focus', weight: 1 },
-    { name: "Explorer's Pack", type: 'gear', weight: 59 },
-    { name: 'Leather Armor', type: 'armor', weight: 10 },
+    { name: 'Shield', qty: 1 },
+    { name: 'Scimitar', qty: 1 },
+    { name: 'Druidic Focus (Sprig of Mistletoe)', qty: 1 },
+    { name: "Explorer's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 59 } },
+    { name: 'Leather Armor', qty: 1 },
   ],
   Monk: [
-    { name: 'Short Sword', type: 'weapon', weight: 2 },
-    { name: "Dungeoneer's Pack", type: 'gear', weight: 61 },
-    { name: 'Dart ×10', type: 'weapon', weight: 2.5 },
+    { name: 'Shortsword', qty: 1 },
+    { name: "Dungeoneer's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 61 } },
+    { name: 'Dart', qty: 10 },
   ],
   Sorcerer: [
-    { name: 'Light Crossbow + 20 Bolts', type: 'weapon', weight: 7 },
-    { name: 'Component Pouch', type: 'focus', weight: 2 },
-    { name: "Dungeoneer's Pack", type: 'gear', weight: 61 },
-    { name: 'Dagger ×2', type: 'weapon', weight: 2 },
-    { name: 'Arcane Focus', type: 'focus', weight: 1 },
+    { name: 'Light Crossbow', qty: 1 },
+    { name: 'Bolts (20)', qty: 1 },
+    { name: 'Component Pouch', qty: 1 },
+    { name: "Dungeoneer's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 61 } },
+    { name: 'Dagger', qty: 2 },
+    { name: 'Arcane Focus (Crystal)', qty: 1 },
   ],
   Warlock: [
-    { name: 'Light Crossbow + 20 Bolts', type: 'weapon', weight: 7 },
-    { name: 'Arcane Focus', type: 'focus', weight: 1 },
-    { name: "Scholar's Pack", type: 'gear', weight: 22 },
-    { name: 'Leather Armor', type: 'armor', weight: 10 },
-    { name: 'Dagger ×2', type: 'weapon', weight: 2 },
+    { name: 'Light Crossbow', qty: 1 },
+    { name: 'Bolts (20)', qty: 1 },
+    { name: 'Arcane Focus (Crystal)', qty: 1 },
+    { name: "Scholar's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 22 } },
+    { name: 'Leather Armor', qty: 1 },
+    { name: 'Dagger', qty: 2 },
+  ],
+  Artificer: [
+    { name: 'Light Crossbow', qty: 1 },
+    { name: 'Bolts (20)', qty: 1 },
+    { name: "Dungeoneer's Pack", qty: 1, fallback: { category: 'Adventuring Gear', weight: 61 } },
+    { name: "Thieves' Tools", qty: 1 },
+    { name: 'Leather Armor', qty: 1 },
+    { name: 'Dagger', qty: 1 },
   ],
 };
 
-const ITEM_ICONS = { armor: '🛡️', weapon: '⚔️', focus: '🔮', gear: '🎒', tool: '🔧' };
+/**
+ * Resolve starting gear definitions into full item objects from the standardItems database.
+ * Each item gets full stats (damage, armor_class, properties, equip_slot, etc.)
+ * and a proper `quantity` field instead of "×N" baked into the name.
+ */
+function resolveStartingGear(defs) {
+  if (!defs) return [];
+  return defs.map(def => {
+    // Try to find the item in the standard database (case-insensitive match)
+    const match = ALL_STANDARD_ITEMS.find(i => i.name.toLowerCase() === def.name.toLowerCase());
+    if (match) {
+      return { ...match, quantity: def.qty || 1 };
+    }
+    // Fallback: create a basic item with whatever data we have
+    return {
+      name: def.name,
+      category: def.fallback?.category || 'Adventuring Gear',
+      weight: def.fallback?.weight || 1,
+      cost: 0,
+      cost_unit: 'gp',
+      rarity: 'common',
+      quantity: def.qty || 1,
+    };
+  });
+}
+
+const CATEGORY_ICONS = {
+  Weapon: '⚔️', Armor: '🛡️', Shield: '🛡️', Potion: '🧪',
+  Ammunition: '🏹', Tool: '🔧', 'Adventuring Gear': '🎒',
+};
+const getItemIcon = (item) => CATEGORY_ICONS[item.category] || '📦';
 const STARTING_GOLD = { Fighter: 175, Rogue: 100, Wizard: 100, Cleric: 125, Ranger: 125, Paladin: 150, Barbarian: 75, Bard: 125, Druid: 50, Monk: 12, Sorcerer: 75, Warlock: 100 };
 
 const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th'];
@@ -98,9 +142,14 @@ const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th'];
 export default function StepEquipmentSpells({ character, set }) {
   const [activeTab, setActiveTab] = useState('equipment');
   const isCaster = SPELLCASTING_CLASSES.includes(character.class);
-  const classEquipment = STARTING_EQUIPMENT[character.class] || [];
+  const classEquipment = resolveStartingGear(STARTING_EQUIPMENT_DEFS[character.class]);
   const bgData = BACKGROUNDS.find(b => b.name === character.background);
-  const bgEquipment = (bgData?.equipment || []).map(e => ({ name: e, type: 'gear', weight: 1 }));
+  // Resolve background equipment through the standard DB too
+  const bgEquipment = (bgData?.equipment || []).map(name => {
+    const match = ALL_STANDARD_ITEMS.find(i => i.name.toLowerCase() === name.toLowerCase());
+    if (match) return { ...match, quantity: 1 };
+    return { name, category: 'Adventuring Gear', weight: 1, cost: 0, cost_unit: 'gp', rarity: 'common', quantity: 1 };
+  });
 
   // Initialize equipment if needed
   const equipment = character.inventory?.length > 0 ? character.inventory : [...classEquipment, ...bgEquipment];
@@ -322,12 +371,20 @@ function EquipmentSubTab({ character, set, classEquipment, bgEquipment }) {
             {allDefaultGear.map((item, i) => (
               <EquipmentTooltip key={i} itemName={item.name} position="top">
                 <div className="flex items-center gap-3 p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl hover:border-slate-600 transition-all cursor-help">
-                  <span className="text-xl">{ITEM_ICONS[item.type] || '📦'}</span>
-                  <div>
-                    <div className="text-amber-200 text-sm font-medium">{item.name}</div>
-                    <div className="text-slate-500 text-xs capitalize">{item.type} · {item.weight}lb</div>
+                  <span className="text-xl">{getItemIcon(item)}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-amber-200 text-sm font-medium">
+                      {item.name}
+                      {(item.quantity || 1) > 1 && <span className="text-amber-400/60 ml-1">×{item.quantity}</span>}
+                    </div>
+                    <div className="text-slate-500 text-xs flex items-center gap-2">
+                      <span className="capitalize">{item.category || 'Gear'}</span>
+                      {item.damage && <span className="text-red-400">{item.damage}</span>}
+                      {item.armor_class > 0 && <span className="text-blue-400">AC {item.armor_class}</span>}
+                      <span>{((item.weight || 0) * (item.quantity || 1)).toFixed(1)}lb</span>
+                    </div>
                   </div>
-                  {bgEquipment.includes(item) && <span className="ml-auto text-xs text-blue-400">Background</span>}
+                  {bgEquipment.includes(item) && <span className="ml-auto text-xs text-blue-400 flex-shrink-0">Background</span>}
                 </div>
               </EquipmentTooltip>
             ))}

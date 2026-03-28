@@ -134,7 +134,14 @@ function MagicPropBadge({ propKey }) {
 }
 
 // ─── Item Row ──────────────────────────────────────────────────────────────────
-const CONSUMABLE_CATEGORIES = ['Potion', 'Ammunition', 'Adventuring Gear'];
+const CONSUMABLE_CATEGORIES = ['Potion'];
+// Detect consumable items by category or name keywords
+const isConsumableItem = (item) => {
+  if (CONSUMABLE_CATEGORIES.includes(item.category)) return true;
+  const name = (item.name || '').toLowerCase();
+  if (name.includes('healer') || name.includes('antitoxin') || name.includes('potion')) return true;
+  return false;
+};
 
 function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onUseConsumable }) {
   const [expanded, setExpanded] = useState(false);
@@ -143,7 +150,7 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
   const canEquip = !!slot;
   const isEquipped = canEquip && Object.entries(equipped).some(([s, i]) => i && i === item);
   const isUnidentifiedMagic = item.is_magic && !item.is_identified;
-  const isConsumable = CONSUMABLE_CATEGORIES.includes(item.category);
+  const isConsumable = isConsumableItem(item);
 
   return (
     <div className="rounded-xl overflow-hidden transition-all"
