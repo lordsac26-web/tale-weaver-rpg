@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Star, Lock, Check, ChevronRight, Sparkles, TrendingUp, Award, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PROFICIENCY_BY_LEVEL } from './gameData';
+import { FEATS as FEAT_LIST, canTakeFeat, CATEGORY_COLORS } from './featData';
+import { computeFeatEffects, getFeatEffectSummary } from './featEffects';
 
 // ASI/Feat levels: 4, 8, 12, 16, 19 (Fighter gets extra at 6, 14)
 const getASILevels = (charClass) => {
@@ -9,163 +11,10 @@ const getASILevels = (charClass) => {
   return charClass === 'Fighter' ? [4, 6, 8, 12, 14, 16, 19] : base;
 };
 
-const FEATS = {
-  // Combat Feats
-  'Great Weapon Master': {
-    category: 'Combat',
-    desc: 'Take -5 to hit for +10 damage with heavy weapons. Score a crit or kill: bonus action attack.',
-    prereq: null,
-    effect: { attack_penalty_option: -5, damage_bonus_option: 10 },
-    icon: '⚔️',
-  },
-  'Sharpshooter': {
-    category: 'Combat',
-    desc: 'Ignore half/three-quarters cover. Take -5 to hit for +10 damage with ranged weapons.',
-    prereq: null,
-    effect: { attack_penalty_option: -5, damage_bonus_option: 10 },
-    icon: '🏹',
-  },
-  'Sentinel': {
-    category: 'Combat',
-    desc: 'Opportunity attacks reduce speed to 0. Attack creatures that Disengage. React when ally is hit within 5 ft.',
-    prereq: null,
-    effect: { special: 'opportunity_control' },
-    icon: '🛡️',
-  },
-  'Polearm Master': {
-    category: 'Combat',
-    desc: 'Bonus action attack (1d4) with polearm. Opportunity attack when creatures enter reach.',
-    prereq: null,
-    effect: { bonus_action_attack: '1d4' },
-    icon: '🔱',
-  },
-  'Crossbow Expert': {
-    category: 'Combat',
-    desc: 'Ignore loading. No disadvantage at 5 ft. Bonus action hand crossbow attack after one-handed attack.',
-    prereq: null,
-    effect: { special: 'crossbow_mastery' },
-    icon: '🎯',
-  },
-  'Dual Wielder': {
-    category: 'Combat',
-    desc: '+1 AC when dual wielding. Can use non-light weapons. Draw/stow two weapons at once.',
-    prereq: null,
-    effect: { ac_bonus: 1 },
-    icon: '⚔️⚔️',
-  },
-
-  // Defense Feats
-  'Heavy Armor Master': {
-    category: 'Defense',
-    desc: '+1 STR. Reduce non-magical B/P/S damage by 3 while wearing heavy armor.',
-    prereq: 'Heavy armor proficiency',
-    effect: { strength: 1, damage_reduction: 3 },
-    icon: '🛡️',
-  },
-  'Medium Armor Master': {
-    category: 'Defense',
-    desc: 'No stealth disadvantage in medium armor. Max DEX bonus to AC increases to +3.',
-    prereq: 'Medium armor proficiency',
-    effect: { special: 'medium_armor_mastery' },
-    icon: '🎽',
-  },
-  'Tough': {
-    category: 'Defense',
-    desc: '+2 HP per level (retroactive). Immediate +2×level HP.',
-    prereq: null,
-    effect: { hp_per_level: 2 },
-    icon: '❤️',
-  },
-  'Resilient': {
-    category: 'Defense',
-    desc: 'Choose one ability score: +1 to that score, gain proficiency in that saving throw.',
-    prereq: null,
-    effect: { stat_choice: 1, save_prof_choice: 1 },
-    icon: '💪',
-  },
-
-  // Magic Feats
-  'War Caster': {
-    category: 'Magic',
-    desc: 'Advantage on concentration saves. Cast spells as opportunity attacks. Somatic components with hands full.',
-    prereq: 'Spellcasting ability',
-    effect: { concentration_advantage: true },
-    icon: '🔮',
-  },
-  'Spell Sniper': {
-    category: 'Magic',
-    desc: 'Double spell range. Ignore half/three-quarters cover. Learn one cantrip.',
-    prereq: 'Spellcasting ability',
-    effect: { spell_range_double: true, cantrip_choice: 1 },
-    icon: '✨',
-  },
-  'Elemental Adept': {
-    category: 'Magic',
-    desc: 'Choose acid/cold/fire/lightning/thunder. Spells ignore resistance. Treat 1s on damage dice as 2s.',
-    prereq: 'Spellcasting ability',
-    effect: { damage_type_choice: 1 },
-    icon: '🔥',
-  },
-  'Ritual Caster': {
-    category: 'Magic',
-    desc: 'Learn two 1st-level rituals from one class. Can add more rituals to your book.',
-    prereq: 'INT or WIS 13+',
-    effect: { ritual_spells: 2 },
-    icon: '📜',
-  },
-
-  // Utility Feats
-  'Alert': {
-    category: 'Utility',
-    desc: '+5 initiative. Can\'t be surprised while conscious. Hidden enemies don\'t get advantage.',
-    prereq: null,
-    effect: { initiative: 5 },
-    icon: '👁️',
-  },
-  'Lucky': {
-    category: 'Utility',
-    desc: 'Gain 3 luck points. Spend to reroll attack/save/check or force enemy reroll. Refresh on long rest.',
-    prereq: null,
-    effect: { luck_points: 3 },
-    icon: '🍀',
-  },
-  'Observant': {
-    category: 'Utility',
-    desc: '+1 INT or WIS. +5 passive Perception/Investigation. Read lips.',
-    prereq: null,
-    effect: { stat_choice: 1, passive_bonus: 5 },
-    icon: '🔍',
-  },
-  'Skilled': {
-    category: 'Utility',
-    desc: 'Gain proficiency in any 3 skills or tools.',
-    prereq: null,
-    effect: { skill_prof_choice: 3 },
-    icon: '🎯',
-  },
-  'Keen Mind': {
-    category: 'Utility',
-    desc: '+1 INT. Always know north and hours to sunrise/sunset. Perfect recall of last 30 days.',
-    prereq: null,
-    effect: { intelligence: 1 },
-    icon: '🧠',
-  },
-
-  // Social Feats
-  'Actor': {
-    category: 'Social',
-    desc: '+1 CHA. Advantage on Deception/Performance when mimicking. Mimic speech perfectly.',
-    prereq: null,
-    effect: { charisma: 1, deception_advantage: true },
-    icon: '🎭',
-  },
-  'Inspiring Leader': {
-    category: 'Social',
-    desc: '10 min speech: grant temp HP = level + CHA to 6 creatures. Once per short rest.',
-    prereq: 'CHA 13+',
-    effect: { temp_hp_ability: true },
-    icon: '📣',
-  },
+// Category icons for display
+const CATEGORY_ICONS = {
+  General: '⭐', Combat: '⚔️', Magic: '🔮', Armor: '🛡️', Support: '💚',
+  Utility: '🔧', Exploration: '🌍', Survival: '❤️', Social: '🎭', Stealth: '🥷', Racial: '🌟',
 };
 
 const SKILL_UPGRADES = {
@@ -195,25 +44,10 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
   const spentPoints = takenFeats.length;
   const availablePoints = earnedPoints - spentPoints;
 
-  // Filter available feats
-  const availableFeats = Object.entries(FEATS).filter(([name, feat]) => {
-    if (takenFeats.includes(name)) return false;
-    
-    // Check prerequisites
-    if (feat.prereq) {
-      if (feat.prereq.includes('13+')) {
-        const stat = feat.prereq.split(' ')[0].toLowerCase();
-        if (stat === 'cha' && (character?.charisma || 10) < 13) return false;
-        if (stat === 'int' && (character?.intelligence || 10) < 13) return false;
-        if (stat === 'wis' && (character?.wisdom || 10) < 13) return false;
-      }
-      if (feat.prereq === 'Spellcasting ability' && !['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Artificer'].includes(charClass)) {
-        return false;
-      }
-    }
-    
-    return true;
-  });
+  // Filter available feats from the canonical feat list
+  const availableFeats = FEAT_LIST
+    .filter(feat => !takenFeats.includes(feat.name) && canTakeFeat(feat, character || {}))
+    .map(feat => [feat.name, feat]);
 
   // Available skill upgrades (only if proficient but not expert)
   const availableSkillUpgrades = Object.entries(SKILL_UPGRADES).filter(([name, upgrade]) => {
@@ -222,7 +56,7 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
     return (skillLevel === 'proficient' || skillLevel === true) && skillLevel !== 'expert';
   });
 
-  const categories = ['all', 'Combat', 'Defense', 'Magic', 'Utility', 'Social', 'Skill'];
+  const categories = ['all', 'Combat', 'Magic', 'General', 'Armor', 'Support', 'Utility', 'Social', 'Racial', 'Skill'];
   const filteredFeats = activeCategory === 'all' ? availableFeats : availableFeats.filter(([_, f]) => f.category === activeCategory);
   const filteredSkills = activeCategory === 'all' || activeCategory === 'Skill' ? availableSkillUpgrades : [];
 
@@ -230,28 +64,15 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
     if (availablePoints < 1) return;
     setProcessingUpgrade(true);
 
-    const updates = { feats: [...takenFeats, featName] };
+    // Use the centralized feat effects engine
+    const newFeats = [...takenFeats, featName];
+    const effectUpdates = computeFeatEffects(character, [featName], {});
+    const updates = { feats: newFeats, ...effectUpdates };
 
-    // Apply stat bonuses
-    if (feat.effect.strength) updates.strength = (character.strength || 10) + feat.effect.strength;
-    if (feat.effect.charisma) updates.charisma = (character.charisma || 10) + feat.effect.charisma;
-    if (feat.effect.intelligence) updates.intelligence = (character.intelligence || 10) + feat.effect.intelligence;
-
-    // Apply HP bonus (Tough feat)
-    if (feat.effect.hp_per_level) {
-      const hpBonus = feat.effect.hp_per_level * charLevel;
-      updates.hp_max = (character.hp_max || 0) + hpBonus;
-      updates.hp_current = (character.hp_current || 0) + hpBonus;
-    }
-
-    // Apply AC bonus
-    if (feat.effect.ac_bonus) {
-      updates.armor_class = (character.armor_class || 10) + feat.effect.ac_bonus;
-    }
-
-    // Apply initiative bonus
-    if (feat.effect.initiative) {
-      updates.initiative = (character.initiative || 0) + feat.effect.initiative;
+    // Apply feat AC bonus directly to armor_class
+    if (updates._feat_ac_bonus) {
+      updates.armor_class = (character.armor_class || 10) + updates._feat_ac_bonus;
+      delete updates._feat_ac_bonus;
     }
 
     await onUpdate(updates);
@@ -353,40 +174,53 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
 
       {/* Feats Grid */}
       <div className="space-y-2">
-        {filteredFeats.map(([name, feat]) => (
-          <motion.div key={name}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-4 rounded-xl cursor-pointer transition-all border"
-            style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.15)' }}
-            onClick={() => availablePoints >= 1 && setSelectedUpgrade({ type: 'feat', name, data: feat })}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.35)'; e.currentTarget.style.background = 'rgba(30,18,7,0.6)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,140,90,0.15)'; e.currentTarget.style.background = 'rgba(20,13,5,0.5)'; }}>
-            <div className="flex items-start gap-3">
-              <div className="text-2xl flex-shrink-0">{feat.icon}</div>
-              <div className="flex-1 min-w-0">
-                <div className="font-fantasy font-bold text-sm mb-1" style={{ color: '#f0c040' }}>{name}</div>
-                <div className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(201,169,110,0.65)', fontFamily: 'EB Garamond, serif' }}>
-                  {feat.desc}
-                </div>
-                {feat.prereq && (
-                  <div className="text-xs" style={{ color: 'rgba(180,120,200,0.5)' }}>
-                    Requires: {feat.prereq}
+        {filteredFeats.map(([name, feat]) => {
+          const effectSummary = getFeatEffectSummary(name);
+          const icon = CATEGORY_ICONS[feat.category] || '⭐';
+          return (
+            <motion.div key={name}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-xl cursor-pointer transition-all border"
+              style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.15)' }}
+              onClick={() => availablePoints >= 1 && setSelectedUpgrade({ type: 'feat', name, data: feat })}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.35)'; e.currentTarget.style.background = 'rgba(30,18,7,0.6)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,140,90,0.15)'; e.currentTarget.style.background = 'rgba(20,13,5,0.5)'; }}>
+              <div className="flex items-start gap-3">
+                <div className="text-2xl flex-shrink-0">{icon}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-fantasy font-bold text-sm mb-1" style={{ color: '#f0c040' }}>{name}</div>
+                  <div className="text-xs leading-relaxed mb-1" style={{ color: 'rgba(201,169,110,0.65)', fontFamily: 'EB Garamond, serif' }}>
+                    {feat.description?.slice(0, 150)}{feat.description?.length > 150 ? '...' : ''}
                   </div>
-                )}
-              </div>
-              <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-full badge-gold">
-                  <Star className="w-3 h-3" />
-                  <span className="text-xs font-bold">1 pt</span>
+                  {effectSummary.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {effectSummary.map((line, i) => (
+                        <span key={i} className="px-1.5 py-0.5 rounded text-xs" style={{ background: 'rgba(10,40,15,0.5)', border: '1px solid rgba(40,160,80,0.2)', color: '#86efac', fontSize: '0.62rem' }}>
+                          {line}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {feat.prerequisite && (
+                    <div className="text-xs mt-1" style={{ color: 'rgba(180,120,200,0.5)' }}>
+                      Requires: {feat.prerequisite}
+                    </div>
+                  )}
                 </div>
-                <span className="px-2 py-0.5 rounded-full text-xs" style={{ background: 'rgba(60,30,8,0.5)', color: 'rgba(201,169,110,0.5)' }}>
-                  {feat.category}
-                </span>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-full badge-gold">
+                    <Star className="w-3 h-3" />
+                    <span className="text-xs font-bold">1 pt</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-xs" style={{ background: 'rgba(60,30,8,0.5)', color: 'rgba(201,169,110,0.5)' }}>
+                    {feat.category}
+                  </span>
+                </div>
               </div>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* Skill Upgrades */}
@@ -443,7 +277,7 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
             <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(201,169,110,0.3), transparent)' }} />
           </div>
           {takenFeats.map((featName, i) => {
-            const feat = FEATS[featName];
+            const feat = FEAT_LIST.find(f => f.name === featName);
             const isASI = featName.startsWith('ASI:');
             return (
               <div key={i} className="p-3 rounded-lg flex items-center gap-3"
@@ -453,7 +287,7 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
                   <div className="font-fantasy font-bold text-xs" style={{ color: '#86efac' }}>{featName}</div>
                   {!isASI && feat && (
                     <div className="text-xs mt-0.5" style={{ color: 'rgba(134,239,172,0.45)', fontFamily: 'EB Garamond, serif' }}>
-                      {feat.desc}
+                      {feat.description?.slice(0, 80)}{feat.description?.length > 80 ? '...' : ''}
                     </div>
                   )}
                 </div>
@@ -490,7 +324,7 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
               ) : selectedUpgrade.type === 'feat' ? (
                 <>
                   <div className="text-center mb-4">
-                    <div className="text-4xl mb-3">{selectedUpgrade.data.icon}</div>
+                    <div className="text-4xl mb-3">{CATEGORY_ICONS[selectedUpgrade.data.category] || '⭐'}</div>
                     <h3 className="font-fantasy text-xl font-bold text-glow-gold" style={{ color: '#f0c040' }}>
                       {selectedUpgrade.name}
                     </h3>
@@ -498,13 +332,27 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
 
                   <div className="p-4 rounded-xl mb-4" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.15)' }}>
                     <p className="text-sm leading-relaxed" style={{ color: 'rgba(232,213,183,0.8)', fontFamily: 'EB Garamond, serif' }}>
-                      {selectedUpgrade.data.desc}
+                      {selectedUpgrade.data.description}
                     </p>
                   </div>
 
-                  {selectedUpgrade.data.prereq && (
+                  {/* Show mechanical effects */}
+                  {(() => {
+                    const summary = getFeatEffectSummary(selectedUpgrade.name);
+                    return summary.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mb-4">
+                        {summary.map((line, i) => (
+                          <span key={i} className="px-2 py-1 rounded-lg text-xs" style={{ background: 'rgba(10,40,15,0.5)', border: '1px solid rgba(40,160,80,0.25)', color: '#86efac' }}>
+                            {line}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {selectedUpgrade.data.prerequisite && (
                     <div className="text-xs mb-4 p-2 rounded" style={{ background: 'rgba(80,30,120,0.2)', color: 'rgba(192,132,252,0.7)' }}>
-                      ⚠️ Requires: {selectedUpgrade.data.prereq}
+                      ⚠️ Requires: {selectedUpgrade.data.prerequisite}
                     </div>
                   )}
 

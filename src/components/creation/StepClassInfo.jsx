@@ -2,6 +2,7 @@ import React from 'react';
 import { CLASSES, ALIGNMENTS } from '@/components/game/gameData';
 import { Input } from '@/components/ui/input';
 import { SubclassTooltip } from '@/components/game/GameTooltip';
+import StepMulticlass from './StepMulticlass';
 
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 
@@ -97,6 +98,11 @@ export default function StepClassInfo({ character, set }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Multiclass section — only show when a primary class is selected */}
+      {character.class && (
+        <StepMulticlass character={character} set={set} />
       )}
     </div>
   );

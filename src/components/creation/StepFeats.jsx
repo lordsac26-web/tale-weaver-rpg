@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { Check, ChevronDown, ChevronUp, Search, Info, Lock, X } from 'lucide-react';
 import { FEATS, FEAT_CATEGORIES, CATEGORY_COLORS, canTakeFeat, meetsPrerequisite, meetsRaceReq, meetsCasterReq } from '@/components/game/featData';
+import { getFeatEffectSummary } from '@/components/game/featEffects';
 import { CLASSES } from '@/components/game/gameData';
 
 // How many feats can this character take based on level / class
+// Accounts for multiclass: each class's ASI levels are checked against that class's level
 function getMaxFeats(character) {
-  const level = character.level || 1;
+  const primaryLevel = character.level || 1;
   const cls = character.class;
   const race = character.race;
   
@@ -15,8 +17,17 @@ function getMaxFeats(character) {
     Rogue: [4, 8, 10, 12, 16, 19],
     default: [4, 8, 12, 16, 19],
   };
-  const levels = ASI_LEVELS[cls] || ASI_LEVELS.default;
-  let feats = levels.filter(l => l <= level).length;
+  
+  // Primary class feat slots
+  const primaryASI = ASI_LEVELS[cls] || ASI_LEVELS.default;
+  let feats = primaryASI.filter(l => l <= primaryLevel).length;
+  
+  // Multiclass feat slots (each secondary class grants ASIs at their own level thresholds)
+  const multiclass = character.multiclass || [];
+  multiclass.forEach(mc => {
+    const mcASI = ASI_LEVELS[mc.class] || ASI_LEVELS.default;
+    feats += mcASI.filter(l => l <= (mc.levels || 1)).length;
+  });
   
   // Variant Human gets +1 bonus feat at level 1
   if (race === 'Human' && character.subrace === 'Variant Human') {
@@ -190,6 +201,22 @@ export default function StepFeats({ character, set }) {
                       ))}
                     </div>
                   </div>
+                  {/* Mechanical effects summary */}
+                  {(() => {
+                    const effectLines = getFeatEffectSummary(feat.name);
+                    return effectLines.length > 0 ? (
+                      <div>
+                        <div className="text-xs text-slate-500 uppercase tracking-widest mb-1.5">Mechanical Effects</div>
+                        <div className="flex flex-wrap gap-1">
+                          {effectLines.map((line, i) => (
+                            <span key={i} className="px-2 py-0.5 rounded text-xs bg-emerald-900/30 border border-emerald-700/30 text-emerald-300">
+                              {line}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
                   {isSelected && feat.asi_choices && (
                     <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg px-3 py-2">
                       <div className="text-xs text-amber-400 font-medium mb-2">Choose ability score increase:</div>

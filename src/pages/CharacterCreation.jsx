@@ -10,6 +10,7 @@ import {
   PROFICIENCY_BY_LEVEL
 } from '@/components/game/gameData';
 import { FEATS } from '@/components/game/featData';
+import { computeFeatEffects } from '@/components/game/featEffects';
 import { getSpellSlotsForLevel } from '@/components/game/spellData';
  
 import StepGenderRace from '@/components/creation/StepGenderRace';
@@ -200,58 +201,18 @@ export default function CharacterCreation() {
     return { ...char, skills };
   };
  
-  // Apply stat bonuses from selected feats (e.g. Actor +1 CHA, Athlete +1 STR or DEX).
-  // Fixed bonuses come from feat.asi_bonus; player choices come from feat.asi_choices
-  // stored in character.feat_stat_choices[featName].
-  // Also handles Resilient's saving throw proficiency grant.
+  // Apply all feat mechanical effects using the centralized engine.
+  // Handles: stat bonuses (fixed + choice), HP (Tough), AC (Dual Wielder),
+  // initiative (Alert), speed (Mobile), save proficiencies (Resilient), and flags.
   const applyFeatBonuses = (char) => {
-    const selectedFeats = char.feats || [];
-    const statBonuses = {};
-    const extraSaveProfs = {};
- 
-    selectedFeats.forEach(featName => {
-      const feat = FEATS.find(f => f.name === featName);
-      if (!feat) return;
- 
-      // Fixed ASI (e.g. Actor +1 CHA, Durable +1 CON, Grappler +1 STR)
-      if (feat.asi_bonus) {
-        Object.entries(feat.asi_bonus).forEach(([stat, val]) => {
-          statBonuses[stat] = (statBonuses[stat] || 0) + val;
-        });
-      }
- 
-      // Choice-based ASI (e.g. Athlete +1 STR or DEX, Resilient +1 any)
-      // Player's choice is stored in character.feat_stat_choices[featName]
-      if (feat.asi_choices && char.feat_stat_choices?.[featName]) {
-        const chosen = char.feat_stat_choices[featName];
-        if (feat.asi_choices.includes(chosen)) {
-          statBonuses[chosen] = (statBonuses[chosen] || 0) + 1;
-        }
-      }
- 
-      // Resilient: also grants saving throw proficiency in the chosen stat
-      if (feat.grants_save_proficiency && char.feat_stat_choices?.[featName]) {
-        extraSaveProfs[char.feat_stat_choices[featName]] = true;
-      }
-    });
- 
-    const updated = { ...char };
- 
-    // Apply stat bonuses — cap at 20 per D&D 5e rules (PHB p.173)
-    STATS.forEach(stat => {
-      if (statBonuses[stat]) {
-        updated[stat] = Math.min(20, (updated[stat] || 10) + statBonuses[stat]);
-      }
-    });
- 
-    // Merge feat-granted saving throw proficiencies into saving_throws object
-    if (Object.keys(extraSaveProfs).length > 0) {
-      updated.saving_throws = { ...(updated.saving_throws || {}), ...extraSaveProfs };
-    }
- 
+    const featUpdates = computeFeatEffects(char, char.feats || [], char.feat_stat_choices || {});
+    const updated = { ...char, ...featUpdates };
+    // Merge stat fields properly — computeFeatEffects returns absolute values,
+    // but we want to layer on top of the char that already has racial bonuses applied.
+    // The engine already does char[stat] + bonus, so just spread.
     return updated;
   };
- 
+
   const handleGenerateBackstory = async () => {
     setGeneratingBackstory(true);
     const result = await base44.functions.invoke('generateBackstory', {
@@ -273,13 +234,35 @@ export default function CharacterCreation() {
     finalChar = buildClassFeatures(finalChar);
     finalChar = buildSpellSlots(finalChar);
     finalChar = buildRacialSkills(finalChar);
+
+    // Build multiclass features if any secondary classes
+    const multiclass = finalChar.multiclass || [];
+    if (multiclass.length > 0) {
+      multiclass.forEach(mc => {
+        const mcClassData = CLASSES[mc.class];
+        if (!mcClassData) return;
+        // Add multiclass features up to their level
+        Object.entries(mcClassData.features || {}).forEach(([lvl, feats]) => {
+          if (parseInt(lvl) <= (mc.levels || 1)) {
+            feats.forEach(f => {
+              if (!finalChar.features.includes(f)) finalChar.features.push(f);
+            });
+          }
+        });
+      });
+    }
+
+    // Apply feat AC bonus (e.g. Dual Wielder +1)
+    if (finalChar._feat_ac_bonus) {
+      finalChar.armor_class = (finalChar.armor_class || 10) + finalChar._feat_ac_bonus;
+    }
+
     // Apply background skills
     const bgData = BACKGROUNDS.find(b => b.name === finalChar.background);
     if (bgData) {
       const skills = { ...finalChar.skills };
       bgData.skills.forEach(s => { if (!skills[s]) skills[s] = 'proficient'; });
       finalChar = { ...finalChar, skills };
-      // Background equipment if inventory empty
       if (!finalChar.inventory?.length) {
         finalChar.inventory = bgData.equipment.map(e => ({ name: e, type: 'gear', weight: 1 }));
       }
@@ -288,11 +271,18 @@ export default function CharacterCreation() {
     delete finalChar._gear_customized;
     delete finalChar.chosen_stat_bonuses;
     delete finalChar.feat_stat_choices;
+    delete finalChar._feat_ac_bonus;
+    delete finalChar._feat_flags;
     const saved = await base44.entities.Character.create(finalChar);
     navigate(createPageUrl('NewGame') + `?character_id=${saved.id}`);
   };
  
-  const reviewChar = updateDerivedStats(applyFeatBonuses(applyRacialBonuses(character)));
+  const reviewCharBase = applyFeatBonuses(applyRacialBonuses(character));
+  const reviewChar = updateDerivedStats(reviewCharBase);
+  // Apply feat AC bonus for review display
+  if (reviewCharBase._feat_ac_bonus) {
+    reviewChar.armor_class = (reviewChar.armor_class || 10) + reviewCharBase._feat_ac_bonus;
+  }
  
   const canProceed = () => {
     switch (step) {

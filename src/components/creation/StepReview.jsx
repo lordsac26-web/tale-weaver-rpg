@@ -38,6 +38,15 @@ export default function StepReview({ character }) {
                 Level {character.level} {character.race} {character.class}
                 {character.subclass ? ` (${character.subclass})` : ''}
               </div>
+              {/* Multiclass display */}
+              {(character.multiclass || []).length > 0 && (
+                <div className="text-blue-300/70 text-xs mt-0.5">
+                  + {character.multiclass.map(mc => `${mc.class} ${mc.levels}`).join(' / ')}
+                  <span className="text-slate-500 ml-1">
+                    (Total Lv.{(character.level || 1) + character.multiclass.reduce((s, mc) => s + (mc.levels || 1), 0)})
+                  </span>
+                </div>
+              )}
               <div className="text-slate-400 text-xs mt-0.5">{character.alignment} · {character.background}</div>
             </div>
           </div>
