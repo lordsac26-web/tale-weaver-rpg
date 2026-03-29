@@ -148,7 +148,8 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
   const rarity = ITEM_RARITY[item.rarity] || ITEM_RARITY.common;
   const slot = item.equip_slot || CATEGORY_TO_SLOT[item.category];
   const canEquip = !!slot;
-  const isEquipped = canEquip && Object.entries(equipped).some(([s, i]) => i && i === item);
+  // Use name-based comparison instead of reference equality — after DB reload, objects are different instances
+  const isEquipped = canEquip && Object.entries(equipped).some(([s, i]) => i && s !== 'weapon' && i.name === item.name);
   const isUnidentifiedMagic = item.is_magic && !item.is_identified;
   const isConsumable = isConsumableItem(item);
 
@@ -261,10 +262,10 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
   const handleRemoveItem = (index) => {
     const removedItem = inventory[index];
     const newInventory = inventory.filter((_, i) => i !== index);
-    // also unequip if equipped
+    // also unequip if equipped — use name-based match (not reference equality)
     const newEquipped = { ...equipped };
     Object.entries(newEquipped).forEach(([slot, it]) => {
-      if (it && it === removedItem) delete newEquipped[slot];
+      if (it && slot !== 'weapon' && it.name === removedItem.name) delete newEquipped[slot];
     });
     setEquipped(newEquipped);
     onUpdate({ inventory: newInventory, equipped: newEquipped });
@@ -272,11 +273,12 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
 
   const handleEquipItem = (item, index, slot) => {
     const newEquipped = { ...equipped };
-    const isCurrentlyEquipped = Object.entries(newEquipped).some(([s, i]) => i && i === item);
+    // Use name-based comparison — after DB reload, item objects are different instances
+    const isCurrentlyEquipped = Object.entries(newEquipped).some(([s, i]) => i && s !== 'weapon' && i.name === item.name);
 
     if (isCurrentlyEquipped) {
-      // Unequip
-      Object.entries(newEquipped).forEach(([s, i]) => { if (i === item) delete newEquipped[s]; });
+      // Unequip — match by name, not reference
+      Object.entries(newEquipped).forEach(([s, i]) => { if (i && s !== 'weapon' && i.name === item.name) delete newEquipped[s]; });
     } else {
       const constraint = getEquipConstraints(newEquipped, item);
       if (!constraint.canEquip) {
@@ -446,6 +448,8 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
 }
 
 // Recalculate character stats based on equipped items
+// IMPORTANT: Only iterates over real equipment slots — excludes the 'weapon' alias
+// to prevent double-counting bonuses from mainhand.
 function recalculateStatsFromEquipment(character, equipped, inventory) {
   const updates = {};
   let acBonus = 0;
@@ -453,7 +457,10 @@ function recalculateStatsFromEquipment(character, equipped, inventory) {
   const abilitySetScores = {};   // "set to X" items (Amulet of Health, Belt of Giant Strength)
   const abilityAddBonuses = {};  // "+N" items (Hand Wraps +1 DEX)
 
-  Object.entries(equipped).forEach(([slot, item]) => {
+  // REAL equipment slots only — 'weapon' is an alias for mainhand, skip to avoid double-counting
+  const REAL_SLOTS = ['mainhand','offhand','armor','helmet','amulet','cloak','gloves','boots','ring','ring2','belt','trinket'];
+  REAL_SLOTS.forEach(slot => {
+    const item = equipped[slot];
     if (!item) return;
 
     // Resolve bonuses using the centralized resolver (known items > form fields > regex)
@@ -504,7 +511,7 @@ function recalculateStatsFromEquipment(character, equipped, inventory) {
   updates.armor_class = computeACWithClassRace(effectiveChar, equipped) + acBonus;
 
   // Expose equipped weapon on character.equipped.weapon for CombatPanel to read
-  const weaponItem = equipped.mainhand || equipped.weapon || null;
+  const weaponItem = equipped.mainhand || null;
   if (weaponItem) {
     const dmgStr = weaponItem.damage || weaponItem.damage_dice || '1d6';
     const [dice, ...rest] = dmgStr.split(' ');
@@ -576,12 +583,12 @@ function computeACWithClassRace(character, equipped) {
     bestAC = Math.max(bestAC, armorAC);
   }
 
-  // Shield
+  // Shield bonus (flat +2 per D&D 5e)
   if (equipped?.offhand?.category === 'Shield') bestAC += 2;
-  // Cloak/ring AC bonuses
-  if (equipped?.cloak?.ac_bonus) bestAC += equipped.cloak.ac_bonus;
-  if (equipped?.ring?.ac_bonus) bestAC += equipped.ring.ac_bonus;
-  if (equipped?.ring2?.ac_bonus) bestAC += equipped.ring2.ac_bonus;
+
+  // NOTE: Cloak/ring ac_bonus fields are REMOVED from here.
+  // All AC bonuses from magic items are now handled exclusively via resolveItemBonuses() → acBonus
+  // in recalculateStatsFromEquipment(). The old code double-counted them.
 
   return bestAC;
 }

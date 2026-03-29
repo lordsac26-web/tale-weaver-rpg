@@ -4,6 +4,7 @@ import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 import { User, Loader2, ChevronLeft, Swords } from 'lucide-react';
 import { SKILL_STAT_MAP, calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
+import { recalculateStats } from '@/components/game/EquipmentManager';
 import { getEquipmentAdvantage, rollD20WithAdvantage } from '@/components/game/equipmentAdvantage';
 import { motion, AnimatePresence } from 'framer-motion';
 import HUD from '@/components/game/HUD';
@@ -61,7 +62,18 @@ export default function Game() {
     setSession(sess);
 
     const chars = await base44.entities.Character.filter({ id: sess.character_id });
-    const loadedChar = chars[0] || null;
+    let loadedChar = chars[0] || null;
+
+    // Recalculate stats from equipment on every load to fix any stale/double-counted values
+    if (loadedChar?.equipped && Object.keys(loadedChar.equipped).length > 0) {
+      const recalc = recalculateStats(loadedChar, loadedChar.equipped, loadedChar.inventory || []);
+      const needsUpdate = recalc.armor_class !== loadedChar.armor_class;
+      if (needsUpdate) {
+        loadedChar = { ...loadedChar, ...recalc };
+        // Persist the corrected values to DB so they stay fixed
+        await base44.entities.Character.update(loadedChar.id, { armor_class: recalc.armor_class });
+      }
+    }
     setCharacter(loadedChar);
 
     if (chars[0]) {

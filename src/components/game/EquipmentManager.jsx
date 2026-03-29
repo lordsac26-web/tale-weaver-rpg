@@ -286,6 +286,8 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
 
 // ─── Stat Recalculation ────────────────────────────────────────────────────────
 // Called whenever equipment changes — updates AC and active_modifiers on the character
+// IMPORTANT: Only iterates over real equipment slots — excludes the 'weapon' alias
+// to prevent double-counting bonuses from mainhand.
 export function recalculateStats(character, equipped, inventory) {
   const updates = {};
   let acBonus = 0;
@@ -295,8 +297,10 @@ export function recalculateStats(character, equipped, inventory) {
   const abilitySetScores = {};   // "set to X" items
   const abilityAddBonuses = {};  // "+N" items
 
-  // Iterate over equipped slot values (full item objects)
-  Object.values(equipped).forEach(item => {
+  // REAL equipment slots only — 'weapon' is an alias for mainhand, skip it to avoid double-counting
+  const REAL_SLOTS = ['mainhand','offhand','armor','helmet','amulet','cloak','gloves','boots','ring','ring2','belt','trinket'];
+  REAL_SLOTS.forEach(slot => {
+    const item = equipped[slot];
     if (!item || typeof item !== 'object') return;
     // Use centralized resolver: known items > form fields > regex
     const b = resolveItemBonuses(item);
@@ -369,12 +373,12 @@ export function recalculateStats(character, equipped, inventory) {
     bestAC = Math.max(bestAC, armorAC);
   }
 
-  // Shield bonus
+  // Shield bonus (flat +2 per D&D 5e)
   if (equipped.offhand?.category === 'Shield') bestAC += 2;
-  // Cloak/ring AC bonus
-  if (equipped.cloak?.ac_bonus) bestAC += equipped.cloak.ac_bonus;
-  if (equipped.ring?.ac_bonus)  bestAC += equipped.ring.ac_bonus;
-  if (equipped.ring2?.ac_bonus) bestAC += equipped.ring2.ac_bonus;
+
+  // NOTE: Cloak/ring ac_bonus fields are REMOVED from here.
+  // All AC bonuses from magic items are now handled exclusively via resolveItemBonuses() → acBonus.
+  // The old code double-counted them: once from resolveItemBonuses and again from item.ac_bonus fields.
 
   updates.armor_class = bestAC + acBonus;
 
