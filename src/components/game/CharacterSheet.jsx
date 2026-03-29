@@ -7,6 +7,7 @@ import { base44 } from '@/api/base44Client';
 import SpellbookTab from './SpellbookTab';
 import { SkillTooltip, FeatureTooltip, ConditionTooltip } from './GameTooltip';
 import SkillProficiencyRow from './SkillProficiencyRow';
+import StatBreakdownTooltip from './StatBreakdownTooltip';
  
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
@@ -191,21 +192,19 @@ function StatsTab({ character, profBonus }) {
           const saveProf = CLASSES[character.class]?.saves?.includes(stat);
           const saveMod = mod + (saveProf ? profBonus : 0);
           return (
-            <div key={stat} className="stat-box rounded-xl p-3 text-center">
-              <div className="text-base mb-0.5">{STAT_ICONS[stat]}</div>
-              <div className="font-fantasy text-xs tracking-widest mb-0.5" style={{ color: 'rgba(180,140,90,0.5)', fontSize: '0.6rem' }}>{STAT_LABELS[stat]}</div>
-              <div className="font-fantasy font-bold text-2xl mb-0.5" style={{ color: '#e8d5b7' }}>{val}</div>
-              <div className="font-fantasy font-bold text-sm" style={{ color: mod >= 0 ? '#86efac' : '#fca5a5' }}>{calcModDisplay(mod)}</div>
-              <div className="text-xs mt-1 pt-1" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif', borderTop: '1px solid rgba(180,140,90,0.1)', fontSize: '0.65rem' }}>
-                Save {calcModDisplay(saveMod)}{saveProf && <span style={{ color: '#c9a96e' }}> ●</span>}
+            <StatBreakdownTooltip key={stat} character={character} stat={stat}>
+              <div className="stat-box rounded-xl p-3 text-center">
+                <div className="text-base mb-0.5">{STAT_ICONS[stat]}</div>
+                <div className="font-fantasy text-xs tracking-widest mb-0.5" style={{ color: 'rgba(180,140,90,0.5)', fontSize: '0.6rem' }}>{STAT_LABELS[stat]}</div>
+                <div className="font-fantasy font-bold text-2xl mb-0.5" style={{ color: '#e8d5b7' }}>{val}</div>
+                <div className="font-fantasy font-bold text-sm" style={{ color: mod >= 0 ? '#86efac' : '#fca5a5' }}>{calcModDisplay(mod)}</div>
+                <div className="text-xs mt-1 pt-1" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif', borderTop: '1px solid rgba(180,140,90,0.1)', fontSize: '0.65rem' }}>
+                  Save {calcModDisplay(saveMod)}{saveProf && <span style={{ color: '#c9a96e' }}> ●</span>}
+                </div>
               </div>
-            </div>
+            </StatBreakdownTooltip>
           );
         })}
-      </div>
-      <div className="rounded-xl p-2.5 text-center stat-box">
-        <span style={{ color: 'rgba(180,150,100,0.5)', fontFamily: 'EB Garamond, serif', fontSize: '0.9rem' }}>Proficiency Bonus </span>
-        <span className="font-fantasy font-bold" style={{ color: '#f0c040' }}>+{profBonus}</span>
       </div>
       {/* Passive Scores */}
       <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.1)' }}>
