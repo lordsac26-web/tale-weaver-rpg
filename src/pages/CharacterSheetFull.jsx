@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, User, TrendingUp, Package, Sparkles, Heart, Shield, Zap } from 'lucide-react';
+import { ChevronLeft, User, TrendingUp, Package, Sparkles, Heart, Shield, Zap, Trash2 } from 'lucide-react';
 import { PROFICIENCY_BY_LEVEL, calcStatMod, calcModDisplay, SKILL_STAT_MAP } from '@/components/game/gameData';
 import { getSpellSlotsForLevel, getSpellcastingAbility } from '@/components/game/spellData';
 import EncumbranceBar from '@/components/inventory/EncumbranceBar';

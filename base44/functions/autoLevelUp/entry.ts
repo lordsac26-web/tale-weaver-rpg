@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
  
 /**
  * Automated Leveling System
@@ -70,12 +70,30 @@ function recalcArmorClass(character) {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
- 
-    const { character_id } = await req.json();
- 
-    const character = await base44.entities.Character.get(character_id);
+
+    const body = await req.json();
+
+    // Support both: entity automation payload AND direct frontend invocation
+    // Entity automation sends: { event: { entity_id, type, entity_name }, data, old_data }
+    // Frontend sends: { character_id }
+    const character_id = body.event?.entity_id || body.character_id;
+
+    if (!character_id) {
+      return Response.json({ error: 'No character_id provided' }, { status: 400 });
+    }
+
+    // When called from an entity automation, check if XP actually changed
+    // to avoid unnecessary processing on non-XP updates
+    if (body.data && body.old_data) {
+      const newXP = body.data.xp ?? 0;
+      const oldXP = body.old_data.xp ?? 0;
+      if (newXP <= oldXP) {
+        return Response.json({ leveled_up: false, message: 'XP did not increase, skipping' });
+      }
+    }
+
+    // Use service role to read character (automation context has no user session)
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
  
     const currentLevel = character.level || 1;
@@ -310,7 +328,7 @@ Deno.serve(async (req) => {
     const mergedFeatures = [...new Set([...existingFeatures, ...newFeatures])];
     if (newFeatures.length > 0) updates.features = mergedFeatures;
  
-    await base44.entities.Character.update(character_id, updates);
+    await base44.asServiceRole.entities.Character.update(character_id, updates);
  
     return Response.json({
       leveled_up:            true,

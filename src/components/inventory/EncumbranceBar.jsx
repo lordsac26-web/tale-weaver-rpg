@@ -1,5 +1,6 @@
 import React from 'react';
 import { Weight, AlertTriangle } from 'lucide-react';
+import { motion } from 'framer-motion';
 import GameTooltip from '@/components/game/GameTooltip';
 
 export default function EncumbranceBar({ character }) {

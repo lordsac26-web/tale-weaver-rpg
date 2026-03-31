@@ -22,8 +22,7 @@ export default function GameTooltip({ content, title, subtitle, icon, position =
   const triggerRef = useRef(null);
   const tooltipRef = useRef(null);
   const timeoutRef = useRef(null);
-
-  if (disabled || (!content && !title)) return children;
+  const isDisabled = disabled || (!content && !title);
 
   const show = () => {
     timeoutRef.current = setTimeout(() => setVisible(true), 300);
@@ -35,7 +34,7 @@ export default function GameTooltip({ content, title, subtitle, icon, position =
   };
 
   useEffect(() => {
-    if (!visible || !triggerRef.current || !tooltipRef.current) return;
+    if (isDisabled || !visible || !triggerRef.current || !tooltipRef.current) return;
     const triggerRect = triggerRef.current.getBoundingClientRect();
     const tooltipRect = tooltipRef.current.getBoundingClientRect();
     const gap = 8;
@@ -64,7 +63,9 @@ export default function GameTooltip({ content, title, subtitle, icon, position =
     top = Math.max(8, Math.min(top, window.innerHeight - tooltipRect.height - 8));
 
     setCoords({ top, left });
-  }, [visible, position]);
+  }, [visible, position, isDisabled]);
+
+  if (isDisabled) return children;
 
   return (
     <>

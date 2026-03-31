@@ -16,8 +16,6 @@ const EFFECT_ICONS = {
 };
 
 export default function InitiativeTracker({ combatants = [], currentTurnIndex, round, onAdvanceTurn, combatStartTime }) {
-  if (!combatants.length) return null;
-
   const [expandedCombatant, setExpandedCombatant] = useState(null);
   const [combatDuration, setCombatDuration] = useState(0);
 
@@ -28,6 +26,8 @@ export default function InitiativeTracker({ combatants = [], currentTurnIndex, r
     }, 1000);
     return () => clearInterval(interval);
   }, [combatStartTime]);
+
+  if (!combatants.length) return null;
 
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
