@@ -1,15 +1,23 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Moon, Coffee, Loader2, Heart, Zap, Flame, Shield } from 'lucide-react';
+import { X, Moon, Coffee, Loader2, Heart, Zap, Flame, Shield, Plus, Minus } from 'lucide-react';
 import { getSpellSlotsForLevel } from './spellData';
 
 export default function RestModal({ character, onClose, onRest }) {
   const [restType, setRestType] = useState(null); // 'short' | 'long'
   const [resting, setResting] = useState(false);
+  const [hitDiceToSpend, setHitDiceToSpend] = useState(1); // for short rest player choice
+
+  const maxHitDice = character?.level || 1;
+  // Estimate hit die size by class
+  const HIT_DIE = { Fighter: 10, Ranger: 10, Paladin: 10, Barbarian: 12, Monk: 8, Rogue: 8, Bard: 8, Cleric: 8, Druid: 8, Warlock: 8, Wizard: 6, Sorcerer: 6, Artificer: 8 };
+  const hitDie = HIT_DIE[character?.class] || 8;
+  const conMod = Math.floor(((character?.constitution || 10) - 10) / 2);
+  const avgHealPerDie = Math.floor(hitDie / 2) + 1 + conMod;
 
   const handleRest = async () => {
     setResting(true);
-    await onRest(restType);
+    await onRest(restType, hitDiceToSpend);
     setResting(false);
   };
 
@@ -98,7 +106,7 @@ export default function RestModal({ character, onClose, onRest }) {
                   <h3 className="font-fantasy font-bold" style={{ color: '#fbbf24' }}>Short Rest (1 hour)</h3>
                 </div>
                 <p className="text-xs mb-2" style={{ color: 'rgba(232,213,183,0.6)', fontFamily: 'EB Garamond, serif' }}>
-                  Rest for an hour. Spend Hit Dice to heal and restore certain abilities.
+                  Rest for an hour. Choose how many Hit Dice (d{hitDie}) to spend to heal.
                 </p>
                 <div className="space-y-1">
                   {calcRestoration('short').map((item, i) => (
@@ -147,7 +155,7 @@ export default function RestModal({ character, onClose, onRest }) {
               <p className="text-sm mb-6" style={{ color: 'rgba(232,213,183,0.6)', fontFamily: 'EB Garamond, serif' }}>
                 You will restore:
               </p>
-              <div className="space-y-2 mb-6">
+              <div className="space-y-2 mb-4">
                 {calcRestoration(restType).map((item, i) => (
                   <div key={i} className="flex items-center justify-center gap-2 text-sm" style={{ color: item.color }}>
                     {item.icon}
@@ -155,6 +163,34 @@ export default function RestModal({ character, onClose, onRest }) {
                   </div>
                 ))}
               </div>
+
+              {/* Hit Dice selector for short rest */}
+              {restType === 'short' && (
+                <div className="rounded-xl p-4 mb-4" style={{ background: 'rgba(60,40,8,0.4)', border: '1px solid rgba(201,169,110,0.2)' }}>
+                  <p className="text-xs font-fantasy mb-3" style={{ color: 'rgba(201,169,110,0.7)' }}>
+                    How many Hit Dice (d{hitDie}) to spend?
+                  </p>
+                  <div className="flex items-center justify-center gap-4">
+                    <button onClick={() => setHitDiceToSpend(v => Math.max(1, v - 1))}
+                      className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                      style={{ background: 'rgba(60,30,5,0.7)', border: '1px solid rgba(180,140,90,0.3)', color: '#c9a96e' }}>
+                      <Minus className="w-3 h-3" />
+                    </button>
+                    <div className="text-center">
+                      <div className="font-fantasy font-bold text-2xl" style={{ color: '#f0c040' }}>{hitDiceToSpend}</div>
+                      <div className="text-xs" style={{ color: 'rgba(201,169,110,0.5)' }}>of {maxHitDice} dice</div>
+                    </div>
+                    <button onClick={() => setHitDiceToSpend(v => Math.min(maxHitDice, v + 1))}
+                      className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                      style={{ background: 'rgba(60,30,5,0.7)', border: '1px solid rgba(180,140,90,0.3)', color: '#c9a96e' }}>
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-center mt-2" style={{ color: 'rgba(201,169,110,0.5)' }}>
+                    Est. ~{hitDiceToSpend * avgHealPerDie} HP ({hitDiceToSpend}d{hitDie}+{conMod > 0 ? '+' : ''}{conMod} each)
+                  </p>
+                </div>
+              )}
               <div className="flex gap-3">
                 <button
                   onClick={() => setRestType(null)}

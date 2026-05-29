@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { character_id, rest_type } = await req.json();
+  const { character_id, rest_type, hit_dice_to_spend } = await req.json();
 
   const chars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
   const character = chars[0];
@@ -37,17 +37,18 @@ Deno.serve(async (req) => {
   const restorations = [];
 
   if (rest_type === 'short') {
-    // SHORT REST (1 hour)
+    // SHORT REST (1 hour) — player chooses how many hit dice to spend (PHB p.186)
     const hitDie = { Fighter: 10, Rogue: 8, Wizard: 6, Cleric: 8, Ranger: 10, Paladin: 10, Barbarian: 12, Bard: 8, Druid: 8, Monk: 8, Sorcerer: 6, Warlock: 8, Artificer: 8 }[charClass] || 8;
     const conMod = Math.floor(((character.constitution || 10) - 10) / 2);
-    const diceToSpend = Math.max(1, Math.floor(charLevel / 2));
+    // Use player's choice, capped at character level (max hit dice available)
+    const diceToSpend = Math.min(charLevel, Math.max(1, hit_dice_to_spend || 1));
     let healing = 0;
     for (let i = 0; i < diceToSpend; i++) {
-      healing += Math.floor(Math.random() * hitDie) + 1 + conMod;
+      healing += Math.max(1, Math.floor(Math.random() * hitDie) + 1 + conMod);
     }
+    restorations.push(`${diceToSpend}d${hitDie}${conMod >= 0 ? `+${conMod}` : conMod} per die — ${healing} HP restored`);
     const newHP = Math.min(character.hp_max, (character.hp_current || 0) + healing);
     updates.hp_current = newHP;
-    restorations.push(`${healing} HP restored`);
 
     // Warlock: restore all pact slots on short rest
     if (charClass === 'Warlock') {

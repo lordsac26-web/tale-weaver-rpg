@@ -1016,10 +1016,11 @@ export default function Game() {
           <RestModal
             character={character}
             onClose={() => setShowRestModal(false)}
-            onRest={async (restType) => {
+            onRest={async (restType, hitDiceToSpend) => {
               const result = await base44.functions.invoke('handleRest', {
                 character_id: character.id,
-                rest_type: restType
+                rest_type: restType,
+                hit_dice_to_spend: hitDiceToSpend,
               });
 
               // Check for interrupted rest

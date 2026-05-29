@@ -15,6 +15,48 @@ Deno.serve(async (req) => {
   const rollD20 = () => Math.floor(Math.random() * 20) + 1;
   const rollDice = (sides) => Math.floor(Math.random() * sides) + 1;
 
+  // Cantrip damage scaling: doubles at char levels 5, 11, 17 (PHB p.205)
+  const scaleCantripDice = (damageDice, characterLevel) => {
+    if (!damageDice || damageDice === '0') return damageDice;
+    const m = damageDice.match(/^(\d+)d(\d+)$/);
+    if (!m) return damageDice;
+    const baseDice = parseInt(m[1]);
+    const sides = parseInt(m[2]);
+    const mult = characterLevel >= 17 ? 4 : characterLevel >= 11 ? 3 : characterLevel >= 5 ? 2 : 1;
+    return `${baseDice * mult}d${sides}`;
+  };
+
+  // Spellcasting ability by class (server-side authoritative copy)
+  const SPELL_ABILITY_MAP = {
+    wizard: 'intelligence', artificer: 'intelligence',
+    eldritch_knight: 'intelligence', arcane_trickster: 'intelligence',
+    cleric: 'wisdom', druid: 'wisdom', ranger: 'wisdom',
+    bard: 'charisma', paladin: 'charisma', sorcerer: 'charisma', warlock: 'charisma'
+  };
+
+  // Roll dice string (e.g. "3d6") and return total
+  const rollDiceStr = (diceStr) => {
+    const m = (diceStr || '').match(/^(\d+)d(\d+)$/);
+    if (!m) return 0;
+    let total = 0;
+    for (let i = 0; i < parseInt(m[1]); i++) total += rollDice(parseInt(m[2]));
+    return total;
+  };
+
+  // Advance initiative tracker past current combatant, skipping unconscious
+  const advanceTurn = (currentIndex, currentRound, combatantsArr) => {
+    let nextIndex = (currentIndex + 1) % combatantsArr.length;
+    let nextRound = currentRound;
+    if (nextIndex === 0) nextRound++;
+    let safety = 0;
+    while (!combatantsArr[nextIndex]?.is_conscious && safety < combatantsArr.length) {
+      nextIndex = (nextIndex + 1) % combatantsArr.length;
+      if (nextIndex === 0) nextRound++;
+      safety++;
+    }
+    return { nextIndex, nextRound };
+  };
+
   if (action === 'start_combat') {
     const { enemies } = payload;
     const session = await base44.entities.GameSession.get(session_id);
@@ -93,15 +135,17 @@ Deno.serve(async (req) => {
   const getActionsPerTurn = (character) => {
     const features = (character.features || []).map(f => (typeof f === 'string' ? f : f.name || '').toLowerCase());
     const charClass = (character.class || '').toLowerCase();
+    const subclass  = (character.subclass || '').toLowerCase();
     const level = character.level || 1;
     let actions = 1;
     // Extra Attack: Fighter 5+, Ranger 5+, Paladin 5+, Barbarian 5+, Monk 5+
     if (['fighter','ranger','paladin','barbarian','monk'].includes(charClass) && level >= 5) actions = 2;
     if (charClass === 'fighter' && level >= 11) actions = 3;
     if (charClass === 'fighter' && level >= 20) actions = 4;
+    // Artificer Battle Smith / Armorer get Extra Attack at level 5
+    if (charClass === 'artificer' && level >= 5 && (subclass.includes('battle smith') || subclass.includes('armorer'))) actions = Math.max(actions, 2);
     // Feature-based overrides
     if (features.some(f => f.includes('extra attack'))) actions = Math.max(actions, 2);
-    // Action Surge (Fighter) — handled separately as a bonus action
     return actions;
   };
 
@@ -130,20 +174,19 @@ Deno.serve(async (req) => {
     let extraDamageDice = []; // For smite, sneak attack, etc
 
     if (spell) {
-      const spellAbilityMap = {
-        wizard: 'intelligence', eldritch_knight: 'intelligence', arcane_trickster: 'intelligence',
-        cleric: 'wisdom', druid: 'wisdom', ranger: 'wisdom',
-        bard: 'charisma', paladin: 'charisma', sorcerer: 'charisma', warlock: 'charisma'
-      };
-      const spellAbility = spellAbilityMap[(character.class || '').toLowerCase()] || 'intelligence';
+      const spellAbility = SPELL_ABILITY_MAP[(character.class || '').toLowerCase()] || 'intelligence';
       const spellStatMod = statMod(character[spellAbility]);
       const profBonus = character.proficiency_bonus || 2;
       const spellSaveDC = 8 + spellStatMod + profBonus;
       const spellAttackBonus = spellStatMod + profBonus;
 
       attackMod = spellAttackBonus;
-      damageDice = spell.damage_dice || '2d6';
-      damageBonus = 0; // spell damage doesn't add ability mod (unless explicit, like Hex)
+      // Scale cantrip damage by character level (PHB cantrip scaling rules)
+      const isCantrip = (spell.base_level === 0 || spell.slot_level === 0);
+      damageDice = isCantrip
+        ? scaleCantripDice(spell.damage_dice || '1d6', character.level || 1)
+        : (spell.damage_dice || '2d6');
+      damageBonus = 0; // spell damage doesn't add ability mod (unless explicit)
       attackType = spell.attack_type || 'ranged_spell_attack';
 
       // Handle upcast: scale damage dice if upcasting
@@ -201,13 +244,7 @@ Deno.serve(async (req) => {
 
       // === HEALING spells ===
       if (spell.attack_type === 'healing' && spell.heal_dice) {
-        const hdMatch = (spell.heal_dice || '1d8').match(/^(\d+)d(\d+)$/);
-        let healAmt = 0;
-        if (hdMatch) {
-          const numD = parseInt(hdMatch[1]);
-          const sides2 = parseInt(hdMatch[2]);
-          for (let i = 0; i < numD; i++) healAmt += rollDice(sides2);
-        }
+        let healAmt = rollDiceStr(spell.heal_dice || '1d8');
         healAmt += spellStatMod;
         const player2 = combatants.find(c => c.type === 'player');
         if (player2) {
@@ -240,19 +277,15 @@ Deno.serve(async (req) => {
 
       // === SAVING THROW spells ===
       if (spell.attack_type === 'saving_throw' && spell.save_type) {
-        // Target's save ability — use what we have on the combatant (may have been set at start), else default
+        // Target's save ability — use what we have on the combatant, else default to 10
         const targetSaveStat = target[spell.save_type] || target.save_stats?.[spell.save_type] || 10;
         const targetSaveMod = statMod(targetSaveStat);
-        const saveRoll = Math.floor(Math.random() * 20) + 1;
+        const saveRoll = rollD20();
         const saveTotal = saveRoll + targetSaveMod;
         const saveFailed = saveTotal < spellSaveDC;
 
-        const dMatch2 = (damageDice).match(/^(\d+)d(\d+)$/);
-        let dmg2 = 0;
-        if (dMatch2) {
-          for (let i = 0; i < parseInt(dMatch2[1]); i++) dmg2 += rollDice(parseInt(dMatch2[2]));
-        }
-        const finalDmg = saveFailed ? dmg2 : Math.floor(dmg2 / 2);
+        const dmg2 = rollDiceStr(damageDice);
+        const finalDmg = saveFailed ? Math.max(1, dmg2) : Math.floor(dmg2 / 2);
         if (finalDmg > 0) {
           target.hp_current = Math.max(0, target.hp_current - finalDmg);
           if (target.hp_current === 0) target.is_conscious = false;
@@ -276,13 +309,16 @@ Deno.serve(async (req) => {
         const ar2 = apt - acu;
         let ni = combatLog.current_turn_index;
         let nr = combatLog.round;
+        // Track concentration spell in world_state
         let ws = { ...(combatLog.world_state || {}), actions_used_this_turn: acu };
+        if (spell.requires_concentration) {
+          ws.concentration_spell = spell.name;
+          ws.concentration_caster = character.name;
+        }
         if (result2 !== 'ongoing' || ar2 <= 0) {
           if (result2 === 'ongoing') {
-            ni = (combatLog.current_turn_index + 1) % updatedC.length;
-            if (ni === 0) nr++;
-            let s = 0;
-            while (!updatedC[ni]?.is_conscious && s < updatedC.length) { ni = (ni + 1) % updatedC.length; if (ni === 0) nr++; s++; }
+            const adv2 = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedC);
+            ni = adv2.nextIndex; nr = adv2.nextRound;
           }
           ws.actions_used_this_turn = 0;
         }
@@ -434,7 +470,11 @@ Deno.serve(async (req) => {
         damage += rollDice(8);
       }
 
-      damage = Math.max(0, damage);
+      // PHB rule: a hit always deals at least 1 damage
+      damage = Math.max(1, damage);
+
+      // Concentration check: if caster is concentrating and takes damage, DC = max(10, half damage) CON save
+      // (Enemy triggering concentration check is handled in enemy_turn)
 
       target.hp_current = Math.max(0, target.hp_current - damage);
       if (target.hp_current === 0) target.is_conscious = false;
@@ -473,20 +513,18 @@ Deno.serve(async (req) => {
     let nextRound = combatLog.round;
     let newWorldState = { ...(combatLog.world_state || {}), actions_used_this_turn: currentActionsUsed };
 
+    // Track concentration spells
+    if (spell?.requires_concentration) {
+      newWorldState.concentration_spell = spell.name;
+      newWorldState.concentration_caster = character.name;
+    }
+
     if (result !== 'ongoing' || actionsRemaining <= 0) {
-      // Move to next combatant
       if (result === 'ongoing') {
-        nextIndex = (combatLog.current_turn_index + 1) % updatedCombatants.length;
-        if (nextIndex === 0) nextRound += 1;
-        // Skip dead combatants
-        let safety = 0;
-        while (!updatedCombatants[nextIndex]?.is_conscious && safety < updatedCombatants.length) {
-          nextIndex = (nextIndex + 1) % updatedCombatants.length;
-          if (nextIndex === 0) nextRound += 1;
-          safety++;
-        }
+        const adv = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCombatants);
+        nextIndex = adv.nextIndex; nextRound = adv.nextRound;
       }
-      newWorldState.actions_used_this_turn = 0; // reset for next turn
+      newWorldState.actions_used_this_turn = 0;
     }
 
     await base44.entities.CombatLog.update(combat_id, {
@@ -629,6 +667,19 @@ Deno.serve(async (req) => {
       player.hp_current = Math.max(0, player.hp_current - totalDamage);
       if (player.hp_current === 0) player.is_conscious = false;
       await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
+
+      // Concentration check: if player was concentrating, DC = max(10, half damage taken), CON save
+      const concentrationSpell = combatLog.world_state?.concentration_spell;
+      if (concentrationSpell && totalDamage > 0) {
+        const dc = Math.max(10, Math.floor(totalDamage / 2));
+        const charFull = await base44.entities.Character.get(player.id);
+        const conSave = rollD20() + statMod(charFull?.constitution || 10);
+        if (conSave < dc) {
+          // Concentration broken — add note to log
+          logText += ` ⚠️ Concentration on ${concentrationSpell} broken! (CON save: ${conSave} vs DC ${dc})`;
+          // Clear concentration from world_state (handled on DB update below)
+        }
+      }
     }
 
     // Build log entry
@@ -653,26 +704,30 @@ Deno.serve(async (req) => {
       text: logText
     };
 
-    // Build updated combatants with player HP changes BEFORE using them
+    // Build updated combatants with player HP changes BEFORE advancing turn
     const updatedCombatants = combatants.map(c => c.id === player.id ? player : c);
 
-    // Advance turn
-    let nextIndex = (combatLog.current_turn_index + 1) % updatedCombatants.length;
-    let round = combatLog.round;
-    if (nextIndex === 0) round += 1;
-    // Skip dead combatants
-    let safety = 0;
-    while (!updatedCombatants[nextIndex]?.is_conscious && safety < updatedCombatants.length) {
-      nextIndex = (nextIndex + 1) % updatedCombatants.length;
-      if (nextIndex === 0) round += 1;
-      safety++;
+    const { nextIndex, nextRound: round } = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCombatants);
+
+    // Carry over world_state, clear concentration if broken
+    const newWS = { ...(combatLog.world_state || {}), actions_used_this_turn: 0 };
+    const concentrationSpellCheck = combatLog.world_state?.concentration_spell;
+    if (concentrationSpellCheck && totalDamage > 0) {
+      const dc = Math.max(10, Math.floor(totalDamage / 2));
+      const charFull2 = await base44.entities.Character.get(player.id);
+      const conSave2 = rollD20() + statMod(charFull2?.constitution || 10);
+      if (conSave2 < dc) {
+        newWS.concentration_spell = null;
+        newWS.concentration_caster = null;
+      }
     }
+
     await base44.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants,
       log_entries: [...(combatLog.log_entries || []), logEntry],
       current_turn_index: nextIndex,
       round,
-      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0 }
+      world_state: newWS,
     });
 
     const playerAtZero = !player.is_conscious;
@@ -687,18 +742,13 @@ Deno.serve(async (req) => {
   if (action === 'next_turn') {
     const combatLog = await base44.entities.CombatLog.get(combat_id);
     const combatants = combatLog.combatants;
-    let nextIndex = (combatLog.current_turn_index + 1) % combatants.length;
-    let round = combatLog.round;
-    if (nextIndex === 0) round += 1;
-    // Skip unconscious/dead combatants
-    let safety = 0;
-    while (!combatants[nextIndex]?.is_conscious && safety < combatants.length) {
-      nextIndex = (nextIndex + 1) % combatants.length;
-      if (nextIndex === 0) round += 1;
-      safety++;
-    }
-    await base44.entities.CombatLog.update(combat_id, { current_turn_index: nextIndex, round, world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0 } });
-    return Response.json({ next_turn_index: nextIndex, round, current_combatant: combatants[nextIndex] });
+    const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
+    await base44.entities.CombatLog.update(combat_id, {
+      current_turn_index: nextIndex,
+      round: nextRound,
+      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false }
+    });
+    return Response.json({ next_turn_index: nextIndex, round: nextRound, current_combatant: combatants[nextIndex] });
   }
 
   return Response.json({ error: 'Unknown action' }, { status: 400 });

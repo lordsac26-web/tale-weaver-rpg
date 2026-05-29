@@ -218,7 +218,7 @@ ${combatNote}`;
         xp_earned:         { type: 'number' },
         loot:              { type: 'array', items: { type: 'object' } },
         location_update:   { type: 'string' },
-        quest_update:      { type: 'object' },
+        quest_update: { type: 'object', properties: { new_quest: { type: 'string', description: 'Title of a newly discovered quest to add' }, completed_quest: { type: 'string', description: 'Title of an existing quest that was just completed' } } },
         new_condition:     { type: 'string' },
         plot_flag:         { type: 'string' }
       }

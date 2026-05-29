@@ -107,10 +107,16 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
     setSelectedSpellLevel(baseLevel);
   };
 
+  const concentrationSpell = world_state?.concentration_spell;
+
   const handleAction = () => {
     if (!selectedTarget) return;
     if (action === 'spell' && selectedSpell) {
       const details = SPELL_DETAILS[selectedSpell] || {};
+      // Warn player if they're replacing concentration
+      if (concentrationSpell && details.requires_concentration && concentrationSpell !== selectedSpell) {
+        if (!window.confirm(`You are concentrating on ${concentrationSpell}. Casting ${selectedSpell} will end it. Continue?`)) return;
+      }
       onPlayerAttack(selectedTarget, 'spell', {
         name: selectedSpell,
         damage_dice: details.damage_dice || '2d6',
@@ -119,6 +125,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         save_type: details.save_type || null,
         is_utility: details.is_utility || false,
         heal_dice: details.heal_dice || null,
+        requires_concentration: details.requires_concentration || false,
         slot_level: selectedSpellLevel || selectedSpellBaseLevel || 1,
         base_level: selectedSpellBaseLevel || 1,
       }, combatModifiers);
@@ -163,6 +170,12 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
             }}>
             Round {round || 1}
           </div>
+          {concentrationSpell && (
+            <div className="px-2 py-0.5 rounded-full text-xs font-fantasy"
+              style={{ background: 'rgba(80,40,120,0.6)', border: '1px solid rgba(160,100,255,0.4)', color: '#c4b5fd' }}>
+              🔮 {concentrationSpell}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 text-xs">
           <span style={{ color: 'rgba(180,100,100,0.6)', fontFamily: 'EB Garamond, serif' }}>Now:</span>
@@ -248,6 +261,19 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                         <p className="text-xs mt-1 italic" style={{ color: 'rgba(180,100,100,0.4)', fontFamily: 'IM Fell English, serif' }}>
                           {enemy.ai_behavior}
                         </p>
+                      )}
+                      {(enemy.conditions || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {enemy.conditions.slice(0, 3).map((cond, ci) => {
+                            const condName = typeof cond === 'string' ? cond : cond.name;
+                            return (
+                              <span key={ci} className="px-1.5 py-0.5 rounded-full text-xs"
+                                style={{ background: 'rgba(80,20,60,0.5)', border: '1px solid rgba(200,80,150,0.3)', color: '#f9a8d4', fontSize: '0.6rem' }}>
+                                {condName}
+                              </span>
+                            );
+                          })}
+                        </div>
                       )}
                     </>
                   )}
