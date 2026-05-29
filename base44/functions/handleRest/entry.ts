@@ -36,12 +36,24 @@ Deno.serve(async (req) => {
   const updates = {};
   const restorations = [];
 
+  // Hit die size by class (PHB)
+  const HIT_DIE = { Fighter: 10, Rogue: 8, Wizard: 6, Cleric: 8, Ranger: 10, Paladin: 10, Barbarian: 12, Bard: 8, Druid: 8, Monk: 8, Sorcerer: 6, Warlock: 8, Artificer: 8 };
+  const hitDie = HIT_DIE[charClass] || 8;
+  const conMod = Math.floor(((character.constitution || 10) - 10) / 2);
+
+  // Current hit dice remaining — initialize to charLevel if field doesn't exist yet (backwards compat)
+  const currentHitDiceRemaining = character.hit_dice_remaining ?? charLevel;
+
   if (rest_type === 'short') {
     // SHORT REST (1 hour) — player chooses how many hit dice to spend (PHB p.186)
-    const hitDie = { Fighter: 10, Rogue: 8, Wizard: 6, Cleric: 8, Ranger: 10, Paladin: 10, Barbarian: 12, Bard: 8, Druid: 8, Monk: 8, Sorcerer: 6, Warlock: 8, Artificer: 8 }[charClass] || 8;
-    const conMod = Math.floor(((character.constitution || 10) - 10) / 2);
-    // Use player's choice, capped at character level (max hit dice available)
-    const diceToSpend = Math.min(charLevel, Math.max(1, hit_dice_to_spend || 1));
+    // Cap dice spent to how many the character actually has remaining
+    const availableDice = Math.max(0, currentHitDiceRemaining);
+    const diceToSpend = Math.min(availableDice, Math.max(1, hit_dice_to_spend || 1));
+
+    if (diceToSpend === 0) {
+      return Response.json({ error: 'No hit dice remaining', restorations: [], healing: 0, character });
+    }
+
     let healing = 0;
     for (let i = 0; i < diceToSpend; i++) {
       healing += Math.max(1, Math.floor(Math.random() * hitDie) + 1 + conMod);
@@ -49,6 +61,9 @@ Deno.serve(async (req) => {
     restorations.push(`${diceToSpend}d${hitDie}${conMod >= 0 ? `+${conMod}` : conMod} per die — ${healing} HP restored`);
     const newHP = Math.min(character.hp_max, (character.hp_current || 0) + healing);
     updates.hp_current = newHP;
+    // Deduct spent hit dice
+    updates.hit_dice_remaining = Math.max(0, currentHitDiceRemaining - diceToSpend);
+    restorations.push(`Hit dice remaining: ${updates.hit_dice_remaining}/${charLevel}`);
 
     // Warlock: restore all pact slots on short rest
     if (charClass === 'Warlock') {
@@ -100,6 +115,12 @@ Deno.serve(async (req) => {
     // LONG REST (8 hours)
     updates.hp_current = character.hp_max;
     restorations.push('Full HP restored');
+
+    // Restore hit dice: regain half your total hit dice rounded down, minimum 1 (PHB p.186)
+    const hitDiceToRestore = Math.max(1, Math.floor(charLevel / 2));
+    updates.hit_dice_remaining = Math.min(charLevel, currentHitDiceRemaining + hitDiceToRestore);
+    updates.hit_dice_max = charLevel;
+    restorations.push(`${hitDiceToRestore} Hit Dice restored (${updates.hit_dice_remaining}/${charLevel} total)`);
 
     // Reset all spell slots
     if (maxSlots.length > 0) {

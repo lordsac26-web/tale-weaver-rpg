@@ -234,7 +234,42 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
   };
 
   const handleEquip = async (slot, item) => {
-    if (slot === 'armor' && character.race === 'Tortle') return; // Tortle natural armor
+    // Tortle cannot wear armor — natural armor only (PHB/MM)
+    if (slot === 'armor' && character.race === 'Tortle') return;
+
+    // === EQUIPMENT CONFLICT VALIDATION (PHB p.144-146) ===
+    const armorTypes = ['light armor', 'medium armor', 'heavy armor', 'armor'];
+    const itemCat = (item.type || item.category || '').toLowerCase();
+    const isArmorItem = armorTypes.some(t => itemCat.includes('armor'));
+
+    // Prevent equipping armor if armor slot already occupied (no stacking)
+    if (slot === 'armor' && equipped.armor) {
+      console.warn('EquipmentManager: Must unequip current armor before equipping new armor.');
+      return;
+    }
+
+    // Two-handed weapon + shield mutual exclusion (PHB p.147)
+    const isTwoHanded = (item.properties || []).map(p => p.toLowerCase()).includes('two-handed');
+    if (slot === 'mainhand' && isTwoHanded && equipped.offhand?.category === 'Shield') {
+      // Auto-unequip shield when equipping two-handed weapon
+      const noShield = { ...equipped };
+      delete noShield.offhand;
+      const newEquipped = { ...noShield, [slot]: item };
+      const recalc = recalculateStats(character, newEquipped, inventory);
+      await onUpdateCharacter({ ...recalc, equipped: recalc.equipped || newEquipped });
+      setShowEquipModal(null);
+      return;
+    }
+
+    // Prevent equipping shield if two-handed weapon in mainhand
+    if (slot === 'offhand' && item.category === 'Shield') {
+      const mainhand = equipped.mainhand || equipped.weapon;
+      const mainIsTwoHanded = (mainhand?.properties || []).map(p => p.toLowerCase()).includes('two-handed');
+      if (mainIsTwoHanded) {
+        console.warn('EquipmentManager: Cannot equip shield while wielding a two-handed weapon.');
+        return;
+      }
+    }
 
     // Store the full item object — CombatPanel reads equipped.weapon directly
     const newEquipped = { ...equipped, [slot]: item };

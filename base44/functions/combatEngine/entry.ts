@@ -142,9 +142,13 @@ Deno.serve(async (req) => {
     if (['fighter','ranger','paladin','barbarian','monk'].includes(charClass) && level >= 5) actions = 2;
     if (charClass === 'fighter' && level >= 11) actions = 3;
     if (charClass === 'fighter' && level >= 20) actions = 4;
-    // Artificer Battle Smith / Armorer get Extra Attack at level 5
+    // Artificer Battle Smith / Armorer get Extra Attack at level 5 (Tasha's p.17)
     if (charClass === 'artificer' && level >= 5 && (subclass.includes('battle smith') || subclass.includes('armorer'))) actions = Math.max(actions, 2);
-    // Feature-based overrides
+    // Bard College of Valor: Extra Attack at level 6 (PHB p.55)
+    if (charClass === 'bard' && level >= 6 && subclass.includes('valor')) actions = Math.max(actions, 2);
+    // Warlock Thirsting Blade invocation: Extra Attack at level 5 (PHB p.111)
+    if (charClass === 'warlock' && level >= 5 && features.some(f => f.includes('thirsting blade'))) actions = Math.max(actions, 2);
+    // Feature-based overrides (catches any class with explicit 'extra attack' in features list)
     if (features.some(f => f.includes('extra attack'))) actions = Math.max(actions, 2);
     return actions;
   };
@@ -384,14 +388,99 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Condition checks
+    // Condition checks — apply RAW condition mechanics (PHB p.290-292)
     const conditions = (character.conditions || []).map(c => c.name || c);
-    if (conditions.includes('poisoned')) attackMod -= 2;
+
+    // POISONED: disadvantage on attack rolls (PHB p.292) — NOT a flat penalty
+    if (conditions.includes('poisoned') && !modifiers.disadvantage) {
+      modifiers.disadvantage = true;
+      // Re-roll for disadvantage if we didn't already have it
+      attackRoll2 = rollD20();
+      attackRoll = Math.min(attackRoll1, attackRoll2);
+      isCritical = attackRoll === 20;
+      isMiss = attackRoll === 1;
+    }
+
+    // BLINDED: disadvantage on attack rolls (PHB p.290)
+    if (conditions.includes('blinded') && !modifiers.disadvantage) {
+      modifiers.disadvantage = true;
+      attackRoll2 = rollD20();
+      attackRoll = Math.min(attackRoll1, attackRoll2);
+      isCritical = attackRoll === 20;
+      isMiss = attackRoll === 1;
+    }
+
+    // FRIGHTENED: disadvantage on attack rolls while source visible (PHB p.290)
+    if (conditions.includes('frightened') && !modifiers.disadvantage) {
+      modifiers.disadvantage = true;
+      attackRoll2 = rollD20();
+      attackRoll = Math.min(attackRoll1, attackRoll2);
+      isCritical = attackRoll === 20;
+      isMiss = attackRoll === 1;
+    }
 
     // Target modifiers (cover, etc)
     let targetACBonus = 0;
     if (modifiers.half_cover) targetACBonus += 2;
     if (modifiers.three_quarters_cover) targetACBonus += 5;
+
+    // === TARGET CONDITION MODIFIERS (PHB p.290-292) ===
+    const targetConditions = (target.conditions || []).map(c => c.name || c);
+
+    // PARALYZED: attacks have advantage; hits from within 5ft are auto-crits (PHB p.291)
+    if (targetConditions.includes('paralyzed')) {
+      modifiers.advantage = true;
+      if (attackType === 'melee') isCritical = true; // within 5ft assumed for melee
+    }
+
+    // STUNNED: attacks have advantage (PHB p.292)
+    if (targetConditions.includes('stunned')) {
+      modifiers.advantage = true;
+    }
+
+    // UNCONSCIOUS: attacks have advantage; hits from within 5ft are auto-crits (PHB p.292)
+    if (targetConditions.includes('unconscious')) {
+      modifiers.advantage = true;
+      if (attackType === 'melee') isCritical = true;
+    }
+
+    // PRONE: melee = advantage, ranged = disadvantage (PHB p.292)
+    if (targetConditions.includes('prone')) {
+      if (attackType === 'melee') {
+        if (!modifiers.disadvantage) modifiers.advantage = true;
+      } else {
+        modifiers.advantage = false;
+        modifiers.disadvantage = true;
+      }
+    }
+
+    // RESTRAINED: attacks against have advantage (PHB p.292)
+    if (targetConditions.includes('restrained') && !modifiers.disadvantage) {
+      modifiers.advantage = true;
+    }
+
+    // INVISIBLE: attacks against have disadvantage (PHB p.291)
+    if (targetConditions.includes('invisible')) {
+      modifiers.advantage = false;
+      modifiers.disadvantage = true;
+    }
+
+    // BLINDED (target): attacks against have advantage (PHB p.290)
+    if (targetConditions.includes('blinded') && !modifiers.disadvantage) {
+      modifiers.advantage = true;
+    }
+
+    // Re-resolve the attack roll if advantage/disadvantage changed after initial roll
+    if (modifiers.advantage && !modifiers.disadvantage) {
+      attackRoll2 = modifiers.advantage && attackRoll2 === attackRoll1 ? rollD20() : attackRoll2;
+      attackRoll = Math.max(attackRoll1, attackRoll2);
+    } else if (modifiers.disadvantage && !modifiers.advantage) {
+      attackRoll2 = modifiers.disadvantage && attackRoll2 === attackRoll1 ? rollD20() : attackRoll2;
+      attackRoll = Math.min(attackRoll1, attackRoll2);
+    }
+    // Advantage + disadvantage cancel each other (PHB p.173)
+    isCritical = !isMiss && (attackRoll === 20 || (targetConditions.includes('paralyzed') && attackType === 'melee') || (targetConditions.includes('unconscious') && attackType === 'melee'));
+    isMiss = attackRoll === 1;
 
     const totalAttack = attackRoll + attackMod;
     let hit = !isMiss && (isCritical || totalAttack >= (target.ac + targetACBonus));
@@ -671,12 +760,29 @@ Deno.serve(async (req) => {
       }
     }
 
+    // === BARBARIAN RAGE RESISTANCE (PHB p.48) ===
+    // While raging, Barbarians resist bludgeoning, piercing, and slashing damage (halved, rounded down)
+    const playerConditions = (player.conditions || []).map(c => c.name || c);
+    const isRaging = playerConditions.includes('raging');
+    // Enemy damage type defaults to physical (bludgeoning) unless specified
+    const enemyDamageType = currentCombatant.damage_type || 'bludgeoning';
+    const physicalTypes = ['bludgeoning', 'piercing', 'slashing'];
+    const charFull = await base44.entities.Character.get(player.id);
+    const isBarbarianRaging = isRaging && (charFull?.class === 'Barbarian' || charFull?.class === 'barbarian');
+
+    let finalDamage = totalDamage;
+    if (isBarbarianRaging && physicalTypes.includes(enemyDamageType.toLowerCase())) {
+      finalDamage = Math.floor(totalDamage / 2);
+      attackLogs.push(`[Rage Resistance: ${totalDamage} → ${finalDamage} ${enemyDamageType} damage]`);
+    }
+
     // Apply total damage to player
-    if (totalDamage > 0) {
-      player.hp_current = Math.max(0, player.hp_current - totalDamage);
+    if (finalDamage > 0) {
+      player.hp_current = Math.max(0, player.hp_current - finalDamage);
       if (player.hp_current === 0) player.is_conscious = false;
       await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
     }
+    totalDamage = finalDamage; // update for log accuracy
 
     // Build log entry
     let logText = '';

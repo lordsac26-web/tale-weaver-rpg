@@ -225,13 +225,15 @@ export const RACES = {
       },
       {
         name: 'Juggernaut',
-        stat_bonuses: { strength: 2, constitution: 2 },
+        // Juggernauts do NOT grant extra stat bonuses — base Warforged already gives CON +2 + one +1.
+        // Subrace only adds traits (Eberron: RftLW p.36)
+        stat_bonuses: {},
         traits: [
           'Iron Fists (unarmed strikes deal 1d4 bludgeoning damage)',
           'Powerful Build (count as Large for carry/push/lift)',
           'Constructed Resilience (all base Warforged traits apply)',
         ],
-        description: 'The largest and most heavily armored of the Warforged, Juggernauts were built as frontline siege weapons.',
+        description: 'The largest and most heavily armored of the Warforged, Juggernauts were built as frontline siege weapons. They gain Iron Fists and Powerful Build on top of base Warforged traits.',
       },
       {
         name: 'Skirmisher',

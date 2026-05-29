@@ -219,6 +219,14 @@
     "long_rest_abilities": {
       "type": "object",
       "description": "Tracks long rest ability usage"
+    },
+    "hit_dice_remaining": {
+      "type": "number",
+      "description": "Number of hit dice currently available to spend (max = character level). Recovered at rate of half level per long rest (PHB p.186)."
+    },
+    "hit_dice_max": {
+      "type": "number",
+      "description": "Maximum hit dice = character level. Stored separately for reference."
     }
   },
   "required": [
