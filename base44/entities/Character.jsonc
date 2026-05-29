@@ -1,0 +1,244 @@
+{
+  "name": "Character",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "race": {
+      "type": "string",
+      "enum": [
+        "Human",
+        "Elf",
+        "Dwarf",
+        "Halfling",
+        "Gnome",
+        "Half-Elf",
+        "Half-Orc",
+        "Tiefling",
+        "Dragonborn",
+        "Aasimar",
+        "Genasi",
+        "Goliath",
+        "Firbolg",
+        "Tabaxi",
+        "Kenku",
+        "Triton",
+        "Lizardfolk",
+        "Yuan-ti Pureblood",
+        "Minotaur",
+        "Tortle",
+        "Warforged"
+      ]
+    },
+    "class": {
+      "type": "string",
+      "enum": [
+        "Fighter",
+        "Rogue",
+        "Wizard",
+        "Cleric",
+        "Ranger",
+        "Paladin",
+        "Barbarian",
+        "Bard",
+        "Druid",
+        "Monk",
+        "Sorcerer",
+        "Warlock",
+        "Artificer"
+      ]
+    },
+    "subclass": {
+      "type": "string"
+    },
+    "multiclass": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Array of {class: string, subclass: string, levels: number}"
+    },
+    "level": {
+      "type": "number",
+      "default": 1
+    },
+    "xp": {
+      "type": "number",
+      "default": 0
+    },
+    "background": {
+      "type": "string"
+    },
+    "backstory": {
+      "type": "string"
+    },
+    "alignment": {
+      "type": "string"
+    },
+    "gender": {
+      "type": "string"
+    },
+    "strength": {
+      "type": "number"
+    },
+    "dexterity": {
+      "type": "number"
+    },
+    "constitution": {
+      "type": "number"
+    },
+    "intelligence": {
+      "type": "number"
+    },
+    "wisdom": {
+      "type": "number"
+    },
+    "charisma": {
+      "type": "number"
+    },
+    "hp_max": {
+      "type": "number"
+    },
+    "hp_current": {
+      "type": "number"
+    },
+    "armor_class": {
+      "type": "number"
+    },
+    "initiative": {
+      "type": "number"
+    },
+    "speed": {
+      "type": "number",
+      "default": 30
+    },
+    "proficiency_bonus": {
+      "type": "number",
+      "default": 2
+    },
+    "skills": {
+      "type": "object"
+    },
+    "saving_throws": {
+      "type": "object",
+      "description": "Saving throw proficiencies: {strength: true, dexterity: false, ...}"
+    },
+    "inventory": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "equipped": {
+      "type": "object",
+      "description": "Slot-based equipment: {weapon, offhand, head, chest, hands, ring1, ring2, feet, neck, mainhand, shoulders, cloak, trinket}"
+    },
+    "gold": {
+      "type": "number",
+      "default": 0
+    },
+    "silver": {
+      "type": "number",
+      "default": 0
+    },
+    "copper": {
+      "type": "number",
+      "default": 0
+    },
+    "spell_slots": {
+      "type": "object",
+      "description": "Tracks USED spell slots: {level_1: 2, level_2: 1} means 2 first-level and 1 second-level slots used"
+    },
+    "spells_known": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "All spells the character knows"
+    },
+    "spells_prepared": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Subset of known spells that are prepared and ready to cast in combat"
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "active_modifiers": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "feats": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "portrait": {
+      "type": "string"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "death_saves_success": {
+      "type": "number",
+      "default": 0
+    },
+    "death_saves_failure": {
+      "type": "number",
+      "default": 0
+    },
+    "arcane_recovery_used": {
+      "type": "boolean",
+      "default": false,
+      "description": "Wizard: Arcane Recovery used this long rest"
+    },
+    "fighting_style": {
+      "type": "string",
+      "description": "Fighter/Ranger/Paladin fighting style choice"
+    },
+    "short_rest_abilities": {
+      "type": "object",
+      "description": "Tracks short rest ability usage (Action Surge, Ki, etc.)"
+    },
+    "long_rest_abilities": {
+      "type": "object",
+      "description": "Tracks long rest ability usage"
+    }
+  },
+  "required": [
+    "name",
+    "race",
+    "class",
+    "level"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

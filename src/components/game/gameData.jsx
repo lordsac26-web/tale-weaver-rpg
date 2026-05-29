@@ -197,6 +197,80 @@ export const RACES = {
     description: 'Peaceful turtle-folk with impenetrable shells. Tortles wander the world seeking enlightenment and protecting nature. Their natural armor makes them formidable without equipment.',
     subraces: [],
   },
+  Warforged: {
+    traits: [
+      'Constructed Resilience (advantage on saves vs poison, resistance to poison damage, immune to disease, no need to eat/drink/breathe, immune to magic sleep)',
+      'Sentry\'s Rest (6 hrs inactive but conscious instead of sleeping)',
+      'Integrated Protection (AC = 11 + DEX mod when unarmored; can don armor and it integrates into body)',
+      'Specialized Design (proficiency in one skill + one tool of choice)',
+      'Composite Plating (natural armor integrates with worn armor, +1 AC bonus)',
+    ],
+    stat_bonuses: { constitution: 2 },
+    stat_choices: 1, // +1 to any one other ability score
+    skill_proficiencies: [], // granted via Specialized Design (player chooses 1)
+    tool_proficiencies: 1, // player chooses 1 tool
+    natural_armor_bonus: 1, // +1 AC from Composite Plating
+    speed: 30, size: 'Medium',
+    languages: ['Common', 'one extra language'],
+    description: 'Living constructs forged for war and imbued with sentience. Warforged blend the durability of metal and wood with the adaptability of flesh. They do not sleep, cannot be poisoned, and are immune to disease — making them relentless warriors and tireless adventurers.',
+    subraces: [
+      {
+        name: 'Envoy',
+        stat_bonuses: {},
+        traits: [
+          'Integrated Tool (one tool built into body, proficiency with it, can use it as part of an action)',
+          'Specialized Design (one skill + one tool proficiency)',
+        ],
+        description: 'Envoys were built for specific functions beyond combat, with a tool integrated directly into their frame.',
+      },
+      {
+        name: 'Juggernaut',
+        stat_bonuses: { strength: 2, constitution: 2 },
+        traits: [
+          'Iron Fists (unarmed strikes deal 1d4 bludgeoning damage)',
+          'Powerful Build (count as Large for carry/push/lift)',
+          'Constructed Resilience (all base Warforged traits apply)',
+        ],
+        description: 'The largest and most heavily armored of the Warforged, Juggernauts were built as frontline siege weapons.',
+      },
+      {
+        name: 'Skirmisher',
+        stat_bonuses: { dexterity: 1 },
+        traits: [
+          'Light Step (speed increases by 5 ft when not wearing heavy armor)',
+          'Integrated Weapon (can integrate one light weapon into body; counts as unarmed for purpose of monk and similar features)',
+        ],
+        description: 'Lightweight Warforged built for speed and stealth operations, favored by scouts and rangers.',
+      },
+    ],
+    warforged_feats: [
+      {
+        name: 'Armor of the Colossus',
+        desc: 'Your Integrated Protection increases to +2 AC. When you are hit by a melee attack, the attacker takes 1d6 + STR modifier bludgeoning damage.',
+        prerequisite: 'Warforged',
+      },
+      {
+        name: 'Enhanced Arcane Focus',
+        desc: 'You can use your body as an arcane focus. You gain +1 to spell attack rolls and spell save DC increases by 1.',
+        prerequisite: 'Warforged, spellcasting class',
+      },
+      {
+        name: 'Integrated Defense Protocol',
+        desc: 'As a reaction when you are targeted by an attack, you can grant yourself resistance to that attack\'s damage type until the start of your next turn (usable once per short rest).',
+        prerequisite: 'Warforged',
+      },
+      {
+        name: 'Warforged Resilience',
+        desc: 'Increase CON by 1 (max 20). When you succeed on a death saving throw, you regain 1 HP instead of stabilizing at 0.',
+        prerequisite: 'Warforged',
+      },
+      {
+        name: 'Self-Repair Protocol',
+        desc: 'As a bonus action, you can spend one Hit Die to heal yourself (roll the die + CON modifier). Usable a number of times equal to your proficiency bonus per long rest.',
+        prerequisite: 'Warforged',
+      },
+    ],
+  },
 };
  
 export const CLASSES = {
@@ -634,6 +708,31 @@ export function getRacialAbilities(race) {
   
   const abilities = [];
   
+  // Warforged-specific abilities
+  if (race === 'Warforged') {
+    abilities.push({
+      name: 'Constructed Resilience',
+      desc: 'Advantage on saves vs poison, resistance to poison damage, immune to disease, no need to eat/drink/breathe, immune to magic sleep.',
+      type: 'passive'
+    });
+    abilities.push({
+      name: "Sentry's Rest",
+      desc: 'Instead of sleeping, you enter an inactive state for 6 hours. You remain conscious and aware of your surroundings.',
+      type: 'passive'
+    });
+    abilities.push({
+      name: 'Integrated Protection',
+      desc: 'AC = 11 + DEX modifier when unarmored. Armor integrates into your body (+1 AC bonus from Composite Plating). You cannot be magically forced to remove armor.',
+      type: 'passive'
+    });
+    abilities.push({
+      name: 'Specialized Design',
+      desc: 'You have proficiency in one skill and one tool of your choice (chosen at character creation).',
+      type: 'passive'
+    });
+    return abilities;
+  }
+
   // Tortle-specific abilities
   if (race === 'Tortle') {
     abilities.push({
