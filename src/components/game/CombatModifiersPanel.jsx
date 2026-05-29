@@ -92,6 +92,34 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
     });
   }
 
+  // ── Great Weapon Master: -5/+10 (PHB p.167) ─────────────────────────────────
+  const hasGWM = (character?.feats || []).includes('Great Weapon Master') ||
+    (character?._feat_flags || []).includes('great_weapon_master');
+  if (hasGWM) {
+    availableModifiers.push({
+      id: 'great_weapon_master',
+      name: 'Great Weapon Master',
+      icon: <Swords className="w-3.5 h-3.5" />,
+      color: '#f87171',
+      effect: '-5 attack roll, +10 damage (heavy two-handed weapons)',
+      description: 'Before making a melee attack with a heavy weapon, take a -5 penalty to the attack roll. If the attack hits, add +10 to the damage roll.',
+    });
+  }
+
+  // ── Sharpshooter: -5/+10 (PHB p.170) ────────────────────────────────────────
+  const hasSharpshooter = (character?.feats || []).includes('Sharpshooter') ||
+    (character?._feat_flags || []).includes('sharpshooter');
+  if (hasSharpshooter) {
+    availableModifiers.push({
+      id: 'sharpshooter',
+      name: 'Sharpshooter',
+      icon: <ChevronDown className="w-3.5 h-3.5" />,
+      color: '#fb923c',
+      effect: '-5 attack roll, +10 damage (ranged attacks)',
+      description: 'Before making a ranged attack with a weapon you are proficient with, take a -5 penalty to the attack roll. If the attack hits, add +10 to the damage roll.',
+    });
+  }
+
   // ── Advantage ────────────────────────────────────────────────────────────────
   availableModifiers.push({
     id: 'advantage',

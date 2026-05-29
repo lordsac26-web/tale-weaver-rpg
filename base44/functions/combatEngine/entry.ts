@@ -66,9 +66,14 @@ Deno.serve(async (req) => {
     // Roll initiative for all combatants
     const combatants = [];
 
+    // Check feat flags (Alert: +5 init, cannot be surprised)
+    const playerFeatFlags = character._feat_flags || [];
+    const hasAlert = (character.feats || []).includes('Alert') || playerFeatFlags.includes('alert');
+
     // Player initiative
     const playerInitRoll = rollD20();
-    const playerInitMod = statMod(character.dexterity) + (character.initiative || 0);
+    const alertBonus = hasAlert ? 5 : 0;
+    const playerInitMod = statMod(character.dexterity) + (character.initiative || 0) + alertBonus;
     combatants.push({
       id: character.id,
       name: character.name,
@@ -360,6 +365,24 @@ Deno.serve(async (req) => {
       const fightingStyle = character.fighting_style?.toLowerCase();
       if (fightingStyle === 'archery' && isRanged) attackMod += 2;
       if (fightingStyle === 'dueling' && !character.equipped?.shield) damageBonus += 2;
+
+      // === FEAT EFFECTS on weapon attacks ===
+      const featFlags = character._feat_flags || [];
+      const hasFeat = (name) => (character.feats || []).includes(name) || featFlags.includes(name.toLowerCase().replace(/\s+/g,'_'));
+
+      // Great Weapon Master: -5/+10 on heavy two-handed weapons (PHB p.167)
+      const weapon2H = (weapon.properties || []).map(p => p.toLowerCase());
+      const isHeavyTwoHanded = weapon2H.includes('heavy') && weapon2H.includes('two-handed');
+      if (modifiers.great_weapon_master && hasFeat('Great Weapon Master') && isHeavyTwoHanded && !isRanged) {
+        attackMod -= 5;
+        damageBonus += 10;
+      }
+
+      // Sharpshooter: -5/+10 on ranged proficient attacks (PHB p.170)
+      if (modifiers.sharpshooter && hasFeat('Sharpshooter') && isRanged) {
+        attackMod -= 5;
+        damageBonus += 10;
+      }
 
       // Barbarian Rage
       if (modifiers.rage && !isRanged) {
@@ -760,20 +783,36 @@ Deno.serve(async (req) => {
       }
     }
 
-    // === BARBARIAN RAGE RESISTANCE (PHB p.48) ===
-    // While raging, Barbarians resist bludgeoning, piercing, and slashing damage (halved, rounded down)
+    // === DAMAGE MITIGATION (applied in priority order) ===
     const playerConditions = (player.conditions || []).map(c => c.name || c);
     const isRaging = playerConditions.includes('raging');
-    // Enemy damage type defaults to physical (bludgeoning) unless specified
-    const enemyDamageType = currentCombatant.damage_type || 'bludgeoning';
+    const enemyDamageType = (currentCombatant.damage_type || 'bludgeoning').toLowerCase();
     const physicalTypes = ['bludgeoning', 'piercing', 'slashing'];
     const charFull = await base44.entities.Character.get(player.id);
-    const isBarbarianRaging = isRaging && (charFull?.class === 'Barbarian' || charFull?.class === 'barbarian');
+    const charFeats = charFull?.feats || [];
+    const charFeatFlags = charFull?._feat_flags || [];
+    const playerHasFeat = (name) => charFeats.includes(name) || charFeatFlags.includes(name.toLowerCase().replace(/\s+/g,'_'));
 
     let finalDamage = totalDamage;
-    if (isBarbarianRaging && physicalTypes.includes(enemyDamageType.toLowerCase())) {
-      finalDamage = Math.floor(totalDamage / 2);
-      attackLogs.push(`[Rage Resistance: ${totalDamage} → ${finalDamage} ${enemyDamageType} damage]`);
+
+    // Heavy Armor Master: -3 nonmagical B/P/S damage (PHB p.167)
+    // Only applies in heavy armor; enemies at CR<5 treated as nonmagical
+    const wearingHeavyArmor = (charFull?.equipped?.armor?.armor_type || '').toLowerCase() === 'heavy';
+    const attackIsNonmagical = (currentCombatant.cr || 1) < 5; // heuristic: low-CR enemies lack magical weapons
+    if (playerHasFeat('Heavy Armor Master') && wearingHeavyArmor && physicalTypes.includes(enemyDamageType) && attackIsNonmagical) {
+      const reduced = Math.max(0, finalDamage - 3);
+      if (reduced < finalDamage) {
+        attackLogs.push(`[Heavy Armor Master: ${finalDamage} → ${reduced} ${enemyDamageType}]`);
+        finalDamage = reduced;
+      }
+    }
+
+    // Barbarian Rage Resistance (PHB p.48): halve B/P/S while raging
+    const isBarbarianRaging = isRaging && (charFull?.class === 'Barbarian' || charFull?.class === 'barbarian');
+    if (isBarbarianRaging && physicalTypes.includes(enemyDamageType)) {
+      const halved = Math.floor(finalDamage / 2);
+      attackLogs.push(`[Rage Resistance: ${finalDamage} → ${halved} ${enemyDamageType}]`);
+      finalDamage = halved;
     }
 
     // Apply total damage to player
@@ -815,10 +854,13 @@ Deno.serve(async (req) => {
     const newWS = { ...(combatLog.world_state || {}), actions_used_this_turn: 0 };
     const concentrationSpellCheck = combatLog.world_state?.concentration_spell;
     let concentrationBrokenMsg = '';
-    if (concentrationSpellCheck && totalDamage > 0) {
-      const dc = Math.max(10, Math.floor(totalDamage / 2));
-      const charFull2 = await base44.entities.Character.get(player.id);
-      const conSave2 = rollD20() + statMod(charFull2?.constitution || 10);
+    if (concentrationSpellCheck && finalDamage > 0) {
+      const dc = Math.max(10, Math.floor(finalDamage / 2));
+      // War Caster: advantage on concentration saves (PHB p.170)
+      const hasWarCaster = playerHasFeat('War Caster');
+      const conRoll1 = rollD20();
+      const conRoll2 = hasWarCaster ? rollD20() : conRoll1;
+      const conSave2 = Math.max(conRoll1, conRoll2) + statMod(charFull?.constitution || 10);
       if (conSave2 < dc) {
         newWS.concentration_spell = null;
         newWS.concentration_caster = null;

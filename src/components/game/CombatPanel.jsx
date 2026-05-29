@@ -14,7 +14,7 @@ import ClassAbilitiesPanel from './ClassAbilitiesPanel';
 
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 
-// D&D 5e Extra Attack — returns number of weapon attacks per Attack action.
+// D&D 5e Extra Attack — mirrors server-side getActionsPerTurn in combatEngine.
 // Note: Monk Flurry of Blows is a BONUS ACTION (handled in CombatModifiersPanel).
 function getActionsPerTurn(character) {
   if (!character) return 1;
@@ -24,21 +24,14 @@ function getActionsPerTurn(character) {
   const level     = character.level || 1;
   let attacks = 1;
 
-  // All martial classes get Extra Attack (2 attacks) at level 5
   if (['fighter','ranger','paladin','barbarian','monk'].includes(charClass) && level >= 5) attacks = 2;
-
-  // Fighter uniquely gets additional attacks at higher levels
-  if (charClass === 'fighter') {
-    if (level >= 20) attacks = 4;
-    else if (level >= 11) attacks = 3;
-  }
-
-  // Artificer Battle Smith / Armorer get Extra Attack at level 5
-  if (charClass === 'artificer' &&
-      (subclass.includes('battle smith') || subclass.includes('armorer')) &&
-      level >= 5) attacks = Math.max(attacks, 2);
-
-  // Feat / multiclass feature override
+  if (charClass === 'fighter' && level >= 11) attacks = 3;
+  if (charClass === 'fighter' && level >= 20) attacks = 4;
+  if (charClass === 'artificer' && level >= 5 && (subclass.includes('battle smith') || subclass.includes('armorer'))) attacks = Math.max(attacks, 2);
+  // Bard College of Valor: Extra Attack at level 6 (PHB p.55)
+  if (charClass === 'bard' && level >= 6 && subclass.includes('valor')) attacks = Math.max(attacks, 2);
+  // Warlock Thirsting Blade invocation: Extra Attack at level 5
+  if (charClass === 'warlock' && level >= 5 && features.some(f => f.includes('thirsting blade'))) attacks = Math.max(attacks, 2);
   if (features.some(f => f.includes('extra attack'))) attacks = Math.max(attacks, 2);
 
   return attacks;
