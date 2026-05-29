@@ -466,6 +466,7 @@ export default function Game() {
           }
         if (data.player_at_zero_hp) {
           // Per 5e: dropping to 0 HP triggers death saving throws, not instant death
+          await loadState(); // sync HP to 0 before showing modal
           setShowDeathSaves(true);
           setCombat(null);
           // Clear the in_combat flag on the session so resume doesn't loop back into combat
@@ -688,8 +689,9 @@ export default function Game() {
       // Clone combatants array to avoid direct state mutation
       const updatedCombatants = (combat.combatants || []).map(c => {
         if (c.id === target.id) {
-          const newHp = Math.max(0, c.hp - damageTotal);
-          return { ...c, hp: newHp, hp_current: newHp, is_conscious: newHp > 0 };
+          const currentHp = c.hp_current ?? c.hp ?? 0;
+          const newHp = Math.max(0, currentHp - damageTotal);
+          return { ...c, hp_current: newHp, is_conscious: newHp > 0 };
         }
         return c;
       });

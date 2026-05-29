@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 /**
  * Combat Engine - handles initiative, turns, damage, conditions
@@ -439,13 +439,22 @@ Deno.serve(async (req) => {
         // spell_slots tracks USED counts. A slot at level i is available if used < max_slots[i].
         // Paladin half-caster table: level 1-2=0, level 3-4=2/3 slots per level, etc.
         // We compare used vs a safe max of 4 (which covers all Paladin slot maxes at any level).
+        // Paladin half-caster max slots per level by character level
+        const PALADIN_MAX_SLOTS = {
+          2:[2,0,0,0,0], 3:[3,0,0,0,0], 4:[3,0,0,0,0],
+          5:[4,2,0,0,0], 6:[4,2,0,0,0], 7:[4,3,0,0,0], 8:[4,3,0,0,0],
+          9:[4,3,2,0,0], 10:[4,3,2,0,0], 11:[4,3,3,0,0], 12:[4,3,3,0,0],
+          13:[4,3,3,1,0], 14:[4,3,3,1,0], 15:[4,3,3,2,0], 16:[4,3,3,2,0],
+          17:[4,3,3,3,1], 18:[4,3,3,3,1], 19:[4,3,3,3,2], 20:[4,3,3,3,2],
+        };
+        const paladinMaxSlots = PALADIN_MAX_SLOTS[Math.min(20, character.level || 1)] || [0,0,0,0,0];
         const slots = character.spell_slots || {};
         let smiteLevel = 0;
         for (let i = 1; i <= 5; i++) {
           const key = `level_${i}`;
           const used = slots[key] || 0;
-          // Available if fewer than 4 used at this level (conservative safe max for half-casters)
-          if (used < 4) {
+          const maxAtLevel = paladinMaxSlots[i - 1] || 0;
+          if (maxAtLevel > 0 && used < maxAtLevel) {
             smiteLevel = i;
             break;
           }
@@ -667,19 +676,6 @@ Deno.serve(async (req) => {
       player.hp_current = Math.max(0, player.hp_current - totalDamage);
       if (player.hp_current === 0) player.is_conscious = false;
       await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
-
-      // Concentration check: if player was concentrating, DC = max(10, half damage taken), CON save
-      const concentrationSpell = combatLog.world_state?.concentration_spell;
-      if (concentrationSpell && totalDamage > 0) {
-        const dc = Math.max(10, Math.floor(totalDamage / 2));
-        const charFull = await base44.entities.Character.get(player.id);
-        const conSave = rollD20() + statMod(charFull?.constitution || 10);
-        if (conSave < dc) {
-          // Concentration broken — add note to log
-          logText += ` ⚠️ Concentration on ${concentrationSpell} broken! (CON save: ${conSave} vs DC ${dc})`;
-          // Clear concentration from world_state (handled on DB update below)
-        }
-      }
     }
 
     // Build log entry
@@ -712,6 +708,7 @@ Deno.serve(async (req) => {
     // Carry over world_state, clear concentration if broken
     const newWS = { ...(combatLog.world_state || {}), actions_used_this_turn: 0 };
     const concentrationSpellCheck = combatLog.world_state?.concentration_spell;
+    let concentrationBrokenMsg = '';
     if (concentrationSpellCheck && totalDamage > 0) {
       const dc = Math.max(10, Math.floor(totalDamage / 2));
       const charFull2 = await base44.entities.Character.get(player.id);
@@ -719,6 +716,8 @@ Deno.serve(async (req) => {
       if (conSave2 < dc) {
         newWS.concentration_spell = null;
         newWS.concentration_caster = null;
+        concentrationBrokenMsg = ` ⚠️ Concentration on ${concentrationSpellCheck} broken! (CON save: ${conSave2} vs DC ${dc})`;
+        logText += concentrationBrokenMsg;
       }
     }
 
