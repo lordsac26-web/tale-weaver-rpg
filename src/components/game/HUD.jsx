@@ -90,7 +90,7 @@ export default function HUD({ character, session }) {
         </div>
  
         {/* XP Bar */}
-        <div className="flex items-center gap-2 hidden sm:flex">
+        <div className="hidden sm:flex items-center gap-2">
           <Star className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#d97706' }} />
           <div className="w-24">
             <div className="flex justify-between text-xs mb-1">

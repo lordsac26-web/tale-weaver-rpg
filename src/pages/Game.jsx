@@ -379,6 +379,7 @@ export default function Game() {
         text: `${data.actions_remaining} action${data.actions_remaining > 1 ? 's' : ''} remaining this turn.`,
         success: true
       }]);
+      await reloadCombat(combatId); // keep UI in sync
       setCombatLoading(false);
       return; // Stop here - player still has actions
     }
@@ -413,6 +414,7 @@ export default function Game() {
       }
       setCombat(null);
     }
+    // Single loadState at end of full turn resolution (not after every sub-step)
     await loadState();
     setCombatLoading(false);
   };
@@ -434,6 +436,10 @@ export default function Game() {
       if (log.round > startRound) break;
       const current = log.combatants[log.current_turn_index];
       if (current?.type === 'player') break;
+
+      // Stop if no conscious enemies remain
+      const hasLivingEnemies = log.combatants.some(c => c.type === 'enemy' && c.is_conscious);
+      if (!hasLivingEnemies) break;
       
       // Stop if player is dead
       const playerCombatant = log.combatants.find(c => c.type === 'player');
@@ -679,9 +685,15 @@ export default function Game() {
     }]);
     
     if (hit && damageTotal > 0) {
-      target.hp = Math.max(0, target.hp - damageTotal);
-      if (target.hp === 0) target.is_conscious = false;
-      await base44.entities.CombatLog.update(combatId, { combatants: combat.combatants });
+      // Clone combatants array to avoid direct state mutation
+      const updatedCombatants = (combat.combatants || []).map(c => {
+        if (c.id === target.id) {
+          const newHp = Math.max(0, c.hp - damageTotal);
+          return { ...c, hp: newHp, hp_current: newHp, is_conscious: newHp > 0 };
+        }
+        return c;
+      });
+      await base44.entities.CombatLog.update(combatId, { combatants: updatedCombatants });
       await reloadCombat(combatId);
     }
   };

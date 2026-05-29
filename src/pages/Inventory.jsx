@@ -87,7 +87,7 @@ export default function Inventory() {
     toast.success('Item unequipped');
   };
 
-  const useConsumable = async (item) => {
+  const handleUseConsumable = async (item) => {
     if (!character) return;
     
     const inventory = character.inventory || [];
@@ -541,7 +541,7 @@ export default function Inventory() {
                 )}
                 
                 {selectedItem.category === 'consumable' && (
-                  <button onClick={() => { useConsumable(selectedItem); }}
+                  <button onClick={() => { handleUseConsumable(selectedItem); }}
                     className="w-full py-2.5 rounded-xl font-fantasy font-semibold text-sm transition-all"
                     style={{
                       background: 'linear-gradient(135deg, rgba(20,80,40,0.8), rgba(10,50,20,0.9))',

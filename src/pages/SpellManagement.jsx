@@ -102,7 +102,7 @@ export default function SpellManagement() {
     setSaving(false);
   };
 
-  const useSpellSlot = async (level) => {
+  const handleUseSpellSlot = async (level) => {
     if (currentSlots[level] >= maxSlots[level - 1]) return;
     const newSlots = { ...currentSlots, [level]: (currentSlots[level] || 0) + 1 };
     setSaving(true);
@@ -208,7 +208,7 @@ export default function SpellManagement() {
                 <div className="flex flex-col gap-1">
                   {Array.from({ length: max }).map((_, i) => (
                     <button key={i}
-                      onClick={() => { i < used ? restoreSlot(level) : useSpellSlot(level); }}
+                      onClick={() => { i < used ? restoreSlot(level) : handleUseSpellSlot(level); }}
                       className="h-4 rounded transition-all"
                       style={{
                         background: i < used ? 'rgba(30,15,50,0.6)' : 'rgba(140,80,220,0.5)',

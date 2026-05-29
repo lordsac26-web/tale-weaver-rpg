@@ -12,7 +12,7 @@ import CombatFloatingText from './CombatFloatingText';
 import CombatModifiersPanel from './CombatModifiersPanel';
 import ClassAbilitiesPanel from './ClassAbilitiesPanel';
 
-const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger'];
+const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 
 // D&D 5e Extra Attack — returns number of weapon attacks per Attack action.
 // Note: Monk Flurry of Blows is a BONUS ACTION (handled in CombatModifiersPanel).

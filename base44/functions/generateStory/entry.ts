@@ -288,11 +288,32 @@ If it's a combat event, use the enemy schema with real monster stats.`;
     if (result.combat_trigger)    updateData.in_combat = true;
     else if (action === 'choice') updateData.in_combat = false; // clear stale combat flag after non-combat choices
 
+    // Process quest updates — add/complete quests from AI response
+    if (result.quest_update) {
+      const activeQuests = session.active_quests || [];
+      const completedQuests = session.completed_quests || [];
+      if (result.quest_update.new_quest) {
+        activeQuests.push({ title: result.quest_update.new_quest, timestamp: new Date().toISOString() });
+        updateData.active_quests = activeQuests;
+      }
+      if (result.quest_update.completed_quest) {
+        const idx = activeQuests.findIndex(q => q.title === result.quest_update.completed_quest);
+        if (idx >= 0) {
+          const [done] = activeQuests.splice(idx, 1);
+          completedQuests.push({ ...done, completed_at: new Date().toISOString() });
+          updateData.active_quests = activeQuests;
+          updateData.completed_quests = completedQuests;
+        }
+      }
+    }
+
     // Single DB write for session
     await base44.entities.GameSession.update(session_id, updateData);
 
-    // Award XP using already-loaded character (avoids extra DB round-trip)
-    if (result.xp_earned && character) {
+    // Award XP for non-combat story beats only.
+    // Combat victory XP is awarded exclusively in combatEngine to prevent double-awarding.
+    const isCombatVictoryCallback = custom_input?.includes('combat has ended in victory');
+    if (result.xp_earned && character && !isCombatVictoryCallback) {
       await base44.entities.Character.update(character.id, {
         xp: (character.xp || 0) + result.xp_earned
       });
