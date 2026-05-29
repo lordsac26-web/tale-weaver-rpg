@@ -3,7 +3,12 @@ import { BACKGROUNDS, ALIGNMENTS } from '@/components/game/gameData';
 
 const BG_ICONS = {
   Acolyte: '⛪', Criminal: '🗡️', 'Folk Hero': '🌾', Noble: '👑', Outlander: '🌲',
-  Sage: '📚', Soldier: '⚔️', Charlatan: '🎭', Hermit: '🕯️', Sailor: '⚓'
+  Sage: '📚', Soldier: '⚔️', Charlatan: '🎭', Hermit: '🕯️', Sailor: '⚓',
+  Spy: '🕵️', Entertainer: '🎪', 'Guild Artisan': '🔨', Urchin: '🏚️',
+  Pirate: '🏴‍☠️', Knight: '🛡️', Gladiator: '🏟️', 'Haunted One': '👻',
+  'Far Traveler': '🗺️', Anthropologist: '🔭', 'City Watch': '⚖️',
+  'Mercenary Veteran': '💰', 'Clan Crafter': '⚒️', Investigator: '🔍',
+  Archaeologist: '🏺', 'Witchlight Hand': '✨', Ruined: '💀',
 };
 
 export default function StepBackground({ character, set }) {
