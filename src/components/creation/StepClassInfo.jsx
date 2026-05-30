@@ -1,7 +1,6 @@
 import React from 'react';
 import { CLASSES, ALIGNMENTS } from '@/components/game/gameData';
 import { Input } from '@/components/ui/input';
-import { SubclassTooltip } from '@/components/game/GameTooltip';
 import StepMulticlass from './StepMulticlass';
 
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
@@ -79,23 +78,8 @@ export default function StepClassInfo({ character, set }) {
               parseInt(lvl) <= character.level ? `Lv.${lvl}: ${feats.join(', ')}` : null
             ).filter(Boolean).join(' · ')}
           </div>
-
-          {/* Subclass */}
-          <div>
-            <label className="text-amber-400/80 text-xs uppercase tracking-widest mb-2 block">Subclass (optional)</label>
-            <div className="flex flex-wrap gap-2">
-              {selectedClass.subclasses.map((sub, i) => {
-                const subName = typeof sub === 'string' ? sub : sub.name;
-                return (
-                  <SubclassTooltip key={subName || i} className={character.class} subclassName={subName} position="bottom">
-                    <button onClick={() => set('subclass', character.subclass === subName ? '' : subName)}
-                      className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${character.subclass === subName ? 'border-amber-500 bg-amber-900/30 text-amber-200' : 'border-slate-700/50 text-slate-400 hover:border-amber-700/50'}`}>
-                      {subName}
-                    </button>
-                  </SubclassTooltip>
-                );
-              })}
-            </div>
+          <div className="text-xs text-amber-400/50">
+            ✨ You'll choose your subclass in the next step.
           </div>
         </div>
       )}

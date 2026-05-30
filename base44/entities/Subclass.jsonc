@@ -1,0 +1,59 @@
+{
+  "name": "Subclass",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Subclass name, e.g. 'Champion', 'School of Evocation'"
+    },
+    "class_name": {
+      "type": "string",
+      "description": "Parent class name, e.g. 'Fighter', 'Wizard'"
+    },
+    "description": {
+      "type": "string",
+      "description": "Full subclass description / flavor text"
+    },
+    "short_description": {
+      "type": "string",
+      "description": "One-line summary for the selection card"
+    },
+    "subclass_flavor": {
+      "type": "string",
+      "description": "The class's term for its subclass, e.g. 'Martial Archetype', 'Divine Domain'"
+    },
+    "features_by_level": {
+      "type": "object",
+      "description": "Map of level -> array of feature names/descriptions granted by this subclass"
+    },
+    "source": {
+      "type": "string",
+      "description": "Sourcebook / document title, e.g. 'PHB', 'Xanathar', '3rd-party'"
+    },
+    "raw_data": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "name",
+    "class_name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

@@ -15,6 +15,7 @@ import { getSpellSlotsForLevel } from '@/components/game/spellData';
  
 import StepGenderRace from '@/components/creation/StepGenderRace';
 import StepClassInfo from '@/components/creation/StepClassInfo';
+import StepSubclass from '@/components/creation/StepSubclass';
 import StepAbilityScores from '@/components/creation/StepAbilityScores';
 import StepSkillsFeatures from '@/components/creation/StepSkillsFeatures';
 import StepBackground from '@/components/creation/StepBackground';
@@ -28,6 +29,7 @@ import StepReview from '@/components/creation/StepReview';
 const STEPS = [
   { id: 'identity', label: 'Identity', icon: '👤' },
   { id: 'class', label: 'Class', icon: '⚔️' },
+  { id: 'subclass', label: 'Subclass', icon: '✨' },
   { id: 'stats', label: 'Stats', icon: '🎲' },
   { id: 'skills', label: 'Skills', icon: '📋' },
   { id: 'choices', label: 'Choices', icon: '🎯' },
@@ -295,15 +297,16 @@ export default function CharacterCreation() {
         return chosenStats.length === statChoicesNeeded;
       }
       case 1: return !!character.class && !!character.name;
-      case 2: return STATS.every(s => character[s] >= 3 && character[s] <= 20);
-      case 3: return true; // skills
-      case 4: return true; // class choices (optional selections)
-      case 5: return !!character.background;
-      case 6: return true; // portrait is optional
-      case 7: return !!character.backstory;
-      case 8: return true; // equipment
-      case 9: return true; // feats
-      case 10: return true;
+      case 2: return true; // subclass (optional / level-gated)
+      case 3: return STATS.every(s => character[s] >= 3 && character[s] <= 20);
+      case 4: return true; // skills
+      case 5: return true; // class choices (optional selections)
+      case 6: return !!character.background;
+      case 7: return true; // portrait is optional
+      case 8: return !!character.backstory;
+      case 9: return true; // equipment
+      case 10: return true; // feats
+      case 11: return true;
       default: return true;
     }
   };
@@ -352,19 +355,20 @@ export default function CharacterCreation() {
         <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 md:p-8 min-h-[420px]">
           {step === 0 && <StepGenderRace character={character} set={set} />}
           {step === 1 && <StepClassInfo character={character} set={set} />}
-          {step === 2 && <StepAbilityScores character={character} set={set} rollAll={rollAllStats} pointBuy={pointBuyStats} />}
-          {step === 3 && <StepSkillsFeatures character={character} set={set} />}
-          {step === 4 && <StepClassChoices character={character} set={set} />}
-          {step === 5 && <StepBackground character={character} set={set} />}
-          {step === 6 && <StepPortrait character={character} set={set} />}
-          {step === 7 && (
+          {step === 2 && <StepSubclass character={character} set={set} />}
+          {step === 3 && <StepAbilityScores character={character} set={set} rollAll={rollAllStats} pointBuy={pointBuyStats} />}
+          {step === 4 && <StepSkillsFeatures character={character} set={set} />}
+          {step === 5 && <StepClassChoices character={character} set={set} />}
+          {step === 6 && <StepBackground character={character} set={set} />}
+          {step === 7 && <StepPortrait character={character} set={set} />}
+          {step === 8 && (
             <StepBackstory character={character} set={set}
               backstoryPrompt={backstoryPrompt} setBackstoryPrompt={setBackstoryPrompt}
               onGenerate={handleGenerateBackstory} generating={generatingBackstory} />
           )}
-          {step === 8 && <StepEquipmentSpells character={character} set={set} />}
-          {step === 9 && <StepFeats character={character} set={set} />}
-          {step === 10 && <StepReview character={reviewChar} />}
+          {step === 9 && <StepEquipmentSpells character={character} set={set} />}
+          {step === 10 && <StepFeats character={character} set={set} />}
+          {step === 11 && <StepReview character={reviewChar} />}
         </div>
  
         {/* Navigation */}
@@ -375,7 +379,7 @@ export default function CharacterCreation() {
           </Button>
  
           <div className="flex items-center gap-2">
-            {step === 6 && (
+            {step === 7 && (
               <Button variant="ghost" className="text-slate-500 hover:text-slate-300 text-sm"
                 onClick={() => setStep(s => s + 1)}>
                 Skip Portrait

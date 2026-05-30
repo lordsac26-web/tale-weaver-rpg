@@ -1,8 +1,31 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Check, ChevronDown, ChevronUp, Search, Info, Lock, X } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 import { FEATS, FEAT_CATEGORIES, CATEGORY_COLORS, canTakeFeat, meetsPrerequisite, meetsRaceReq, meetsCasterReq } from '@/components/game/featData';
 import { getFeatEffectSummary } from '@/components/game/featEffects';
 import { CLASSES } from '@/components/game/gameData';
+
+// Merge the curated FEATS (which carry engine metadata: stat_req, asi_choices, race_req,
+// caster_only) with feats ingested into the DB. Curated entries win on name collision so
+// mechanical wiring is never lost; DB-only feats are appended as plain reference entries.
+function mergeFeats(dbFeats) {
+  const curatedByName = new Map(FEATS.map(f => [f.name.toLowerCase(), f]));
+  const merged = [...FEATS];
+  for (const db of dbFeats) {
+    if (!db?.name || curatedByName.has(db.name.toLowerCase())) continue;
+    merged.push({
+      name: db.name,
+      prerequisite: db.prerequisite || null,
+      category: db.category || 'General',
+      description: db.description || '',
+      benefits: db.benefits || [],
+      tags: db.tags || [],
+      source: db.source,
+      from_db: true,
+    });
+  }
+  return merged.sort((a, b) => a.name.localeCompare(b.name));
+}
 
 // How many feats can this character take based on level / class
 // Accounts for multiclass: each class's ASI levels are checked against that class's level
@@ -42,6 +65,14 @@ export default function StepFeats({ character, set }) {
   const [category, setCategory] = useState('All');
   const [expanded, setExpanded] = useState(null);
   const [showUnavailable, setShowUnavailable] = useState(false);
+  const [allFeats, setAllFeats] = useState(FEATS);
+
+  // Load the full feat library from the DB and merge with the curated list.
+  useEffect(() => {
+    base44.entities.Feat.list('name', 500)
+      .then(db => setAllFeats(mergeFeats(db || [])))
+      .catch(() => setAllFeats(FEATS)); // fallback to curated-only if fetch fails
+  }, []);
 
   const selectedFeats = character.feats || [];
   const maxFeats = getMaxFeats(character);
@@ -68,16 +99,16 @@ export default function StepFeats({ character, set }) {
   };
 
   const filtered = useMemo(() => {
-    return FEATS.filter(feat => {
+    return allFeats.filter(feat => {
       const matchSearch = !search || feat.name.toLowerCase().includes(search.toLowerCase()) ||
-        feat.description.toLowerCase().includes(search.toLowerCase()) ||
+        (feat.description || '').toLowerCase().includes(search.toLowerCase()) ||
         feat.tags?.some(t => t.includes(search.toLowerCase()));
       const matchCategory = category === 'All' || feat.category === category;
       const available = canTakeFeat(feat, character);
       if (!showUnavailable && !available && !selectedFeats.includes(feat.name)) return false;
       return matchSearch && matchCategory;
     });
-  }, [search, category, character, showUnavailable, selectedFeats]);
+  }, [allFeats, search, category, character, showUnavailable, selectedFeats]);
 
   const available = filtered.filter(f => canTakeFeat(f, character));
   const unavailable = filtered.filter(f => !canTakeFeat(f, character));

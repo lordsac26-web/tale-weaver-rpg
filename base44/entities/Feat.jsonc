@@ -1,0 +1,78 @@
+{
+  "name": "Feat",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "prerequisite": {
+      "type": "string",
+      "description": "Prerequisite text, e.g. 'DEX 13+', 'Spellcasting', null if none"
+    },
+    "category": {
+      "type": "string",
+      "description": "General, Combat, Magic, Armor, Support, Utility, Exploration, Survival, Social, Stealth, Racial"
+    },
+    "description": {
+      "type": "string"
+    },
+    "benefits": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Short bullet-point benefits"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "asi": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this feat grants an ability score increase"
+    },
+    "asi_choices": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Which ability scores the player may choose to increase"
+    },
+    "source": {
+      "type": "string",
+      "description": "Sourcebook / document title"
+    },
+    "has_engine_support": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if this feat has mechanical effects wired into the combat engine (from the curated list)"
+    },
+    "raw_data": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
