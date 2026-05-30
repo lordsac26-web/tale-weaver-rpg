@@ -610,6 +610,12 @@ Deno.serve(async (req) => {
         const newInv = inv.map((it, i) => i === ammoIdx ? { ...it, quantity: Math.max(0, (it.quantity ?? 1) - 1) } : it);
         await base44.entities.Character.update(character_id, { inventory: newInv });
       }
+      // Loading (PHB p.147): a weapon with the Loading property fires only ONCE per
+      // turn, regardless of Extra Attack, bonus actions, or other action sources.
+      const hasLoading = weaponProps.includes('loading');
+      if (isRanged && hasLoading && combatLog.world_state?.loading_weapon_fired) {
+        return Response.json({ error: `${weapon.name} has the Loading property — it can only be fired once per turn.`, invalid: true }, { status: 400 });
+      }
       const isFinesse = (weapon.properties || []).includes('finesse');
       const strMod = statMod(character.strength);
       const dexMod = statMod(character.dexterity);
@@ -936,6 +942,10 @@ Deno.serve(async (req) => {
     if (isQuickenedMain) newWorldState.bonus_action_used = true;
     // Mark Sneak Attack consumed for this turn so it can't trigger again until next turn
     if (sneakAttackApplied) newWorldState.sneak_attack_used = true;
+    // Mark a Loading weapon as fired so it can't fire again this turn (PHB p.147)
+    if (weapon && (weapon.properties || []).map(p => p.toLowerCase()).includes('loading') && weapon.type === 'ranged') {
+      newWorldState.loading_weapon_fired = true;
+    }
 
     // Track concentration spells
     if (spell?.requires_concentration) {
@@ -951,6 +961,7 @@ Deno.serve(async (req) => {
       newWorldState.actions_used_this_turn = 0;
       newWorldState.bonus_action_used = false;
       newWorldState.sneak_attack_used = false; // player turn ended — refresh for next turn
+      newWorldState.loading_weapon_fired = false; // refresh Loading weapon for next turn
     }
 
     await base44.entities.CombatLog.update(combat_id, {
@@ -1522,7 +1533,7 @@ Deno.serve(async (req) => {
     await base44.entities.CombatLog.update(combat_id, {
       current_turn_index: nextIndex,
       round: nextRound,
-      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, sneak_attack_used: false }
+      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, sneak_attack_used: false, loading_weapon_fired: false }
     });
     return Response.json({ next_turn_index: nextIndex, round: nextRound, current_combatant: combatants[nextIndex] });
   }
