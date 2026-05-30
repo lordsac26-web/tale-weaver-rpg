@@ -40,14 +40,15 @@ export default function HUD({ character, session }) {
         {/* Character portrait + name */}
         <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
           <div className="relative flex-shrink-0">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center font-fantasy font-bold text-sm"
+            <div className="w-10 h-10 rounded-full flex items-center justify-center font-fantasy font-bold text-sm bg-cover bg-center"
               style={{
-                background: 'linear-gradient(135deg, rgba(100,65,15,0.9), rgba(50,30,5,0.95))',
+                backgroundImage: character.portrait ? `url(${character.portrait})` : 'none',
+                backgroundColor: '#1a0e06',
                 border: '2px solid rgba(201,169,110,0.5)',
                 color: '#f0c040',
                 boxShadow: '0 0 12px rgba(201,169,110,0.2), inset 0 2px 4px rgba(0,0,0,0.5)'
               }}>
-              {initials}
+              {!character.portrait && initials}
             </div>
             {session?.in_combat && (
               <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center"

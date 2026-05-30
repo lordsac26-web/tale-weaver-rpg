@@ -309,6 +309,26 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
             <div className="flex-shrink-0 p-3 space-y-2"
               style={{ borderTop: '1px solid rgba(180,50,50,0.2)', background: 'rgba(10,3,3,0.85)' }}>
 
+              {/* Player Status */}
+              <div className="flex items-center gap-3 p-2 rounded-lg" style={{ background: 'rgba(5, 8, 15, 0.4)', border: '1px solid rgba(80, 100, 180, 0.15)'}}>
+                <div className="w-8 h-8 rounded-full bg-slate-800 flex-shrink-0 bg-cover bg-center" style={{ backgroundImage: character.portrait ? `url(${character.portrait})` : 'none', border: '1px solid rgba(100,120,200,0.3)'}}>
+                  {!character.portrait && <span className="font-fantasy text-xs self-center text-center text-blue-300">{character.name?.slice(0,2).toUpperCase()}</span>}
+                </div>
+                <div className="flex-1">
+                  <div className="flex justify-between items-center text-xs mb-1">
+                    <span className="font-bold font-fantasy text-blue-300">HP</span>
+                    <span className="font-mono text-blue-200">{player?.hp_current || 0} / {player?.hp_max || 0}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-slate-900/70 overflow-hidden">
+                    <div className="h-full bg-blue-500" style={{ width: `${player ? (player.hp_current / player.hp_max * 100) : 0}%`}}></div>
+                  </div>
+                </div>
+                <div className="text-center px-2">
+                  <div className="font-fantasy text-lg text-blue-300">{player?.ac || 0}</div>
+                  <div className="text-xs text-blue-400/50">AC</div>
+                </div>
+              </div>
+
               {/* Action point bar */}
               <ActionPointBar
                 actionsTotal={actionsPerTurn}

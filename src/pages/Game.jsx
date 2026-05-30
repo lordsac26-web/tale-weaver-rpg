@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
-import { createPageUrl } from '@/utils';
+
 import { useNavigate } from 'react-router-dom';
 import { User, Loader2, ChevronLeft, Swords } from 'lucide-react';
 import { SKILL_STAT_MAP, calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
@@ -55,10 +55,10 @@ export default function Game() {
   const [combatViewTab, setCombatViewTab] = useState('combat'); // 'story' | 'combat' — for mobile
 
   const loadState = useCallback(async () => {
-    if (!sessionId) { navigate(createPageUrl('Home')); return; }
+    if (!sessionId) { navigate('/Home'); return; }
     const sessions = await base44.entities.GameSession.filter({ id: sessionId });
     const sess = sessions[0];
-    if (!sess) { navigate(createPageUrl('Home')); return; }
+    if (!sess) { navigate('/Home'); return; }
     setSession(sess);
 
     const chars = await base44.entities.Character.filter({ id: sess.character_id });
@@ -692,7 +692,7 @@ export default function Game() {
     });
     
     setShowDeathModal(false);
-    navigate(createPageUrl('Home'));
+    navigate('/Home');
   };
 
   const handleFlee = async () => {
@@ -831,7 +831,7 @@ export default function Game() {
           borderBottom: '1px solid rgba(180,140,90,0.15)',
           backdropFilter: 'blur(8px)',
         }}>
-        <button onClick={() => navigate(createPageUrl('Home'))}
+        <button onClick={() => navigate('/Home')}
           className="p-1.5 rounded-lg transition-all flex-shrink-0"
           style={{ color: 'rgba(201,169,110,0.5)' }}
           onMouseEnter={e => e.currentTarget.style.color = '#c9a96e'}

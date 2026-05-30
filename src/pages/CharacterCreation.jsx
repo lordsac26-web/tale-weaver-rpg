@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { createPageUrl } from '@/utils';
+
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -299,7 +299,7 @@ export default function CharacterCreation() {
     delete finalChar._feat_ac_bonus;
     delete finalChar._feat_flags;
     const saved = await base44.entities.Character.create(finalChar);
-    navigate(createPageUrl('NewGame') + `?character_id=${saved.id}`);
+    navigate(`/NewGame?character_id=${saved.id}`);
   };
  
   const reviewCharBase = applyFeatBonuses(applyRacialBonuses(character));
@@ -341,7 +341,7 @@ export default function CharacterCreation() {
       <div className="relative z-10 max-w-5xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <button onClick={() => navigate(createPageUrl('Home'))} className="text-amber-400/60 hover:text-amber-400 transition-colors">
+          <button onClick={() => navigate('/Home')} className="text-amber-400/60 hover:text-amber-400 transition-colors">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div>

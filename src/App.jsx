@@ -1,29 +1,37 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import OfflineIndicator from '@/components/OfflineIndicator';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
-import Inventory from '@/pages/Inventory';
-import SpellManagement from '@/pages/SpellManagement';
-import ImageForge from '@/pages/ImageForge';
-import Progression from '@/pages/Progression';
-import NPCManager from '@/pages/NPCManager';
+
+// Import Layout and all pages directly
+import Layout from './Layout.jsx';
+import Home from './pages/Home';
+import CharacterCreation from './pages/CharacterCreation';
+import CharacterSheetPage from './pages/CharacterSheetPage';
+import CombatHistory from './pages/CombatHistory';
+import Encyclopedia from './pages/Encyclopedia';
+import Game from './pages/Game';
+import ImageForge from './pages/ImageForge';
+import Inventory from './pages/Inventory';
+import Market from './pages/Market';
+import NewGame from './pages/NewGame';
+import SpellManagement from './pages/SpellManagement';
+import WorldMap from './pages/WorldMap';
 import InventoryPage from '@/pages/InventoryPage';
 import CharacterSheetFull from '@/pages/CharacterSheetFull';
-import Market from '@/pages/Market';
+import Progression from '@/pages/Progression';
+import NPCManager from '@/pages/NPCManager';
 import RaceReport from '@/pages/RaceReport';
 
-const { Pages, Layout, mainPage } = pagesConfig;
-const mainPageKey = mainPage ?? Object.keys(Pages)[0];
-const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
 
-const LayoutWrapper = ({ children, currentPageName }) => Layout ?
+const LayoutWrapper = ({ children, currentPageName }) => (
   <Layout currentPageName={currentPageName}>{children}</Layout>
-  : <>{children}</>;
+);
+
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -51,22 +59,24 @@ const AuthenticatedApp = () => {
   // Render the main app
   return (
     <Routes>
-      <Route path="/" element={
-        <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
-        </LayoutWrapper>
-      } />
-      {Object.entries(Pages).map(([path, Page]) => (
-        <Route
-          key={path}
-          path={`/${path}`}
-          element={
-            <LayoutWrapper currentPageName={path}>
-              <Page />
-            </LayoutWrapper>
-          }
-        />
-      ))}
+      <Route path="/" element={<LayoutWrapper currentPageName="Home"><Home /></LayoutWrapper>} />
+      <Route path="/CharacterCreation" element={<LayoutWrapper currentPageName="CharacterCreation"><CharacterCreation /></LayoutWrapper>} />
+      <Route path="/CharacterSheetPage" element={<LayoutWrapper currentPageName="CharacterSheetPage"><CharacterSheetPage /></LayoutWrapper>} />
+      <Route path="/CombatHistory" element={<LayoutWrapper currentPageName="CombatHistory"><CombatHistory /></LayoutWrapper>} />
+      <Route path="/Encyclopedia" element={<LayoutWrapper currentPageName="Encyclopedia"><Encyclopedia /></LayoutWrapper>} />
+      <Route path="/Game" element={<LayoutWrapper currentPageName="Game"><Game /></LayoutWrapper>} />
+      <Route path="/Home" element={<LayoutWrapper currentPageName="Home"><Home /></LayoutWrapper>} />
+      <Route path="/ImageForge" element={<LayoutWrapper currentPageName="ImageForge"><ImageForge /></LayoutWrapper>} />
+      <Route path="/Inventory" element={<LayoutWrapper currentPageName="Inventory"><Inventory /></LayoutWrapper>} />
+      <Route path="/Market" element={<LayoutWrapper currentPageName="Market"><Market /></LayoutWrapper>} />
+      <Route path="/NewGame" element={<LayoutWrapper currentPageName="NewGame"><NewGame /></LayoutWrapper>} />
+      <Route path="/SpellManagement" element={<LayoutWrapper currentPageName="SpellManagement"><SpellManagement /></LayoutWrapper>} />
+      <Route path="/WorldMap" element={<LayoutWrapper currentPageName="WorldMap"><WorldMap /></LayoutWrapper>} />
+      <Route path="/Progression" element={<LayoutWrapper currentPageName="Progression"><Progression /></LayoutWrapper>} />
+      <Route path="/NPCManager" element={<LayoutWrapper currentPageName="NPCManager"><NPCManager /></LayoutWrapper>} />
+      <Route path="/InventoryPage" element={<LayoutWrapper currentPageName="InventoryPage"><InventoryPage /></LayoutWrapper>} />
+      <Route path="/CharacterSheetFull" element={<LayoutWrapper currentPageName="CharacterSheetFull"><CharacterSheetFull /></LayoutWrapper>} />
+      <Route path="/RaceReport" element={<LayoutWrapper currentPageName="RaceReport"><RaceReport /></LayoutWrapper>} />
       <Route path="/Inventory" element={
         <LayoutWrapper currentPageName="Inventory">
           <Inventory />

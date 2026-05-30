@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { createPageUrl } from '@/utils';
+
 import { Link } from 'react-router-dom';
 import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -138,7 +138,7 @@ export default function Home() {
         <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-14">
           {[
             {
-              to: createPageUrl('ImageForge'),
+              to: '/ImageForge',
               icon: Wand2, iconColor: '#f0c040',
               accentColor: 'rgba(240,192,64,0.2)', glowColor: 'rgba(240,192,64,0.08)',
               borderColor: 'rgba(240,192,64,0.3)',
@@ -149,7 +149,7 @@ export default function Home() {
               iconBorder: 'rgba(240,192,64,0.4)',
             },
             {
-              to: createPageUrl('Encyclopedia'),
+              to: '/Encyclopedia',
               icon: Library, iconColor: 'var(--brass-gold)',
               accentColor: 'rgba(184,115,51,0.22)', glowColor: 'rgba(184,115,51,0.08)',
               borderColor: 'rgba(184,115,51,0.3)',
@@ -160,7 +160,7 @@ export default function Home() {
               iconBorder: 'rgba(212,149,90,0.35)',
             },
             {
-              to: createPageUrl('CharacterCreation'),
+              to: '/CharacterCreation',
               icon: Plus, iconColor: 'var(--brass-shine)',
               accentColor: 'rgba(184,115,51,0.18)', glowColor: 'rgba(184,115,51,0.06)',
               borderColor: 'rgba(184,115,51,0.28)',
@@ -171,7 +171,7 @@ export default function Home() {
               iconBorder: 'rgba(232,184,109,0.35)',
             },
             {
-              to: createPageUrl('NewGame'),
+              to: '/NewGame',
               icon: BookOpen, iconColor: '#c4b5fd',
               accentColor: 'rgba(100,50,180,0.18)', glowColor: 'rgba(100,50,180,0.07)',
               borderColor: 'rgba(140,80,220,0.25)',
@@ -182,7 +182,7 @@ export default function Home() {
               iconBorder: 'rgba(150,90,230,0.35)',
             },
             sessions.length > 0 && characters.find(c => c.id === sessions[0].character_id)?.hp_current > 0 ? {
-              to: createPageUrl('Game') + `?session_id=${sessions[0].id}`,
+              to: `/Game?session_id=${sessions[0].id}`,
               icon: Play, iconColor: '#86efac',
               accentColor: 'rgba(34,197,94,0.15)', glowColor: 'rgba(34,197,94,0.06)',
               borderColor: 'rgba(40,160,80,0.25)',
@@ -345,7 +345,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
     }
     
     // Send directly to New Game so they start a fresh campaign, not resume the death scene
-    navigate(createPageUrl('NewGame') + `?character_id=${character.id}`);
+    navigate(`/NewGame?character_id=${character.id}`);
   };
 
   const handleDelete = async (e) => {
@@ -444,7 +444,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(60,30,8,0.6)'; e.currentTarget.style.borderColor = 'rgba(184,115,51,0.3)'; }}>
                 <User className="w-3 h-3" /> View Sheet
               </button>
-              <button onClick={() => navigate(createPageUrl('CharacterSheetPage') + `?character_id=${character.id}`)}
+              <button onClick={() => navigate(`/CharacterSheetPage?character_id=${character.id}`)}
                 className="py-1.5 px-2.5 rounded-lg text-xs transition-all"
                 title="Full Character Sheet"
                 style={{ background: 'rgba(38,10,70,0.5)', border: '1px solid rgba(130,70,210,0.25)', color: 'rgba(190,155,255,0.7)' }}
@@ -464,7 +464,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
           )}
           {!isDead && (
             session ? (
-              <Link to={createPageUrl('Game') + `?session_id=${session.id}`} className="flex-1">
+              <Link to={`/Game?session_id=${session.id}`} className="flex-1">
                 <button className="w-full py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
                   style={{ background: 'rgba(8,38,15,0.65)', border: '1px solid rgba(40,160,75,0.35)', color: '#90f4b0' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(12,55,22,0.75)'; e.currentTarget.style.borderColor = 'rgba(60,200,100,0.55)'; }}
@@ -473,7 +473,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
                 </button>
               </Link>
             ) : (
-              <Link to={createPageUrl('NewGame') + `?character_id=${character.id}`} className="flex-1">
+              <Link to={`/NewGame?character_id=${character.id}`} className="flex-1">
                 <button className="w-full py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
                   style={{ background: 'rgba(38,10,70,0.5)', border: '1px solid rgba(130,70,210,0.3)', color: '#dfc8ff' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(55,18,100,0.65)'; e.currentTarget.style.borderColor = 'rgba(160,110,255,0.5)'; }}
@@ -494,7 +494,7 @@ function SessionCard({ session, characters }) {
   const char = characters.find(c => c.id === session.character_id);
   const canResume = char && char.hp_current > 0;
   const LinkOrDiv = canResume ? Link : 'div';
-  const linkProps = canResume ? { to: createPageUrl('Game') + `?session_id=${session.id}` } : {};
+  const linkProps = canResume ? { to: `/Game?session_id=${session.id}` } : {};
   
   const handleDeleteSession = async (e) => {
     e.stopPropagation();
