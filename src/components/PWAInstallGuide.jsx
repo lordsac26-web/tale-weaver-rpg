@@ -5,17 +5,24 @@ import { Button } from '@/components/ui/button';
 
 export default function PWAInstallGuide({ onClose }) {
   const [installed, setInstalled] = useState(false);
+  const [installError, setInstallError] = useState(null);
 
   const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
   const isEdge = /Edg/.test(navigator.userAgent);
   const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
   const isFirefox = /Firefox/.test(navigator.userAgent);
 
-  const handleInstall = () => {
-    // Trigger install prompt if available
-    const event = new Event('beforeinstallprompt');
-    window.dispatchEvent(event);
-    setInstalled(true);
+  const handleInstall = async () => {
+    try {
+      // Dispatch custom event to trigger install prompt
+      const installEvent = new CustomEvent('trigger-install-prompt');
+      window.dispatchEvent(installEvent);
+      setInstalled(true);
+      setInstallError(null);
+    } catch (error) {
+      setInstallError('Install prompt not available. Please use your browser\'s install option.');
+      console.error('Install error:', error);
+    }
   };
 
   return (
@@ -166,16 +173,27 @@ export default function PWAInstallGuide({ onClose }) {
             </div>
           </div>
 
-          {/* Success message */}
-          {installed && (
+          {/* Success/Error messages */}
+          {installed && !installError && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className="p-4 rounded-xl text-center"
               style={{ background: 'rgba(40,100,60,0.2)', border: '1px solid rgba(40,160,80,0.4)' }}>
               <Check className="w-8 h-8 mx-auto mb-2 text-green-400" />
-              <div className="font-fantasy text-sm" style={{ color: '#86efac' }}>Install prompt opened!</div>
+              <div className="font-fantasy text-sm" style={{ color: '#86efac' }}>Install prompt triggered!</div>
               <div className="text-xs text-slate-400 mt-1">Follow the browser prompts to complete installation</div>
+            </motion.div>
+          )}
+
+          {installError && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-xl text-center"
+              style={{ background: 'rgba(120,40,40,0.2)', border: '1px solid rgba(220,80,80,0.4)' }}>
+              <div className="font-fantasy text-sm" style={{ color: '#fca5a5' }}>Install Prompt Not Available</div>
+              <div className="text-xs text-slate-400 mt-1">Please use your browser's menu to install this app</div>
             </motion.div>
           )}
         </div>

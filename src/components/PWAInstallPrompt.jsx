@@ -61,7 +61,83 @@ export default function PWAInstallPrompt() {
     localStorage.setItem('pwa-install-dismissed', Date.now().toString());
   };
 
-  if (!showPrompt) return null;
+  // Listen for trigger event from install guide
+  useEffect(() => {
+    const handleTriggerInstall = () => {
+      // Show the prompt if it was hidden
+      if (!showPrompt && deferredPrompt) {
+        setShowPrompt(true);
+        // Auto-trigger install after a short delay
+        setTimeout(() => {
+          handleInstall();
+        }, 500);
+      } else if (!deferredPrompt) {
+        // No install prompt available
+        setInstallError(true);
+      }
+    };
+
+    window.addEventListener('trigger-install-prompt', handleTriggerInstall);
+
+    return () => {
+      window.removeEventListener('trigger-install-prompt', handleTriggerInstall);
+    };
+  }, [showPrompt, deferredPrompt]);
+
+  const [installError, setInstallError] = useState(false);
+
+  if (!showPrompt && !installError) return null;
+
+  // Show error message if install prompt not available
+  if (installError) {
+    return (
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 50 }}
+          className="fixed bottom-4 right-4 z-50 max-w-sm"
+        >
+          <div 
+            className="rounded-xl p-4"
+            style={{ 
+              background: 'linear-gradient(160deg, rgba(40,15,10,0.98), rgba(20,8,5,0.99))',
+              border: '1px solid rgba(220,80,80,0.4)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.7), 0 0 20px rgba(220,80,80,0.15)'
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg" style={{ background: 'rgba(220,80,80,0.15)' }}>
+                <Download className="w-6 h-6" style={{ color: '#fca5a5' }} />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-fantasy font-bold text-sm mb-1" style={{ color: '#fca5a5' }}>
+                  Install Not Available
+                </h3>
+                <p className="text-xs text-slate-400 mb-3">
+                  Your browser doesn't support the install prompt. Please use your browser's menu to add this app to your home screen.
+                </p>
+                <button
+                  onClick={() => setInstallError(false)}
+                  className="text-xs px-3 py-2 rounded-lg transition-colors"
+                  style={{ color: 'rgba(201,169,110,0.4)', background: 'rgba(201,169,110,0.1)' }}
+                >
+                  Dismiss
+                </button>
+              </div>
+              <button
+                onClick={() => setInstallError(false)}
+                className="p-1 rounded"
+                style={{ color: 'rgba(201,169,110,0.3)' }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
 
   return (
     <AnimatePresence>

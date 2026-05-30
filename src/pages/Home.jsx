@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked, Book, Smartphone } from 'lucide-react';
 import PWAInstallButton from '@/components/PWAInstallButton';
+import PWADebugger from '@/components/PWADebugger';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import CharacterSheet from '@/components/game/CharacterSheet';
@@ -58,6 +59,11 @@ export default function Home() {
             <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(212,149,90,0.6)' }}>TALE WEAVER</span>
           </div>
           <PWAInstallButton />
+          
+          {/* PWA Debug Info - Remove after testing */}
+          <div className="hidden lg:block">
+            <PWADebugger />
+          </div>
           <div className="relative" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => setShowCharMenu(v => !v)}
