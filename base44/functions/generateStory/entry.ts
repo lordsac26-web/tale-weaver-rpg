@@ -105,6 +105,22 @@ Deno.serve(async (req) => {
     ? `No monsters available in the database — do NOT trigger combat in this scene.`
     : `Available monsters (use EXACT stats when spawning enemies): ${monsterNames}`;
 
+  // Adult mode content guidelines
+  const adultModeGuidelines = session.adult_mode ? `
+  CONTENT GUIDELINES (ADULT MODE ENABLED):
+  - Violence & Gore: Describe combat, injuries, and death vividly and realistically. Blood, wounds, and brutal tactics are permitted.
+  - Dark Themes: Horror, psychological tension, moral ambiguity, and mature subject matter are allowed.
+  - Battle Scenes: Detailed combat choreography with visceral descriptions is encouraged.
+  - Sexual Content: R-rated romantic/intimate scenes are permitted when narratively appropriate (no explicit pornography).
+  - Language: Strong language is acceptable in context.
+  - Tone: Gritty, realistic, and mature storytelling is preferred over sanitized fantasy.
+
+  Remember: All content should still serve the narrative and maintain dramatic tension. Mature content should enhance immersion, not gratuitously shock.` : `
+  CONTENT GUIDELINES (STANDARD MODE):
+  - Violence: Fantasy combat without graphic gore or excessive blood.
+  - Themes: Appropriate for general audiences, avoiding explicit content.
+  - Tone: Classic heroic fantasy adventure.`;
+
   // Strict enemy schema — enforces all fields combatEngine needs
   const enemyItemSchema = {
     type: 'object',
@@ -142,7 +158,7 @@ World: ${worldSummary}
 ${gameDataContext}
 Story Seed: ${session.story_seed || 'A mysterious summons has drawn our hero to action...'}
 
-Write an immersive opening narrative (3-4 paragraphs) that sets the scene vividly, introduces the situation, and ends with tension or a decision point.${session.adult_mode ? ' Mature/gritty tone permitted.' : ''}
+Write an immersive opening narrative (3-4 paragraphs) that sets the scene vividly, introduces the situation, and ends with tension or a decision point.${adultModeGuidelines}
 
 Then provide exactly 4 choices the player can make. Include skill checks and DCs on risky choices (at least 2-3 of 4 should have checks). Use diverse skills — Persuasion, Deception, Intimidation, Perception, Investigation, Athletics, Stealth, Insight, Acrobatics, Survival, Arcana, History, Medicine, Religion. DCs: 10=trivial, 15=moderate, 20=hard, 25=extreme.
 
@@ -215,7 +231,7 @@ ${recentLog}
 Player Action: ${selectedChoice}
 ${skillCheckNote}
 
-Write the consequence narrative (2-3 paragraphs) reacting directly to the action and any skill check outcome. Then provide 4 new choices. Consider active conditions, reputation, environment (${session.season}, ${session.time_of_day}).${session.adult_mode ? ' Mature content permitted.' : ''}
+Write the consequence narrative (2-3 paragraphs) reacting directly to the action and any skill check outcome. Then provide 4 new choices. Consider active conditions, reputation, environment (${session.season}, ${session.time_of_day}).${adultModeGuidelines}
 ${combatNote}`;
 
     responseSchema = {
