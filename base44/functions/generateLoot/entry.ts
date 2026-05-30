@@ -58,6 +58,25 @@ const LOOT_TABLES = {
     { name: 'Staff of Power', type: 'weapon', rarity: 'legendary', effect: '+2 to spell attacks, 20 charges', weight: 4, value: 15000 },
   ],
 
+  // Class affinity: keywords used to bias item drops toward the player's class.
+  // When a generated item's name/type matches a keyword, it gets a re-roll chance
+  // to be swapped for a more class-appropriate pick from the same tier.
+  classAffinity: {
+    fighter:   ['weapon', 'armor', 'belt', 'strength', 'shield'],
+    barbarian: ['weapon', 'belt', 'strength', 'giant'],
+    paladin:   ['weapon', 'armor', 'protection', 'holy'],
+    ranger:    ['bow', 'archery', 'boots', 'cloak', 'arrow'],
+    rogue:     ['boots', 'cloak', 'lockpicks', 'dagger', 'displacement'],
+    monk:      ['boots', 'speed', 'cloak', 'belt'],
+    wizard:    ['scroll', 'wand', 'staff', 'fireball', 'magic'],
+    sorcerer:  ['scroll', 'wand', 'staff', 'fireball', 'magic'],
+    warlock:   ['scroll', 'wand', 'staff', 'magic', 'necklace'],
+    bard:      ['scroll', 'cloak', 'protection', 'wand'],
+    cleric:    ['healing', 'holy', 'protection', 'amulet'],
+    druid:     ['healing', 'hide', 'cloak', 'staff'],
+    artificer: ['wand', 'scrap', 'mechanical', 'gear', 'staff'],
+  },
+
   // Enemy type modifiers
   enemyTypes: {
     undead: { coinMultiplier: 0.5, itemBonus: ['Holy Water', 'Silver Dust'] },
@@ -110,7 +129,21 @@ function generateCoins(tier, enemyType = 'humanoid') {
   };
 }
 
-function generateItems(tier, level, enemyType = 'humanoid', cr = null) {
+// Pick a tier-appropriate item, biased toward the player's class when possible.
+// 55% of the time we try to swap a random pick for one matching a class keyword.
+function pickItemForClass(pool, charClass) {
+  const keywords = LOOT_TABLES.classAffinity[(charClass || '').toLowerCase()] || [];
+  if (keywords.length > 0 && Math.random() < 0.55) {
+    const matches = pool.filter(it => {
+      const hay = `${it.name} ${it.type} ${it.effect || ''}`.toLowerCase();
+      return keywords.some(k => hay.includes(k));
+    });
+    if (matches.length > 0) return matches[Math.floor(Math.random() * matches.length)];
+  }
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function generateItems(tier, level, enemyType = 'humanoid', cr = null, charClass = null) {
   const items = [];
   // Use CR to determine item count if available
   const effectiveLevel = cr ? Math.ceil(parseFloat(cr) * 2.5) : level;
@@ -144,7 +177,7 @@ function generateItems(tier, level, enemyType = 'humanoid', cr = null) {
       pool = roll < 0.5 ? LOOT_TABLES.rareItems : LOOT_TABLES.legendaryItems;
     }
 
-    const item = pool[Math.floor(Math.random() * pool.length)];
+    const item = pickItemForClass(pool, charClass);
     items.push({ ...item, quantity: item.type === 'consumable' ? rollDice(1, 3) : 1 });
   }
 
@@ -160,7 +193,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { level, enemy_type, enemy_cr, num_enemies = 1 } = await req.json();
+    const { level, enemy_type, enemy_cr, num_enemies = 1, character_class = null } = await req.json();
 
     // Determine tier by CR if provided, otherwise use character level
     const tier = enemy_cr ? determineTierByCR(enemy_cr) : level ? determineTier(level) : 'low';
@@ -168,7 +201,7 @@ Deno.serve(async (req) => {
 
     // Generate loot
     const coins = generateCoins(tier, effectiveEnemyType);
-    const items = generateItems(tier, level || 1, effectiveEnemyType, enemy_cr);
+    const items = generateItems(tier, level || 1, effectiveEnemyType, enemy_cr, character_class);
 
     // Scale coins by number of enemies
     coins.gold *= num_enemies;
@@ -187,7 +220,7 @@ Deno.serve(async (req) => {
         rare: LOOT_TABLES.rareItems,
         legendary: LOOT_TABLES.legendaryItems,
       };
-      artifact = artifactPools[artifactTier][Math.floor(Math.random() * artifactPools[artifactTier].length)];
+      artifact = pickItemForClass(artifactPools[artifactTier], character_class);
     }
 
     return Response.json({

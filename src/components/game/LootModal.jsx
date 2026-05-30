@@ -121,6 +121,7 @@ export default function LootModal({ enemies, character, onClose, onCollect }) {
         enemy_type: enemies[0]?.type || enemies[0]?.meta?.split(' ')[0] || 'humanoid',
         enemy_cr: parseFloat(enemies[0]?.cr || enemies[0]?.challenge) || 1,
         num_enemies: enemies.length,
+        character_class: character.class || null,
       });
 
       if (result.data?.success) {

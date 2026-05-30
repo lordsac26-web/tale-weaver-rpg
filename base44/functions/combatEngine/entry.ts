@@ -231,10 +231,57 @@ Deno.serve(async (req) => {
   // and create the CombatLog record that drives the whole encounter.
   // ═══════════════════════════════════════════════════════════════════════════
   if (action === 'start_combat') {
-    const { enemies } = payload;
+    let { enemies } = payload;
     const session = await base44.entities.GameSession.get(session_id);
     if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
     const character = await base44.entities.Character.get(session.character_id);
+
+    // ─── DYNAMIC ENCOUNTER SCALING ──────────────────────────────────────────
+    // Keep solo-player encounters balanced and challenging by scaling enemy HP,
+    // attack bonus, and participant count to the player's level and current HP.
+    //  • Level scaling: enemies grow tougher as the hero levels up.
+    //  • HP scaling: if the hero is wounded (< 50% HP), ease off slightly so a
+    //    fresh encounter isn't an instant death spiral; if at full HP, push harder.
+    //  • Count scaling: higher-level heroes face more foes (more action economy).
+    const scaleEnemies = (rawEnemies, char) => {
+      const level = char?.level || 1;
+      const hpPct = (char?.hp_max ? (char.hp_current || 0) / char.hp_max : 1);
+      // Per-enemy stat multipliers driven by level (≈ +6% per level over 1).
+      const levelFactor = 1 + Math.max(0, level - 1) * 0.06;
+      // Difficulty trim when the hero is hurt, boost when topped off.
+      const hpFactor = hpPct < 0.35 ? 0.8 : hpPct < 0.5 ? 0.9 : hpPct >= 0.95 ? 1.1 : 1;
+      const statMult = levelFactor * hpFactor;
+
+      const scaled = rawEnemies.map(e => {
+        const baseHp = parseInt(e.hp) || e.hp_current || 10;
+        const baseAtk = e.attack_bonus ?? 3;
+        const baseDmgBonus = e.damage_bonus ?? 2;
+        return {
+          ...e,
+          hp: Math.max(1, Math.round(baseHp * statMult)),
+          attack_bonus: Math.round(baseAtk + Math.max(0, level - 1) * 0.25),
+          damage_bonus: Math.round(baseDmgBonus + Math.max(0, level - 4) * 0.2),
+        };
+      });
+
+      // Add extra reinforcements for higher-level, healthy heroes (action economy).
+      // +1 enemy at L5, +2 at L11 — but never reinforce a wounded hero.
+      let reinforcements = 0;
+      if (hpPct >= 0.5) {
+        if (level >= 11) reinforcements = 2;
+        else if (level >= 5) reinforcements = 1;
+      }
+      if (reinforcements > 0 && scaled.length > 0) {
+        // Clone the weakest existing enemy as the reinforcement template.
+        const template = [...scaled].sort((a, b) => (parseInt(a.hp) || 0) - (parseInt(b.hp) || 0))[0];
+        for (let i = 0; i < reinforcements; i++) {
+          scaled.push({ ...template, name: `${template.name} Reinforcement` });
+        }
+      }
+      return scaled;
+    };
+
+    enemies = scaleEnemies(enemies, character);
 
     // Roll initiative for all combatants
     const combatants = [];
