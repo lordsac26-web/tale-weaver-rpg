@@ -333,8 +333,20 @@ function EquipmentSubTab({ character, set, classEquipment, bgEquipment }) {
 
   const acceptDefault = () => {
     set('inventory', allDefaultGear);
-    set('gold', STARTING_GOLD[character.class] || 50);
+    const baseGold = STARTING_GOLD[character.class] || 50;
+    const extraGold = character.extra_starting_gold ? 100 : 0;
+    set('gold', baseGold + extraGold);
     set('_gear_customized', false);
+  };
+
+  const handleExtraGoldToggle = (checked) => {
+    set('extra_starting_gold', checked);
+    // Update gold immediately if using default gear
+    if (mode === 'default') {
+      const baseGold = STARTING_GOLD[character.class] || 50;
+      const extraGold = checked ? 100 : 0;
+      set('gold', baseGold + extraGold);
+    }
   };
 
   return (
@@ -363,9 +375,48 @@ function EquipmentSubTab({ character, set, classEquipment, bgEquipment }) {
 
       {mode === 'default' && (
         <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">💰</span>
+              <div>
+                <div className="text-sm font-medium text-amber-200">
+                  {STARTING_GOLD[character.class] || 50} gp Base Gold
+                </div>
+                <div className="text-xs text-slate-500">Standard starting equipment gold</div>
+              </div>
+            </div>
+            {character.extra_starting_gold && (
+              <div className="text-right">
+                <div className="text-sm font-bold text-green-400">+100 gp</div>
+                <div className="text-xs text-slate-500">Bonus</div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 p-3 bg-slate-800/30 border border-slate-700/30 rounded-xl">
+            <input
+              type="checkbox"
+              id="extra-gold"
+              checked={character.extra_starting_gold || false}
+              onChange={(e) => handleExtraGoldToggle(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-600 text-amber-600 focus:ring-amber-500 focus:ring-2 bg-slate-700"
+            />
+            <label htmlFor="extra-gold" className="flex-1 cursor-pointer">
+              <div className="text-sm font-medium text-amber-100">Add Extra Starting Gold</div>
+              <div className="text-xs text-slate-500">Receive an additional 100 gp for your character</div>
+            </label>
+            <span className="text-lg">✨</span>
+          </div>
+
           <div className="flex items-center gap-3 text-sm">
             <span className="text-yellow-400 font-bold">💰 {STARTING_GOLD[character.class] || 50} gp</span>
             <span className="text-slate-500">starting gold</span>
+            {character.extra_starting_gold && (
+              <>
+                <span className="text-green-400 font-bold">+ 100 gp</span>
+                <span className="text-slate-500">bonus</span>
+              </>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {allDefaultGear.map((item, i) => (
