@@ -14,10 +14,29 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
   const [showDetail,    setShowDetail]    = useState(null);
   const [expandedLevel, setExpandedLevel] = useState(0);
 
-  const preparedSpells = character?.spells_prepared || [];
-  const knownSpells    = preparedSpells.length > 0 ? preparedSpells : (character?.spells_known || []);
   const charLevel      = character?.level || 1;
   const charClass      = character?.class || '';
+
+  // PHB spell preparation rules:
+  //  • Clerics, Druids, Paladins, Artificers: prepare a subset each long rest — only prepared spells available in combat.
+  //  • Wizards: prepared from their spellbook (same rule — only prepared).
+  //  • Bards, Rangers, Sorcerers, Warlocks: "spells known" = always available, no daily prep needed.
+  // Cantrips are always available regardless.
+  const PREP_CASTERS = ['Cleric', 'Druid', 'Paladin', 'Artificer', 'Wizard'];
+  const isPrepCaster = PREP_CASTERS.includes(charClass);
+  const preparedSpells = character?.spells_prepared || [];
+  const knownSpells = (() => {
+    const all = character?.spells_known || [];
+    if (!isPrepCaster) return all; // spontaneous casters use all known spells
+    if (preparedSpells.length === 0) return all; // fallback: if none prepared yet, show all
+    // Prep casters: only show prepared spells in combat (cantrips always available)
+    return all.filter(name => {
+      const details = SPELL_DETAILS[name];
+      if (!details) return false;
+      if (details.level === 0) return true; // cantrips always available
+      return preparedSpells.includes(name);
+    });
+  })();
   const slotMaxArr     = getSpellSlotsForLevel(charClass, charLevel);
   const currentSlots   = character?.spell_slots || {};
   const spellSaveDC    = calcSpellSaveDC(character);

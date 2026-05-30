@@ -1084,6 +1084,7 @@ export default function Game() {
         {showDeathSaves && character && (
           <DeathSavesModal
             character={character}
+            combat={combat}
             onStabilize={async (roll) => {
               setShowDeathSaves(false);
               // Update local state immediately so HUD reflects the change without waiting for loadState

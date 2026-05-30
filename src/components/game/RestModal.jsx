@@ -9,8 +9,9 @@ export default function RestModal({ character, onClose, onRest }) {
   const [resting, setResting] = useState(false);
   const [hitDiceToSpend, setHitDiceToSpend] = useState(1); // for short rest player choice
 
-  const maxHitDice = character?.level || 1;
-  // Estimate hit die size by class
+  // Use actual remaining hit dice, not just level (PHB p.186)
+  const totalHitDice = character?.level || 1;
+  const maxHitDice = character?.hit_dice_remaining ?? totalHitDice;
   const HIT_DIE = { Fighter: 10, Ranger: 10, Paladin: 10, Barbarian: 12, Monk: 8, Rogue: 8, Bard: 8, Cleric: 8, Druid: 8, Warlock: 8, Wizard: 6, Sorcerer: 6, Artificer: 8 };
   const hitDie = HIT_DIE[character?.class] || 8;
   const conMod = Math.floor(((character?.constitution || 10) - 10) / 2);
@@ -18,7 +19,8 @@ export default function RestModal({ character, onClose, onRest }) {
 
   const handleRest = async () => {
     setResting(true);
-    await onRest(restType, hitDiceToSpend);
+    // Clamp to actual remaining before sending to backend
+    await onRest(restType, Math.min(hitDiceToSpend, maxHitDice));
     setResting(false);
   };
 
@@ -107,7 +109,11 @@ export default function RestModal({ character, onClose, onRest }) {
                   <h3 className="font-fantasy font-bold" style={{ color: '#fbbf24' }}>Short Rest (1 hour)</h3>
                 </div>
                 <p className="text-xs mb-2" style={{ color: 'rgba(232,213,183,0.6)', fontFamily: 'EB Garamond, serif' }}>
-                  Rest for an hour. Choose how many Hit Dice (d{hitDie}) to spend to heal.
+                  Rest for an hour. Spend Hit Dice (d{hitDie}) to heal.
+                  {maxHitDice === 0
+                    ? <span className="ml-1" style={{ color: '#ef4444' }}>No dice remaining!</span>
+                    : <span className="ml-1" style={{ color: 'rgba(201,169,110,0.5)' }}>({maxHitDice}/{totalHitDice} available)</span>
+                  }
                 </p>
                 <div className="space-y-1">
                   {calcRestoration('short').map((item, i) => (
@@ -181,26 +187,37 @@ export default function RestModal({ character, onClose, onRest }) {
                 <div className="rounded-xl p-4 mb-4" style={{ background: 'rgba(60,40,8,0.4)', border: '1px solid rgba(201,169,110,0.2)' }}>
                   <p className="text-xs font-fantasy mb-3" style={{ color: 'rgba(201,169,110,0.7)' }}>
                     How many Hit Dice (d{hitDie}) to spend?
+                    <span className="ml-2" style={{ color: maxHitDice === 0 ? '#ef4444' : 'rgba(201,169,110,0.5)' }}>
+                      ({maxHitDice}/{totalHitDice} remaining)
+                    </span>
                   </p>
-                  <div className="flex items-center justify-center gap-4">
-                    <button onClick={() => setHitDiceToSpend(v => Math.max(1, v - 1))}
-                      className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
-                      style={{ background: 'rgba(60,30,5,0.7)', border: '1px solid rgba(180,140,90,0.3)', color: '#c9a96e' }}>
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <div className="text-center">
-                      <div className="font-fantasy font-bold text-2xl" style={{ color: '#f0c040' }}>{hitDiceToSpend}</div>
-                      <div className="text-xs" style={{ color: 'rgba(201,169,110,0.5)' }}>of {maxHitDice} dice</div>
-                    </div>
-                    <button onClick={() => setHitDiceToSpend(v => Math.min(maxHitDice, v + 1))}
-                      className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
-                      style={{ background: 'rgba(60,30,5,0.7)', border: '1px solid rgba(180,140,90,0.3)', color: '#c9a96e' }}>
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <p className="text-xs text-center mt-2" style={{ color: 'rgba(201,169,110,0.5)' }}>
-                    Est. ~{hitDiceToSpend * avgHealPerDie} HP ({hitDiceToSpend}d{hitDie}+{conMod > 0 ? '+' : ''}{conMod} each)
-                  </p>
+                  {maxHitDice === 0 ? (
+                    <p className="text-sm text-center" style={{ color: '#ef4444', fontFamily: 'EB Garamond, serif' }}>
+                      No Hit Dice remaining — take a long rest to recover them.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-center gap-4">
+                        <button onClick={() => setHitDiceToSpend(v => Math.max(1, v - 1))}
+                          className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                          style={{ background: 'rgba(60,30,5,0.7)', border: '1px solid rgba(180,140,90,0.3)', color: '#c9a96e' }}>
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <div className="text-center">
+                          <div className="font-fantasy font-bold text-2xl" style={{ color: '#f0c040' }}>{Math.min(hitDiceToSpend, maxHitDice)}</div>
+                          <div className="text-xs" style={{ color: 'rgba(201,169,110,0.5)' }}>of {maxHitDice} available</div>
+                        </div>
+                        <button onClick={() => setHitDiceToSpend(v => Math.min(maxHitDice, v + 1))}
+                          className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                          style={{ background: 'rgba(60,30,5,0.7)', border: '1px solid rgba(180,140,90,0.3)', color: '#c9a96e' }}>
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-center mt-2" style={{ color: 'rgba(201,169,110,0.5)' }}>
+                        Est. ~{Math.min(hitDiceToSpend, maxHitDice) * avgHealPerDie} HP ({Math.min(hitDiceToSpend, maxHitDice)}d{hitDie}{conMod >= 0 ? `+${conMod}` : conMod} each)
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
               <div className="flex gap-3">

@@ -3,7 +3,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Skull, Heart, Dices, AlertTriangle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
-export default function DeathSavesModal({ character, onStabilize, onDeath, onClose }) {
+/**
+ * DeathSavesModal — PHB p.197
+ *
+ * Props:
+ *   character  — Character entity record
+ *   combat     — (optional) active CombatLog record. When provided, rolls are
+ *                routed through the server-side `death_save` combat engine action
+ *                so the result is logged and the initiative tracker advances.
+ *   onStabilize(roll) — called when stabilized or nat20
+ *   onDeath()         — called when 3 failures reached
+ *   onClose()         — close the modal without acting
+ */
+export default function DeathSavesModal({ character, combat, onStabilize, onDeath, onClose }) {
   const [rolling, setRolling] = useState(false);
   const [lastRoll, setLastRoll] = useState(null);
   // Use local state so UI updates immediately after each roll (not stale prop)
@@ -13,9 +25,36 @@ export default function DeathSavesModal({ character, onStabilize, onDeath, onClo
   const rollDeathSave = async () => {
     setRolling(true);
     setLastRoll(null);
-
     await new Promise(resolve => setTimeout(resolve, 600));
 
+    // ── IN-COMBAT: route through combat engine (server-authoritative roll + log) ──
+    if (combat?.id) {
+      try {
+        const res = await base44.functions.invoke('combatEngine', {
+          action: 'death_save',
+          session_id: combat.session_id,
+          combat_id: combat.id,
+          character_id: character.id,
+          payload: {},
+        });
+        const d = res.data;
+        if (d?.error) { setRolling(false); return; }
+        const roll = d.roll;
+        setLastRoll(roll);
+        setSuccesses(d.death_saves_success);
+        setFailures(d.death_saves_failure);
+        setRolling(false);
+        // Reload combat so turn tracker advances
+        window.dispatchEvent(new CustomEvent('reload-combat'));
+        if (d.regained_hp || d.stabilized) { onStabilize(roll); return; }
+        if (d.character_dead) { onDeath(); return; }
+      } catch {
+        setRolling(false);
+      }
+      return;
+    }
+
+    // ── OUT-OF-COMBAT FALLBACK: client-side roll (e.g., GM-controlled scenario) ──
     const roll = Math.floor(Math.random() * 20) + 1;
     setLastRoll(roll);
     setRolling(false);
@@ -24,19 +63,12 @@ export default function DeathSavesModal({ character, onStabilize, onDeath, onClo
     let newFailures = failures;
 
     if (roll === 20) {
-      // Natural 20 = stabilize and regain 1 HP immediately
       await base44.entities.Character.update(character.id, {
-        hp_current: 1,
-        death_saves_success: 0,
-        death_saves_failure: 0,
-        conditions: [],
+        hp_current: 1, death_saves_success: 0, death_saves_failure: 0, conditions: [],
       });
-      setLastRoll(roll);
-      setRolling(false);
       onStabilize(roll);
       return;
     } else if (roll === 1) {
-      // Natural 1 = 2 failures per D&D 5e rules
       newFailures = Math.min(3, failures + 2);
     } else if (roll >= 10) {
       newSuccesses = Math.min(3, successes + 1);
@@ -44,36 +76,24 @@ export default function DeathSavesModal({ character, onStabilize, onDeath, onClo
       newFailures = Math.min(3, failures + 1);
     }
 
-    // Update local state immediately so UI reflects the new values
     setSuccesses(newSuccesses);
     setFailures(newFailures);
-
-    // Persist to DB
     await base44.entities.Character.update(character.id, {
       death_saves_success: newSuccesses,
       death_saves_failure: newFailures,
     });
 
-    // Check for death or stabilization
     if (newFailures >= 3) {
-      // Mark character as truly dead (hp stays 0, clear saves)
       await base44.entities.Character.update(character.id, {
-        hp_current: 0,
-        death_saves_success: 0,
-        death_saves_failure: 0,
+        hp_current: 0, death_saves_success: 0, death_saves_failure: 0,
       });
       onDeath();
     } else if (newSuccesses >= 3) {
-      // Stabilized: set to 1 HP, clear saves and conditions
       await base44.entities.Character.update(character.id, {
-        hp_current: 1,
-        death_saves_success: 0,
-        death_saves_failure: 0,
-        conditions: [],
+        hp_current: 1, death_saves_success: 0, death_saves_failure: 0, conditions: [],
       });
       onStabilize(roll);
     }
-    // Otherwise stay open for next roll — no onClose() call needed
   };
 
   const isSuccess = lastRoll && lastRoll >= 10;
