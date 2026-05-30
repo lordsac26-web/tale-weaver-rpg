@@ -135,6 +135,10 @@ Deno.serve(async (req) => {
       const initRoll = rollD20();
       const initMod = statMod(enemy.dexterity || 10);
       const enemyHP = parseInt(enemy.hp) || enemy.hp_current || 10;
+      // Legendary creatures (CR 10+ or explicitly flagged) get Legendary Actions (3/round)
+      // and Legendary Resistance (3/day) per the Monster Manual.
+      const cr = enemy.cr || 1;
+      const isLegendary = enemy.is_legendary || cr >= 10;
       combatants.push({
         id: `enemy_${Math.random().toString(36).substr(2, 9)}`,
         name: enemy.name || enemy.monster_name || `Enemy`,
@@ -150,8 +154,10 @@ Deno.serve(async (req) => {
         damage_bonus: enemy.damage_bonus || 2,
         conditions: [],
         is_conscious: true,
-        cr: enemy.cr || 1,
-        xp: enemy.xp || 100
+        cr,
+        xp: enemy.xp || 100,
+        is_legendary: isLegendary,
+        legendary_resistance_remaining: isLegendary ? 3 : 0
       });
     }
 
@@ -375,6 +381,15 @@ Deno.serve(async (req) => {
           effectiveSaveFailed = effectiveSaveTotal < spellSaveDC;
         }
 
+        // Legendary Resistance (MM): a legendary creature can choose to succeed on a
+        // failed save, up to legendary_resistance_remaining times per day.
+        let usedLegendaryResistance = false;
+        if (effectiveSaveFailed && (target.legendary_resistance_remaining || 0) > 0) {
+          target.legendary_resistance_remaining -= 1;
+          effectiveSaveFailed = false;
+          usedLegendaryResistance = true;
+        }
+
         const dmg2 = rollDiceStr(damageDice);
         // On save failure: minimum 1 damage. On success: half damage (can be 0 for weak saves)
         const finalDmg = effectiveSaveFailed ? Math.max(1, dmg2) : Math.max(0, Math.floor(dmg2 / 2));
@@ -404,7 +419,7 @@ Deno.serve(async (req) => {
         const saveEntry = {
           round: combatLog.round, actor: character.name, action: 'spell', target: target.name,
           hit: effectiveSaveFailed, spell_name: spell.name,
-          text: `${character.name} casts ${spell.name}! DC${spellSaveDC} ${spell.save_type} save: ${target.name} rolled ${effectiveSaveTotal}${modifiers.metamagic?.heightened ? ' (Heightened: disadvantage)' : ''} — ${effectiveSaveFailed ? 'FAILED' : 'success'}.${finalDmg > 0 ? ` Takes ${finalDmg} ${spell.damage_type || ''} damage.` : ''}${appliedCondition ? ` ${target.name} is ${appliedCondition.toUpperCase()}!` : ''}${target.hp_current === 0 ? ` ${target.name} falls!` : ''}`
+          text: `${character.name} casts ${spell.name}! DC${spellSaveDC} ${spell.save_type} save: ${target.name} rolled ${effectiveSaveTotal}${modifiers.metamagic?.heightened ? ' (Heightened: disadvantage)' : ''} — ${usedLegendaryResistance ? `FAILED but uses LEGENDARY RESISTANCE (${target.legendary_resistance_remaining} left)` : (effectiveSaveFailed ? 'FAILED' : 'success')}.${finalDmg > 0 ? ` Takes ${finalDmg} ${spell.damage_type || ''} damage.` : ''}${appliedCondition ? ` ${target.name} is ${appliedCondition.toUpperCase()}!` : ''}${target.hp_current === 0 ? ` ${target.name} falls!` : ''}`
         };
 
         // Twinned Spell: resolve the same spell against a second creature (PHB p.102).
@@ -573,6 +588,28 @@ Deno.serve(async (req) => {
       // damageBonus stays 0 for spell attacks (no ability mod added to spell damage by default).
     } else if (weapon) {
       const isRanged = weapon.type === 'ranged';
+      // Ammunition (PHB p.146): ranged weapons with the Ammunition property must
+      // consume a matching ammo item from inventory. Block the attack if none left.
+      const weaponProps = (weapon.properties || []).map(p => p.toLowerCase());
+      const usesAmmo = weaponProps.includes('ammunition');
+      if (isRanged && usesAmmo) {
+        const AMMO_FOR = {
+          'longbow': 'arrow', 'shortbow': 'arrow',
+          'light crossbow': 'bolt', 'heavy crossbow': 'bolt', 'hand crossbow': 'bolt',
+          'sling': 'bullet',
+        };
+        const ammoKeyword = AMMO_FOR[(weapon.name || '').toLowerCase()] || 'arrow';
+        const inv = character.inventory || [];
+        const ammoIdx = inv.findIndex(it =>
+          (it.name || '').toLowerCase().includes(ammoKeyword) && (it.quantity ?? 1) > 0
+        );
+        if (ammoIdx === -1) {
+          return Response.json({ error: `Out of ammunition (${ammoKeyword}s). Restock before firing.`, invalid: true }, { status: 400 });
+        }
+        // Decrement one unit of ammunition
+        const newInv = inv.map((it, i) => i === ammoIdx ? { ...it, quantity: Math.max(0, (it.quantity ?? 1) - 1) } : it);
+        await base44.entities.Character.update(character_id, { inventory: newInv });
+      }
       const isFinesse = (weapon.properties || []).includes('finesse');
       const strMod = statMod(character.strength);
       const dexMod = statMod(character.dexterity);
@@ -1060,6 +1097,14 @@ Deno.serve(async (req) => {
       return Response.json({ skipped: true });
     }
 
+    // Legendary creature: refresh its 3 legendary actions at the start of its turn (MM).
+    if (currentCombatant.is_legendary) {
+      await base44.entities.CombatLog.update(combat_id, {
+        world_state: { ...(combatLog.world_state || {}), legendary_actions_remaining: 3 }
+      });
+      combatLog.world_state = { ...(combatLog.world_state || {}), legendary_actions_remaining: 3 };
+    }
+
     // === AUTO-SAVE: shake off saveable conditions at the start of the turn ===
     // Hold Person/Monster, Banishment, etc. grant a save at the end of each turn;
     // we resolve it here at the start of the affected creature's turn for simplicity.
@@ -1337,7 +1382,10 @@ Deno.serve(async (req) => {
       const conProf = hasResilientCon ? (charFull?.proficiency_bonus || 2) : 0;
       const conRoll1 = rollD20();
       const conRoll2 = hasWarCaster ? rollD20() : conRoll1;
-      const conSave2 = Math.max(conRoll1, conRoll2) + statMod(charFull?.constitution || 10) + conProf;
+      // Paladin Aura of Protection (PHB p.85): add CHA modifier (min +1) to own saves at L6+
+      const auraBonus = (charFull?.class === 'Paladin' && (charFull?.level || 1) >= 6)
+        ? Math.max(1, statMod(charFull?.charisma || 10)) : 0;
+      const conSave2 = Math.max(conRoll1, conRoll2) + statMod(charFull?.constitution || 10) + conProf + auraBonus;
       if (conSave2 < dc) {
         newWS.concentration_spell = null;
         newWS.concentration_caster = null;
@@ -1411,6 +1459,60 @@ Deno.serve(async (req) => {
       world_state: { ...ws, actions_used_this_turn: newUsed },
     });
     return Response.json({ success: true, log_entry: logEntry, uses_remaining: maxUses - (used + 1) });
+  }
+
+  // ─── LEGENDARY ACTION (Monster Manual) ──────────────────────────────────────
+  // A legendary creature can spend legendary actions at the end of another
+  // creature's turn. Budget = 3 per round, refreshed at the start of its own turn
+  // (handled in enemy_turn via world_state reset). Here we resolve one LA: a melee
+  // attack against the player.
+  if (action === 'legendary_action') {
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatants = [...combatLog.combatants];
+
+    // Find the legendary enemy (first conscious enemy flagged legendary with budget left)
+    const ws = combatLog.world_state || {};
+    const budget = ws.legendary_actions_remaining ?? 3;
+    const legendary = combatants.find(c => c.type === 'enemy' && c.is_conscious && c.is_legendary);
+    const player = combatants.find(c => c.type === 'player');
+
+    if (!legendary || !player || !player.is_conscious || budget <= 0) {
+      return Response.json({ skipped: true, legendary_actions_remaining: Math.max(0, budget) });
+    }
+
+    // Resolve a single legendary melee attack
+    const atkRoll = rollD20();
+    const atkBonus = legendary.attack_bonus || 5;
+    const isCrit = atkRoll === 20;
+    const hit = !(atkRoll === 1) && (isCrit || (atkRoll + atkBonus) >= player.ac);
+    let dmg = 0;
+    if (hit) {
+      const dMatch = (legendary.damage_dice || '2d6').match(/^(\d+)d(\d+)$/);
+      const numDice = dMatch ? (isCrit ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1])) : (isCrit ? 4 : 2);
+      const sides = dMatch ? parseInt(dMatch[2]) : 6;
+      for (let i = 0; i < numDice; i++) dmg += rollDice(sides);
+      dmg = Math.max(1, dmg + (legendary.damage_bonus || 0));
+      player.hp_current = Math.max(0, player.hp_current - dmg);
+      if (player.hp_current === 0) player.is_conscious = false;
+      await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
+    }
+
+    const newBudget = budget - 1;
+    const logEntry = {
+      round: combatLog.round, actor: legendary.name, action: 'legendary_action', target: player.name,
+      hit, critical: isCrit, damage: dmg,
+      text: hit
+        ? `✨ LEGENDARY ACTION — ${legendary.name} strikes ${player.name}${isCrit ? ' (CRIT!)' : ''} for ${dmg} damage! (${newBudget} legendary actions left)${player.hp_current === 0 ? ` ${player.name} falls!` : ''}`
+        : `✨ LEGENDARY ACTION — ${legendary.name} strikes at ${player.name} but misses. (${newBudget} legendary actions left)`
+    };
+
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants: combatants.map(c => c.id === player.id ? player : c),
+      log_entries: [...(combatLog.log_entries || []), logEntry],
+      world_state: { ...ws, legendary_actions_remaining: newBudget },
+    });
+
+    return Response.json({ log_entry: logEntry, player_hp: player.hp_current, legendary_actions_remaining: newBudget });
   }
 
   if (action === 'next_turn') {

@@ -237,6 +237,12 @@ export function computeAC(character, equipped) {
     } else if (character.class === 'Barbarian') {
       base = Math.max(base, 10 + dexMod + conMod);
     }
+    // Mage Armor (PHB p.256): base AC 13 + DEX while unarmored.
+    // Active when a 'mage_armor' modifier is present on the character.
+    const hasMageArmor = (character.active_modifiers || []).some(
+      m => (m.id || m.name || '').toLowerCase().replace(/\s+/g, '_') === 'mage_armor'
+    );
+    if (hasMageArmor) base = Math.max(base, 13 + dexMod);
   }
 
   // Racial natural armor — always an option

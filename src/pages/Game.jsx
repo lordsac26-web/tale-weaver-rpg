@@ -363,6 +363,13 @@ export default function Game() {
 
     const data = result.data;
 
+    // Invalid action (e.g. out of ammunition) — surface message, don't consume the turn
+    if (data?.invalid) {
+      setNarrative(prev => [...prev, { type: 'roll_result', text: data.error || 'That action is not available.', success: false }]);
+      setCombatLoading(false);
+      return;
+    }
+
     // Emit floating combat text event + haptic feedback
     if (data.log_entry) {
       setLastCombatEvent({
@@ -469,7 +476,39 @@ export default function Game() {
     setCombatLoading(false);
   };
 
+  // Legendary Actions (MM): a legendary creature spends actions at the END of another
+  // creature's turn. We resolve up to 3 at the end of the player's turn.
+  const processLegendaryActions = async (combatId) => {
+    const logs = await base44.entities.CombatLog.filter({ id: combatId });
+    const log = logs[0];
+    if (!log || !log.is_active) return;
+    const hasLegendary = (log.combatants || []).some(c => c.type === 'enemy' && c.is_conscious && c.is_legendary);
+    const player = (log.combatants || []).find(c => c.type === 'player');
+    if (!hasLegendary || !player?.is_conscious) return;
+
+    let safety = 0;
+    while (safety < 3) {
+      safety++;
+      const res = await base44.functions.invoke('combatEngine', {
+        action: 'legendary_action', session_id: sessionId, combat_id: combatId,
+        character_id: character?.id, payload: {}
+      });
+      if (res.data?.skipped || (res.data?.legendary_actions_remaining ?? 0) < 0) break;
+      if (res.data?.log_entry) {
+        setNarrative(prev => [...prev, { type: 'roll_result', text: res.data.log_entry.text, success: res.data.log_entry.hit === false }]);
+        setLastCombatEvent({ key: Date.now(), hit: res.data.log_entry.hit, critical: res.data.log_entry.critical, damage: res.data.log_entry.damage || 0 });
+      }
+      await new Promise(r => setTimeout(r, 500));
+      await reloadCombat(combatId);
+      if ((res.data?.legendary_actions_remaining ?? 0) <= 0) break;
+    }
+    await loadState();
+  };
+
   const processEnemyTurns = async (combatId) => {
+    // Legendary actions fire at the end of the player's turn, before enemies act.
+    await processLegendaryActions(combatId);
+
     // Record the starting round — enemies should only act once per round.
     // When the round advances, stop and let the player go next.
     const initialLogs = await base44.entities.CombatLog.filter({ id: combatId });

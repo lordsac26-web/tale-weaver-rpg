@@ -53,7 +53,15 @@ function computeModifier(character, rollKey) {
   const abilityCheck = ABILITY_CHECKS.find(a => a.key === rollKey);
   if (abilityCheck) return statMod(abilityCheck.stat);
   const save = SAVING_THROWS.find(s => s.key === rollKey);
-  if (save) return statMod(save.stat) + (character.saving_throws?.[save.stat] ? profBonus : 0);
+  if (save) {
+    let bonus = statMod(save.stat) + (character.saving_throws?.[save.stat] ? profBonus : 0);
+    // Paladin Aura of Protection (PHB p.85): from level 6, add CHA modifier (min +1)
+    // to all of your own saving throws.
+    if (character.class === 'Paladin' && (character.level || 1) >= 6) {
+      bonus += Math.max(1, statMod('charisma'));
+    }
+    return bonus;
+  }
   const skill = SKILLS.find(s => s.key === rollKey);
   if (skill) return statMod(skill.stat) + skillProf(skill.key);
   if (rollKey === 'attack_melee') return statMod('strength') + (character.equipped?.weapon?.attack_bonus || 0);
