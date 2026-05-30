@@ -43,6 +43,21 @@ Deno.serve(async (req) => {
     return total;
   };
 
+  // Damage Resistance/Vulnerability/Immunity (PHB p.197): immunity → 0,
+  // resistance → halved (rounded down), vulnerability → doubled.
+  const normList = (l) => Array.isArray(l) ? l.map(d => String(d || '').toLowerCase().trim()).filter(Boolean) : [];
+  const applyDamageModifiers = (damage, damageType, target = {}) => {
+    const type = String(damageType || '').toLowerCase().trim();
+    if (!type || damage <= 0) return { amount: Math.max(0, damage), applied: null };
+    const immunities = normList(target.immunities);
+    const resistances = normList(target.resistances);
+    const vulnerabilities = normList(target.vulnerabilities);
+    if (immunities.includes(type)) return { amount: 0, applied: 'immunity' };
+    if (resistances.includes(type)) return { amount: Math.floor(damage / 2), applied: 'resistance' };
+    if (vulnerabilities.includes(type)) return { amount: damage * 2, applied: 'vulnerability' };
+    return { amount: Math.max(0, damage), applied: null };
+  };
+
   // Advance initiative tracker past current combatant, skipping unconscious
   const advanceTurn = (currentIndex, currentRound, combatantsArr) => {
     let nextIndex = (currentIndex + 1) % combatantsArr.length;
@@ -696,6 +711,19 @@ Deno.serve(async (req) => {
       // PHB rule: a hit always deals at least 1 damage
       damage = Math.max(1, damage);
 
+      // Apply target's Resistance/Vulnerability/Immunity (PHB p.197).
+      // Damage type: spell uses spell.damage_type; weapon uses its damage_type (default slashing).
+      const dmgType = (spell?.damage_type || weapon?.damage_type || 'slashing').toLowerCase();
+      const tgtMod = applyDamageModifiers(damage, dmgType, {
+        resistances: target.resistances,
+        vulnerabilities: target.vulnerabilities,
+        immunities: target.immunities,
+      });
+      if (tgtMod.applied) {
+        logEntry.damage_modifier = tgtMod.applied;
+        damage = tgtMod.applied === 'immunity' ? 0 : tgtMod.amount;
+      }
+
       // Concentration check: if caster is concentrating and takes damage, DC = max(10, half damage) CON save
       // (Enemy triggering concentration check is handled in enemy_turn)
 
@@ -1050,17 +1078,55 @@ Deno.serve(async (req) => {
 
     // Barbarian Rage Resistance (PHB p.48): halve B/P/S while raging
     const isBarbarianRaging = isRaging && (charFull?.class === 'Barbarian' || charFull?.class === 'barbarian');
+    let alreadyResisted = false;
     if (isBarbarianRaging && physicalTypes.includes(enemyDamageType)) {
       const halved = Math.floor(finalDamage / 2);
       attackLogs.push(`[Rage Resistance: ${finalDamage} → ${halved} ${enemyDamageType}]`);
       finalDamage = halved;
+      alreadyResisted = true;
+    }
+
+    // General Resistance/Vulnerability/Immunity from character fields (PHB p.197).
+    // Resistance doesn't stack (a damage type can only be halved once), so skip
+    // resistance if Rage already halved this same physical damage.
+    const dmgMod = applyDamageModifiers(finalDamage, enemyDamageType, {
+      resistances: charFull?.resistances,
+      vulnerabilities: charFull?.vulnerabilities,
+      immunities: charFull?.immunities,
+    });
+    if (dmgMod.applied === 'immunity') {
+      attackLogs.push(`[Immune to ${enemyDamageType}: ${finalDamage} → 0]`);
+      finalDamage = 0;
+    } else if (dmgMod.applied === 'resistance' && !alreadyResisted) {
+      attackLogs.push(`[Resist ${enemyDamageType}: ${finalDamage} → ${dmgMod.amount}]`);
+      finalDamage = dmgMod.amount;
+    } else if (dmgMod.applied === 'vulnerability') {
+      attackLogs.push(`[Vulnerable to ${enemyDamageType}: ${finalDamage} → ${dmgMod.amount}]`);
+      finalDamage = dmgMod.amount;
     }
 
     // Apply total damage to player
+    let instantDeath = false;
     if (finalDamage > 0) {
-      player.hp_current = Math.max(0, player.hp_current - finalDamage);
-      if (player.hp_current === 0) player.is_conscious = false;
-      await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
+      const hpBefore = player.hp_current;
+      const overkill = finalDamage - hpBefore; // damage remaining after reaching 0 HP
+      player.hp_current = Math.max(0, hpBefore - finalDamage);
+      if (player.hp_current === 0) {
+        player.is_conscious = false;
+        // Instant Death (PHB p.197): if remaining damage >= max HP, the creature dies instantly
+        if (overkill >= (player.hp_max || 0)) {
+          instantDeath = true;
+          const downedChar = await base44.entities.Character.get(player.id);
+          await base44.entities.Character.update(player.id, {
+            hp_current: 0,
+            death_saves_failure: 3, // mark as dead
+            death_saves_success: 0,
+          });
+        }
+      }
+      if (!instantDeath) {
+        await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
+      }
     }
     totalDamage = finalDamage; // update for log accuracy
 
@@ -1069,7 +1135,8 @@ Deno.serve(async (req) => {
     if (strategyDesc) logText += `[${currentCombatant.name} ${strategyDesc}] `;
     if (anyHit) {
       logText += attackLogs.join('; ') + `. ${player.name} takes ${totalDamage} total damage! (${player.hp_current}/${player.hp_max} HP)`;
-      if (!player.is_conscious) logText += ` ${player.name} falls!`;
+      if (instantDeath) logText += ` 💀 The blow is so massive that ${player.name} dies instantly!`;
+      else if (!player.is_conscious) logText += ` ${player.name} falls!`;
     } else {
       logText = `${strategyDesc ? `[${currentCombatant.name} ${strategyDesc}] ` : ''}${currentCombatant.name} attacks but misses ${player.name}! (${attackLogs.join('; ')})`;
     }
@@ -1086,9 +1153,12 @@ Deno.serve(async (req) => {
       const dc = Math.max(10, Math.floor(finalDamage / 2));
       // War Caster: advantage on concentration saves (PHB p.170)
       const hasWarCaster = playerHasFeat('War Caster');
+      // Resilient (CON): add proficiency bonus to CON saves (PHB p.168)
+      const hasResilientCon = !!(charFull?.saving_throws?.constitution);
+      const conProf = hasResilientCon ? (charFull?.proficiency_bonus || 2) : 0;
       const conRoll1 = rollD20();
       const conRoll2 = hasWarCaster ? rollD20() : conRoll1;
-      const conSave2 = Math.max(conRoll1, conRoll2) + statMod(charFull?.constitution || 10);
+      const conSave2 = Math.max(conRoll1, conRoll2) + statMod(charFull?.constitution || 10) + conProf;
       if (conSave2 < dc) {
         newWS.concentration_spell = null;
         newWS.concentration_caster = null;

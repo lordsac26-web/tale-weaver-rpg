@@ -714,7 +714,9 @@ export const ALL_SKILLS = Object.keys(SKILL_STAT_MAP);
 export const ALIGNMENTS = ['Lawful Good', 'Neutral Good', 'Chaotic Good', 'Lawful Neutral', 'True Neutral', 'Chaotic Neutral', 'Lawful Evil', 'Neutral Evil', 'Chaotic Evil'];
  
 // ─── Passive Scores ─────────────────────────────────────────────────────────
-export function calcPassiveScore(character, skill) {
+// PHB p.175: a passive check is 10 + all modifiers. If the character has
+// advantage on the check, add 5; if disadvantage, subtract 5.
+export function calcPassiveScore(character, skill, { advantage = false, disadvantage = false } = {}) {
   const stat    = SKILL_STAT_MAP[skill];
   const mod     = calcStatMod(character[stat]);
   const profBonus = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
@@ -731,7 +733,12 @@ export function calcPassiveScore(character, skill) {
   else if (profLevel === 'proficient' || profLevel === true) profContrib = profBonus;
   else if (isJoat)                               profContrib = Math.floor(profBonus / 2);
  
-  return 10 + mod + profContrib;
+  // Advantage/disadvantage modify passive scores by ±5 (they cancel if both apply)
+  let advMod = 0;
+  if (advantage && !disadvantage) advMod = 5;
+  else if (disadvantage && !advantage) advMod = -5;
+ 
+  return 10 + mod + profContrib + advMod;
 }
  
 // ─── Carry Capacity ──────────────────────────────────────────────────────────
