@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Star, TrendingUp, Heart, Shield, Sparkles, Award, X, ChevronRight } from 'lucide-react';
 import { CLASSES, calcStatMod, PROFICIENCY_BY_LEVEL } from './gameData';
+import SpellSelectionStep, { getRequiredSpellCounts } from './SpellSelectionStep';
 
 const XP_THRESHOLDS = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
 
@@ -14,9 +15,14 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
   const [asiChoice, setAsiChoice] = useState('stats'); // 'stats' or 'feat'
   const [statIncreases, setStatIncreases] = useState({ first: '', second: '' });
   const [selectedFeat, setSelectedFeat] = useState('');
+  const [spellSelection, setSpellSelection] = useState({ cantrips: [], spells: [] });
   
   const currentLevel = character.level || 1;
   const newLevel = currentLevel + 1;
+  const requiredSpells = getRequiredSpellCounts(character, newLevel);
+  const spellsIncomplete =
+    (spellSelection.cantrips?.length || 0) < requiredSpells.cantrips ||
+    (spellSelection.spells?.length || 0) < requiredSpells.spells;
   const classData = CLASSES[character.class] || {};
   const hitDie = classData.hit_die || 8;
   const conMod = calcStatMod(character.constitution || 10);
@@ -78,6 +84,11 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
         return;
       }
     }
+
+    if (spellsIncomplete) {
+      alert('Please select your new spells to continue.');
+      return;
+    }
     
     const hpGain = hpRoll + conMod;
     const updates = {
@@ -113,6 +124,12 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
       }
     }
     
+    // Add newly learned spells to character
+    const learnedSpells = [...(spellSelection.cantrips || []), ...(spellSelection.spells || [])];
+    if (learnedSpells.length > 0) {
+      updates.spells_known = [...new Set([...(character.spells_known || []), ...learnedSpells])];
+    }
+
     // Add new features to character
     if (newFeatures.length > 0) {
       updates.features = [...(character.features || []), ...newFeatures];
@@ -384,6 +401,14 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
             </div>
           )}
           
+          {/* Spell Selection */}
+          <SpellSelectionStep
+            character={character}
+            newLevel={newLevel}
+            selection={spellSelection}
+            onChange={setSpellSelection}
+          />
+          
           {/* New Features */}
           {newFeatures.length > 0 && (
             <div className="rounded-xl p-4"
@@ -434,7 +459,8 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
               hpRoll === null || 
               (needsSubclass && !selectedSubclass) ||
               (grantsASI && asiChoice === 'stats' && (!statIncreases.first || !statIncreases.second)) ||
-              (grantsASI && asiChoice === 'feat' && !selectedFeat)
+              (grantsASI && asiChoice === 'feat' && !selectedFeat) ||
+              spellsIncomplete
             }
             className="flex-1 py-3 rounded-xl font-fantasy font-bold text-sm btn-fantasy flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
             <Star className="w-4 h-4" />

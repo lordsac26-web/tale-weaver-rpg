@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Trash2, Info, Package, Weight } from 'lucide-react';
+import { Trash2, Info, Package, Weight, Coins } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { estimateItemValue } from './SellItemModal';
 
 const ITEM_ICONS = {
   weapon: '⚔️',
@@ -21,7 +22,7 @@ const RARITY_COLORS = {
   legendary: 'rgba(255,140,40,0.4)',
 };
 
-export default function InventoryGrid({ items, onEquip, onDelete, onUse, equippedSlots = {} }) {
+export default function InventoryGrid({ items, onEquip, onDelete, onUse, onSell, equippedSlots = {} }) {
   const [selectedItem, setSelectedItem] = useState(null);
 
   const isEquipped = (item) => {
@@ -103,6 +104,7 @@ export default function InventoryGrid({ items, onEquip, onDelete, onUse, equippe
             onEquip={() => { onEquip(selectedItem); setSelectedItem(null); }}
             onUse={() => { onUse(selectedItem); setSelectedItem(null); }}
             onDelete={() => { onDelete(selectedItem); setSelectedItem(null); }}
+            onSell={onSell ? () => { onSell(selectedItem); setSelectedItem(null); } : null}
           />
         )}
       </AnimatePresence>
@@ -110,9 +112,10 @@ export default function InventoryGrid({ items, onEquip, onDelete, onUse, equippe
   );
 }
 
-function ItemDetailModal({ item, isEquipped, onClose, onEquip, onUse, onDelete }) {
+function ItemDetailModal({ item, isEquipped, onClose, onEquip, onUse, onDelete, onSell }) {
   const canEquip = item.category && (item.category.toLowerCase().includes('weapon') || item.category.toLowerCase().includes('armor'));
   const canUse = item.category && (item.category.toLowerCase().includes('potion') || item.category.toLowerCase().includes('consumable'));
+  const sellValue = Math.max(1, Math.floor(estimateItemValue(item) * 0.5));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -195,6 +198,13 @@ function ItemDetailModal({ item, isEquipped, onClose, onEquip, onUse, onDelete }
             <button onClick={onUse}
               className="flex-1 py-2 rounded-lg btn-arcane text-sm">
               Use
+            </button>
+          )}
+          {onSell && !isEquipped && (
+            <button onClick={onSell}
+              className="flex-1 py-2 rounded-lg text-sm flex items-center justify-center gap-1.5"
+              style={{ background: 'rgba(60,45,10,0.6)', border: '1px solid rgba(240,192,64,0.3)', color: '#f0c040' }}>
+              <Coins className="w-3.5 h-3.5" /> Sell ({sellValue}gp)
             </button>
           )}
           <button onClick={onDelete}

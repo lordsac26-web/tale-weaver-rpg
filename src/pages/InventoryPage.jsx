@@ -5,7 +5,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Package, Sword, Shield, Trash2 } from 'lucide-react';
 import InventoryGrid from '@/components/inventory/InventoryGrid';
 import EncumbranceBar from '@/components/inventory/EncumbranceBar';
-import { motion } from 'framer-motion';
+import GoldHeader from '@/components/inventory/GoldHeader';
+import SellItemModal from '@/components/inventory/SellItemModal';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function InventoryPage() {
   const navigate = useNavigate();
@@ -13,6 +15,7 @@ export default function InventoryPage() {
   const characterId = searchParams.get('character_id');
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState('all'); // all, weapons, armor, consumables
+  const [sellingItem, setSellingItem] = useState(null);
 
   const { data: character, isLoading } = useQuery({
     queryKey: ['character', characterId],
@@ -90,6 +93,25 @@ export default function InventoryPage() {
     });
   };
 
+  const handleConfirmSell = (item, qty, totalGold) => {
+    // Remove sold quantity from inventory
+    const newInventory = inventory
+      .map(i => {
+        if (i === item) {
+          const remaining = (i.quantity || 1) - qty;
+          return remaining > 0 ? { ...i, quantity: remaining } : null;
+        }
+        return i;
+      })
+      .filter(Boolean);
+
+    updateMutation.mutate({
+      id: characterId,
+      data: { inventory: newInventory, gold: (character.gold || 0) + totalGold },
+    });
+    setSellingItem(null);
+  };
+
   const handleUse = (item) => {
     // Consumable logic would go here
     const newInventory = inventory.map(i => {
@@ -127,7 +149,8 @@ export default function InventoryPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-5xl mx-auto space-y-4">
-          {/* Encumbrance Bar */}
+          {/* Gold + Encumbrance */}
+          <GoldHeader character={character} />
           <EncumbranceBar character={character} />
 
           {/* Filter Tabs */}
@@ -163,10 +186,21 @@ export default function InventoryPage() {
             onEquip={handleEquip}
             onDelete={handleDelete}
             onUse={handleUse}
+            onSell={setSellingItem}
             equippedSlots={equipped}
           />
         </div>
       </div>
+
+      <AnimatePresence>
+        {sellingItem && (
+          <SellItemModal
+            item={sellingItem}
+            onConfirm={handleConfirmSell}
+            onClose={() => setSellingItem(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
