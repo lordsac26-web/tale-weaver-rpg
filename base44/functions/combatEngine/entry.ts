@@ -1,8 +1,24 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 /**
- * Combat Engine - handles initiative, turns, damage, conditions
- * All math done server-side referencing DB state
+ * Combat Engine - handles initiative, turns, damage, conditions.
+ * All math done server-side referencing DB state.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ TABLE OF CONTENTS — search the banner text to jump to a section          │
+ * ├─────────────────────────────────────────────────────────────────────────┤
+ * │  SECTION: SHARED HELPERS        dice, damage mods, conditions, advanceTurn│
+ * │  ACTION: start_combat           roll initiative, build the CombatLog      │
+ * │  HELPER: getActionsPerTurn      Extra Attack / action economy             │
+ * │  ACTION: player_attack          weapon + spell attacks (largest handler)  │
+ * │  ACTION: offhand_attack         two-weapon fighting bonus-action strike   │
+ * │  ACTION: enemy_turn             enemy AI, damage mitigation, death saves  │
+ * │  ACTION: action_surge           Fighter extra action                      │
+ * │  ACTION: legendary_action       Monster Manual legendary attack           │
+ * │  ACTION: grapple                opposed Athletics check → Grappled        │
+ * │  ACTION: dodge                  disadvantage on incoming attacks          │
+ * │  ACTION: next_turn              advance initiative tracker                │
+ * └─────────────────────────────────────────────────────────────────────────┘
  */
 Deno.serve(async (req) => {
   const base44 = createClientFromRequest(req);
@@ -11,6 +27,10 @@ Deno.serve(async (req) => {
 
   const { action, session_id, combat_id, character_id, payload } = await req.json();
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION: SHARED HELPERS — dice rolling, damage modifiers, condition logic,
+  // and turn advancement. Used by every action handler below.
+  // ═══════════════════════════════════════════════════════════════════════════
   const statMod = (stat) => Math.floor(((stat || 10) - 10) / 2);
   const rollD20 = () => Math.floor(Math.random() * 20) + 1;
   const rollDice = (sides) => Math.floor(Math.random() * sides) + 1;
@@ -99,6 +119,10 @@ Deno.serve(async (req) => {
     return { nextIndex, nextRound };
   };
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ACTION: start_combat — roll initiative for player + enemies, sort the order,
+  // and create the CombatLog record that drives the whole encounter.
+  // ═══════════════════════════════════════════════════════════════════════════
   if (action === 'start_combat') {
     const { enemies } = payload;
     const session = await base44.entities.GameSession.get(session_id);
@@ -184,7 +208,9 @@ Deno.serve(async (req) => {
     return Response.json({ combat_id: combatLog.id, combatants, initiative_order: combatants });
   }
 
-  // Determine how many actions a character gets per turn based on features/level
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HELPER: getActionsPerTurn — action economy (Extra Attack and class overrides).
+  // ═══════════════════════════════════════════════════════════════════════════
   const getActionsPerTurn = (character) => {
     const features = (character.features || []).map(f => (typeof f === 'string' ? f : f.name || '').toLowerCase());
     const charClass = (character.class || '').toLowerCase();
@@ -206,6 +232,12 @@ Deno.serve(async (req) => {
     return actions;
   };
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ACTION: player_attack — the largest handler. Resolves weapon AND spell
+  // attacks (utility, healing, saving-throw, auto-hit/Magic Missile, Eldritch
+  // Blast, then generic attack-roll), applies feats, conditions, damage mods,
+  // smite/sneak/rage, and advances the turn. Sub-branches are marked with === ===.
+  // ═══════════════════════════════════════════════════════════════════════════
   if (action === 'player_attack') {
     const { target_id, weapon, spell, modifiers = {} } = payload;
     const combatLog = await base44.entities.CombatLog.get(combat_id);
@@ -1098,6 +1130,11 @@ Deno.serve(async (req) => {
     });
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ACTION: enemy_turn — resolves the active enemy's turn: end-of-turn saves,
+  // attacking a downed player (death-save failures), AI strategy selection,
+  // multiattack resolution, damage mitigation, and concentration checks.
+  // ═══════════════════════════════════════════════════════════════════════════
   if (action === 'enemy_turn') {
     const combatLog = await base44.entities.CombatLog.get(combat_id);
     const combatants = [...combatLog.combatants];
@@ -1618,6 +1655,10 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, log_entry: logEntry, next_turn_index: nextIndex, round: nextRound });
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ACTION: next_turn — simply advance the initiative tracker (used when the
+  // player ends their turn early or to step a non-acting combatant).
+  // ═══════════════════════════════════════════════════════════════════════════
   if (action === 'next_turn') {
     const combatLog = await base44.entities.CombatLog.get(combat_id);
     const combatants = combatLog.combatants;
