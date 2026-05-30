@@ -105,6 +105,113 @@ Deno.serve(async (req) => {
     stunned: 'constitution',
   };
 
+  // ─── DATA-DRIVEN MONSTER AI ─────────────────────────────────────────────────
+  // Each enemy has an `archetype` (stored at start_combat). The archetype maps to a
+  // tactical preset: a prioritized list of tactics, each with a `when` predicate and
+  // the combat effects it applies (extra attacks, accuracy/damage tweaks, descriptor).
+  // To add or tune a monster's behavior, edit AI_ARCHETYPES — no control-flow changes.
+  //
+  // Tactic effect fields:
+  //   numAttacks   — total attacks this turn (default 1)
+  //   attackBonus  — flat bonus/penalty to the attack roll
+  //   bonusDamage  — flat bonus damage per hit
+  //   desc         — flavor text shown in the log ("[Name <desc>]")
+  // Tactic gating fields (all optional; a tactic fires when ALL provided predicates pass):
+  //   selfHpBelow / selfHpAbove — fraction of the enemy's own max HP
+  //   playerHpBelow             — fraction of the player's max HP
+  //   roundLte                  — only on/before this round
+  //   chance                    — probabilistic gate (0..1)
+  // Tactics are evaluated in order; the FIRST match wins, else `default` is used.
+  const AI_ARCHETYPES = {
+    // Big dumb melee: hits hard, gets reckless when wounded.
+    brute: {
+      label: 'brute',
+      tactics: [
+        { id: 'desperate_fury', when: { selfHpBelow: 0.25 }, effects: { numAttacks: 2, attackBonus: 2, bonusDamage: 2, desc: 'swings in a desperate frenzy!' } },
+        { id: 'reckless',       when: { chance: 0.5 },        effects: { attackBonus: 3, bonusDamage: 2, desc: 'attacks recklessly!' } },
+      ],
+      default: { desc: 'attacks!' },
+    },
+    // Mobile striker: opportunistic, presses weakened foes, retreats when nearly dead.
+    scout: {
+      label: 'scout',
+      tactics: [
+        { id: 'retreat',        when: { selfHpBelow: 0.25, chance: 0.5 }, effects: { attackBonus: -1, desc: 'looks for an opening to flee!' } },
+        { id: 'press',          when: { playerHpBelow: 0.3 },             effects: { attackBonus: 2, bonusDamage: 1, desc: 'darts in to finish the wounded hero!' } },
+        { id: 'tactical_strike',when: { chance: 0.35 },                   effects: { attackBonus: 1, desc: 'strikes at a weak point!' } },
+      ],
+      default: { desc: 'attacks!' },
+    },
+    // Ranged caster: opens with a calculated assessment, then precise blasts.
+    spellcaster: {
+      label: 'spellcaster',
+      tactics: [
+        { id: 'opening_assess', when: { roundLte: 1 },        effects: { attackBonus: 1, desc: 'weaves a spell, sizing up the hero...' } },
+        { id: 'focused_blast',  when: { playerHpBelow: 0.4 }, effects: { attackBonus: 2, bonusDamage: 2, desc: 'channels a focused blast!' } },
+        { id: 'arcane_volley',  when: { chance: 0.4 },        effects: { numAttacks: 2, desc: 'unleashes an arcane volley!' } },
+      ],
+      default: { desc: 'casts a spell!' },
+    },
+    // Disciplined fighter: balanced, tactical, holds the line.
+    soldier: {
+      label: 'soldier',
+      tactics: [
+        { id: 'multiattack',    when: { selfHpAbove: 0.5 },   effects: { numAttacks: 2, desc: 'executes a disciplined multiattack!' } },
+        { id: 'press',          when: { playerHpBelow: 0.3 }, effects: { attackBonus: 2, bonusDamage: 1, desc: 'presses the advantage!' } },
+        { id: 'defensive',      when: { chance: 0.2 },        effects: { attackBonus: -2, desc: 'takes a defensive stance!' } },
+      ],
+      default: { desc: 'attacks!' },
+    },
+    // Boss/legendary: relentless, escalates with multiattacks and fury.
+    boss: {
+      label: 'boss',
+      tactics: [
+        { id: 'desperate_fury', when: { selfHpBelow: 0.25 }, effects: { numAttacks: 3, bonusDamage: 2, desc: 'fights with desperate fury!' } },
+        { id: 'press',          when: { playerHpBelow: 0.3 }, effects: { numAttacks: 2, attackBonus: 2, bonusDamage: 2, desc: 'moves in for the kill!' } },
+        { id: 'opening',        when: { roundLte: 1 },        effects: { numAttacks: 2, desc: 'sizes up the hero with cold calculation...' } },
+        { id: 'multiattack',    when: { chance: 1 },          effects: { numAttacks: 2, desc: 'unleashes a flurry of blows!' } },
+      ],
+      default: { numAttacks: 2, desc: 'attacks!' },
+    },
+  };
+
+  // Infer an archetype from monster metadata when one isn't explicitly provided.
+  const inferArchetype = (enemy) => {
+    if (enemy.archetype && AI_ARCHETYPES[enemy.archetype]) return enemy.archetype;
+    const cr = enemy.cr || 1;
+    if (enemy.is_legendary || cr >= 10) return 'boss';
+    const text = `${enemy.name || ''} ${enemy.monster_name || ''} ${enemy.meta || ''} ${enemy.type || ''} ${(enemy.actions || '')}`.toLowerCase();
+    if ((enemy.attack_type === 'ranged') || /mage|wizard|sorcerer|warlock|caster|cultist|priest|shaman|witch|lich|spell/.test(text)) return 'spellcaster';
+    if (/scout|rogue|assassin|thief|archer|skirmisher|goblin|kobold|wolf|raptor|stalker/.test(text)) return 'scout';
+    if (/knight|guard|soldier|veteran|captain|legionnaire|hobgoblin|warrior/.test(text)) return 'soldier';
+    if (cr >= 5) return 'boss';
+    return 'brute';
+  };
+
+  // Evaluate an archetype's tactic list against the current battlefield state and
+  // return the chosen tactic effects ({ numAttacks, attackBonus, bonusDamage, desc }).
+  const chooseTactic = (archetypeKey, ctx) => {
+    const arch = AI_ARCHETYPES[archetypeKey] || AI_ARCHETYPES.brute;
+    const passes = (when = {}) => {
+      if (when.selfHpBelow != null && !(ctx.selfHpPct < when.selfHpBelow)) return false;
+      if (when.selfHpAbove != null && !(ctx.selfHpPct >= when.selfHpAbove)) return false;
+      if (when.playerHpBelow != null && !(ctx.playerHpPct < when.playerHpBelow)) return false;
+      if (when.roundLte != null && !(ctx.round <= when.roundLte)) return false;
+      if (when.chance != null && !(Math.random() < when.chance)) return false;
+      return true;
+    };
+    const chosen = (arch.tactics || []).find(t => passes(t.when)) || null;
+    const eff = chosen ? chosen.effects : (arch.default || {});
+    return {
+      id: chosen ? chosen.id : 'default',
+      numAttacks: eff.numAttacks || 1,
+      attackBonus: eff.attackBonus || 0,
+      bonusDamage: eff.bonusDamage || 0,
+      desc: eff.desc || null,
+      archetype: arch.label || archetypeKey,
+    };
+  };
+
   // Advance initiative tracker past current combatant, skipping unconscious
   const advanceTurn = (currentIndex, currentRound, combatantsArr) => {
     let nextIndex = (currentIndex + 1) % combatantsArr.length;
@@ -181,7 +288,10 @@ Deno.serve(async (req) => {
         cr,
         xp: enemy.xp || 100,
         is_legendary: isLegendary,
-        legendary_resistance_remaining: isLegendary ? 3 : 0
+        legendary_resistance_remaining: isLegendary ? 3 : 0,
+        // Data-driven AI: explicit archetype if provided, else inferred from meta/CR.
+        archetype: inferArchetype(enemy),
+        attack_type: enemy.attack_type || 'melee'
       });
     }
 
@@ -1132,8 +1242,9 @@ Deno.serve(async (req) => {
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ACTION: enemy_turn — resolves the active enemy's turn: end-of-turn saves,
-  // attacking a downed player (death-save failures), AI strategy selection,
-  // multiattack resolution, damage mitigation, and concentration checks.
+  // attacking a downed player (death-save failures), DATA-DRIVEN AI tactic selection
+  // (see AI_ARCHETYPES in SHARED HELPERS), multiattack resolution, damage mitigation,
+  // and concentration checks.
   // ═══════════════════════════════════════════════════════════════════════════
   if (action === 'enemy_turn') {
     const combatLog = await base44.entities.CombatLog.get(combat_id);
@@ -1233,63 +1344,23 @@ Deno.serve(async (req) => {
       return Response.json({ no_target: false, player_unconscious: true, attacked_downed: true, hit: hitDowned, log_entry: { text: downedLog, hit: hitDowned }, next_turn_index: ni0, round: nr0 });
     }
 
-    // === AI Strategy System ===
+    // === DATA-DRIVEN AI: pick a tactic from the enemy's archetype preset ===
     const enemyHpPct = currentCombatant.hp_max ? currentCombatant.hp_current / currentCombatant.hp_max : 1;
     const playerHpPct = player.hp_max ? player.hp_current / player.hp_max : 1;
-    const cr = currentCombatant.cr || 1;
-    const isBoss = cr >= 5;
-    const isElite = cr >= 3;
+    // Older combats may predate the `archetype` field — infer on the fly as a fallback.
+    const archetypeKey = currentCombatant.archetype || inferArchetype(currentCombatant);
+    const tactic = chooseTactic(archetypeKey, {
+      selfHpPct: enemyHpPct,
+      playerHpPct,
+      round: combatLog.round,
+    });
+    const strategy = `${archetypeKey}:${tactic.id}`;
+    const strategyDesc = tactic.desc;
 
-    // Determine AI strategy based on enemy state
-    let strategy = 'attack'; // default
-    let strategyDesc = null;
-
-    if (enemyHpPct < 0.25 && !currentCombatant.has_fled_attempt) {
-      // Low HP: desperate behavior
-      if (isBoss) {
-        strategy = 'multiattack'; // bosses fight to the death with fury
-        strategyDesc = 'fights with desperate fury!';
-      } else if (cr < 2 && Math.random() < 0.4) {
-        strategy = 'retreat';
-        strategyDesc = 'attempts to retreat!';
-      } else {
-        strategy = 'reckless_attack';
-        strategyDesc = 'attacks recklessly in desperation!';
-      }
-    } else if (playerHpPct < 0.3) {
-      strategy = 'press_advantage';
-      strategyDesc = 'presses the advantage against the weakened hero!';
-    } else if (isBoss && combatLog.round <= 1) {
-      strategy = 'intimidate_then_attack';
-      strategyDesc = 'sizes up the hero with cold calculation...';
-    } else if (isElite && Math.random() < 0.3) {
-      strategy = 'tactical_strike';
-      strategyDesc = 'uses a tactical strike!';
-    } else if (Math.random() < 0.15) {
-      strategy = 'defensive_stance';
-      strategyDesc = 'takes a defensive stance before attacking!';
-    }
-
-    let attackBonus = currentCombatant.attack_bonus || 3;
+    let attackBonus = (currentCombatant.attack_bonus || 3) + tactic.attackBonus;
     let targetAC = player.ac;
-    let numAttacks = 1;
-    let bonusDamage = 0;
-
-    // Apply strategy effects
-    if (strategy === 'reckless_attack') {
-      attackBonus += 3; // advantage-like bonus
-      bonusDamage += 2;
-    } else if (strategy === 'press_advantage') {
-      attackBonus += 2;
-      bonusDamage += 1;
-    } else if (strategy === 'multiattack') {
-      numAttacks = isBoss ? 3 : 2;
-    } else if (strategy === 'tactical_strike') {
-      attackBonus += 1;
-      bonusDamage += Math.floor(cr);
-    } else if (strategy === 'defensive_stance') {
-      attackBonus -= 2; // trades accuracy for positioning
-    }
+    let numAttacks = tactic.numAttacks;
+    let bonusDamage = tactic.bonusDamage;
 
     // Dodge action (PHB p.192): attacks against a dodging player roll with disadvantage.
     const playerDodging = !!combatLog.world_state?.player_dodging;
