@@ -223,6 +223,7 @@ Deno.serve(async (req) => {
     let isCritical = attackRoll === 20;
     let isMiss = attackRoll === 1;
     let extraDamageDice = []; // For smite, sneak attack, etc
+    let sneakAttackApplied = false; // tracks if Sneak Attack was used this attack (once-per-turn guard)
 
     if (spell) {
       const spellAbility = SPELL_ABILITY_MAP[(character.class || '').toLowerCase()] || 'intelligence';
@@ -611,10 +612,21 @@ Deno.serve(async (req) => {
         damageBonus += rageDamage;
       }
 
-      // Rogue Sneak Attack (if active and conditions met)
+      // Rogue Sneak Attack (PHB p.96) — server-authoritative validation:
+      //  • once per TURN (tracked in world_state.sneak_attack_used)
+      //  • requires a finesse or ranged weapon
+      //  • requires advantage on the attack OR an ally adjacent to the target (modifiers.ally_adjacent)
+      //    (advantage is negated if the attacker has disadvantage — handled by the cancel rule)
       if (modifiers.sneak_attack_ready && character.class === 'Rogue') {
-        const sneakDice = Math.ceil((character.level || 1) / 2);
-        extraDamageDice.push({ dice: `${sneakDice}d6`, type: 'sneak', label: 'Sneak Attack' });
+        const alreadyUsed = combatLog.world_state?.sneak_attack_used;
+        const weaponProps = (weapon?.properties || []).map(p => p.toLowerCase());
+        const isFinesseOrRanged = weaponProps.includes('finesse') || weapon?.type === 'ranged';
+        const hasSneakCondition = (modifiers.advantage && !modifiers.disadvantage) || modifiers.ally_adjacent;
+        if (!alreadyUsed && isFinesseOrRanged && hasSneakCondition) {
+          const sneakDice = Math.ceil((character.level || 1) / 2);
+          extraDamageDice.push({ dice: `${sneakDice}d6`, type: 'sneak', label: 'Sneak Attack' });
+          sneakAttackApplied = true;
+        }
       }
 
       // Fighter Action Surge — handled by action tracking in world_state; no extra variable needed here
@@ -880,6 +892,8 @@ Deno.serve(async (req) => {
     let nextRound = combatLog.round;
     let newWorldState = { ...(combatLog.world_state || {}), actions_used_this_turn: currentActionsUsed };
     if (isQuickenedMain) newWorldState.bonus_action_used = true;
+    // Mark Sneak Attack consumed for this turn so it can't trigger again until next turn
+    if (sneakAttackApplied) newWorldState.sneak_attack_used = true;
 
     // Track concentration spells
     if (spell?.requires_concentration) {
@@ -893,6 +907,8 @@ Deno.serve(async (req) => {
         nextIndex = adv.nextIndex; nextRound = adv.nextRound;
       }
       newWorldState.actions_used_this_turn = 0;
+      newWorldState.bonus_action_used = false;
+      newWorldState.sneak_attack_used = false; // player turn ended — refresh for next turn
     }
 
     await base44.entities.CombatLog.update(combat_id, {
@@ -1353,6 +1369,45 @@ Deno.serve(async (req) => {
     return Response.json({ log_entry: logEntry, player_hp: player.hp_current, player_at_zero_hp: playerAtZero, next_turn_index: nextIndex, round, ai_strategy: strategy });
   }
 
+  // ─── ACTION SURGE (Fighter, PHB p.72) ───────────────────────────────────────
+  // Grants one extra action this turn. Once per short rest (twice at L17+).
+  // Server-authoritative: tracked in character.short_rest_abilities.action_surge_used.
+  if (action === 'action_surge') {
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    const charClass = (character.class || '').toLowerCase();
+    const level = character.level || 1;
+
+    if (charClass !== 'fighter' || level < 2) {
+      return Response.json({ error: 'Action Surge requires Fighter level 2+.', invalid: true }, { status: 400 });
+    }
+
+    const maxUses = level >= 17 ? 2 : 1;
+    const sra = character.short_rest_abilities || {};
+    const used = sra.action_surge_used || 0;
+    if (used >= maxUses) {
+      return Response.json({ error: 'Action Surge already used — recover it on a short or long rest.', invalid: true }, { status: 400 });
+    }
+
+    // Consume one use (persist to character)
+    await base44.entities.Character.update(character_id, {
+      short_rest_abilities: { ...sra, action_surge_used: used + 1 }
+    });
+
+    // Grant an extra action this turn by giving back one action's worth of budget
+    const ws = combatLog.world_state || {};
+    const newUsed = Math.max(0, (ws.actions_used_this_turn || 0) - 1);
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'action_surge',
+      text: `⚡ ${character.name} uses Action Surge — gaining an extra action this turn! (${used + 1}/${maxUses} used)`
+    };
+    await base44.entities.CombatLog.update(combat_id, {
+      log_entries: [...(combatLog.log_entries || []), logEntry],
+      world_state: { ...ws, actions_used_this_turn: newUsed },
+    });
+    return Response.json({ success: true, log_entry: logEntry, uses_remaining: maxUses - (used + 1) });
+  }
+
   if (action === 'next_turn') {
     const combatLog = await base44.entities.CombatLog.get(combat_id);
     const combatants = combatLog.combatants;
@@ -1360,7 +1415,7 @@ Deno.serve(async (req) => {
     await base44.entities.CombatLog.update(combat_id, {
       current_turn_index: nextIndex,
       round: nextRound,
-      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false }
+      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, sneak_attack_used: false }
     });
     return Response.json({ next_turn_index: nextIndex, round: nextRound, current_combatant: combatants[nextIndex] });
   }
