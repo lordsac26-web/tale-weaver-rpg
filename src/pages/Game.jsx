@@ -389,6 +389,10 @@ export default function Game() {
       await processEnemyTurns(combatId);
     }
 
+    // Sync character HP from DB after enemy turns (prevents stale closure HP display)
+    const freshChars = await base44.entities.Character.filter({ id: character?.id });
+    if (freshChars[0]) setCharacter(prev => ({ ...prev, hp_current: freshChars[0].hp_current }));
+
     if (data.combat_ended) {
       if (data.result === 'victory') {
         // Grab combatants from the freshly reloaded log (not stale combat state)

@@ -198,16 +198,19 @@ Deno.serve(async (req) => {
       damageBonus = 0; // spell damage doesn't add ability mod (unless explicit)
       attackType = spell.attack_type || 'ranged_spell_attack';
 
-      // Handle upcast: scale damage dice if upcasting
+      // Handle upcast: scale damage dice if upcasting (add 1 die per slot level above base)
+      // e.g. Fireball (8d6 base level 3) cast at level 4 → 9d6, level 5 → 10d6
       const slotLevel = spell.slot_level || spell.base_level || 1;
       const baseLevel = spell.base_level || 1;
       const upcasting = slotLevel > baseLevel;
       if (upcasting && damageDice && damageDice !== '0') {
         const dMatch0 = damageDice.match(/^(\d+)d(\d+)$/);
         if (dMatch0) {
+          const baseDieCount = parseInt(dMatch0[1]);
+          const dieSides = parseInt(dMatch0[2]);
           const extraLevels = slotLevel - baseLevel;
-          const newNumDice = parseInt(dMatch0[1]) + extraLevels;
-          damageDice = `${newNumDice}d${dMatch0[2]}`;
+          // Add 1 die per extra slot level, capped so we don't over-scale cantrips
+          damageDice = `${baseDieCount + extraLevels}d${dieSides}`;
         }
       }
 
@@ -294,7 +297,8 @@ Deno.serve(async (req) => {
         const saveFailed = saveTotal < spellSaveDC;
 
         const dmg2 = rollDiceStr(damageDice);
-        const finalDmg = saveFailed ? Math.max(1, dmg2) : Math.floor(dmg2 / 2);
+        // On save failure: minimum 1 damage. On success: half damage (can be 0 for weak saves)
+        const finalDmg = saveFailed ? Math.max(1, dmg2) : Math.max(0, Math.floor(dmg2 / 2));
         if (finalDmg > 0) {
           target.hp_current = Math.max(0, target.hp_current - finalDmg);
           if (target.hp_current === 0) target.is_conscious = false;
@@ -346,6 +350,92 @@ Deno.serve(async (req) => {
         return Response.json({ hit: saveFailed, damage: finalDmg, log_entry: saveEntry, result: result2, combat_ended: result2 !== 'ongoing', actions_remaining: Math.max(0, ar2), next_turn_index: ni });
       }
 
+      // === MAGIC MISSILE (auto-hit, no attack roll needed) ===
+      if (spell.attack_type === 'auto_hit') {
+        const numMissiles = (spell.num_missiles || 3) + Math.max(0, (spell.slot_level || 1) - 1);
+        let totalMissileDmg = 0;
+        for (let m = 0; m < numMissiles; m++) {
+          totalMissileDmg += rollDice(4) + 1; // 1d4+1 per missile
+        }
+        totalMissileDmg = Math.max(1, totalMissileDmg);
+        target.hp_current = Math.max(0, target.hp_current - totalMissileDmg);
+        if (target.hp_current === 0) target.is_conscious = false;
+        const updatedCMM = combatants.map(c => c.id === target_id ? target : c);
+        const allDeadMM = updatedCMM.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
+        const resultMM = allDeadMM ? 'victory' : 'ongoing';
+        const mmEntry = {
+          round: combatLog.round, actor: character.name, action: 'spell', target: target.name,
+          hit: true, damage: totalMissileDmg, spell_name: spell.name,
+          text: `${character.name} fires ${numMissiles} Magic Missile${numMissiles > 1 ? 's' : ''} at ${target.name} for ${totalMissileDmg} force damage! (auto-hit)${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`
+        };
+        const aptMM = getActionsPerTurn(character);
+        const acuMM = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
+        const arMM = aptMM - acuMM;
+        let niMM = combatLog.current_turn_index; let nrMM = combatLog.round;
+        const wsMM = { ...(combatLog.world_state || {}), actions_used_this_turn: acuMM };
+        if (resultMM !== 'ongoing' || arMM <= 0) {
+          if (resultMM === 'ongoing') { const a = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCMM); niMM = a.nextIndex; nrMM = a.nextRound; }
+          wsMM.actions_used_this_turn = 0;
+        }
+        await base44.entities.CombatLog.update(combat_id, { combatants: updatedCMM, log_entries: [...(combatLog.log_entries || []), mmEntry], current_turn_index: niMM, round: nrMM, world_state: wsMM, is_active: resultMM === 'ongoing', result: resultMM });
+        if (resultMM !== 'ongoing') {
+          await base44.entities.GameSession.update(session_id, { in_combat: false });
+          if (resultMM === 'victory') { const ch = await base44.entities.Character.get(character_id); await base44.entities.Character.update(character_id, { xp: (ch.xp || 0) + updatedCMM.filter(c => c.type === 'enemy').reduce((s, e) => s + (e.xp || 0), 0) }); }
+        }
+        return Response.json({ hit: true, damage: totalMissileDmg, log_entry: mmEntry, result: resultMM, combat_ended: resultMM !== 'ongoing', actions_remaining: Math.max(0, arMM), next_turn_index: niMM });
+      }
+
+      // === ELDRITCH BLAST multi-beam (Warlock, scales at levels 5/11/17) ===
+      if (spell.name === 'Eldritch Blast') {
+        const beams = character.level >= 17 ? 4 : character.level >= 11 ? 3 : character.level >= 5 ? 2 : 1;
+        let totalBeamDmg = 0; let anyBeamHit = false; let beamCrit = false;
+        const beamLogs = [];
+        for (let b = 0; b < beams; b++) {
+          const br1 = rollD20(); const br2 = rollD20();
+          const br = (modifiers.advantage ? Math.max(br1,br2) : modifiers.disadvantage ? Math.min(br1,br2) : br1);
+          const bCrit = br === 20; const bMiss = br === 1;
+          const bMod = spellAttackBonus;
+          const bHit = !bMiss && (bCrit || (br + bMod) >= (target.ac + targetACBonus));
+          if (bCrit) beamCrit = true;
+          if (bHit) {
+            anyBeamHit = true;
+            const numD = bCrit ? 2 : 1;
+            let d = 0; for (let i = 0; i < numD; i++) d += rollDice(10);
+            totalBeamDmg += d;
+            beamLogs.push(`Beam ${b+1}: ${bCrit?'CRIT! ':''}${d} force (${br}+${bMod}=${br+bMod} vs AC ${target.ac})`);
+          } else {
+            beamLogs.push(`Beam ${b+1}: miss (${br}+${bMod}=${br+bMod} vs AC ${target.ac})`);
+          }
+        }
+        if (totalBeamDmg > 0) {
+          target.hp_current = Math.max(0, target.hp_current - totalBeamDmg);
+          if (target.hp_current === 0) target.is_conscious = false;
+        }
+        const updatedCEB = combatants.map(c => c.id === target_id ? target : c);
+        const allDeadEB = updatedCEB.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
+        const resultEB = allDeadEB ? 'victory' : 'ongoing';
+        const ebEntry = {
+          round: combatLog.round, actor: character.name, action: 'spell', target: target.name,
+          hit: anyBeamHit, critical: beamCrit, damage: totalBeamDmg, spell_name: 'Eldritch Blast',
+          text: `${character.name} fires ${beams} Eldritch Blast beam${beams>1?'s':''} at ${target.name}! ${beamLogs.join(' | ')} — Total: ${totalBeamDmg} force damage.${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`
+        };
+        const aptEB = getActionsPerTurn(character);
+        const acuEB = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
+        const arEB = aptEB - acuEB;
+        let niEB = combatLog.current_turn_index; let nrEB = combatLog.round;
+        const wsEB = { ...(combatLog.world_state || {}), actions_used_this_turn: acuEB };
+        if (resultEB !== 'ongoing' || arEB <= 0) {
+          if (resultEB === 'ongoing') { const a = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCEB); niEB = a.nextIndex; nrEB = a.nextRound; }
+          wsEB.actions_used_this_turn = 0;
+        }
+        await base44.entities.CombatLog.update(combat_id, { combatants: updatedCEB, log_entries: [...(combatLog.log_entries || []), ebEntry], current_turn_index: niEB, round: nrEB, world_state: wsEB, is_active: resultEB === 'ongoing', result: resultEB });
+        if (resultEB !== 'ongoing') {
+          await base44.entities.GameSession.update(session_id, { in_combat: false });
+          if (resultEB === 'victory') { const ch = await base44.entities.Character.get(character_id); await base44.entities.Character.update(character_id, { xp: (ch.xp || 0) + updatedCEB.filter(c => c.type === 'enemy').reduce((s, e) => s + (e.xp || 0), 0) }); }
+        }
+        return Response.json({ hit: anyBeamHit, damage: totalBeamDmg, log_entry: ebEntry, result: resultEB, combat_ended: resultEB !== 'ongoing', actions_remaining: Math.max(0, arEB), next_turn_index: niEB });
+      }
+
       // Fall through: ranged/melee spell attacks use spellAttackBonus already set above.
       // damageBonus stays 0 for spell attacks (no ability mod added to spell damage by default).
     } else if (weapon) {
@@ -364,7 +454,10 @@ Deno.serve(async (req) => {
       // Apply Fighting Style bonuses
       const fightingStyle = character.fighting_style?.toLowerCase();
       if (fightingStyle === 'archery' && isRanged) attackMod += 2;
-      if (fightingStyle === 'dueling' && !character.equipped?.shield) damageBonus += 2;
+      // Dueling: +2 damage when wielding a single one-handed weapon and no other weapon in offhand
+      // Shield occupies 'offhand' slot (not 'shield'), so check both keys
+      const hasOffhandItem = !!(character.equipped?.offhand || character.equipped?.shield);
+      if (fightingStyle === 'dueling' && !isRanged && !hasOffhandItem) damageBonus += 2;
 
       // === FEAT EFFECTS on weapon attacks ===
       const featFlags = character._feat_flags || [];

@@ -310,6 +310,18 @@ If it's a combat event, use the enemy schema with real monster stats.`;
     // Single DB write for session
     await base44.entities.GameSession.update(session_id, updateData);
 
+    // Apply new condition to character if AI returned one
+    if (result.new_condition && character) {
+      const currentConditions = character.conditions || [];
+      const condName = result.new_condition;
+      const alreadyHas = currentConditions.some(c => (typeof c === 'string' ? c : c.name) === condName);
+      if (!alreadyHas) {
+        await base44.entities.Character.update(character.id, {
+          conditions: [...currentConditions, { name: condName, source: 'story', applied_at: new Date().toISOString() }]
+        });
+      }
+    }
+
     // Award XP for non-combat story beats only.
     // Combat victory XP is awarded exclusively in combatEngine to prevent double-awarding.
     const isCombatVictoryCallback = custom_input?.includes('combat has ended in victory');
