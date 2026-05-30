@@ -1254,13 +1254,17 @@ Deno.serve(async (req) => {
       attackBonus -= 2; // trades accuracy for positioning
     }
 
+    // Dodge action (PHB p.192): attacks against a dodging player roll with disadvantage.
+    const playerDodging = !!combatLog.world_state?.player_dodging;
+
     let totalDamage = 0;
     let anyHit = false;
     let isCritical = false;
     const attackLogs = [];
 
     for (let atk = 0; atk < numAttacks; atk++) {
-      const attackRoll = rollD20();
+      const roll1 = rollD20();
+      const attackRoll = playerDodging ? Math.min(roll1, rollD20()) : roll1;
       const totalAttack = attackRoll + attackBonus;
       const isCrit = attackRoll === 20;
       const isFumble = attackRoll === 1;
@@ -1381,8 +1385,9 @@ Deno.serve(async (req) => {
 
     const { nextIndex, nextRound: round } = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCombatants);
 
-    // Carry over world_state, clear concentration if broken
-    const newWS = { ...(combatLog.world_state || {}), actions_used_this_turn: 0 };
+    // Carry over world_state, clear concentration if broken.
+    // player_dodging expires once enemies have acted (it only lasts until the player's next turn).
+    const newWS = { ...(combatLog.world_state || {}), actions_used_this_turn: 0, player_dodging: false };
     const concentrationSpellCheck = combatLog.world_state?.concentration_spell;
     if (concentrationSpellCheck && finalDamage > 0) {
       const dc = Math.max(10, Math.floor(finalDamage / 2));
@@ -1524,6 +1529,29 @@ Deno.serve(async (req) => {
     });
 
     return Response.json({ log_entry: logEntry, player_hp: player.hp_current, legendary_actions_remaining: newBudget });
+  }
+
+  // ─── DODGE ACTION (PHB p.192) ───────────────────────────────────────────────
+  // Until the start of your next turn, attack rolls against you have disadvantage
+  // (if you can see the attacker) and you make DEX saves with advantage. Uses your
+  // action and ends the turn. Server marks player_dodging in world_state; enemy_turn
+  // applies disadvantage to attacks against the player.
+  if (action === 'dodge') {
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatants = combatLog.combatants;
+    const character = await base44.entities.Character.get(character_id);
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'dodge',
+      text: `🛡️ ${character.name} takes the Dodge action — attacks against them have disadvantage until their next turn.`
+    };
+    const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
+    await base44.entities.CombatLog.update(combat_id, {
+      log_entries: [...(combatLog.log_entries || []), logEntry],
+      current_turn_index: nextIndex,
+      round: nextRound,
+      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, sneak_attack_used: false, loading_weapon_fired: false, player_dodging: true }
+    });
+    return Response.json({ success: true, log_entry: logEntry, next_turn_index: nextIndex, round: nextRound });
   }
 
   if (action === 'next_turn') {

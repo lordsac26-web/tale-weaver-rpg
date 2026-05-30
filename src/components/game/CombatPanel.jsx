@@ -144,6 +144,27 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
     }
   };
 
+  // Dodge action (PHB p.192): ends the turn; enemy attacks get disadvantage until next turn.
+  const handleDodge = async () => {
+    if (!isPlayerTurn || loading) return;
+    try {
+      const res = await base44.functions.invoke('combatEngine', {
+        action: 'dodge',
+        session_id: combat?.session_id,
+        combat_id: combat?.id,
+        character_id: character?.id,
+        payload: {},
+      });
+      if (res.data?.success) {
+        setAbilityMessages(prev => [...prev.slice(-2), { id: Date.now(), text: res.data.log_entry?.text || '🛡️ Dodging!' }]);
+        window.dispatchEvent(new CustomEvent('reload-combat'));
+      }
+    } catch (err) {
+      console.error('Dodge failed:', err);
+    }
+  };
+
+  const isDodging = !!world_state?.player_dodging;
   const canAct = isPlayerTurn && selectedTarget && (action !== 'spell' || selectedSpell);
 
   return (
@@ -174,6 +195,12 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
             <div className="px-2 py-0.5 rounded-full text-xs font-fantasy"
               style={{ background: 'rgba(80,40,120,0.6)', border: '1px solid rgba(160,100,255,0.4)', color: '#c4b5fd' }}>
               🔮 {concentrationSpell}
+            </div>
+          )}
+          {isDodging && (
+            <div className="px-2 py-0.5 rounded-full text-xs font-fantasy"
+              style={{ background: 'rgba(8,30,60,0.7)', border: '1px solid rgba(80,140,220,0.4)', color: '#93c5fd' }}>
+              🛡️ Dodging
             </div>
           )}
           {(player?.conditions || character?.conditions || []).length > 0 && (
@@ -405,6 +432,12 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                     background: 'rgba(10,50,20,0.7)', border: '1px solid rgba(40,160,80,0.5)', color: '#86efac'
                   } : { background: 'rgba(5,15,10,0.5)', border: '1px solid rgba(40,120,60,0.15)', color: 'rgba(80,160,100,0.4)' }}>
                   🧪 Item
+                </button>
+                <button onClick={handleDodge} disabled={loading || actionsRemaining === 0}
+                  title="Dodge — attacks against you have disadvantage until your next turn (uses your action)"
+                  className="px-2 py-2 rounded-lg text-xs font-fantasy transition-all"
+                  style={{ background: 'rgba(8,20,40,0.6)', border: '1px solid rgba(80,140,220,0.3)', color: 'rgba(147,197,253,0.8)' }}>
+                  🛡️
                 </button>
                 <button onClick={onFlee}
                   className="px-2 py-2 rounded-lg text-xs font-fantasy transition-all"
