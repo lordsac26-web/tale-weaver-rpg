@@ -14,12 +14,18 @@ export default function PWADebugger() {
   const [browserSupport, setBrowserSupport] = useState(false);
   const [debugInfo, setDebugInfo] = useState([]);
   const [isVisible, setIsVisible] = useState(true);
-  const [isDismissed, setIsDismissed] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('pwa-debugger-dismissed') === 'true';
+    }
+    return false;
+  });
 
   // Listen for show event
   useEffect(() => {
     const handleShow = () => {
       setIsDismissed(false);
+      localStorage.removeItem('pwa-debugger-dismissed');
       setIsVisible(true);
     };
     window.addEventListener('show-pwa-debugger', handleShow);
@@ -129,7 +135,10 @@ export default function PWADebugger() {
           <h3 className="font-fantasy text-sm" style={{ color: '#c9a96e' }}>PWA Installation Status</h3>
         </div>
         <button
-          onClick={() => setIsDismissed(true)}
+          onClick={() => {
+            setIsDismissed(true);
+            localStorage.setItem('pwa-debugger-dismissed', 'true');
+          }}
           className="px-3 py-1.5 rounded-lg text-xs font-fantasy transition-all hover:bg-red-500/20"
           style={{ 
             color: '#ff6b6b',
