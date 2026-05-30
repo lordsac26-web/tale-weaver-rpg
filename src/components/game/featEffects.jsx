@@ -81,6 +81,7 @@ export function computeFeatEffects(character, featNames, featStatChoices = {}) {
   let acBonus = 0;
   let initBonus = 0;
   let speedBonus = 0;
+  let luckPoints = 0;
   const extraSaveProfs = {};
   const flags = [];
 
@@ -124,6 +125,8 @@ export function computeFeatEffects(character, featNames, featStatChoices = {}) {
       if (effect.initiative) initBonus += effect.initiative;
       if (effect.speed) speedBonus += effect.speed;
       if (effect.flag) flags.push(effect.flag);
+      // Lucky feat: grant luck points (PHB p.167)
+      if (effect.luck_points) luckPoints += effect.luck_points;
     }
   }
 
@@ -164,6 +167,12 @@ export function computeFeatEffects(character, featNames, featStatChoices = {}) {
   // Feat flags (for combat engine to check)
   if (flags.length > 0) {
     updates._feat_flags = flags;
+  }
+
+  // Lucky feat: set max luck points and top up current
+  if (luckPoints > 0) {
+    updates.luck_points_max = luckPoints;
+    updates.luck_points_remaining = luckPoints;
   }
 
   return updates;

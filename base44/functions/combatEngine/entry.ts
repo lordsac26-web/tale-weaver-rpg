@@ -507,6 +507,15 @@ Deno.serve(async (req) => {
     // Condition checks — apply RAW condition mechanics (PHB p.290-292)
     const conditions = (character.conditions || []).map(c => c.name || c);
 
+    // EXHAUSTION level 3+ : disadvantage on attack rolls (PHB p.291)
+    if ((character.exhaustion_level || 0) >= 3 && !modifiers.disadvantage) {
+      modifiers.disadvantage = true;
+      attackRoll2 = rollD20();
+      attackRoll = Math.min(attackRoll1, attackRoll2);
+      isCritical = attackRoll === 20;
+      isMiss = attackRoll === 1;
+    }
+
     // POISONED: disadvantage on attack rolls (PHB p.292) — NOT a flat penalty
     if (conditions.includes('poisoned') && !modifiers.disadvantage) {
       modifiers.disadvantage = true;
@@ -766,6 +775,112 @@ Deno.serve(async (req) => {
       next_turn_index: nextIndex,
       actions_remaining: actionsRemaining > 0 ? actionsRemaining : 0,
       actions_per_turn: actionsPerTurn
+    });
+  }
+
+  // ─── OFF-HAND ATTACK (Two-Weapon Fighting, PHB p.195) ───────────────────────
+  // Bonus action attack with a light weapon in the off-hand. No ability modifier
+  // added to damage unless the character has the Two-Weapon Fighting fighting style.
+  if (action === 'offhand_attack') {
+    const { target_id, modifiers = {} } = payload;
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    const combatants = [...combatLog.combatants];
+    const target = combatants.find(c => c.id === target_id);
+    if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });
+
+    // Off-hand weapon comes from the offhand slot; must be a light melee weapon
+    const offhand = character.equipped?.offhand;
+    const mainhand = character.equipped?.weapon || character.equipped?.mainhand;
+    const isLight = (w) => (w?.properties || []).map(p => p.toLowerCase()).includes('light')
+      || ['dagger','shortsword','scimitar','handaxe','light hammer','club','sickle'].includes((w?.name || '').toLowerCase());
+
+    if (!offhand || !isLight(offhand) || !isLight(mainhand)) {
+      return Response.json({ error: 'Two-weapon fighting requires a light melee weapon in each hand.', invalid: true }, { status: 400 });
+    }
+
+    // Bonus action gating
+    if (combatLog.world_state?.bonus_action_used) {
+      return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
+    }
+
+    const strMod = statMod(character.strength);
+    const dexMod = statMod(character.dexterity);
+    const isFinesse = (offhand.properties || []).map(p => p.toLowerCase()).includes('finesse');
+    const abilityMod = isFinesse ? Math.max(strMod, dexMod) : strMod;
+    const profBonus = character.proficiency_bonus || 2;
+
+    let attackRoll1 = rollD20();
+    let attackRoll2 = (modifiers.advantage || modifiers.disadvantage) ? rollD20() : attackRoll1;
+    let attackRoll = modifiers.advantage ? Math.max(attackRoll1, attackRoll2)
+      : modifiers.disadvantage ? Math.min(attackRoll1, attackRoll2) : attackRoll1;
+
+    // Exhaustion 3+ : disadvantage on attacks
+    if ((character.exhaustion_level || 0) >= 3 && !modifiers.disadvantage) {
+      attackRoll2 = rollD20();
+      attackRoll = Math.min(attackRoll1, attackRoll2);
+    }
+
+    const isCritical = attackRoll === 20;
+    const isMiss = attackRoll === 1;
+    const attackMod = abilityMod + profBonus + (offhand.attack_bonus || 0);
+    const totalAttack = attackRoll + attackMod;
+    const hit = !isMiss && (isCritical || totalAttack >= target.ac);
+
+    // Two-Weapon Fighting style: add ability modifier to off-hand damage
+    const hasTWFStyle = (character.fighting_style || '').toLowerCase().includes('two-weapon');
+    let damage = 0;
+    const damageRolls = [];
+    if (hit) {
+      const dMatch = (offhand.damage_dice || offhand.damage || '1d4').match(/^(\d+)d(\d+)$/);
+      const numDice = dMatch ? (isCritical ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1])) : (isCritical ? 2 : 1);
+      const sides = dMatch ? parseInt(dMatch[2]) : 4;
+      for (let i = 0; i < numDice; i++) { const r = rollDice(sides); damageRolls.push(r); damage += r; }
+      // Off-hand: NO ability mod to damage unless TWF style (PHB p.195). Negative mod always applies.
+      if (hasTWFStyle) damage += abilityMod;
+      else if (abilityMod < 0) damage += abilityMod;
+      damage += (offhand.damage_bonus || 0);
+      damage = Math.max(1, damage);
+      target.hp_current = Math.max(0, target.hp_current - damage);
+      if (target.hp_current === 0) target.is_conscious = false;
+    }
+
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'offhand_attack', target: target.name,
+      hit, critical: isCritical, attack_roll: totalAttack, damage,
+      text: hit
+        ? `${character.name} strikes with their off-hand ${offhand.name}${isCritical ? ' (CRIT!)' : ''} for ${damage} damage!${hasTWFStyle ? '' : ' (no ability mod — off-hand)'} (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`
+        : `${character.name}'s off-hand ${offhand.name} misses ${target.name}! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})`
+    };
+
+    const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
+    const allEnemiesDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
+    const result = allEnemiesDead ? 'victory' : 'ongoing';
+
+    // Off-hand uses the BONUS ACTION, not an action — do not consume an action or advance the turn
+    const newWorldState = { ...(combatLog.world_state || {}), bonus_action_used: true };
+
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants: updatedCombatants,
+      log_entries: [...(combatLog.log_entries || []), logEntry],
+      world_state: newWorldState,
+      is_active: result === 'ongoing',
+      result
+    });
+
+    if (result !== 'ongoing') {
+      await base44.entities.GameSession.update(session_id, { in_combat: false });
+      if (result === 'victory') {
+        const totalXP = updatedCombatants.filter(c => c.type === 'enemy').reduce((s, e) => s + (e.xp || 0), 0);
+        const ch = await base44.entities.Character.get(character_id);
+        await base44.entities.Character.update(character_id, { xp: (ch.xp || 0) + totalXP });
+      }
+    }
+
+    return Response.json({
+      hit, damage, damage_rolls: damageRolls, attack_roll: totalAttack, log_entry: logEntry,
+      target_hp: target.hp_current, result, combat_ended: result !== 'ongoing',
+      bonus_action_used: true, two_weapon_style: hasTWFStyle
     });
   }
 

@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { Dices, RotateCcw, TrendingUp, TrendingDown, Sparkles } from 'lucide-react';
+import { Dices, RotateCcw, TrendingUp, TrendingDown, Sparkles, Clover } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { calcStatMod, calcModDisplay, SKILL_STAT_MAP } from './gameData';
+import { base44 } from '@/api/base44Client';
+import LuckPromptModal from './LuckPromptModal';
 
 const DICE_OPTIONS = [4, 6, 8, 10, 12, 20, 100];
 
@@ -73,6 +75,11 @@ export default function DiceRoller({ character }) {
   const [rollAnim, setRollAnim] = useState(false);
   const logRef = useRef(null);
 
+  // Lucky feat reroll state
+  const [luckPrompt, setLuckPrompt] = useState(null); // { result, luckDie }
+  const luckPoints = character?.luck_points_remaining || 0;
+  const hasLucky = (character?.feats || []).includes('Lucky') || (character?._feat_flags || []).includes('lucky');
+
   const charModifier = rollType !== 'none' ? computeModifier(character, rollType) : 0;
   const totalModifier = charModifier + modifier;
 
@@ -125,6 +132,33 @@ export default function DiceRoller({ character }) {
     setLog(prev => [{ ...result, ts: Date.now() }, ...prev].slice(0, 20));
     if (result.effectiveRolls?.[0] === 20 && navigator.vibrate) navigator.vibrate([50, 30, 80, 30, 120]);
     setTimeout(() => { logRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, 50);
+
+    // Lucky feat (PHB p.167): offer a reroll on single-d20 rolls when points remain
+    const isSingleD20 = dieSides === 20 && result.rolls.length >= 1 && !customNotation.trim();
+    if (hasLucky && luckPoints > 0 && isSingleD20 && result.adv === 'normal') {
+      setLuckPrompt({ result: { ...result, ts: Date.now() }, luckDie: null });
+    }
+  };
+
+  // Spend a luck point: roll an extra d20 and persist the point spend
+  const handleUseLuck = async () => {
+    const luckDie = rollDice(1, 20)[0];
+    setLuckPrompt(prev => ({ ...prev, luckDie }));
+    if (character?.id) {
+      await base44.entities.Character.update(character.id, {
+        luck_points_remaining: Math.max(0, luckPoints - 1),
+      });
+    }
+  };
+
+  // Keep the chosen die and recompute the final result
+  const handleChooseLuckDie = (chosenFace) => {
+    const r = luckPrompt.result;
+    const newFinal = chosenFace + r.bonus;
+    const updated = { ...r, effectiveRolls: [chosenFace], raw: chosenFace, final: newFinal, ts: Date.now(), luckApplied: true };
+    setLastResult(updated);
+    setLog(prev => [updated, ...prev.filter(e => e.ts !== r.ts)].slice(0, 20));
+    setLuckPrompt(null);
   };
 
   const isCrit = lastResult && dieSides === 20 && lastResult.effectiveRolls[0] === 20;
@@ -137,6 +171,12 @@ export default function DiceRoller({ character }) {
         style={{ borderBottom: '1px solid rgba(180,140,90,0.2)', background: 'rgba(15,10,5,0.6)' }}>
         <Dices className="w-4 h-4" style={{ color: '#c9a96e' }} />
         <span className="font-fantasy font-semibold text-sm tracking-widest" style={{ color: '#c9a96e' }}>DICE ROLLER</span>
+        {hasLucky && (
+          <span className="ml-auto px-2 py-0.5 rounded-full font-fantasy inline-flex items-center gap-1"
+            style={{ fontSize: '0.6rem', background: 'rgba(10,50,20,0.7)', border: '1px solid rgba(40,160,80,0.4)', color: '#86efac' }}>
+            <Clover className="w-3 h-3" /> {luckPoints} Luck
+          </span>
+        )}
       </div>
 
       <div className="flex flex-col flex-1 overflow-y-auto p-3 gap-3 min-h-0">
@@ -347,6 +387,17 @@ export default function DiceRoller({ character }) {
           </div>
         )}
       </div>
+
+      {/* Lucky feat reroll prompt */}
+      <LuckPromptModal
+        open={!!luckPrompt}
+        originalDie={luckPrompt?.result?.effectiveRolls?.[0]}
+        luckDie={luckPrompt?.luckDie}
+        luckPointsRemaining={luckPoints}
+        onUseLuck={handleUseLuck}
+        onChoose={handleChooseLuckDie}
+        onDecline={() => setLuckPrompt(null)}
+      />
     </div>
   );
 }

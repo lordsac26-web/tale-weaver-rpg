@@ -423,6 +423,39 @@ export default function Game() {
     setCombatLoading(false);
   };
 
+  // Two-Weapon Fighting bonus-action off-hand strike (PHB p.195)
+  const handleOffhandAttack = async (targetId, modifiers = {}) => {
+    const combatId = combat?.id || session?.combat_state?.combat_id;
+    if (!combatId) return;
+    setCombatLoading(true);
+    const result = await base44.functions.invoke('combatEngine', {
+      action: 'offhand_attack', session_id: sessionId, combat_id: combatId,
+      character_id: character?.id, payload: { target_id: targetId, modifiers }
+    });
+    const data = result.data;
+    if (data?.invalid) {
+      setNarrative(prev => [...prev, { type: 'roll_result', text: data.error || 'Off-hand attack not available.', success: false }]);
+      setCombatLoading(false);
+      return;
+    }
+    if (data?.log_entry) {
+      setLastCombatEvent({ key: Date.now(), hit: data.hit, critical: data.log_entry.critical, damage: data.damage || 0 });
+      setNarrative(prev => [...prev, { type: 'roll_result', text: data.log_entry.text, success: data.hit }]);
+    }
+    await reloadCombat(combatId);
+    if (data?.combat_ended && data?.result === 'victory') {
+      const freshLogs = await base44.entities.CombatLog.filter({ id: combatId });
+      const freshCombat = freshLogs[0];
+      const victoriousEnemies = (freshCombat?.combatants || []).filter(c => c.type === 'enemy');
+      setDefeatedEnemies(victoriousEnemies);
+      setShowLootModal(true);
+      await saveCombatHistory(combatId, 'victory', victoriousEnemies, freshCombat?.round);
+      setCombat(null);
+    }
+    await loadState();
+    setCombatLoading(false);
+  };
+
   const processEnemyTurns = async (combatId) => {
     // Record the starting round — enemies should only act once per round.
     // When the round advances, stop and let the player go next.
@@ -812,6 +845,7 @@ export default function Game() {
               <div className={`overflow-hidden ${combatViewTab !== 'combat' ? 'hidden lg:block' : ''}`}>
                 <CombatPanel combat={combat} character={character}
                   onPlayerAttack={handlePlayerAttack}
+                  onOffhandAttack={handleOffhandAttack}
                   onNextTurn={handleNextTurn}
                   onEndTurn={handleEndTurn}
                   onFlee={handleFlee}

@@ -10,7 +10,7 @@ Deno.serve(async (req) => {
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { session_id, character_id, roll_type, dice, dc, context, advantage, disadvantage } = await req.json();
+  const { session_id, character_id, roll_type, dice, dc, context, advantage, disadvantage, use_luck } = await req.json();
 
   // Parse dice notation e.g. "2d6", "1d20", "4d6"
   const diceMatch = dice.match(/^(\d+)d(\d+)$/i);
@@ -30,8 +30,35 @@ Deno.serve(async (req) => {
   let effectiveDisadvantage = !!disadvantage;
   let effectiveAdvantage = !!advantage;
 
+  // Fetch character to get modifiers
+  let character = null;
+  let modifiersApplied = [];
+  let modifierTotal = 0;
+  let conditionsActive = [];
+
+  if (character_id) {
+    try {
+      const chars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
+      character = chars[0];
+    } catch (_e) {}
+  }
+
+  // ── EXHAUSTION (PHB p.291): determine forced disadvantage by roll category ──
+  // Level 1+: disadvantage on ability checks (incl. skills).
+  // Level 3+: also disadvantage on attack rolls and saving throws.
+  const isAttackRoll = ['attack_melee', 'attack_ranged', 'attack_spell'].includes(roll_type);
+  const normRoll = (roll_type || '').toLowerCase().replace(/\s+/g, '_');
+  const isSaveRoll = normRoll.includes('save') || normRoll.includes('saving_throw');
+  const isAbilityCheck = !isAttackRoll && !isSaveRoll; // skills + raw ability checks
+  let exhaustionDisadvantage = false;
+  let exhaustionLevel = character?.exhaustion_level || 0;
+  if (exhaustionLevel >= 1 && isAbilityCheck) exhaustionDisadvantage = true;
+  if (exhaustionLevel >= 3 && (isAttackRoll || isSaveRoll)) exhaustionDisadvantage = true;
+  if (exhaustionDisadvantage) effectiveDisadvantage = true;
+
   // Advantage/Disadvantage for d20 rolls (advantage + disadvantage cancel, PHB p.173)
   let effectiveRolls = [...rawRolls];
+  let luckUsed = false;
   if (diceSides === 20 && numDice === 1) {
     const netAdv = effectiveAdvantage && !effectiveDisadvantage;
     const netDis = effectiveDisadvantage && !effectiveAdvantage;
@@ -44,19 +71,25 @@ Deno.serve(async (req) => {
       rawRolls.push(roll2);
       effectiveRolls = [Math.min(rawRolls[0], roll2)];
     }
-  }
 
-  // Fetch character to get modifiers
-  let character = null;
-  let modifiersApplied = [];
-  let modifierTotal = 0;
-  let conditionsActive = [];
+    // ── LUCKY feat (PHB p.167): spend 1 luck point to roll an extra d20,
+    // then choose which die to use. We roll the extra die and keep the BEST
+    // result (most favourable for the player). Only valid on attack/check/save d20s.
+    if (use_luck && character && (character.luck_points_remaining || 0) > 0) {
+      const luckDie = Math.floor(Math.random() * 20) + 1;
+      rawRolls.push(luckDie);
+      effectiveRolls = [Math.max(effectiveRolls[0], luckDie)];
+      luckUsed = true;
+      modifiersApplied.push({ source: 'Lucky (rerolled, kept best)', value: 0, type: 'feat' });
+      // Consume a luck point
+      await base44.asServiceRole.entities.Character.update(character_id, {
+        luck_points_remaining: Math.max(0, (character.luck_points_remaining || 0) - 1)
+      });
+    }
 
-  if (character_id) {
-    try {
-      const chars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
-      character = chars[0];
-    } catch (_e) {}
+    if (exhaustionDisadvantage) {
+      modifiersApplied.push({ source: `Exhaustion ${exhaustionLevel} (disadvantage)`, value: 0, type: 'condition' });
+    }
   }
 
   if (character) {
@@ -249,6 +282,10 @@ Deno.serve(async (req) => {
     final_result: finalResult,
     dc,
     success,
-    conditions_active: conditionsActive
+    conditions_active: conditionsActive,
+    luck_used: luckUsed,
+    luck_points_remaining: luckUsed ? Math.max(0, (character?.luck_points_remaining || 0) - 1) : (character?.luck_points_remaining || 0),
+    exhaustion_level: exhaustionLevel,
+    exhaustion_disadvantage: exhaustionDisadvantage
   });
 });

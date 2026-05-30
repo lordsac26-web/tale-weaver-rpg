@@ -129,14 +129,25 @@ Deno.serve(async (req) => {
       updates.arcane_recovery_used = false;
     }
 
-    // Remove one level of exhaustion
+    // Remove one level of exhaustion (PHB p.186/291: a long rest reduces exhaustion by 1)
+    const currentExhaustion = character.exhaustion_level || 0;
+    if (currentExhaustion > 0) {
+      updates.exhaustion_level = Math.max(0, currentExhaustion - 1);
+      restorations.push(`Exhaustion reduced to level ${updates.exhaustion_level}`);
+    }
+    // Legacy: also clear a single 'exhausted' condition tag if present
     const conditions = character.conditions || [];
     const exhaustIdx = conditions.findIndex(c => (typeof c === 'string' ? c : c.name) === 'exhausted');
     if (exhaustIdx >= 0) {
       const newConditions = [...conditions];
       newConditions.splice(exhaustIdx, 1);
       updates.conditions = newConditions;
-      restorations.push('Exhaustion reduced');
+    }
+
+    // Lucky feat: restore luck points to maximum on a long rest (PHB p.167)
+    if ((character.luck_points_max || 0) > 0) {
+      updates.luck_points_remaining = character.luck_points_max;
+      restorations.push(`Luck points restored (${character.luck_points_max})`);
     }
 
     updates.death_saves_success = 0;

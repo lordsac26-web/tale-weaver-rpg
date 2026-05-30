@@ -664,6 +664,43 @@ export const CONDITIONS = {
   concentration_broken: { icon: '🔮', color: 'text-purple-400', description: 'Concentration spell was disrupted.' },
 };
  
+// ─── Exhaustion (PHB p.291) ──────────────────────────────────────────────────
+// Cumulative levels 1-6. Each level includes the effects of all lower levels.
+export const EXHAUSTION_EFFECTS = [
+  { level: 0, label: 'None', effects: [] },
+  { level: 1, label: 'Exhaustion 1', effects: ['Disadvantage on ability checks'] },
+  { level: 2, label: 'Exhaustion 2', effects: ['Disadvantage on ability checks', 'Speed halved'] },
+  { level: 3, label: 'Exhaustion 3', effects: ['Disadvantage on ability checks', 'Speed halved', 'Disadvantage on attack rolls and saving throws'] },
+  { level: 4, label: 'Exhaustion 4', effects: ['Disadvantage on ability checks', 'Speed halved', 'Disadvantage on attacks & saves', 'HP maximum halved'] },
+  { level: 5, label: 'Exhaustion 5', effects: ['Disadvantage on ability checks', 'Speed reduced to 0', 'Disadvantage on attacks & saves', 'HP maximum halved'] },
+  { level: 6, label: 'Exhaustion 6', effects: ['Death'] },
+];
+
+// Returns which roll categories suffer disadvantage at a given exhaustion level.
+export function exhaustionRollPenalties(level) {
+  const lvl = Math.max(0, Math.min(6, level || 0));
+  return {
+    ability_checks: lvl >= 1, // includes skills
+    attacks: lvl >= 3,
+    saves: lvl >= 3,
+  };
+}
+
+// Effective speed after exhaustion: halved at 2-4, 0 at 5+.
+export function exhaustionEffectiveSpeed(baseSpeed, level) {
+  const lvl = Math.max(0, Math.min(6, level || 0));
+  if (lvl >= 5) return 0;
+  if (lvl >= 2) return Math.floor((baseSpeed || 30) / 2);
+  return baseSpeed || 30;
+}
+
+// Effective max HP after exhaustion: halved at 4+.
+export function exhaustionEffectiveMaxHP(baseMaxHP, level) {
+  const lvl = Math.max(0, Math.min(6, level || 0));
+  if (lvl >= 4) return Math.floor((baseMaxHP || 0) / 2);
+  return baseMaxHP || 0;
+}
+
 export const SKILL_STAT_MAP = {
   Athletics: 'strength',
   Acrobatics: 'dexterity', 'Sleight of Hand': 'dexterity', Stealth: 'dexterity',

@@ -170,6 +170,11 @@
         "type": "object"
       }
     },
+    "exhaustion_level": {
+      "type": "number",
+      "default": 0,
+      "description": "PHB exhaustion track (0-6). 1: disadvantage on ability checks. 2: speed halved. 3: disadvantage on attacks & saves. 4: HP maximum halved. 5: speed 0. 6: death."
+    },
     "active_modifiers": {
       "type": "array",
       "items": {
@@ -187,6 +192,16 @@
       "items": {
         "type": "string"
       }
+    },
+    "luck_points_remaining": {
+      "type": "number",
+      "default": 0,
+      "description": "Lucky feat (PHB p.167): luck points available. Spend 1 to roll an extra d20 on an attack, ability check, or save and choose which die to use. Refreshes to luck_points_max on a long rest."
+    },
+    "luck_points_max": {
+      "type": "number",
+      "default": 0,
+      "description": "Maximum luck points (3 if the character has the Lucky feat, else 0)."
     },
     "portrait": {
       "type": "string"
