@@ -21,6 +21,8 @@ import LootModal from '@/components/game/LootModal.jsx';
 import CompanionPanel from '@/components/game/CompanionPanel';
 import RestModal from '@/components/game/RestModal';
 import GameToolbar from '@/components/game/GameToolbar';
+import ThreeJSScene from '@/components/game/ThreeJSScene';
+import CinematicFrame from '@/components/game/CinematicFrame';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -866,10 +868,22 @@ export default function Game() {
         </div>
       </div>
 
-      {/* Main Game Area */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
-        {inCombat ? (
-          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+      {/* Main Game Area with Cinematic Frame */}
+      <div className="flex-1 flex overflow-hidden min-h-0 relative">
+        {/* Three.js Background Scene */}
+        <ThreeJSScene 
+          inCombat={inCombat} 
+          season={session?.season || 'Spring'}
+          timeOfDay={session?.time_of_day || 'Morning'}
+        />
+        
+        {/* Cinematic Frame Overlay */}
+        <CinematicFrame 
+          inCombat={inCombat}
+          title={inCombat ? '⚔️ COMBAT' : session?.title || 'Adventure'}
+        >
+          {inCombat ? (
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             {/* Mobile tab switcher — only visible on small screens */}
             <div className="flex lg:hidden flex-shrink-0" style={{ borderBottom: '1px solid rgba(180,30,30,0.2)', background: 'rgba(10,3,3,0.8)' }}>
               {['story', 'combat'].map(tab => (
@@ -948,6 +962,7 @@ export default function Game() {
             )}
           </div>
         )}
+        </CinematicFrame>
       </div>
 
       {/* Dice Roller Side Panel */}
