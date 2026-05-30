@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Package, Sword, Shield, Trash2 } from 'lucide-react';
-import InventoryGrid from '@/components/inventory/InventoryGrid';
+import { ChevronLeft, Package, Sword, Shield, Trash2, LayoutGrid, Shield as ShieldIcon } from 'lucide-react';
+import EnhancedInventoryGrid from '@/components/inventory/EnhancedInventoryGrid';
+import EnhancedEquipmentSlots from '@/components/inventory/EnhancedEquipmentSlots';
 import EncumbranceBar from '@/components/inventory/EncumbranceBar';
 import GoldHeader from '@/components/inventory/GoldHeader';
 import SellItemModal from '@/components/inventory/SellItemModal';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function InventoryPage() {
   const navigate = useNavigate();
@@ -16,6 +18,7 @@ export default function InventoryPage() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState('all'); // all, weapons, armor, consumables
   const [sellingItem, setSellingItem] = useState(null);
+  const [activeTab, setActiveTab] = useState('inventory'); // inventory, equipment
 
   const { data: character, isLoading } = useQuery({
     queryKey: ['character', characterId],
@@ -55,33 +58,46 @@ export default function InventoryPage() {
     return true;
   });
 
-  const handleEquip = (item) => {
+  const handleEquip = (item, specificSlot = null) => {
     const cat = (item.category || '').toLowerCase();
-    let slot = null;
+    let slot = specificSlot;
     
-    if (cat.includes('weapon')) slot = 'weapon';
-    else if (cat.includes('armor')) slot = 'chest';
-    else if (cat.includes('shield')) slot = 'offhand';
-    else if (cat.includes('helmet') || cat.includes('head')) slot = 'head';
-    else if (cat.includes('gloves') || cat.includes('hands')) slot = 'hands';
-    else if (cat.includes('boots') || cat.includes('feet')) slot = 'feet';
-    else if (cat.includes('ring')) slot = equipped.ring1 ? 'ring2' : 'ring1';
-    else if (cat.includes('amulet') || cat.includes('neck')) slot = 'neck';
+    if (!slot) {
+      if (cat.includes('weapon')) slot = 'weapon';
+      else if (cat.includes('armor')) slot = 'chest';
+      else if (cat.includes('shield')) slot = 'offhand';
+      else if (cat.includes('helmet') || cat.includes('head')) slot = 'head';
+      else if (cat.includes('gloves') || cat.includes('hands')) slot = 'hands';
+      else if (cat.includes('boots') || cat.includes('feet')) slot = 'feet';
+      else if (cat.includes('ring')) slot = equipped.ring1 ? 'ring2' : 'ring1';
+      else if (cat.includes('amulet') || cat.includes('neck')) slot = 'neck';
+    }
 
     if (!slot) return;
 
-    const isCurrentlyEquipped = equipped[slot]?.name === item.name;
     const newEquipped = { ...equipped };
-    
-    if (isCurrentlyEquipped) {
-      delete newEquipped[slot];
-    } else {
-      newEquipped[slot] = item;
-    }
+    newEquipped[slot] = item;
 
     updateMutation.mutate({ 
       id: characterId, 
       data: { equipped: newEquipped } 
+    });
+  };
+
+  const handleUnequip = (slot) => {
+    const newEquipped = { ...equipped };
+    delete newEquipped[slot];
+    
+    updateMutation.mutate({ 
+      id: characterId, 
+      data: { equipped: newEquipped } 
+    });
+  };
+
+  const handleReorder = (newOrder) => {
+    updateMutation.mutate({ 
+      id: characterId, 
+      data: { inventory: newOrder } 
     });
   };
 
@@ -148,47 +164,75 @@ export default function InventoryPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-5xl mx-auto space-y-4">
+        <div className="max-w-6xl mx-auto space-y-4">
           {/* Gold + Encumbrance */}
           <GoldHeader character={character} />
           <EncumbranceBar character={character} />
 
-          {/* Filter Tabs */}
-          <div className="flex gap-2">
-            {[
-              { key: 'all', label: 'All Items', icon: Package },
-              { key: 'weapons', label: 'Weapons', icon: Sword },
-              { key: 'armor', label: 'Armor', icon: Shield },
-              { key: 'consumables', label: 'Consumables', icon: Package },
-            ].map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                onClick={() => setFilter(key)}
-                className="px-4 py-2 rounded-lg font-fantasy text-sm transition-all flex items-center gap-2"
-                style={filter === key ? {
-                  background: 'rgba(60,40,10,0.8)',
-                  border: '1px solid rgba(201,169,110,0.5)',
-                  color: '#f0c040',
-                } : {
-                  background: 'rgba(20,13,5,0.5)',
-                  border: '1px solid rgba(180,140,90,0.15)',
-                  color: 'rgba(180,140,90,0.5)',
-                }}>
-                <Icon className="w-4 h-4" />
-                {label}
-              </button>
-            ))}
-          </div>
+          {/* Main Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid grid-cols-2 gap-2" style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.15)' }}>
+              <TabsTrigger value="inventory" className="font-fantasy text-sm data-[state=active]:bg-amber-900/40 data-[state=active]:text-amber-200" style={{ color: 'rgba(180,140,90,0.5)' }}>
+                <LayoutGrid className="w-4 h-4 mr-2" />
+                Inventory
+              </TabsTrigger>
+              <TabsTrigger value="equipment" className="font-fantasy text-sm data-[state=active]:bg-amber-900/40 data-[state=active]:text-amber-200" style={{ color: 'rgba(180,140,90,0.5)' }}>
+                <ShieldIcon className="w-4 h-4 mr-2" />
+                Equipment
+              </TabsTrigger>
+            </TabsList>
 
-          {/* Inventory Grid */}
-          <InventoryGrid
-            items={filteredItems}
-            onEquip={handleEquip}
-            onDelete={handleDelete}
-            onUse={handleUse}
-            onSell={setSellingItem}
-            equippedSlots={equipped}
-          />
+            <TabsContent value="inventory" className="space-y-4 mt-4">
+              {/* Filter Tabs */}
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { key: 'all', label: 'All Items', icon: Package },
+                  { key: 'weapons', label: 'Weapons', icon: Sword },
+                  { key: 'armor', label: 'Armor', icon: Shield },
+                  { key: 'consumables', label: 'Consumables', icon: Package },
+                ].map(({ key, label, icon: Icon }) => (
+                  <button
+                    key={key}
+                    onClick={() => setFilter(key)}
+                    className="px-4 py-2 rounded-lg font-fantasy text-sm transition-all flex items-center gap-2"
+                    style={filter === key ? {
+                      background: 'rgba(60,40,10,0.8)',
+                      border: '1px solid rgba(201,169,110,0.5)',
+                      color: '#f0c040',
+                    } : {
+                      background: 'rgba(20,13,5,0.5)',
+                      border: '1px solid rgba(180,140,90,0.15)',
+                      color: 'rgba(180,140,90,0.5)',
+                    }}>
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Enhanced Inventory Grid with Drag-and-Drop */}
+              <EnhancedInventoryGrid
+                items={filteredItems}
+                onEquip={handleEquip}
+                onDelete={handleDelete}
+                onUse={handleUse}
+                onSell={setSellingItem}
+                equippedSlots={equipped}
+                onReorder={handleReorder}
+              />
+            </TabsContent>
+
+            <TabsContent value="equipment" className="mt-4">
+              {/* Enhanced Equipment Slots */}
+              <EnhancedEquipmentSlots
+                equipped={equipped}
+                inventory={inventory}
+                onEquip={handleEquip}
+                onUnequip={handleUnequip}
+                character={character}
+              />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
 
