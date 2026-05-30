@@ -11,7 +11,7 @@ import InitiativeTracker from './InitiativeTracker';
 import ActionPointBar from './ActionPointBar';
 import CombatFloatingText from './CombatFloatingText';
 import CombatModifiersPanel from './CombatModifiersPanel';
-import ClassAbilitiesPanel from './ClassAbilitiesPanel';
+import ClassAbilitiesPanel from './ClassAbilitiesPanel.jsx';
 import MetamagicSelector from './MetamagicSelector';
 import ConditionBadges from './ConditionBadges';
 import CombatSpellSlotBar from './CombatSpellSlotBar';
