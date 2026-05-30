@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Zap, Shield, Flame, Sparkles, Swords, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
+import { Zap, Shield, Flame, Sparkles, Swords, ChevronDown, ChevronUp, AlertCircle, Crosshair } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // D&D 5e Barbarian rage uses per level (PHB table)
@@ -113,7 +113,7 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
     availableModifiers.push({
       id: 'sharpshooter',
       name: 'Sharpshooter',
-      icon: <ChevronDown className="w-3.5 h-3.5" />,
+      icon: <Crosshair className="w-3.5 h-3.5" />,
       color: '#fb923c',
       effect: '-5 attack roll, +10 damage (ranged attacks)',
       description: 'Before making a ranged attack with a weapon you are proficient with, take a -5 penalty to the attack roll. If the attack hits, add +10 to the damage roll.',

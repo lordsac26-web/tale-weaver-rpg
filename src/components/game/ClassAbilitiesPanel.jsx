@@ -202,6 +202,23 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
       }
     });
 
+    // Paladin Fighting Style (level 2+)
+    if (level >= 2 && character.fighting_style) {
+      abilities.push({
+        id: 'fighting_style',
+        name: 'Fighting Style',
+        icon: <Shield className="w-4 h-4" />,
+        color: '#93c5fd',
+        borderColor: 'rgba(100,160,255,0.3)',
+        bgColor: 'rgba(8,20,50,0.5)',
+        type: 'passive',
+        shortDesc: character.fighting_style,
+        description: getFightingStyleDesc(character.fighting_style),
+        used: false,
+        available: true,
+      });
+    }
+
     // Divine Smite reminder
     if (level >= 2) {
       abilities.push({
@@ -411,6 +428,118 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
         onAbilityUsed?.('wild_shape', {});
       }
     });
+  }
+
+  // ── SORCERER ─────────────────────────────────────────────────────────────────
+  if (charClass === 'Sorcerer') {
+    const maxSorceryPts = level;
+    const usedSorceryPts = shortRestAbilities.sorcery_points_used || 0;
+    const sorceryLeft = Math.max(0, maxSorceryPts - usedSorceryPts);
+    abilities.push({
+      id: 'sorcery_points',
+      name: 'Sorcery Points',
+      icon: <Sparkles className="w-4 h-4" />,
+      color: '#f0abfc',
+      borderColor: 'rgba(230,100,255,0.4)',
+      bgColor: 'rgba(40,5,50,0.7)',
+      type: 'passive',
+      description: `${sorceryLeft}/${maxSorceryPts} Sorcery Points. Convert to/from spell slots via Font of Magic. Power Metamagic options (Quickened, Twinned, Empowered, etc.). Recharge on long rest.`,
+      shortDesc: `${sorceryLeft}/${maxSorceryPts} Sorcery Points`,
+      used: false,
+      available: true,
+    });
+
+    if (level >= 3) {
+      abilities.push({
+        id: 'metamagic',
+        name: 'Metamagic',
+        icon: <Zap className="w-4 h-4" />,
+        color: '#e879f9',
+        borderColor: 'rgba(200,80,240,0.35)',
+        bgColor: 'rgba(35,5,45,0.6)',
+        type: 'passive',
+        description: 'Apply Metamagic options to your spells by spending Sorcery Points. Options chosen at level 3: Quickened Spell (1pt), Twinned Spell (varies), Empowered Spell (1pt), etc.',
+        shortDesc: `Modify spells with Sorcery Points`,
+        used: false,
+        available: true,
+      });
+    }
+  }
+
+  // ── RANGER ───────────────────────────────────────────────────────────────────
+  if (charClass === 'Ranger') {
+    // Hunter's Mark reminder
+    if (level >= 1) {
+      abilities.push({
+        id: 'hunters_mark',
+        name: "Hunter's Mark",
+        icon: <Eye className="w-4 h-4" />,
+        color: '#6ee7b7',
+        borderColor: 'rgba(80,220,160,0.35)',
+        bgColor: 'rgba(5,35,20,0.65)',
+        type: 'passive',
+        description: "Bonus Action: Cast Hunter's Mark (requires spell slot). Designate a creature — deal +1d6 damage to it and have advantage on Perception/Survival checks to find it. Move the mark as a bonus action when target dies.",
+        shortDesc: '+1d6 dmg to marked target (spell)',
+        used: false,
+        available: true,
+      });
+    }
+
+    // Fighting Style (Ranger also gets one at level 2)
+    if (level >= 2 && character.fighting_style) {
+      abilities.push({
+        id: 'fighting_style',
+        name: 'Fighting Style',
+        icon: <Shield className="w-4 h-4" />,
+        color: '#93c5fd',
+        borderColor: 'rgba(100,160,255,0.3)',
+        bgColor: 'rgba(8,20,50,0.5)',
+        type: 'passive',
+        shortDesc: character.fighting_style,
+        description: getFightingStyleDesc(character.fighting_style),
+        used: false,
+        available: true,
+      });
+    }
+  }
+
+  // ── ARTIFICER ────────────────────────────────────────────────────────────────
+  if (charClass === 'Artificer') {
+    if (level >= 2) {
+      const infusionsMax = Math.floor(level / 2) + 1;
+      const infusionsUsed = shortRestAbilities.infusions_used || 0;
+      const infusionsLeft = Math.max(0, infusionsMax - infusionsUsed);
+      abilities.push({
+        id: 'infuse_item',
+        name: 'Infuse Item',
+        icon: <Star className="w-4 h-4" />,
+        color: '#fbbf24',
+        borderColor: 'rgba(250,190,40,0.4)',
+        bgColor: 'rgba(40,28,3,0.65)',
+        type: 'passive',
+        description: `Imbue up to ${infusionsMax} items with magical infusions (requires 1 hour attunement). Active infusions: ${infusionsLeft}/${infusionsMax} slots. Infusions end when you die or exceed your limit.`,
+        shortDesc: `${infusionsLeft}/${infusionsMax} infusion slots active`,
+        used: false,
+        available: true,
+      });
+    }
+
+    // The Right Tool for the Job (level 3+)
+    if (level >= 3) {
+      abilities.push({
+        id: 'right_tool',
+        name: "The Right Tool",
+        icon: <Zap className="w-4 h-4" />,
+        color: '#fde68a',
+        borderColor: 'rgba(220,200,40,0.3)',
+        bgColor: 'rgba(38,32,4,0.55)',
+        type: 'special',
+        description: 'During a short rest, produce any artisan\'s tools using tinker\'s tools. The tools disappear when you use this feature again.',
+        shortDesc: 'Produce artisan tools (short rest)',
+        used: false,
+        available: true,
+      });
+    }
   }
 
   // ── WARLOCK ──────────────────────────────────────────────────────────────────

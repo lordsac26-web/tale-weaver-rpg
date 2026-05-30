@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 // Spell slot progression by class
 const SPELL_SLOTS_BY_CLASS = {
@@ -79,17 +79,13 @@ Deno.serve(async (req) => {
 
     if (charClass === 'Fighter') {
       restorations.push('Action Surge & Second Wind recovered');
-      // Preserve long_rest_abilities, only reset short_rest abilities
     }
     if (charClass === 'Monk') restorations.push('Ki points recharged');
     if (charClass === 'Bard' && charLevel >= 5) restorations.push('Bardic Inspiration recovered');
 
-    // Reset short-rest abilities but preserve arcane_recovery_used (resets on long rest only)
-    const preservedShortRest = {};
-    if (charClass === 'Wizard' && character.arcane_recovery_used) {
-      // arcane_recovery_used is tracked separately; short_rest_abilities.arcane_recovery resets here
-    }
-    updates.short_rest_abilities = preservedShortRest;
+    // Reset all short-rest ability tracking (Action Surge, Second Wind, Arcane Recovery, etc.)
+    // arcane_recovery is gated by arcane_recovery_used flag (long rest only) — reset here to allow use again if not yet used
+    updates.short_rest_abilities = {};
 
   } else if (rest_type === 'long') {
     // LONG REST (8 hours)

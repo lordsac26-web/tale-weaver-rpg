@@ -833,6 +833,28 @@ Deno.serve(async (req) => {
       logText = `${strategyDesc ? `[${currentCombatant.name} ${strategyDesc}] ` : ''}${currentCombatant.name} attacks but misses ${player.name}! (${attackLogs.join('; ')})`;
     }
 
+    // Build updated combatants with player HP changes BEFORE advancing turn
+    const updatedCombatants = combatants.map(c => c.id === player.id ? player : c);
+
+    const { nextIndex, nextRound: round } = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCombatants);
+
+    // Carry over world_state, clear concentration if broken
+    const newWS = { ...(combatLog.world_state || {}), actions_used_this_turn: 0 };
+    const concentrationSpellCheck = combatLog.world_state?.concentration_spell;
+    if (concentrationSpellCheck && finalDamage > 0) {
+      const dc = Math.max(10, Math.floor(finalDamage / 2));
+      // War Caster: advantage on concentration saves (PHB p.170)
+      const hasWarCaster = playerHasFeat('War Caster');
+      const conRoll1 = rollD20();
+      const conRoll2 = hasWarCaster ? rollD20() : conRoll1;
+      const conSave2 = Math.max(conRoll1, conRoll2) + statMod(charFull?.constitution || 10);
+      if (conSave2 < dc) {
+        newWS.concentration_spell = null;
+        newWS.concentration_caster = null;
+        logText += ` ⚠️ Concentration on ${concentrationSpellCheck} broken! (CON save: ${conSave2} vs DC ${dc})`;
+      }
+    }
+
     const logEntry = {
       round: combatLog.round,
       actor: currentCombatant.name,
@@ -844,30 +866,6 @@ Deno.serve(async (req) => {
       ai_strategy: strategyDesc,
       text: logText
     };
-
-    // Build updated combatants with player HP changes BEFORE advancing turn
-    const updatedCombatants = combatants.map(c => c.id === player.id ? player : c);
-
-    const { nextIndex, nextRound: round } = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCombatants);
-
-    // Carry over world_state, clear concentration if broken
-    const newWS = { ...(combatLog.world_state || {}), actions_used_this_turn: 0 };
-    const concentrationSpellCheck = combatLog.world_state?.concentration_spell;
-    let concentrationBrokenMsg = '';
-    if (concentrationSpellCheck && finalDamage > 0) {
-      const dc = Math.max(10, Math.floor(finalDamage / 2));
-      // War Caster: advantage on concentration saves (PHB p.170)
-      const hasWarCaster = playerHasFeat('War Caster');
-      const conRoll1 = rollD20();
-      const conRoll2 = hasWarCaster ? rollD20() : conRoll1;
-      const conSave2 = Math.max(conRoll1, conRoll2) + statMod(charFull?.constitution || 10);
-      if (conSave2 < dc) {
-        newWS.concentration_spell = null;
-        newWS.concentration_caster = null;
-        concentrationBrokenMsg = ` ⚠️ Concentration on ${concentrationSpellCheck} broken! (CON save: ${conSave2} vs DC ${dc})`;
-        logText += concentrationBrokenMsg;
-      }
-    }
 
     await base44.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants,
