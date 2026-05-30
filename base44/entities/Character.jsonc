@@ -134,6 +134,13 @@
       "type": "object",
       "description": "Slot-based equipment: {weapon, offhand, head, chest, hands, ring1, ring2, feet, neck, mainhand, shoulders, cloak, trinket}"
     },
+    "attuned_items": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Names of magic items the character is currently attuned to. Max 3 (DMG p.138). Attunement-required item bonuses only apply when the item name is in this list."
+    },
     "gold": {
       "type": "number",
       "default": 0

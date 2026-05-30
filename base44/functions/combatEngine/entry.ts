@@ -226,6 +226,11 @@ Deno.serve(async (req) => {
     let sneakAttackApplied = false; // tracks if Sneak Attack was used this attack (once-per-turn guard)
 
     if (spell) {
+      // Barbarian Rage (PHB p.48): cannot cast or concentrate on spells while raging.
+      const playerConds = (character.conditions || []).map(c => String(typeof c === 'string' ? c : c?.name || '').toLowerCase());
+      if (playerConds.includes('raging')) {
+        return Response.json({ error: 'You cannot cast spells while raging (PHB p.48).', invalid: true }, { status: 400 });
+      }
       const spellAbility = SPELL_ABILITY_MAP[(character.class || '').toLowerCase()] || 'intelligence';
       const spellStatMod = statMod(character[spellAbility]);
       const profBonus = character.proficiency_bonus || 2;

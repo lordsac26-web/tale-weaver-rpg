@@ -271,21 +271,55 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
       }
     }
 
+    // Off-hand WEAPON must be Light for two-weapon fighting unless the character has Dual Wielder (PHB p.195, p.165)
+    const itemCatLower = (item.type || item.category || '').toLowerCase();
+    const isWeaponItem = itemCatLower.includes('weapon') || itemCatLower === 'melee' || itemCatLower === 'ranged';
+    if (slot === 'offhand' && isWeaponItem && item.category !== 'Shield') {
+      const isLight = (item.properties || []).map(p => p.toLowerCase()).includes('light');
+      const hasDualWielder = (character.feats || []).includes('Dual Wielder')
+        || (character._feat_flags || []).includes('dual_wielder');
+      if (!isLight && !hasDualWielder) {
+        console.warn('EquipmentManager: Off-hand weapon must be Light (or requires the Dual Wielder feat).');
+        return;
+      }
+    }
+
+    // === ATTUNEMENT LIMIT (DMG p.138): max 3 attuned items ===
+    let newAttuned = character.attuned_items || [];
+    if (item.requires_attunement) {
+      const alreadyAttuned = newAttuned.includes(item.name);
+      if (!alreadyAttuned) {
+        if (newAttuned.length >= 3) {
+          console.warn('EquipmentManager: Cannot attune to more than 3 items at once.');
+          window.alert('You can be attuned to a maximum of 3 magic items at once. Unequip an attuned item first.');
+          return;
+        }
+        newAttuned = [...newAttuned, item.name];
+      }
+    }
+
     // Store the full item object — CombatPanel reads equipped.weapon directly
     const newEquipped = { ...equipped, [slot]: item };
-    const recalc = recalculateStats(character, newEquipped, inventory);
+    const recalc = recalculateStats({ ...character, attuned_items: newAttuned }, newEquipped, inventory);
     // recalc.equipped includes the weapon alias (mainhand → weapon)
-    await onUpdateCharacter({ ...recalc, equipped: recalc.equipped || newEquipped });
+    await onUpdateCharacter({ ...recalc, equipped: recalc.equipped || newEquipped, attuned_items: newAttuned });
     setShowEquipModal(null);
   };
 
   const handleUnequip = async (slot) => {
+    const removed = equipped[slot];
     const newEquipped = { ...equipped };
     delete newEquipped[slot];
     // Also remove the weapon alias if unequipping mainhand
     if (slot === 'mainhand') delete newEquipped.weapon;
-    const recalc = recalculateStats(character, newEquipped, inventory);
-    await onUpdateCharacter({ ...recalc, equipped: recalc.equipped || newEquipped });
+    // End attunement when unequipping an attuned item, unless the same item is still in another slot
+    let newAttuned = character.attuned_items || [];
+    if (removed?.requires_attunement) {
+      const stillEquipped = Object.values(newEquipped).some(it => it?.name === removed.name);
+      if (!stillEquipped) newAttuned = newAttuned.filter(n => n !== removed.name);
+    }
+    const recalc = recalculateStats({ ...character, attuned_items: newAttuned }, newEquipped, inventory);
+    await onUpdateCharacter({ ...recalc, equipped: recalc.equipped || newEquipped, attuned_items: newAttuned });
   };
 
   return (
@@ -334,9 +368,12 @@ export function recalculateStats(character, equipped, inventory) {
 
   // REAL equipment slots only — 'weapon' is an alias for mainhand, skip it to avoid double-counting
   const REAL_SLOTS = ['mainhand','offhand','armor','helmet','amulet','cloak','gloves','boots','ring','ring2','belt','trinket'];
+  const attunedNames = character.attuned_items || [];
   REAL_SLOTS.forEach(slot => {
     const item = equipped[slot];
     if (!item || typeof item !== 'object') return;
+    // Attunement gate (DMG p.138): items requiring attunement grant NO bonuses until attuned.
+    if (item.requires_attunement && !attunedNames.includes(item.name)) return;
     // Use centralized resolver: known items > form fields > regex
     const b = resolveItemBonuses(item);
     if (b.ac)            acBonus += b.ac;
@@ -410,6 +447,17 @@ export function recalculateStats(character, equipped, inventory) {
 
   // Shield bonus (flat +2 per D&D 5e)
   if (equipped.offhand?.category === 'Shield') bestAC += 2;
+
+  // Heavy armor STR requirement (PHB p.144): if the wearer's STR is below the armor's
+  // requirement, speed is reduced by 10ft (they can still wear it). Otherwise normal speed.
+  const baseSpeed = character._base_speed || character.speed || 30;
+  if (armorItem && (armorItem.armor_type || '').toLowerCase() === 'heavy') {
+    const strReq = armorItem.str_requirement || 0;
+    const effectiveStr = effectiveChar.strength || 10;
+    updates.speed = (strReq > 0 && effectiveStr < strReq) ? Math.max(0, baseSpeed - 10) : baseSpeed;
+  } else {
+    updates.speed = baseSpeed;
+  }
 
   // NOTE: Cloak/ring ac_bonus fields are REMOVED from here.
   // All AC bonuses from magic items are now handled exclusively via resolveItemBonuses() → acBonus.

@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { character_id, rest_type, hit_dice_to_spend } = await req.json();
+  const { character_id, rest_type, hit_dice_to_spend, had_food_water = true, location_safe = false } = await req.json();
 
   const chars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
   const character = chars[0];
@@ -90,9 +90,9 @@ Deno.serve(async (req) => {
   } else if (rest_type === 'long') {
     // LONG REST (8 hours)
     
-    // Random encounter check (20% chance)
+    // Random encounter check (20% chance) — skipped entirely in a safe location (town, inn, etc.)
     const encounterRoll = Math.random();
-    if (encounterRoll < 0.2) {
+    if (!location_safe && encounterRoll < 0.2) {
       return Response.json({
         interrupted: true,
         encounter_message: 'Your rest is interrupted! A creature stirs in the darkness...'
@@ -129,11 +129,16 @@ Deno.serve(async (req) => {
       updates.arcane_recovery_used = false;
     }
 
-    // Remove one level of exhaustion (PHB p.186/291: a long rest reduces exhaustion by 1)
+    // Remove one level of exhaustion (PHB p.186/291: a long rest reduces exhaustion by 1),
+    // but only if the character ingested food and drink during the rest.
     const currentExhaustion = character.exhaustion_level || 0;
     if (currentExhaustion > 0) {
-      updates.exhaustion_level = Math.max(0, currentExhaustion - 1);
-      restorations.push(`Exhaustion reduced to level ${updates.exhaustion_level}`);
+      if (had_food_water) {
+        updates.exhaustion_level = Math.max(0, currentExhaustion - 1);
+        restorations.push(`Exhaustion reduced to level ${updates.exhaustion_level}`);
+      } else {
+        restorations.push(`Exhaustion not reduced — no food or water (still level ${currentExhaustion})`);
+      }
     }
     // Legacy: also clear a single 'exhausted' condition tag if present
     const conditions = character.conditions || [];

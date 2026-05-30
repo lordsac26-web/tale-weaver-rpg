@@ -82,8 +82,19 @@ Deno.serve(async (req) => {
     return `${m.name} (CR ${m.challenge}, AC ${ac}, HP ${hp}, XP ${xp})`;
   }).join('; ');
 
+  // Spell-slot usage summary (spell_slots tracks USED counts per level)
+  const slotSummary = (() => {
+    const slots = character?.spell_slots || {};
+    const used = Object.entries(slots).filter(([, v]) => (v || 0) > 0)
+      .map(([k, v]) => `${k.replace('level_', 'L')}:${v} used`);
+    return used.length ? used.join(', ') : 'all available';
+  })();
+
+  // Active concentration spell, if any (stored on the session's combat world_state)
+  const concentration = session.combat_state?.concentration_spell || session.world_state?.concentration_spell || null;
+
   // Build compact character summary
-  const charSummary = character ? `${character.name}, Lvl ${character.level} ${character.race} ${character.class} | HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class} | Conditions: ${(character.conditions || []).map(c => c.name || c).join(', ') || 'None'} | Background: ${(character.backstory || 'Unknown').slice(0, 200)}` : '';
+  const charSummary = character ? `${character.name}, Lvl ${character.level} ${character.race} ${character.class} | HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class} | Conditions: ${(character.conditions || []).map(c => c.name || c).join(', ') || 'None'} | Spell slots: ${slotSummary}${concentration ? ` | Concentrating on: ${concentration}` : ''} | Background: ${(character.backstory || 'Unknown').slice(0, 200)}` : '';
 
   const worldSummary = `Location: ${session.current_location || 'Unknown'} | Season: ${session.season} | Time: ${session.time_of_day} | Quests: ${(session.active_quests || []).map(q => q.title).join(', ') || 'None'} | Reputation: ${session.reputation || 0}${session.adult_mode ? ' | Adult mode: ON' : ''}`;
 
