@@ -14,6 +14,7 @@ import CombatModifiersPanel from './CombatModifiersPanel';
 import ClassAbilitiesPanel from './ClassAbilitiesPanel';
 import MetamagicSelector from './MetamagicSelector';
 import ConditionBadges from './ConditionBadges';
+import CombatSpellSlotBar from './CombatSpellSlotBar';
 
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 
@@ -161,6 +162,26 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
       }
     } catch (err) {
       console.error('Dodge failed:', err);
+    }
+  };
+
+  // Grapple action (PHB p.195): opposed Athletics vs Athletics/Acrobatics, applies Grappled.
+  const handleGrapple = async () => {
+    if (!isPlayerTurn || loading || !selectedTarget || actionsRemaining === 0) return;
+    try {
+      const res = await base44.functions.invoke('combatEngine', {
+        action: 'grapple',
+        session_id: combat?.session_id,
+        combat_id: combat?.id,
+        character_id: character?.id,
+        payload: { target_id: selectedTarget },
+      });
+      if (res.data?.log_entry) {
+        setAbilityMessages(prev => [...prev.slice(-2), { id: Date.now(), text: res.data.log_entry.text }]);
+        window.dispatchEvent(new CustomEvent('reload-combat'));
+      }
+    } catch (err) {
+      console.error('Grapple failed:', err);
     }
   };
 
@@ -433,6 +454,13 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                   } : { background: 'rgba(5,15,10,0.5)', border: '1px solid rgba(40,120,60,0.15)', color: 'rgba(80,160,100,0.4)' }}>
                   🧪 Item
                 </button>
+                <button onClick={handleGrapple} disabled={loading || actionsRemaining === 0 || !selectedTarget}
+                  title="Grapple — opposed Athletics check; on success the target's speed drops to 0 (uses one attack)"
+                  className="px-2 py-2 rounded-lg text-xs font-fantasy transition-all"
+                  style={{ background: 'rgba(30,18,8,0.6)', border: '1px solid rgba(200,140,60,0.3)', color: 'rgba(230,180,110,0.85)',
+                    opacity: (!selectedTarget || actionsRemaining === 0) ? 0.4 : 1 }}>
+                  🤼
+                </button>
                 <button onClick={handleDodge} disabled={loading || actionsRemaining === 0}
                   title="Dodge — attacks against you have disadvantage until your next turn (uses your action)"
                   className="px-2 py-2 rounded-lg text-xs font-fantasy transition-all"
@@ -445,6 +473,11 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                   🏃
                 </button>
               </div>
+
+              {/* Spell slot tracker — at-a-glance remaining slots (casting blocked when empty) */}
+              {action === 'spell' && isCaster && (
+                <CombatSpellSlotBar character={character} />
+              )}
 
               {/* Spell selector */}
               {action === 'spell' && (

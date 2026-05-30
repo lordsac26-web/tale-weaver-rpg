@@ -1531,6 +1531,70 @@ Deno.serve(async (req) => {
     return Response.json({ log_entry: logEntry, player_hp: player.hp_current, legendary_actions_remaining: newBudget });
   }
 
+  // ─── GRAPPLE ACTION (PHB p.195) ─────────────────────────────────────────────
+  // Replaces one attack: opposed Strength (Athletics) check vs the target's best of
+  // Strength (Athletics) or Dexterity (Acrobatics). On success, the target is Grappled
+  // (speed 0 until the grapple ends). Uses one attack/action and may end the turn.
+  if (action === 'grapple') {
+    const { target_id } = payload || {};
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    const combatants = [...combatLog.combatants];
+    const target = combatants.find(c => c.id === target_id);
+    if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });
+
+    const profBonus = character.proficiency_bonus || 2;
+    // Attacker: Strength (Athletics). Add proficiency if proficient in Athletics.
+    const athleticsProf = character.skills?.athletics ? profBonus : 0;
+    const attackerCheck = rollD20() + statMod(character.strength) + athleticsProf;
+
+    // Defender: best of Athletics (STR) or Acrobatics (DEX). Monster stats are on the combatant.
+    const defStr = target.strength || (target.str ? parseInt(target.str) : 10);
+    const defDex = target.dexterity || (target.dex ? parseInt(target.dex) : 10);
+    const defenderCheck = rollD20() + Math.max(statMod(defStr), statMod(defDex));
+
+    const success = attackerCheck >= defenderCheck;
+    let logText;
+    if (success) {
+      const existing = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
+      if (!existing.includes('grappled')) {
+        target.conditions = [...(target.conditions || []), { name: 'grappled', source: character.name, escape_dc: 8 + statMod(character.strength) + athleticsProf }];
+      }
+      logText = `🤼 ${character.name} GRAPPLES ${target.name}! (Athletics ${attackerCheck} vs ${defenderCheck}) — ${target.name}'s speed is reduced to 0 until they break free.`;
+    } else {
+      logText = `${character.name} tries to grapple ${target.name} but fails! (Athletics ${attackerCheck} vs ${defenderCheck})`;
+    }
+
+    const logEntry = { round: combatLog.round, actor: character.name, action: 'grapple', target: target.name, hit: success, text: logText };
+    const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
+
+    // Grapple replaces one attack — consume one action from the turn budget.
+    const actionsPerTurn = getActionsPerTurn(character);
+    const actionsUsed = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
+    const actionsRemaining = actionsPerTurn - actionsUsed;
+    let nextIndex = combatLog.current_turn_index;
+    let nextRound = combatLog.round;
+    const newWorldState = { ...(combatLog.world_state || {}), actions_used_this_turn: actionsUsed };
+    if (actionsRemaining <= 0) {
+      const adv = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCombatants);
+      nextIndex = adv.nextIndex; nextRound = adv.nextRound;
+      newWorldState.actions_used_this_turn = 0;
+      newWorldState.bonus_action_used = false;
+      newWorldState.sneak_attack_used = false;
+      newWorldState.loading_weapon_fired = false;
+    }
+
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants: updatedCombatants,
+      log_entries: [...(combatLog.log_entries || []), logEntry],
+      current_turn_index: nextIndex,
+      round: nextRound,
+      world_state: newWorldState,
+    });
+
+    return Response.json({ success, log_entry: logEntry, actions_remaining: Math.max(0, actionsRemaining), next_turn_index: nextIndex });
+  }
+
   // ─── DODGE ACTION (PHB p.192) ───────────────────────────────────────────────
   // Until the start of your next turn, attack rolls against you have disadvantage
   // (if you can see the attacker) and you make DEX saves with advantage. Uses your
