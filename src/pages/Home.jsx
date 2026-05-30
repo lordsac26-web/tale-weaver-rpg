@@ -74,7 +74,7 @@ export default function Home() {
           style={{ background: 'rgba(10,5,2,0.95)', borderBottom: '1px solid rgba(184,115,51,0.3)', backdropFilter: 'blur(10px)' }}>
           <div className="flex items-center gap-2">
             <div className="w-1 h-5 rounded-full" style={{ background: 'linear-gradient(180deg, #e8b86d, #b87333)' }} />
-            <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(212,149,90,0.6)' }}>TALE WEAVER</span>
+            <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(240,200,120,0.85)' }}>TALE WEAVER</span>
           </div>
           <PWAInstallButton />
           
@@ -112,7 +112,7 @@ export default function Home() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-fantasy truncate" style={{ color: 'var(--parchment)' }}>{char.name}</div>
-                        <div className="text-xs" style={{ color: 'rgba(212,149,90,0.55)', fontFamily: 'EB Garamond, serif' }}>Lv.{char.level} {char.class}</div>
+                        <div className="text-xs" style={{ color: 'rgba(232,200,150,0.8)', fontFamily: 'EB Garamond, serif' }}>Lv.{char.level} {char.class}</div>
                       </div>
                     </button>
                   ))}
@@ -153,7 +153,7 @@ export default function Home() {
             <div className="flex items-center gap-2 px-4 py-1.5 rounded-full"
               style={{ background: 'rgba(45,22,8,0.7)', border: '1px solid rgba(184,115,51,0.2)' }}>
               <Sparkles className="w-3 h-3" style={{ color: 'var(--brass-gold)' }} />
-              <span className="font-fantasy tracking-widest text-xs" style={{ color: 'rgba(212,149,90,0.7)' }}>D&D 5E · REAL DICE ENGINE · LIVING WORLD</span>
+              <span className="font-fantasy tracking-widest text-xs" style={{ color: 'rgba(255,240,200,0.85)' }}>D&D 5E · REAL DICE ENGINE · LIVING WORLD</span>
               <Sparkles className="w-3 h-3" style={{ color: 'var(--brass-gold)' }} />
             </div>
             <div className="h-px flex-1 max-w-16" style={{ background: 'linear-gradient(90deg, rgba(184,115,51,0.5), transparent)' }} />
@@ -170,7 +170,7 @@ export default function Home() {
               borderColor: 'rgba(184,115,51,0.3)',
               title: 'Custom Bestiary', titleColor: '#f0d090',
               desc: 'Create unique monster templates for your campaigns.',
-              descColor: 'var(--parchment-dim)',
+              descColor: 'rgba(232,212,168,0.85)',
               iconBg: 'linear-gradient(135deg, #5c3318, #3d2010)',
               iconBorder: 'rgba(212,149,90,0.35)',
             },
@@ -192,7 +192,7 @@ export default function Home() {
               borderColor: 'rgba(184,115,51,0.3)',
               title: 'Lore Archives', titleColor: '#f0d090',
               desc: 'History, factions, figures, locations & your adventurer\'s logbook.',
-              descColor: 'var(--parchment-dim)',
+              descColor: 'rgba(232,212,168,0.85)',
               iconBg: 'linear-gradient(135deg, #5c3318, #3d2010)',
               iconBorder: 'rgba(212,149,90,0.35)',
             },
@@ -203,7 +203,7 @@ export default function Home() {
               borderColor: 'rgba(184,115,51,0.28)',
               title: 'New Hero', titleColor: '#f5d08a',
               desc: 'Forge your legend. Choose race, class, roll stats, shape destiny.',
-              descColor: 'var(--parchment-dim)',
+              descColor: 'rgba(232,212,168,0.85)',
               iconBg: 'linear-gradient(135deg, #6b3d1a, #4a2510)',
               iconBorder: 'rgba(232,184,109,0.35)',
             },
@@ -326,7 +326,7 @@ export default function Home() {
             <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}>
               <Skull className="w-16 h-16 mx-auto mb-5" style={{ color: 'rgba(184,115,51,0.2)' }} />
             </motion.div>
-            <p className="font-fantasy text-lg" style={{ color: 'rgba(212,149,90,0.35)', textShadow: '0 0 16px rgba(184,115,51,0.15)' }}>
+            <p className="font-fantasy text-lg" style={{ color: 'rgba(240,210,170,0.7)', textShadow: '0 0 16px rgba(184,115,51,0.15)' }}>
               No heroes yet. Your legend begins now.
             </p>
           </motion.div>
@@ -413,7 +413,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
           <h3 className="font-fantasy font-bold text-sm truncate" style={{ color: 'var(--parchment)', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
             {character.name}
           </h3>
-          <p className="text-xs truncate" style={{ color: 'rgba(212,149,90,0.6)', fontFamily: 'EB Garamond, serif' }}>
+          <p className="text-xs truncate" style={{ color: 'rgba(232,200,150,0.85)', fontFamily: 'EB Garamond, serif' }}>
             {character.race} {character.class}
           </p>
         </div>
@@ -426,7 +426,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
           <div className="flex justify-between items-center mb-1.5">
             <div className="flex items-center gap-1.5">
               <Heart className="w-3 h-3" style={{ color: hpTextColor }} />
-              <span className="text-xs font-fantasy" style={{ color: 'rgba(212,149,90,0.5)', fontSize: '0.62rem', letterSpacing: '0.08em' }}>HIT POINTS</span>
+              <span className="text-xs font-fantasy" style={{ color: 'rgba(240,210,170,0.75)', fontSize: '0.62rem', letterSpacing: '0.08em' }}>HIT POINTS</span>
             </div>
             <span className="font-fantasy font-bold text-xs" style={{ color: hpTextColor }}>{character.hp_current}/{character.hp_max}</span>
           </div>
@@ -447,7 +447,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
               style={{ background: 'rgba(8,4,1,0.7)', border: '1px solid rgba(184,115,51,0.12)' }}>
               <Icon className="w-3 h-3 mx-auto mb-0.5" style={{ color }} />
               <div className="font-fantasy font-bold text-xs" style={{ color, textShadow: `0 0 8px ${color}55` }}>{val}</div>
-              <div className="font-body text-xs" style={{ color: 'rgba(184,150,100,0.4)', fontSize: '0.6rem' }}>{label}</div>
+              <div className="font-body text-xs" style={{ color: 'rgba(220,195,155,0.7)', fontSize: '0.6rem' }}>{label}</div>
             </div>
           ))}
         </div>
@@ -568,16 +568,16 @@ function SessionCard({ session, characters }) {
             </div>
           </div>
           <div className="px-4 py-3 space-y-1">
-            <p className="text-sm italic font-serif" style={{ color: 'rgba(196,181,253,0.65)' }}>
+            <p className="text-sm italic font-serif" style={{ color: 'rgba(220,200,180,0.85)' }}>
               📍 {session.current_location || 'Unknown Location'}
             </p>
             {char && (
-              <p className="text-xs font-body" style={{ color: 'rgba(212,149,90,0.55)' }}>
+              <p className="text-xs font-body" style={{ color: 'rgba(232,200,150,0.85)' }}>
                 Playing as <span style={{ color: 'var(--brass-gold)', fontWeight: 600 }}>{char.name}</span>
               </p>
             )}
             {(session.season || session.time_of_day) && (
-              <p className="text-xs font-body" style={{ color: 'rgba(160,130,200,0.4)' }}>
+              <p className="text-xs font-body" style={{ color: 'rgba(200,180,220,0.7)' }}>
                 {[session.season, session.time_of_day].filter(Boolean).join(' · ')}
               </p>
             )}
