@@ -36,6 +36,26 @@ const SPELL_SLOTS = {
 };
  
 const NON_CASTERS = ['Fighter', 'Barbarian', 'Rogue', 'Monk'];
+
+/** Total character level = primary level + all multiclass levels. */
+function getTotalLevel(character) {
+  const primary = character.level || 1;
+  const mcLevels = (character.multiclass || []).reduce((sum, mc) => sum + (mc.levels || 0), 0);
+  return primary + mcLevels;
+}
+
+/**
+ * Returns the per-class level breakdown as a flat lookup:
+ * { [className]: levelsInThatClass }. The primary class uses character.level.
+ */
+function getClassLevels(character) {
+  const levels = { [character.class]: character.level || 1 };
+  (character.multiclass || []).forEach(mc => {
+    if (!mc.class) return;
+    levels[mc.class] = (levels[mc.class] || 0) + (mc.levels || 0);
+  });
+  return levels;
+}
  
 /** Build a fresh spell_slots object (tracks slots used, starting at 0). */
 function buildSpellSlots(charClass, level) {
@@ -96,43 +116,74 @@ Deno.serve(async (req) => {
     const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
  
-    const currentLevel = character.level || 1;
-    const currentXP    = character.xp    || 0;
+    // Multiclass: gating, proficiency bonus, and XP use TOTAL character level
+    // (primary + all secondary class levels) per 5e rules. Per-class levels
+    // still drive HP hit dice and class features.
+    const currentTotalLevel = getTotalLevel(character);
+    const currentXP         = character.xp || 0;
  
-    if (currentLevel >= 20) {
-      return Response.json({ leveled_up: false, message: 'Already at max level (20)', current_level: currentLevel });
+    if (currentTotalLevel >= 20) {
+      return Response.json({ leveled_up: false, message: 'Already at max level (20)', current_level: currentTotalLevel });
     }
  
-    const nextLevelThreshold = XP_THRESHOLDS[currentLevel];
+    const nextLevelThreshold = XP_THRESHOLDS[currentTotalLevel];
     if (currentXP < nextLevelThreshold) {
       return Response.json({
         leveled_up: false, message: 'Not enough XP',
-        current_xp: currentXP, xp_needed: nextLevelThreshold, current_level: currentLevel,
+        current_xp: currentXP, xp_needed: nextLevelThreshold, current_level: currentTotalLevel,
       });
     }
  
-    // Support gaining multiple levels at once
-    let newLevel = currentLevel;
-    while (newLevel < 20 && currentXP >= XP_THRESHOLDS[newLevel]) newLevel++;
+    // Determine how many total levels are earned by current XP
+    let newTotalLevel = currentTotalLevel;
+    while (newTotalLevel < 20 && currentXP >= XP_THRESHOLDS[newTotalLevel]) newTotalLevel++;
  
-    if (newLevel === currentLevel) {
+    const levelsGained = newTotalLevel - currentTotalLevel;
+    if (levelsGained === 0) {
       return Response.json({ leveled_up: false, message: 'No level gain' });
     }
  
-    // ── HP increase ──────────────────────────────────────────────────────────
-    const hitDie        = CLASS_HIT_DICE[character.class] || 8;
+    // ── Which class receives the new level(s)? (player chooses) ──────────────
+    // Frontend passes `level_into_class`. If a multiclass character is eligible
+    // and no class was specified, return a pending choice instead of guessing.
+    const requestedClass = body.level_into_class;
+    const isMulticlass   = (character.multiclass || []).length > 0;
+ 
+    if (isMulticlass && !requestedClass) {
+      const heldClasses = Object.keys(getClassLevels(character));
+      return Response.json({
+        leveled_up: false,
+        needs_class_choice: true,
+        levels_available: levelsGained,
+        held_classes: heldClasses,
+        new_total_level: newTotalLevel,
+        message: `Choose which class to advance (${levelsGained} level${levelsGained > 1 ? 's' : ''} available).`,
+      });
+    }
+ 
+    // The class receiving the new level(s): explicit choice, or primary class.
+    const receivingClass = requestedClass || character.class;
+ 
+    // Per-class level the receiving class reaches AFTER this level-up
+    const classLevelsBefore = getClassLevels(character);
+    const receivingBefore   = classLevelsBefore[receivingClass] || 0;
+    const receivingAfter    = receivingBefore + levelsGained;
+ 
+    // ── HP increase (uses hit die of the RECEIVING class) ────────────────────
+    const hitDie        = CLASS_HIT_DICE[receivingClass] || 8;
     const conMod        = calcStatMod(character.constitution || 10);
     const racialHPBonus = RACIAL_HP_BONUSES[character.race] || 0;
-    const levelsGained  = newLevel - currentLevel;
     const avgHPPerLevel = Math.floor(hitDie / 2) + 1 + conMod + racialHPBonus;
     const hpIncrease    = levelsGained * avgHPPerLevel;
     const newMaxHP      = (character.hp_max || 0) + hpIncrease;
-    const newProfBonus  = PROFICIENCY_BY_LEVEL[newLevel - 1];
+    // Proficiency bonus is based on TOTAL level (5e PHB p.45)
+    const newProfBonus  = PROFICIENCY_BY_LEVEL[newTotalLevel - 1];
  
     // ── Spell slots ──────────────────────────────────────────────────────────
-    const newSpellSlots = buildSpellSlots(character.class, newLevel);
+    // Slots scale with the receiving class's own level (simple per-class model).
+    const newSpellSlots = buildSpellSlots(receivingClass, receivingAfter);
     const existingUsed  = character.spell_slots || {};
-    const newSlotTable  = (SPELL_SLOTS[character.class] && SPELL_SLOTS[character.class][newLevel]) || [];
+    const newSlotTable  = (SPELL_SLOTS[receivingClass] && SPELL_SLOTS[receivingClass][receivingAfter]) || [];
     Object.keys(newSpellSlots).forEach(key => {
       const lvlIdx        = parseInt(key.replace('level_', '')) - 1;
       const maxAtNewLevel = newSlotTable[lvlIdx] || 0;
@@ -302,24 +353,33 @@ Deno.serve(async (req) => {
       },
     };
  
-    for (let lvl = currentLevel + 1; lvl <= newLevel; lvl++) {
-      const classFeatures = CLASS_FEATURES[character.class];
+    // Class features for the RECEIVING class's newly gained per-class levels.
+    for (let lvl = receivingBefore + 1; lvl <= receivingAfter; lvl++) {
+      const classFeatures = CLASS_FEATURES[receivingClass];
       if (classFeatures && classFeatures[lvl]) {
         newFeatures.push(...classFeatures[lvl]);
       }
     }
 
     // ── Subclass features for gained levels ──────────────────────────────────
-    // Pull the character's chosen subclass from the ingested Subclass table and
-    // grant any features whose level falls within the newly gained range.
-    if (character.subclass) {
+    // Resolve the subclass tied to the receiving class: primary uses
+    // character.subclass; a secondary class uses its multiclass entry's subclass.
+    let receivingSubclass = '';
+    if (receivingClass === character.class) {
+      receivingSubclass = character.subclass || '';
+    } else {
+      const mcEntry = (character.multiclass || []).find(mc => mc.class === receivingClass);
+      receivingSubclass = mcEntry?.subclass || '';
+    }
+ 
+    if (receivingSubclass) {
       try {
         const scMatches = await base44.asServiceRole.entities.Subclass.filter({
-          class_name: character.class, name: character.subclass,
+          class_name: receivingClass, name: receivingSubclass,
         }, 'name', 1);
         const sc = scMatches?.[0];
         if (sc?.features_by_level) {
-          for (let lvl = currentLevel + 1; lvl <= newLevel; lvl++) {
+          for (let lvl = receivingBefore + 1; lvl <= receivingAfter; lvl++) {
             const feats = sc.features_by_level[lvl] || sc.features_by_level[String(lvl)];
             if (feats) {
               (Array.isArray(feats) ? feats : [feats]).forEach(f => {
@@ -336,12 +396,27 @@ Deno.serve(async (req) => {
  
     // ── Build update payload ─────────────────────────────────────────────────
     const updates = {
-      level:             newLevel,
       hp_max:            newMaxHP,
       hp_current:        character.hp_current + hpIncrease,
       proficiency_bonus: newProfBonus,
       initiative:        newInitiative,
     };
+ 
+    // Write the gained level(s) into the correct class slot.
+    if (receivingClass === character.class) {
+      // Advancing the primary class → bump character.level
+      updates.level = (character.level || 1) + levelsGained;
+    } else {
+      // Advancing a secondary class → bump its multiclass entry (create if new)
+      const mc = (character.multiclass || []).map(m => ({ ...m }));
+      const idx = mc.findIndex(m => m.class === receivingClass);
+      if (idx >= 0) {
+        mc[idx].levels = (mc[idx].levels || 0) + levelsGained;
+      } else {
+        mc.push({ class: receivingClass, subclass: receivingSubclass || '', levels: levelsGained });
+      }
+      updates.multiclass = mc;
+    }
  
     if (newAC !== null) updates.armor_class = newAC;
  
@@ -357,16 +432,18 @@ Deno.serve(async (req) => {
  
     return Response.json({
       leveled_up:            true,
-      old_level:             currentLevel,
-      new_level:             newLevel,
+      old_total_level:       currentTotalLevel,
+      new_total_level:       newTotalLevel,
       levels_gained:         levelsGained,
+      advanced_class:        receivingClass,
+      advanced_class_level:  receivingAfter,
       hp_increase:           hpIncrease,
       new_hp_max:            newMaxHP,
       new_proficiency_bonus: newProfBonus,
       new_features:          newFeatures,
       spell_slots_updated:   Object.keys(newSpellSlots).length > 0,
       ac_updated:            newAC !== null,
-      message:               `🎉 Level Up! ${character.name} is now level ${newLevel}!`,
+      message:               `🎉 Level Up! ${character.name} advanced ${receivingClass} to level ${receivingAfter} (total ${newTotalLevel})!`,
     });
  
   } catch (error) {
