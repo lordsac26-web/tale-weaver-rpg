@@ -133,9 +133,12 @@ export default function DiceRoller({ character }) {
     if (result.effectiveRolls?.[0] === 20 && navigator.vibrate) navigator.vibrate([50, 30, 80, 30, 120]);
     setTimeout(() => { logRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, 50);
 
-    // Lucky feat (PHB p.167): offer a reroll on single-d20 rolls when points remain
-    const isSingleD20 = dieSides === 20 && result.rolls.length >= 1 && !customNotation.trim();
-    if (hasLucky && luckPoints > 0 && isSingleD20 && result.adv === 'normal') {
+    // Lucky feat (PHB p.167): offer a reroll on single-d20 rolls when points remain.
+    // Works for normal, advantage, and disadvantage — Lucky lets you roll an extra
+    // d20 and choose any of the dice. The "effective" die (already adv/disadv-selected)
+    // is the one shown as the original; the luck die is compared against it.
+    const isSingleD20 = numDice === 1 && dieSides === 20 && result.effectiveRolls?.length >= 1 && !customNotation.trim();
+    if (hasLucky && luckPoints > 0 && isSingleD20) {
       setLuckPrompt({ result: { ...result, ts: Date.now() }, luckDie: null });
     }
   };
