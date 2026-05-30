@@ -308,6 +308,31 @@ Deno.serve(async (req) => {
         newFeatures.push(...classFeatures[lvl]);
       }
     }
+
+    // ── Subclass features for gained levels ──────────────────────────────────
+    // Pull the character's chosen subclass from the ingested Subclass table and
+    // grant any features whose level falls within the newly gained range.
+    if (character.subclass) {
+      try {
+        const scMatches = await base44.asServiceRole.entities.Subclass.filter({
+          class_name: character.class, name: character.subclass,
+        }, 'name', 1);
+        const sc = scMatches?.[0];
+        if (sc?.features_by_level) {
+          for (let lvl = currentLevel + 1; lvl <= newLevel; lvl++) {
+            const feats = sc.features_by_level[lvl] || sc.features_by_level[String(lvl)];
+            if (feats) {
+              (Array.isArray(feats) ? feats : [feats]).forEach(f => {
+                const name = typeof f === 'string' ? f : (f?.name || '');
+                if (name) newFeatures.push(name);
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Subclass feature lookup failed:', e.message);
+      }
+    }
  
     // ── Build update payload ─────────────────────────────────────────────────
     const updates = {

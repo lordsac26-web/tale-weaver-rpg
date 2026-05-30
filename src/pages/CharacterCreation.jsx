@@ -163,6 +163,28 @@ export default function CharacterCreation() {
     return { ...char, features };
   };
 
+  // Merge the chosen subclass's level-appropriate features into char.features.
+  // Pulls features_by_level from the ingested Subclass entity. Async because it
+  // reads from the database; safely no-ops if no subclass is selected.
+  const buildSubclassFeatures = async (char) => {
+    if (!char.subclass) return char;
+    const matches = await base44.entities.Subclass.filter({
+      class_name: char.class, name: char.subclass,
+    }, 'name', 1);
+    const sc = matches?.[0];
+    if (!sc?.features_by_level) return char;
+    const features = [...(char.features || [])];
+    Object.entries(sc.features_by_level).forEach(([lvl, feats]) => {
+      if (parseInt(lvl) <= (char.level || 1)) {
+        (Array.isArray(feats) ? feats : [feats]).forEach(f => {
+          const name = typeof f === 'string' ? f : (f?.name || '');
+          if (name && !features.includes(name)) features.push(name);
+        });
+      }
+    });
+    return { ...char, features };
+  };
+
   // Apply class_choices to the character (fighting style, expertise, etc.)
   const applyClassChoices = (char) => {
     const cc = char.class_choices || {};
@@ -234,6 +256,7 @@ export default function CharacterCreation() {
     finalChar = applyClassChoices(finalChar);      // fighting style, expertise, etc.
     finalChar = updateDerivedStats(finalChar);
     finalChar = buildClassFeatures(finalChar);
+    finalChar = await buildSubclassFeatures(finalChar);  // merge subclass features
     finalChar = buildSpellSlots(finalChar);
     finalChar = buildRacialSkills(finalChar);
 
