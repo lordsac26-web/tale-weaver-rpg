@@ -13,8 +13,22 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - network first for JS/CSS, cache-first for other assets
 self.addEventListener('fetch', (event) => {
+  const url = event.request.url;
+  
+  // Always use network for source code to prevent stale cache issues
+  if (url.includes('/src/') || 
+      url.includes('/node_modules/') || 
+      url.includes('/@vite') || 
+      url.includes('/@react-refresh') ||
+      url.endsWith('.js') || 
+      url.endsWith('.css')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
+  // Cache-first for other assets
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
