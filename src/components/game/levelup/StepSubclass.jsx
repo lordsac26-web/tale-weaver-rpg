@@ -1,6 +1,6 @@
 import React from 'react';
 import { Sparkles, Check } from 'lucide-react';
-import { CLASSES } from '../../gameData';
+import { CLASSES } from '../gameData';
 
 export default function StepSubclass({ workflowState, setWorkflowState }) {
   const { receivingClass, selectedSubclass } = workflowState;

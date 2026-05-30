@@ -1,7 +1,7 @@
 import React from 'react';
 import { Heart, Dices } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { CLASSES, calcStatMod } from '../../gameData';
+import { CLASSES, calcStatMod } from '../gameData';
 
 export default function StepHP({ character, workflowState, setWorkflowState }) {
   const { receivingClass, hpRoll } = workflowState;

@@ -1,9 +1,7 @@
 import React from 'react';
 import { BookOpen } from 'lucide-react';
-import React from 'react';
-import { BookOpen } from 'lucide-react';
 import SpellSelectionStep from '../SpellSelectionStep';
-import { CLASSES } from '../../gameData'; // Reusing the spell selection logic // Reusing the spell selection logic
+import { CLASSES } from '../gameData';
 
 export default function StepSpells({ character, workflowState, setWorkflowState }) {
   const { receivingClass } = workflowState;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Award } from 'lucide-react';
-import { CLASSES } from '../../gameData';
+import { CLASSES } from '../gameData';
 
 export default function StepFeatures({ workflowState }) {
   const { receivingClass, newClassLevel } = workflowState;
