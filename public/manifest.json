@@ -1,12 +1,12 @@
 {
-  "name": "manifest",
+  "name": "Tale Weaver - D&D 5E RPG",
   "short_name": "Tale Weaver",
-  "description": "D&D 5E RPG Platform - Create and manage your fantasy adventures",
+  "description": "Interactive D&D 5E adventure platform with character management, combat, and AI-driven storytelling",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a0e06",
   "theme_color": "#1a0e06",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "icons": [
     {
       "src": "https://base44.com/logo_v2.svg",
@@ -28,20 +28,6 @@
     }
   ],
   "categories": ["games", "entertainment"],
-  "shortcuts": [
-    {
-      "name": "New Game",
-      "short_name": "New Game",
-      "description": "Start a new adventure",
-      "url": "/NewGame",
-      "icons": [{ "src": "https://base44.com/logo_v2.svg", "sizes": "any" }]
-    },
-    {
-      "name": "Characters",
-      "short_name": "Characters",
-      "description": "View your characters",
-      "url": "/Home",
-      "icons": [{ "src": "https://base44.com/logo_v2.svg", "sizes": "any" }]
-    }
-  ]
+  "screenshots": [],
+  "prefer_related_applications": false
 }

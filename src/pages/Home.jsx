@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 
 import { Link } from 'react-router-dom';
-import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked, Book } from 'lucide-react';
+import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked, Book, Smartphone } from 'lucide-react';
+import PWAInstallButton from '@/components/PWAInstallButton';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import CharacterSheet from '@/components/game/CharacterSheet';
@@ -56,6 +57,7 @@ export default function Home() {
             <div className="w-1 h-5 rounded-full" style={{ background: 'linear-gradient(180deg, #e8b86d, #b87333)' }} />
             <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(212,149,90,0.6)' }}>TALE WEAVER</span>
           </div>
+          <PWAInstallButton />
           <div className="relative" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => setShowCharMenu(v => !v)}

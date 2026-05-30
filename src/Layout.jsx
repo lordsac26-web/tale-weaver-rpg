@@ -1,8 +1,10 @@
 import React from 'react';
+import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 
 export default function Layout({ children, currentPageName }) {
   return (
     <div className="min-h-screen tavern-root">
+      <PWAInstallPrompt />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;900&family=IM+Fell+English:ital@0;1&family=Cinzel+Decorative:wght@400;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');
 
