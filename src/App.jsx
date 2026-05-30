@@ -26,6 +26,7 @@ import CharacterSheetFull from '@/pages/CharacterSheetFull';
 import Progression from '@/pages/Progression';
 import NPCManager from '@/pages/NPCManager';
 import RaceReport from '@/pages/RaceReport';
+import CustomBestiary from '@/pages/CustomBestiary';
 
 
 const LayoutWrapper = ({ children, currentPageName }) => (
@@ -115,6 +116,11 @@ const AuthenticatedApp = () => {
       <Route path="/RaceReport" element={
         <LayoutWrapper currentPageName="RaceReport">
           <RaceReport />
+        </LayoutWrapper>
+      } />
+      <Route path="/CustomBestiary" element={
+        <LayoutWrapper currentPageName="CustomBestiary">
+          <CustomBestiary />
         </LayoutWrapper>
       } />
       <Route path="/Market" element={

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 
 import { Link } from 'react-router-dom';
-import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked } from 'lucide-react';
+import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked, Book } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import CharacterSheet from '@/components/game/CharacterSheet';
@@ -137,6 +137,17 @@ export default function Home() {
         {/* ── Main Action Cards ── */}
         <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-14">
           {[
+            {
+              to: '/CustomBestiary',
+              icon: Book, iconColor: 'var(--brass-gold)',
+              accentColor: 'rgba(184,115,51,0.2)', glowColor: 'rgba(184,115,51,0.08)',
+              borderColor: 'rgba(184,115,51,0.3)',
+              title: 'Custom Bestiary', titleColor: '#f0d090',
+              desc: 'Create unique monster templates for your campaigns.',
+              descColor: 'var(--parchment-dim)',
+              iconBg: 'linear-gradient(135deg, #5c3318, #3d2010)',
+              iconBorder: 'rgba(212,149,90,0.35)',
+            },
             {
               to: '/ImageForge',
               icon: Wand2, iconColor: '#f0c040',
