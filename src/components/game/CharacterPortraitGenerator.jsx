@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { X, Loader2, Download, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 const POSES = [
   { id: 'portrait',    label: 'Portrait',    icon: '🎨', desc: 'Classic face and shoulders portrait, heroic expression' },
@@ -40,10 +41,26 @@ const RACE_VISUAL = {
 };
 
 export default function CharacterPortraitGenerator({ character, onClose, onSavePortrait }) {
+  const navigate = useNavigate();
   const [selectedPose, setSelectedPose] = useState('portrait');
   const [customPrompt, setCustomPrompt] = useState('');
   const [imageUrl, setImageUrl] = useState(character?.portrait || null);
   const [loading, setLoading] = useState(false);
+  
+  // Check if mature content is enabled for the current session
+  const getMatureContentFlag = async () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionId = urlParams.get('session_id');
+      if (sessionId) {
+        const sessions = await base44.entities.GameSession.filter({ id: sessionId });
+        return sessions[0]?.adult_mode || false;
+      }
+    } catch (e) {
+      console.error('Failed to check mature mode:', e);
+    }
+    return false;
+  };
 
   const generatePortrait = async () => {
     setLoading(true);
@@ -56,7 +73,11 @@ export default function CharacterPortraitGenerator({ character, onClose, onSaveP
       : `High fantasy character portrait: ${character?.name}, a ${character?.race} ${character?.class}. ${raceVisual}. ${classVisual}. Pose: ${pose?.desc}. Style: rich oil painting, cinematic lighting, highly detailed, heroic fantasy art. No text, no UI.`;
 
     try {
-      const result = await base44.integrations.Core.GenerateImage({ prompt });
+      const matureContent = await getMatureContentFlag();
+      const result = await base44.integrations.Core.GenerateImage({ 
+        prompt,
+        mature_content: matureContent
+      });
       setImageUrl(result.url);
     } catch (e) {
       console.error('Portrait generation failed:', e);
