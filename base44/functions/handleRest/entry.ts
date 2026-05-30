@@ -40,6 +40,7 @@ Deno.serve(async (req) => {
   const HIT_DIE = { Fighter: 10, Rogue: 8, Wizard: 6, Cleric: 8, Ranger: 10, Paladin: 10, Barbarian: 12, Bard: 8, Druid: 8, Monk: 8, Sorcerer: 6, Warlock: 8, Artificer: 8 };
   const hitDie = HIT_DIE[charClass] || 8;
   const conMod = Math.floor(((character.constitution || 10) - 10) / 2);
+  const chaMod = Math.floor(((character.charisma || 10) - 10) / 2);
 
   // Current hit dice remaining — initialize to charLevel if field doesn't exist yet (backwards compat)
   const currentHitDiceRemaining = character.hit_dice_remaining ?? charLevel;
@@ -80,8 +81,19 @@ Deno.serve(async (req) => {
     if (charClass === 'Fighter') {
       restorations.push('Action Surge & Second Wind recovered');
     }
-    if (charClass === 'Monk') restorations.push('Ki points recharged');
-    if (charClass === 'Bard' && charLevel >= 5) restorations.push('Bardic Inspiration recovered');
+    // Monk: Ki points fully recharge on a short rest (PHB p.78)
+    if (charClass === 'Monk' && charLevel >= 2) {
+      updates.ki_points_max = charLevel;
+      updates.ki_points_remaining = charLevel;
+      restorations.push(`Ki points recharged (${charLevel})`);
+    }
+    // Bard level 5+ (Font of Inspiration): Bardic Inspiration recovers on a short rest (PHB p.54)
+    if (charClass === 'Bard' && charLevel >= 5) {
+      const biMax = Math.max(1, chaMod);
+      updates.bardic_inspiration_max = biMax;
+      updates.bardic_inspiration_remaining = biMax;
+      restorations.push(`Bardic Inspiration recovered (${biMax})`);
+    }
 
     // Reset all short-rest ability tracking (Action Surge, Second Wind, Arcane Recovery, etc.)
     // arcane_recovery is gated by arcane_recovery_used flag (long rest only) — reset here to allow use again if not yet used
@@ -162,6 +174,20 @@ Deno.serve(async (req) => {
       updates.sorcery_points_max = spMax;
       updates.sorcery_points_current = spMax;
       restorations.push(`Sorcery points restored (${spMax})`);
+    }
+
+    // Monk: Ki fully restored on a long rest (PHB p.78)
+    if (charClass === 'Monk' && charLevel >= 2) {
+      updates.ki_points_max = charLevel;
+      updates.ki_points_remaining = charLevel;
+      restorations.push(`Ki points restored (${charLevel})`);
+    }
+    // Bard: Bardic Inspiration always restored on a long rest (PHB p.53)
+    if (charClass === 'Bard') {
+      const biMax = Math.max(1, chaMod);
+      updates.bardic_inspiration_max = biMax;
+      updates.bardic_inspiration_remaining = biMax;
+      restorations.push(`Bardic Inspiration restored (${biMax})`);
     }
 
     updates.death_saves_success = 0;

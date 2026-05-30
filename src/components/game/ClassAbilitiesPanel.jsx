@@ -3,14 +3,39 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, Wind, Shield, Flame, Eye, Swords, Heart, ChevronDown, Sparkles, Star } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { calcStatMod, PROFICIENCY_BY_LEVEL } from './gameData';
+import AbilityRow from './AbilityRow';
 
 /**
  * ClassAbilitiesPanel — shows prominently all class-specific combat abilities
  * available to the current character (Second Wind, Action Surge, Stances, etc.)
  * Abilities that consume resources track usage and show remaining counts.
  */
-export default function ClassAbilitiesPanel({ character, combat, worldState, onAbilityUsed, onMessage }) {
+export default function ClassAbilitiesPanel({ character, combat, worldState, onAbilityUsed, onMessage, onCharacterUpdate }) {
   const [collapsed, setCollapsed] = useState(false);
+
+  // Server-authoritative resource spend — backend validates class/level/pool and deducts.
+  const spendResource = async (resource, extra = {}) => {
+    try {
+      const res = await base44.functions.invoke('spendResource', {
+        resource, character_id: character.id, ...extra,
+      });
+      if (res.data?.success) {
+        onMessage?.(res.data.log_text);
+        // Refresh local character with the new remaining pool so the UI updates immediately.
+        const fields = resource === 'ki'
+          ? { ki_points_remaining: res.data.remaining, ki_points_max: res.data.max }
+          : { bardic_inspiration_remaining: res.data.remaining, bardic_inspiration_max: res.data.max };
+        onCharacterUpdate?.((prev) => prev ? { ...prev, ...fields } : prev);
+        onAbilityUsed?.(resource, res.data);
+      } else if (res.data?.error) {
+        onMessage?.(res.data.error);
+      }
+    } catch (err) {
+      console.error(`spendResource(${resource}) failed:`, err);
+    }
+  };
+  const spendKi = (ability) => spendResource('ki', { ability });
+  const spendBardic = () => spendResource('bardic');
 
   if (!character) return null;
 
@@ -291,9 +316,10 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
         type: 'bonus_action',
         description: `Bonus Action after Attack: 2 unarmed strikes. Costs 1 Ki. (${kiLeft} Ki remaining)`,
         shortDesc: `2 unarmed strikes (1 Ki — ${kiLeft} left)`,
-        used: kiLeft <= 0,
-        usedLabel: 'No Ki remaining',
-        available: kiLeft > 0,
+        used: kiLeft <= 0 || bonusActionUsed,
+        usedLabel: kiLeft <= 0 ? 'No Ki remaining' : 'Bonus action used',
+        available: kiLeft > 0 && !bonusActionUsed,
+        onUse: () => spendKi('Flurry of Blows'),
       });
 
       abilities.push({
@@ -309,6 +335,7 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
         used: kiLeft <= 0 || bonusActionUsed,
         usedLabel: kiLeft <= 0 ? 'No Ki' : 'Bonus action used',
         available: kiLeft > 0 && !bonusActionUsed,
+        onUse: () => spendKi('Patient Defense'),
       });
     }
   }
@@ -345,9 +372,8 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
   if (charClass === 'Bard') {
     const dieMod = level < 5 ? 'd6' : level < 10 ? 'd8' : level < 15 ? 'd10' : 'd12';
     const chaBonus = calcStatMod(character.charisma || 10);
-    const maxInspire = chaBonus > 0 ? chaBonus : 1;
-    const usedInspire = shortRestAbilities.bardic_inspiration_used || 0;
-    const inspireLeft = Math.max(0, maxInspire - usedInspire);
+    const maxInspire = character.bardic_inspiration_max ?? (chaBonus > 0 ? chaBonus : 1);
+    const inspireLeft = character.bardic_inspiration_remaining ?? maxInspire;
     abilities.push({
       id: 'bardic_inspiration',
       name: 'Bardic Inspiration',
@@ -362,13 +388,7 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
       used: inspireLeft <= 0,
       usedLabel: `All uses spent (refills on ${level >= 5 ? 'short' : 'long'} rest)`,
       available: inspireLeft > 0,
-      onUse: async () => {
-        await base44.entities.Character.update(character.id, {
-          short_rest_abilities: { ...shortRestAbilities, bardic_inspiration_used: usedInspire + 1 }
-        });
-        onMessage?.(`🎵 Bardic Inspiration! ${character.name} grants a ${dieMod} inspiration die!`);
-        onAbilityUsed?.('bardic_inspiration', {});
-      }
+      onUse: () => spendBardic(),
     });
   }
 
@@ -615,9 +635,6 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
 
   if (abilities.length === 0) return null;
 
-  const typeLabel = { action: 'Action', bonus_action: 'Bonus', reaction: 'Reaction', passive: 'Passive', free: 'Free', special: 'Special', passive_toggle: 'Toggle' };
-  const typeColor = { action: '#fde68a', bonus_action: '#86efac', reaction: '#93c5fd', passive: 'rgba(180,160,120,0.6)', free: '#fbbf24', special: '#c4b5fd', passive_toggle: '#fbbf24' };
-
   return (
     <div className="rounded-lg overflow-hidden" style={{ background: 'rgba(8,5,2,0.8)', border: '1px solid rgba(180,140,90,0.2)' }}>
       {/* Header */}
@@ -645,84 +662,9 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden">
             <div className="p-2 grid grid-cols-1 gap-1.5" style={{ borderTop: '1px solid rgba(180,140,90,0.1)' }}>
-              {abilities.map(ability => {
-                const isClickable = ability.onUse && ability.available && !ability.used;
-                const isPassive = ability.type === 'passive';
-                return (
-                  <motion.button
-                    key={ability.id}
-                    whileTap={isClickable ? { scale: 0.98 } : {}}
-                    onClick={isClickable ? ability.onUse : undefined}
-                    disabled={ability.used || isPassive}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all"
-                    style={ability.used || !ability.available ? {
-                      background: 'rgba(10,8,4,0.4)',
-                      border: '1px solid rgba(60,45,20,0.15)',
-                      opacity: 0.45,
-                      cursor: 'not-allowed',
-                    } : isPassive ? {
-                      background: 'rgba(15,12,5,0.5)',
-                      border: `1px solid ${ability.borderColor}`,
-                      cursor: 'default',
-                    } : {
-                      background: ability.bgColor,
-                      border: `1px solid ${ability.borderColor}`,
-                      boxShadow: `0 0 8px ${ability.borderColor}`,
-                      cursor: 'pointer',
-                    }}
-                    onMouseEnter={e => { if (isClickable) e.currentTarget.style.background = ability.activeBg || ability.bgColor; }}
-                    onMouseLeave={e => { if (isClickable) e.currentTarget.style.background = ability.bgColor; }}
-                  >
-                    {/* Icon */}
-                    <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
-                      style={{
-                        background: ability.used ? 'rgba(20,15,5,0.4)' : `${ability.bgColor}`,
-                        border: `1px solid ${ability.used ? 'rgba(60,45,20,0.2)' : ability.borderColor}`,
-                        color: ability.used ? 'rgba(100,80,40,0.3)' : ability.color,
-                      }}>
-                      {ability.icon}
-                    </div>
-
-                    {/* Text */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-fantasy text-xs font-semibold"
-                          style={{ color: ability.used ? 'rgba(120,100,60,0.4)' : ability.color }}>
-                          {ability.name}
-                        </span>
-                        <span className="px-1 py-0.5 rounded text-xs"
-                          style={{
-                            background: 'rgba(20,15,5,0.5)',
-                            color: ability.used ? 'rgba(80,60,30,0.3)' : typeColor[ability.type] || '#c9a96e',
-                            fontSize: '0.55rem',
-                            fontFamily: 'Cinzel, serif',
-                            letterSpacing: '0.05em',
-                          }}>
-                          {typeLabel[ability.type] || ability.type}
-                        </span>
-                      </div>
-                      <div className="text-xs mt-0.5 truncate"
-                        style={{ color: ability.used ? 'rgba(100,80,40,0.3)' : 'rgba(200,175,130,0.6)', fontFamily: 'EB Garamond, serif', fontSize: '0.65rem' }}>
-                        {ability.used ? ability.usedLabel : ability.shortDesc}
-                      </div>
-                    </div>
-
-                    {/* Status dot */}
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                      style={ability.used ? {
-                        background: 'rgba(60,45,20,0.3)',
-                        border: '1px solid rgba(80,60,25,0.2)',
-                      } : isPassive ? {
-                        background: ability.color,
-                        boxShadow: `0 0 4px ${ability.color}88`,
-                        opacity: 0.5,
-                      } : {
-                        background: ability.color,
-                        boxShadow: `0 0 6px ${ability.color}99`,
-                      }} />
-                  </motion.button>
-                );
-              })}
+              {abilities.map(ability => (
+                <AbilityRow key={ability.id} ability={ability} />
+              ))}
             </div>
           </motion.div>
         )}

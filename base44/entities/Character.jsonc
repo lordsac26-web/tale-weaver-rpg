@@ -248,6 +248,22 @@
       },
       "description": "Metamagic options the Sorcerer knows (PHB p.102). e.g. ['Quickened Spell','Twinned Spell','Heightened Spell']"
     },
+    "ki_points_remaining": {
+      "type": "number",
+      "description": "Monk Ki points currently available (PHB p.78). Spent on Flurry of Blows, Patient Defense, Step of the Wind. Refreshes to ki_points_max on a short or long rest."
+    },
+    "ki_points_max": {
+      "type": "number",
+      "description": "Maximum Ki points = Monk level (from level 2). 0 for non-Monks."
+    },
+    "bardic_inspiration_remaining": {
+      "type": "number",
+      "description": "Bardic Inspiration uses currently available (PHB p.53). Max = Charisma modifier (min 1). Refreshes on a long rest (short rest at level 5+ via Font of Inspiration)."
+    },
+    "bardic_inspiration_max": {
+      "type": "number",
+      "description": "Maximum Bardic Inspiration uses = Charisma modifier (min 1). 0 for non-Bards."
+    },
     "portrait": {
       "type": "string"
     },
