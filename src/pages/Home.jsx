@@ -49,6 +49,24 @@ export default function Home() {
       {/* Top brass accent bar */}
       <div className="fixed top-0 left-0 right-0 z-40 h-0.5 pointer-events-none"
         style={{ background: 'linear-gradient(90deg, transparent, rgba(232,184,109,0.7) 25%, rgba(245,208,138,0.85) 50%, rgba(232,184,109,0.7) 75%, transparent)' }} />
+      
+      {/* Show PWA Debug toggle button (bottom-left corner) */}
+      <button
+        onClick={() => {
+          const event = new CustomEvent('show-pwa-debugger');
+          window.dispatchEvent(event);
+        }}
+        className="fixed bottom-4 left-4 p-2.5 rounded-xl z-40 transition-all hover:scale-110"
+        style={{ 
+          background: 'rgba(20,15,10,0.9)',
+          border: '1px solid rgba(201,169,110,0.3)',
+          color: 'rgba(201,169,110,0.6)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.6)'
+        }}
+        title="Show PWA Debugger"
+      >
+        <Smartphone className="w-4 h-4" />
+      </button>
 
       {/* Nav Bar */}
       {characters.length > 0 && (

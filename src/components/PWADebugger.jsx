@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Smartphone, Check, X, AlertCircle } from 'lucide-react';
+import { Smartphone, Check, X, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -13,6 +13,18 @@ export default function PWADebugger() {
   const [serviceWorkerActive, setServiceWorkerActive] = useState(false);
   const [browserSupport, setBrowserSupport] = useState(false);
   const [debugInfo, setDebugInfo] = useState([]);
+  const [isVisible, setIsVisible] = useState(true);
+  const [isDismissed, setIsDismissed] = useState(false);
+
+  // Listen for show event
+  useEffect(() => {
+    const handleShow = () => {
+      setIsDismissed(false);
+      setIsVisible(true);
+    };
+    window.addEventListener('show-pwa-debugger', handleShow);
+    return () => window.removeEventListener('show-pwa-debugger', handleShow);
+  }, []);
 
   useEffect(() => {
     const logs = [];
@@ -103,14 +115,37 @@ export default function PWADebugger() {
     };
   }, []);
 
+  // Don't render if dismissed
+  if (isDismissed || !isVisible) return null;
+
   return (
-    <div className="p-4 rounded-xl" style={{ 
+    <div className="p-4 rounded-xl relative" style={{ 
       background: 'rgba(20,15,10,0.8)', 
       border: '1px solid rgba(201,169,110,0.2)' 
     }}>
-      <div className="flex items-center gap-2 mb-4">
-        <Smartphone className="w-5 h-5" style={{ color: '#fbbf24' }} />
-        <h3 className="font-fantasy text-sm" style={{ color: '#c9a96e' }}>PWA Installation Status</h3>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Smartphone className="w-5 h-5" style={{ color: '#fbbf24' }} />
+          <h3 className="font-fantasy text-sm" style={{ color: '#c9a96e' }}>PWA Installation Status</h3>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsVisible(!isVisible)}
+            className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+            style={{ color: 'rgba(201,169,110,0.4)' }}
+            title={isVisible ? 'Hide' : 'Show'}
+          >
+            {isVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={() => setIsDismissed(true)}
+            className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+            style={{ color: 'rgba(201,169,110,0.4)' }}
+            title="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2 text-xs">
