@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Star, TrendingUp, Heart, Shield, Sparkles, Award, X, ChevronRight } from 'lucide-react';
 import { CLASSES, calcStatMod, PROFICIENCY_BY_LEVEL } from './gameData';
 import SpellSelectionStep, { getRequiredSpellCounts } from './SpellSelectionStep';
+import ClassSelector from './levelup/ClassSelector';
 
 const XP_THRESHOLDS = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
 
@@ -16,28 +17,51 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
   const [statIncreases, setStatIncreases] = useState({ first: '', second: '' });
   const [selectedFeat, setSelectedFeat] = useState('');
   const [spellSelection, setSpellSelection] = useState({ cantrips: [], spells: [] });
-  
-  const currentLevel = character.level || 1;
-  const newLevel = currentLevel + 1;
+
+  // ── Multiclass class picker ──────────────────────────────────────────────
+  // Build the list of classes the character holds (primary + any multiclass).
+  const classOptions = [
+    { class: character.class, level: character.level || 1, isPrimary: true },
+    ...(character.multiclass || []).map(mc => ({
+      class: mc.class, level: mc.levels || 1, isPrimary: false,
+    })),
+  ];
+  const isMulticlass = classOptions.length > 1;
+  // Default to advancing the primary class.
+  const [receivingClass, setReceivingClass] = useState(character.class);
+
+  // Per-class level of whichever class is receiving the level.
+  const receivingOption = classOptions.find(o => o.class === receivingClass) || classOptions[0];
+  const receivingClassLevel = receivingOption.level;
+  const newClassLevel = receivingClassLevel + 1;
+
+  // Total character level drives proficiency bonus (5e rule).
+  const currentTotalLevel = classOptions.reduce((sum, o) => sum + o.level, 0);
+  const newTotalLevel = currentTotalLevel + 1;
+  const newLevel = newTotalLevel; // display value
+
   const requiredSpells = getRequiredSpellCounts(character, newLevel);
   const spellsIncomplete =
     (spellSelection.cantrips?.length || 0) < requiredSpells.cantrips ||
     (spellSelection.spells?.length || 0) < requiredSpells.spells;
-  const classData = CLASSES[character.class] || {};
+  // classData / hitDie / features derive from the RECEIVING class.
+  const classData = CLASSES[receivingClass] || {};
   const hitDie = classData.hit_die || 8;
   const conMod = calcStatMod(character.constitution || 10);
-  const oldProfBonus = PROFICIENCY_BY_LEVEL[currentLevel - 1] || 2;
-  const newProfBonus = PROFICIENCY_BY_LEVEL[newLevel - 1] || 2;
+  const oldProfBonus = PROFICIENCY_BY_LEVEL[currentTotalLevel - 1] || 2;
+  const newProfBonus = PROFICIENCY_BY_LEVEL[newTotalLevel - 1] || 2;
   
-  // Check if this level grants subclass selection
-  const needsSubclass = !character.subclass && newLevel >= 3 && classData.subclasses?.length > 0;
-  
-  // Check if this level grants ASI/Feat
-  const asiLevels = ['Fighter', 'Rogue'].includes(character.class) ? FIGHTER_ROGUE_ASI : ASI_LEVELS;
-  const grantsASI = asiLevels.includes(newLevel);
-  
-  // Get new features for this level
-  const newFeatures = classData.features?.[newLevel] || [];
+  // Subclass selection / ASI / features all key off the RECEIVING class's
+  // per-class level, not the total character level.
+  const needsSubclass = receivingClass === character.class &&
+    !character.subclass && newClassLevel >= 3 && classData.subclasses?.length > 0;
+
+  // Check if this level grants ASI/Feat (based on the receiving class's level)
+  const asiLevels = ['Fighter', 'Rogue'].includes(receivingClass) ? FIGHTER_ROGUE_ASI : ASI_LEVELS;
+  const grantsASI = asiLevels.includes(newClassLevel);
+
+  // Get new features for this class level
+  const newFeatures = classData.features?.[newClassLevel] || [];
   
   // Simple feat options (most common)
   const COMMON_FEATS = [
@@ -92,12 +116,24 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
     
     const hpGain = hpRoll + conMod;
     const updates = {
-      level: newLevel,
       hp_max: (character.hp_max || 0) + hpGain,
       hp_current: (character.hp_current || 0) + hpGain,
       proficiency_bonus: newProfBonus,
+      // Tell autoLevelUp which class receives the level.
+      level_into_class: receivingClass,
     };
-    
+
+    // Write the gained level into the correct class slot.
+    if (receivingClass === character.class) {
+      updates.level = newClassLevel;
+    } else {
+      const mc = (character.multiclass || []).map(m => ({ ...m }));
+      const idx = mc.findIndex(m => m.class === receivingClass);
+      if (idx >= 0) mc[idx].levels = (mc[idx].levels || 0) + 1;
+      else mc.push({ class: receivingClass, subclass: '', levels: 1 });
+      updates.multiclass = mc;
+    }
+
     if (needsSubclass) {
       updates.subclass = selectedSubclass;
     }
@@ -201,7 +237,25 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
         
         {/* Content */}
         <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
-          
+
+          {/* Multiclass: choose which class to advance */}
+          {isMulticlass && (
+            <ClassSelector
+              options={classOptions}
+              selected={receivingClass}
+              onSelect={(cls) => {
+                setReceivingClass(cls);
+                // Reset choices that depend on the receiving class.
+                setHpRoll(null);
+                setSelectedSubclass('');
+                setAsiChoice('stats');
+                setStatIncreases({ first: '', second: '' });
+                setSelectedFeat('');
+                setSpellSelection({ cantrips: [], spells: [] });
+              }}
+            />
+          )}
+
           {/* HP Gain */}
           <div className="rounded-xl p-4 rune-border"
             style={{ background: 'rgba(15,10,5,0.7)', border: '1px solid rgba(184,115,51,0.25)' }}>
@@ -269,7 +323,7 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
                 <span className="font-fantasy text-sm tracking-widest" style={{ color: 'rgba(196,181,253,0.7)' }}>CHOOSE YOUR PATH</span>
               </div>
               <p className="text-sm mb-3" style={{ color: 'var(--parchment-dim)', fontFamily: 'EB Garamond, serif' }}>
-                At 3rd level, all {character.class}s must choose their specialization:
+                At 3rd level, all {receivingClass}s must choose their specialization:
               </p>
               <div className="space-y-2">
                 {classData.subclasses?.map(sub => (
