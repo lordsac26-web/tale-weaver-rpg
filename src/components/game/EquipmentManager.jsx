@@ -469,16 +469,28 @@ export function recalculateStats(character, equipped, inventory) {
   if (equipped.mainhand) {
     const w = equipped.mainhand;
     const dmgStr = w.damage || w.damage_dice || '1d6';
+    let weaponDice = dmgStr.split(' ')[0] || '1d6';
+
+    // Versatile (PHB p.147): use the larger die when wielded two-handed (no off-hand item).
+    // The versatile die is parsed from the property string, e.g. "Versatile (1d10)".
+    const props = w.properties || [];
+    const versatileProp = props.find(p => /versatile/i.test(p));
+    const handsFree = !equipped.offhand; // nothing in the off-hand → two-handed grip available
+    if (versatileProp && handsFree) {
+      const m = versatileProp.match(/(\d+d\d+)/);
+      if (m) weaponDice = m[1];
+    }
+
     updates.equipped = {
       ...equipped,
       weapon: {
         ...w,
-        damage_dice: dmgStr.split(' ')[0] || '1d6',
+        damage_dice: weaponDice,
         damage_type: w.damage_type || 'slashing',
         attack_bonus: w.attack_bonus || 0,
         damage_bonus: w.damage_bonus || 0,
         type: w.type || 'melee',
-        properties: w.properties || [],
+        properties: props,
       }
     };
   } else {
