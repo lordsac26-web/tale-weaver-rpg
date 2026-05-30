@@ -400,6 +400,11 @@ Deno.serve(async (req) => {
     const combatLog = await base44.entities.CombatLog.get(combat_id);
     const character = await base44.entities.Character.get(character_id);
 
+    // ── SECURITY: verify the authenticated user owns this character ──────────
+    if (character.created_by !== user.email) {
+      return Response.json({ error: 'Forbidden: character does not belong to this user.' }, { status: 403 });
+    }
+
     const combatants = [...combatLog.combatants];
     const target = combatants.find(c => c.id === target_id);
     if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });
@@ -724,6 +729,8 @@ Deno.serve(async (req) => {
 
       // === ELDRITCH BLAST multi-beam (Warlock, scales at levels 5/11/17) ===
       if (spell.name === 'Eldritch Blast') {
+        // targetACBonus defined here so it is in scope for the beam loop
+        const ebTargetACBonus = (modifiers.half_cover ? 2 : 0) + (modifiers.three_quarters_cover ? 5 : 0);
         const beams = character.level >= 17 ? 4 : character.level >= 11 ? 3 : character.level >= 5 ? 2 : 1;
         let totalBeamDmg = 0; let anyBeamHit = false; let beamCrit = false;
         const beamLogs = [];
@@ -732,7 +739,7 @@ Deno.serve(async (req) => {
           const br = (modifiers.advantage ? Math.max(br1,br2) : modifiers.disadvantage ? Math.min(br1,br2) : br1);
           const bCrit = br === 20; const bMiss = br === 1;
           const bMod = spellAttackBonus;
-          const bHit = !bMiss && (bCrit || (br + bMod) >= (target.ac + targetACBonus));
+          const bHit = !bMiss && (bCrit || (br + bMod) >= (target.ac + ebTargetACBonus));
           if (bCrit) beamCrit = true;
           if (bHit) {
             anyBeamHit = true;
@@ -1498,28 +1505,42 @@ Deno.serve(async (req) => {
       finalDamage = dmgMod.amount;
     }
 
-    // Apply total damage to player
+    // Apply total damage to player — temp HP absorbs first (PHB p.198)
     let instantDeath = false;
     if (finalDamage > 0) {
-      const hpBefore = player.hp_current;
-      const overkill = finalDamage - hpBefore; // damage remaining after reaching 0 HP
-      player.hp_current = Math.max(0, hpBefore - finalDamage);
-      if (player.hp_current === 0) {
-        player.is_conscious = false;
-        // Instant Death (PHB p.197): if remaining damage >= max HP, the creature dies instantly
-        if (overkill >= (player.hp_max || 0)) {
-          instantDeath = true;
-          const downedChar = await base44.entities.Character.get(player.id);
-          await base44.entities.Character.update(player.id, {
-            hp_current: 0,
-            death_saves_failure: 3, // mark as dead
-            death_saves_success: 0,
-          });
+      // Temporary HP acts as a buffer: absorbed before real HP, never stacks
+      const currentTempHP = charFull.temp_hp || 0;
+      let remainingDamage = finalDamage;
+      if (currentTempHP > 0) {
+        const tempAbsorbed = Math.min(currentTempHP, remainingDamage);
+        remainingDamage -= tempAbsorbed;
+        const newTempHP = currentTempHP - tempAbsorbed;
+        await base44.entities.Character.update(player.id, { temp_hp: newTempHP });
+        if (tempAbsorbed > 0) {
+          attackLogs.push(`[Temp HP absorbed ${tempAbsorbed} damage (${newTempHP} temp HP remaining)]`);
         }
       }
-      if (!instantDeath) {
-        await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
+      if (remainingDamage > 0) {
+        const hpBefore = player.hp_current;
+        const overkill = remainingDamage - hpBefore; // damage remaining after reaching 0 HP
+        player.hp_current = Math.max(0, hpBefore - remainingDamage);
+        if (player.hp_current === 0) {
+          player.is_conscious = false;
+          // Instant Death (PHB p.197): if remaining damage >= max HP, the creature dies instantly
+          if (overkill >= (player.hp_max || 0)) {
+            instantDeath = true;
+            await base44.entities.Character.update(player.id, {
+              hp_current: 0,
+              death_saves_failure: 3, // mark as dead
+              death_saves_success: 0,
+            });
+          }
+        }
+        if (!instantDeath) {
+          await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
+        }
       }
+      totalDamage = finalDamage; // log shows original pre-absorption total
     }
     totalDamage = finalDamage; // update for log accuracy
 
@@ -1663,9 +1684,20 @@ Deno.serve(async (req) => {
       const sides = dMatch ? parseInt(dMatch[2]) : 6;
       for (let i = 0; i < numDice; i++) dmg += rollDice(sides);
       dmg = Math.max(1, dmg + (legendary.damage_bonus || 0));
-      player.hp_current = Math.max(0, player.hp_current - dmg);
-      if (player.hp_current === 0) player.is_conscious = false;
-      await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
+      // Temp HP absorbs legendary action damage first (PHB p.198)
+      const laCharFull = await base44.entities.Character.get(player.id);
+      const laTempHP = laCharFull.temp_hp || 0;
+      let laRemainingDmg = dmg;
+      if (laTempHP > 0) {
+        const absorbed = Math.min(laTempHP, laRemainingDmg);
+        laRemainingDmg -= absorbed;
+        await base44.entities.Character.update(player.id, { temp_hp: laTempHP - absorbed });
+      }
+      if (laRemainingDmg > 0) {
+        player.hp_current = Math.max(0, player.hp_current - laRemainingDmg);
+        if (player.hp_current === 0) player.is_conscious = false;
+        await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
+      }
     }
 
     const newBudget = budget - 1;
@@ -1787,6 +1819,119 @@ Deno.serve(async (req) => {
       world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, sneak_attack_used: false, loading_weapon_fired: false }
     });
     return Response.json({ next_turn_index: nextIndex, round: nextRound, current_combatant: combatants[nextIndex] });
+  }
+
+  // ─── DEATH SAVE (PHB p.197) ─────────────────────────────────────────────────
+  // Player rolls a d20 on their turn while at 0 HP.
+  // 10+  = success. 3 successes = stabilized.
+  // 9-   = failure. 3 failures  = dead.
+  // Nat 20 = regain 1 HP and stand up immediately.
+  // Nat 1  = counts as 2 failures.
+  if (action === 'death_save') {
+    const character = await base44.entities.Character.get(character_id);
+    if (character.created_by !== user.email) {
+      return Response.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatants = [...combatLog.combatants];
+    const playerCombatant = combatants.find(c => c.type === 'player');
+
+    // Only roll if actually at 0 HP
+    if ((character.hp_current || 0) > 0) {
+      return Response.json({ error: 'Character is not at 0 HP — no death save needed.', invalid: true }, { status: 400 });
+    }
+
+    const roll = rollD20();
+    let successDelta = 0;
+    let failureDelta = 0;
+    let logText = `💀 ${character.name} rolls a Death Saving Throw: ${roll}`;
+    let stabilized = false;
+    let regainedHP = false;
+
+    if (roll === 20) {
+      // Nat 20: regain 1 HP, stand up (PHB p.197)
+      await base44.entities.Character.update(character_id, {
+        hp_current: 1,
+        death_saves_success: 0,
+        death_saves_failure: 0,
+      });
+      if (playerCombatant) {
+        playerCombatant.hp_current = 1;
+        playerCombatant.is_conscious = true;
+      }
+      logText += ` — NATURAL 20! ${character.name} regains 1 HP and stands back up! 🌟`;
+      regainedHP = true;
+    } else if (roll === 1) {
+      // Nat 1: 2 failures
+      failureDelta = 2;
+      logText += ` — Natural 1! Two death save failures!`;
+    } else if (roll >= 10) {
+      successDelta = 1;
+      logText += ` — Success! (${roll} ≥ 10)`;
+    } else {
+      failureDelta = 1;
+      logText += ` — Failure. (${roll} < 10)`;
+    }
+
+    const newSuccesses = Math.min(3, (character.death_saves_success || 0) + successDelta);
+    const newFailures = Math.min(3, (character.death_saves_failure || 0) + failureDelta);
+
+    if (!regainedHP) {
+      if (newSuccesses >= 3) {
+        // Stabilized: unconscious but no longer dying (PHB p.197)
+        stabilized = true;
+        logText += ` — ${character.name} is STABILIZED and no longer dying!`;
+        await base44.entities.Character.update(character_id, {
+          death_saves_success: newSuccesses,
+          death_saves_failure: newFailures,
+        });
+      } else if (newFailures >= 3) {
+        logText += ` — ${character.name} has DIED. ☠️`;
+        await base44.entities.Character.update(character_id, {
+          death_saves_success: newSuccesses,
+          death_saves_failure: 3,
+        });
+      } else {
+        await base44.entities.Character.update(character_id, {
+          death_saves_success: newSuccesses,
+          death_saves_failure: newFailures,
+        });
+      }
+    }
+
+    const logEntry = {
+      round: combatLog.round,
+      actor: character.name,
+      action: 'death_save',
+      roll,
+      text: logText + ` (${newSuccesses}/3 successes, ${newFailures}/3 failures)`,
+    };
+
+    // Advance turn after death save (it consumes the player's turn)
+    const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
+    const updatedCombatants = playerCombatant ? combatants.map(c => c.type === 'player' ? playerCombatant : c) : combatants;
+
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants: updatedCombatants,
+      log_entries: [...(combatLog.log_entries || []), logEntry],
+      current_turn_index: nextIndex,
+      round: nextRound,
+      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false },
+    });
+
+    return Response.json({
+      roll,
+      success: successDelta > 0,
+      nat20: roll === 20,
+      nat1: roll === 1,
+      stabilized,
+      regained_hp: regainedHP,
+      death_saves_success: newSuccesses,
+      death_saves_failure: newFailures,
+      character_dead: newFailures >= 3 && !regainedHP,
+      log_entry: logEntry,
+      next_turn_index: nextIndex,
+    });
   }
 
   return Response.json({ error: 'Unknown action' }, { status: 400 });

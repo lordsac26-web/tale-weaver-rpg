@@ -74,14 +74,6 @@ export const RACES = {
     description: 'Fierce and powerful, half-orcs refuse to fall. Their orcish blood makes them terrifying warriors who thrive in battle.',
     subraces: [],
   },
-  Tiefling: {
-    traits: ['Darkvision (60 ft)', 'Hellish Resistance (fire resistance)', 'Infernal Legacy (Thaumaturgy cantrip; Hellish Rebuke at 3rd; Darkness at 5th)'],
-    stat_bonuses: { intelligence: 1, charisma: 2 },
-    speed: 30, size: 'Medium',
-    languages: ['Common', 'Infernal'],
-    description: 'Touched by infernal magic, tieflings wield dark power. Though distrusted, their strength and magic are undeniable.',
-    subraces: [],
-  },
   Dragonborn: {
     traits: ['Draconic Ancestry (choose dragon type)', 'Breath Weapon (2× proficiency bonus, uses Constitution save)', 'Damage Resistance (matching ancestry type)'],
     stat_bonuses: { strength: 2, charisma: 1 },

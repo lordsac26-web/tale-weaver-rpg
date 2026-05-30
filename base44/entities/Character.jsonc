@@ -115,6 +115,11 @@
     "hp_current": {
       "type": "number"
     },
+    "temp_hp": {
+      "type": "number",
+      "default": 0,
+      "description": "Temporary hit points (PHB p.198). Absorbed before real HP. Do not stack \u2014 take the higher value. Lost first when taking damage."
+    },
     "armor_class": {
       "type": "number"
     },
@@ -151,7 +156,7 @@
       "items": {
         "type": "string"
       },
-      "description": "Names of magic items the character is currently attuned to. Max 3 (DMG p.138). Attunement-required item bonuses only apply when the item name is in this list."
+      "description": "Names of magic items the character is currently attuned to. Max 3 (DMG p.138)."
     },
     "gold": {
       "type": "number",
@@ -192,7 +197,7 @@
     "exhaustion_level": {
       "type": "number",
       "default": 0,
-      "description": "PHB exhaustion track (0-6). 1: disadvantage on ability checks. 2: speed halved. 3: disadvantage on attacks & saves. 4: HP maximum halved. 5: speed 0. 6: death."
+      "description": "PHB exhaustion track (0-6)."
     },
     "active_modifiers": {
       "type": "array",
@@ -217,64 +222,64 @@
       "items": {
         "type": "string"
       },
-      "description": "Damage types this character has resistance to (damage halved). e.g. ['fire','cold']"
+      "description": "Damage types this character has resistance to."
     },
     "vulnerabilities": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "description": "Damage types this character is vulnerable to (damage doubled)."
+      "description": "Damage types this character is vulnerable to."
     },
     "immunities": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "description": "Damage types this character is immune to (damage reduced to 0)."
+      "description": "Damage types this character is immune to."
     },
     "luck_points_remaining": {
       "type": "number",
       "default": 0,
-      "description": "Lucky feat (PHB p.167): luck points available. Spend 1 to roll an extra d20 on an attack, ability check, or save and choose which die to use. Refreshes to luck_points_max on a long rest."
+      "description": "Lucky feat luck points available."
     },
     "luck_points_max": {
       "type": "number",
       "default": 0,
-      "description": "Maximum luck points (3 if the character has the Lucky feat, else 0)."
+      "description": "Maximum luck points (3 if Lucky feat, else 0)."
     },
     "sorcery_points_max": {
       "type": "number",
       "default": 0,
-      "description": "Sorcerer Font of Magic (PHB p.101): maximum sorcery points = sorcerer level (from level 2). 0 for non-sorcerers."
+      "description": "Sorcerer Font of Magic maximum sorcery points."
     },
     "sorcery_points_current": {
       "type": "number",
       "default": 0,
-      "description": "Sorcery points currently available. Spent on Metamagic. Refreshes to sorcery_points_max on a long rest."
+      "description": "Sorcery points currently available."
     },
     "metamagic_known": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "description": "Metamagic options the Sorcerer knows (PHB p.102). e.g. ['Quickened Spell','Twinned Spell','Heightened Spell']"
+      "description": "Metamagic options the Sorcerer knows."
     },
     "ki_points_remaining": {
       "type": "number",
-      "description": "Monk Ki points currently available (PHB p.78). Spent on Flurry of Blows, Patient Defense, Step of the Wind. Refreshes to ki_points_max on a short or long rest."
+      "description": "Monk Ki points currently available."
     },
     "ki_points_max": {
       "type": "number",
-      "description": "Maximum Ki points = Monk level (from level 2). 0 for non-Monks."
+      "description": "Maximum Ki points = Monk level (from level 2)."
     },
     "bardic_inspiration_remaining": {
       "type": "number",
-      "description": "Bardic Inspiration uses currently available (PHB p.53). Max = Charisma modifier (min 1). Refreshes on a long rest (short rest at level 5+ via Font of Inspiration)."
+      "description": "Bardic Inspiration uses currently available."
     },
     "bardic_inspiration_max": {
       "type": "number",
-      "description": "Maximum Bardic Inspiration uses = Charisma modifier (min 1). 0 for non-Bards."
+      "description": "Maximum Bardic Inspiration uses = Charisma modifier (min 1)."
     },
     "portrait": {
       "type": "string"
@@ -310,11 +315,11 @@
     },
     "hit_dice_remaining": {
       "type": "number",
-      "description": "Number of hit dice currently available to spend (max = character level). Recovered at rate of half level per long rest (PHB p.186)."
+      "description": "Hit dice currently available to spend."
     },
     "hit_dice_max": {
       "type": "number",
-      "description": "Maximum hit dice = character level. Stored separately for reference."
+      "description": "Maximum hit dice = character level."
     }
   },
   "required": [
