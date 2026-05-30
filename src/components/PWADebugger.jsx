@@ -128,24 +128,18 @@ export default function PWADebugger() {
           <Smartphone className="w-5 h-5" style={{ color: '#fbbf24' }} />
           <h3 className="font-fantasy text-sm" style={{ color: '#c9a96e' }}>PWA Installation Status</h3>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setIsVisible(!isVisible)}
-            className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
-            style={{ color: 'rgba(201,169,110,0.4)' }}
-            title={isVisible ? 'Hide' : 'Show'}
-          >
-            {isVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={() => setIsDismissed(true)}
-            className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
-            style={{ color: 'rgba(201,169,110,0.4)' }}
-            title="Dismiss"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        <button
+          onClick={() => setIsDismissed(true)}
+          className="px-3 py-1.5 rounded-lg text-xs font-fantasy transition-all hover:bg-red-500/20"
+          style={{ 
+            color: '#ff6b6b',
+            border: '1px solid rgba(255,107,107,0.4)',
+            cursor: 'pointer'
+          }}
+          title="Dismiss this panel permanently"
+        >
+          ✕ Dismiss
+        </button>
       </div>
 
       <div className="space-y-2 text-xs">
