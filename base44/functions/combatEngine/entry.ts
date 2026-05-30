@@ -781,9 +781,42 @@ Deno.serve(async (req) => {
 
     // Enemy attacks player
     const player = combatants.find(c => c.type === 'player');
-    if (!player || !player.is_conscious) {
-      // Player is dead/unconscious - skip enemy turn
-      return Response.json({ no_target: true, player_unconscious: true });
+    if (!player) {
+      return Response.json({ no_target: true });
+    }
+
+    // Player is at 0 HP (downed): an attack that hits causes a death save failure (PHB p.197).
+    // A melee hit from within 5 ft is an automatic critical → 2 failures.
+    if (!player.is_conscious || player.hp_current === 0) {
+      const downedChar = await base44.entities.Character.get(player.id);
+      const atkRoll = rollD20();
+      const atkBonus = currentCombatant.attack_bonus || 3;
+      const isCrit = atkRoll === 20;
+      const hitDowned = !(atkRoll === 1) && (isCrit || (atkRoll + atkBonus) >= player.ac);
+
+      let downedLog = `${currentCombatant.name} strikes at the fallen ${player.name}`;
+      const ws0 = { ...(combatLog.world_state || {}), actions_used_this_turn: 0 };
+
+      if (hitDowned) {
+        // Melee hit at 0 HP = auto-crit = 2 failures; ranged/normal hit = 1 failure
+        const isMeleeEnemy = (currentCombatant.attack_type || 'melee') !== 'ranged';
+        const failuresToAdd = (isCrit || isMeleeEnemy) ? 2 : 1;
+        const newFailures = Math.min(3, (downedChar.death_saves_failure || 0) + failuresToAdd);
+        await base44.entities.Character.update(player.id, { death_saves_failure: newFailures });
+        downedLog += ` — a brutal blow lands! +${failuresToAdd} death save failure${failuresToAdd > 1 ? 's' : ''} (${newFailures}/3).`;
+        if (newFailures >= 3) downedLog += ` ${player.name} has died.`;
+      } else {
+        downedLog += ` but misses (${atkRoll}+${atkBonus} vs AC ${player.ac}).`;
+      }
+
+      const { nextIndex: ni0, nextRound: nr0 } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
+      await base44.entities.CombatLog.update(combat_id, {
+        log_entries: [...(combatLog.log_entries || []), { round: combatLog.round, actor: currentCombatant.name, action: 'attack_downed', target: player.name, hit: hitDowned, text: downedLog }],
+        current_turn_index: ni0,
+        round: nr0,
+        world_state: ws0,
+      });
+      return Response.json({ no_target: false, player_unconscious: true, attacked_downed: true, hit: hitDowned, log_entry: { text: downedLog, hit: hitDowned }, next_turn_index: ni0, round: nr0 });
     }
 
     // === AI Strategy System ===

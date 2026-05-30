@@ -445,9 +445,25 @@ export default function Game() {
       const hasLivingEnemies = log.combatants.some(c => c.type === 'enemy' && c.is_conscious);
       if (!hasLivingEnemies) break;
       
-      // Stop if player is dead
+      // If player is downed (0 HP), enemies can still attack to inflict death-save failures (PHB p.197)
       const playerCombatant = log.combatants.find(c => c.type === 'player');
-      if (!playerCombatant?.is_conscious) break;
+      if (!playerCombatant?.is_conscious) {
+        // Let the current enemy attack the downed player, then surface the result
+        if (current?.type === 'enemy' && current?.is_conscious) {
+          await new Promise(resolve => setTimeout(resolve, 600));
+          const downedRes = await base44.functions.invoke('combatEngine', {
+            action: 'enemy_turn', session_id: sessionId, combat_id: combatId, character_id: character?.id, payload: {}
+          });
+          if (downedRes.data?.log_entry) {
+            setNarrative(prev => [...prev, { type: 'roll_result', text: downedRes.data.log_entry.text, success: !downedRes.data.hit }]);
+          }
+          // Refresh death-save state and re-show the modal
+          await loadState();
+          setShowDeathSaves(true);
+          continue;
+        }
+        break;
+      }
 
       if (current?.type === 'enemy' && current?.is_conscious) {
         // Add delay between enemy actions to prevent rate limiting

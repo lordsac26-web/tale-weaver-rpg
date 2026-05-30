@@ -23,7 +23,6 @@ export const FEAT_EFFECTS = {
   'Keen Mind':           { stat_bonus: { intelligence: 1 } },
   'Linguist':            { stat_bonus: { intelligence: 1 } },
   'Grappler':            { stat_bonus: { strength: 1 } },
-  'Heavy Armor Master':  { stat_bonus: { strength: 1 } },
   'Heavily Armored':     { stat_bonus: { strength: 1 } },
   'Infernal Constitution': { stat_bonus: { constitution: 1 } },
 

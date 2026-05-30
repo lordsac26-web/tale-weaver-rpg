@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 /**
  * Roll Dice Engine - All rolls computed server-side from DB state
@@ -25,21 +25,26 @@ Deno.serve(async (req) => {
     rawRolls.push(Math.floor(Math.random() * diceSides) + 1);
   }
 
-  // Advantage/Disadvantage for d20 rolls
+  // Poisoned imposes disadvantage on attack rolls and ability checks (PHB p.292) — not a flat penalty.
+  // Determine effective disadvantage before resolving the d20.
+  let effectiveDisadvantage = !!disadvantage;
+  let effectiveAdvantage = !!advantage;
+
+  // Advantage/Disadvantage for d20 rolls (advantage + disadvantage cancel, PHB p.173)
   let effectiveRolls = [...rawRolls];
   if (diceSides === 20 && numDice === 1) {
-    if (advantage) {
+    const netAdv = effectiveAdvantage && !effectiveDisadvantage;
+    const netDis = effectiveDisadvantage && !effectiveAdvantage;
+    if (netAdv) {
       const roll2 = Math.floor(Math.random() * 20) + 1;
       rawRolls.push(roll2);
       effectiveRolls = [Math.max(rawRolls[0], roll2)];
-    } else if (disadvantage) {
+    } else if (netDis) {
       const roll2 = Math.floor(Math.random() * 20) + 1;
       rawRolls.push(roll2);
       effectiveRolls = [Math.min(rawRolls[0], roll2)];
     }
   }
-
-  const rawTotal = effectiveRolls.reduce((a, b) => a + b, 0);
 
   // Fetch character to get modifiers
   let character = null;
@@ -181,16 +186,22 @@ Deno.serve(async (req) => {
       modifierTotal += baseMod;
     }
 
-    // Condition penalties
-    if (conditionsActive.includes('poisoned') && ['attack_melee', 'attack_ranged', 'attack_spell'].includes(roll_type)) {
-      modifiersApplied.push({ source: 'Poisoned', value: -2, type: 'condition' });
-      modifierTotal -= 2;
-    }
-    if (conditionsActive.includes('exhausted')) {
-      modifiersApplied.push({ source: 'Exhausted', value: -1, type: 'condition' });
-      modifierTotal -= 1;
+    // Poisoned: disadvantage on attack rolls and ability checks (PHB p.292), NOT a flat penalty.
+    // A skill/save/check or attack counts; apply disadvantage if not already advantaged/disadvantaged.
+    const isAttack = ['attack_melee', 'attack_ranged', 'attack_spell'].includes(roll_type);
+    const isAbilityCheckRoll = resolvedKey && !resolvedKey.endsWith('_save'); // skills + ability checks (not saves)
+    const poisonApplies = isAttack || isAbilityCheckRoll;
+    if (conditionsActive.includes('poisoned') && poisonApplies && diceSides === 20 && numDice === 1 && !effectiveDisadvantage && !effectiveAdvantage) {
+      const roll2 = Math.floor(Math.random() * 20) + 1;
+      rawRolls.push(roll2);
+      effectiveRolls = [Math.min(effectiveRolls[0], roll2)];
+      effectiveDisadvantage = true;
+      modifiersApplied.push({ source: 'Poisoned (disadvantage)', value: 0, type: 'condition' });
     }
   }
+
+  // Compute raw total AFTER all advantage/disadvantage resolution (incl. poisoned)
+  const rawTotal = effectiveRolls.reduce((a, b) => a + b, 0);
 
   // Fetch environmental modifiers from session
   if (session_id) {
