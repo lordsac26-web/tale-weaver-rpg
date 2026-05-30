@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Moon, Coffee, Loader2, Heart, Zap, Flame, Shield, Plus, Minus } from 'lucide-react';
 import { getSpellSlotsForLevel } from './spellData';
+import CampfireRestAnimation from './CampfireRestAnimation';
 
 export default function RestModal({ character, onClose, onRest }) {
   const [restType, setRestType] = useState(null); // 'short' | 'long'
@@ -140,6 +141,17 @@ export default function RestModal({ character, onClose, onRest }) {
                 </div>
               </button>
             </>
+          ) : resting ? (
+            <div className="text-center py-2">
+              <CampfireRestAnimation restType={restType} />
+              <h3 className="font-fantasy font-bold text-lg mb-1 flex items-center justify-center gap-2" style={{ color: '#f0c040' }}>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {restType === 'short' ? 'Resting by the fire…' : 'Sleeping through the night…'}
+              </h3>
+              <p className="text-sm" style={{ color: 'rgba(232,213,183,0.6)', fontFamily: 'EB Garamond, serif' }}>
+                Recovering your strength.
+              </p>
+            </div>
           ) : (
             <div className="text-center py-6">
               <motion.div
