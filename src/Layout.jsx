@@ -18,13 +18,13 @@ export default function Layout({ children, currentPageName }) {
 
           --brass:        #b87333;
           --brass-bright: #d4955a;
-          --brass-gold:   #e8b86d;
-          --brass-shine:  #f5d08a;
+          --brass-gold:   #f0c875;
+          --brass-shine:  #f8d895;
           --brass-glow:   rgba(184,115,51,0.5);
 
-          --parchment:    #f0dfc0;
-          --parchment-mid:#dcc49a;
-          --parchment-dim:#b89a72;
+          --parchment:    #fff4d6;
+          --parchment-mid:#e8d4a8;
+          --parchment-dim:#d4c090;
 
           --ember:        #c0452a;
           --ember-glow:   rgba(192,69,42,0.4);
@@ -33,9 +33,9 @@ export default function Layout({ children, currentPageName }) {
           --arcane:       #7c3aed;
           --arcane-glow:  rgba(124,58,237,0.35);
 
-          --text-bright:  #f5dfc8;
-          --text-mid:     #d4b896;
-          --text-dim:     #9a7a58;
+          --text-bright:  #fff8e7;
+          --text-mid:     #e8d5b5;
+          --text-dim:     #c9b49a;
         }
 
         .tavern-root {
@@ -319,7 +319,7 @@ export default function Layout({ children, currentPageName }) {
         .badge-gold {
           background: rgba(92,51,24,0.85);
           border: 1px solid rgba(212,149,90,0.45);
-          color: #f0d090;
+          color: #fff0c8;
           font-family: 'Cinzel', serif;
           font-size: 0.62rem;
           letter-spacing: 0.06em;
@@ -328,21 +328,21 @@ export default function Layout({ children, currentPageName }) {
         .badge-blood {
           background: rgba(80,12,8,0.85);
           border: 1px solid rgba(200,65,40,0.45);
-          color: #ffbba0;
+          color: #ffd5c0;
           font-family: 'Cinzel', serif;
           font-size: 0.62rem;
         }
         .badge-arcane {
           background: rgba(48,18,80,0.85);
           border: 1px solid rgba(150,90,230,0.45);
-          color: #dfc8ff;
+          color: #f0e0ff;
           font-family: 'Cinzel', serif;
           font-size: 0.62rem;
         }
         .badge-green {
           background: rgba(8,45,18,0.85);
           border: 1px solid rgba(40,170,80,0.45);
-          color: #90f4b0;
+          color: #b0ffd0;
           font-size: 0.62rem;
         }
 
