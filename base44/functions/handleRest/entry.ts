@@ -13,6 +13,47 @@ const SPELL_SLOTS_BY_CLASS = {
   Warlock: [[1],[2],[2],[2],[2],[2],[2],[2],[2],[2],[3],[3],[3],[3],[3],[3],[4],[4],[4],[4]],
 };
 
+// Multiclass spellcaster slot table, indexed by COMBINED caster level (PHB p.165).
+// Index 0 = caster level 1. Warlock Pact Magic is tracked separately and excluded here.
+const MULTICLASS_SLOTS = [
+  [2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],
+  [4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],
+  [4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1],
+];
+
+// How each class contributes to the multiclass caster level (PHB p.164).
+// full = level counts fully; half = level/2 rounded down (Paladin/Ranger);
+// third = level/3 rounded down (Eldritch Knight / Arcane Trickster — tracked via subclass).
+const CASTER_PROGRESSION = {
+  Wizard: 'full', Sorcerer: 'full', Bard: 'full', Cleric: 'full', Druid: 'full',
+  Paladin: 'half', Ranger: 'half', Artificer: 'half',
+};
+
+// Compute the combined caster level for a (possibly multiclassed) character.
+// `multiclass` is an array of { class, subclass, levels }. Falls back to the
+// primary class/level when no multiclass data is present.
+function computeCasterLevel(character) {
+  const classes = [];
+  if (Array.isArray(character.multiclass) && character.multiclass.length > 0) {
+    for (const mc of character.multiclass) {
+      if (mc?.class && mc?.levels) classes.push({ class: mc.class, subclass: mc.subclass, levels: mc.levels });
+    }
+  } else {
+    classes.push({ class: character.class, subclass: character.subclass, levels: character.level || 1 });
+  }
+
+  let casterLevel = 0;
+  for (const c of classes) {
+    const prog = CASTER_PROGRESSION[c.class];
+    const sub = (c.subclass || '').toLowerCase();
+    const isThirdCaster = sub.includes('eldritch knight') || sub.includes('arcane trickster');
+    if (prog === 'full') casterLevel += c.levels;
+    else if (prog === 'half') casterLevel += Math.floor(c.levels / 2);
+    else if (isThirdCaster) casterLevel += Math.floor(c.levels / 3);
+  }
+  return casterLevel;
+}
+
 /**
  * Handle Short and Long Rests
  * Restores HP, spell slots, hit dice, and class abilities per D&D 5E rules
@@ -31,7 +72,12 @@ Deno.serve(async (req) => {
   const charClass = character.class;
   const charLevel = character.level || 1;
   const currentSlots = character.spell_slots || {};
-  const maxSlots = SPELL_SLOTS_BY_CLASS[charClass]?.[charLevel - 1] || [];
+  const isMulticlassed = Array.isArray(character.multiclass) && character.multiclass.length > 0;
+  // Multiclass casters use a COMBINED caster level against the multiclass slot table
+  // (PHB p.164-165). Single-class characters keep their own class progression.
+  const maxSlots = isMulticlassed
+    ? (MULTICLASS_SLOTS[computeCasterLevel(character) - 1] || [])
+    : (SPELL_SLOTS_BY_CLASS[charClass]?.[charLevel - 1] || []);
   const shortRestAbilities = character.short_rest_abilities || {};
 
   const updates = {};
