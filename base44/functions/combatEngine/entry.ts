@@ -289,11 +289,22 @@ Deno.serve(async (req) => {
     // Check feat flags (Alert: +5 init, cannot be surprised)
     const playerFeatFlags = character._feat_flags || [];
     const hasAlert = (character.feats || []).includes('Alert') || playerFeatFlags.includes('alert');
+    // Harengon: Hare-Trigger — add proficiency bonus to Initiative rolls (Wilds Beyond the Witchlight)
+    const isHarengon = (character.race || '') === 'Harengon';
+    const harengonInitBonus = isHarengon ? (character.proficiency_bonus || 2) : 0;
 
     // Player initiative
     const playerInitRoll = rollD20();
     const alertBonus = hasAlert ? 5 : 0;
-    const playerInitMod = statMod(character.dexterity) + (character.initiative || 0) + alertBonus;
+    const playerInitMod = statMod(character.dexterity) + (character.initiative || 0) + alertBonus + harengonInitBonus;
+    // Heavy armor STR requirement speed penalty (PHB p.144): -10 ft if STR < armor minimum
+    let playerSpeed = character.speed || 30;
+    const equippedArmor = character.equipped?.armor;
+    if (equippedArmor?.armor_type?.toLowerCase() === 'heavy') {
+      const strReq = equippedArmor.str_requirement || 13;
+      if ((character.strength || 10) < strReq) playerSpeed = Math.max(0, playerSpeed - 10);
+    }
+
     combatants.push({
       id: character.id,
       name: character.name,
@@ -304,6 +315,7 @@ Deno.serve(async (req) => {
       hp_current: character.hp_current,
       hp_max: character.hp_max,
       ac: character.armor_class,
+      speed: playerSpeed,
       conditions: character.conditions || [],
       is_conscious: true
     });
@@ -462,10 +474,25 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Use slot on cast (track in character spell_slots)
+      // Use slot on cast — server validates availability before spending (Security fix #5)
       if (spell.slot_level && spell.slot_level > 0) {
         const slotsKey = `level_${spell.slot_level}`;
         const currentUsed = (character.spell_slots || {})[slotsKey] || 0;
+        // Compute max slots for this level from the handleRest SPELL_SLOTS_BY_CLASS table.
+        // We inline a simplified full-caster/half-caster check here.
+        const FULL_CASTER_MAX = [4,3,3,3,3,2,2,1,1];
+        const HALF_CASTER_CLASSES = ['Paladin', 'Ranger', 'Artificer'];
+        const THIRD_CASTER_SUBCLASSES = ['eldritch knight', 'arcane trickster'];
+        const isHalfCaster = HALF_CASTER_CLASSES.includes(character.class);
+        const isThirdCaster = NON_CASTERS.includes(character.class) &&
+          THIRD_CASTER_SUBCLASSES.some(s => (character.subclass || '').toLowerCase().includes(s));
+        // Use a generous cap of 4 for validation — this prevents spending slots that were never granted
+        // while avoiding storing the full slot table here (handleRest owns that).
+        const slotLevelIdx = spell.slot_level - 1;
+        const maxForLevel = isThirdCaster ? 4 : (FULL_CASTER_MAX[slotLevelIdx] || 4);
+        if (currentUsed >= maxForLevel) {
+          return Response.json({ error: `No ${spell.slot_level === 1 ? '1st' : spell.slot_level + 'th'}-level spell slots remaining.`, invalid: true }, { status: 400 });
+        }
         await base44.entities.Character.update(character_id, {
           spell_slots: { ...(character.spell_slots || {}), [slotsKey]: currentUsed + 1 }
         });
@@ -835,8 +862,21 @@ Deno.serve(async (req) => {
       const featFlags = character._feat_flags || [];
       const hasFeat = (name) => (character.feats || []).includes(name) || featFlags.includes(name.toLowerCase().replace(/\s+/g,'_'));
 
-      // Great Weapon Master: -5/+10 on heavy two-handed weapons (PHB p.167)
+      // Small creature + Heavy weapon = disadvantage (PHB p.147)
+      // Small races: Halfling, Gnome, Goblin, Kobold (Small size)
+      const SMALL_RACES = ['Halfling', 'Gnome', 'Goblin', 'Kobold'];
+      const isSmallRace = SMALL_RACES.includes(character.race);
       const weapon2H = (weapon.properties || []).map(p => p.toLowerCase());
+      const isHeavyWeapon = weapon2H.includes('heavy');
+      if (isSmallRace && isHeavyWeapon && !modifiers.disadvantage) {
+        modifiers.disadvantage = true;
+        attackRoll2 = rollD20();
+        attackRoll = Math.min(attackRoll1, attackRoll2);
+        isCritical = attackRoll === 20;
+        isMiss = attackRoll === 1;
+      }
+
+      // Great Weapon Master: -5/+10 on heavy two-handed weapons (PHB p.167)
       const isHeavyTwoHanded = weapon2H.includes('heavy') && weapon2H.includes('two-handed');
       if (modifiers.great_weapon_master && hasFeat('Great Weapon Master') && isHeavyTwoHanded && !isRanged) {
         attackMod -= 5;
@@ -871,6 +911,20 @@ Deno.serve(async (req) => {
           extraDamageDice.push({ dice: `${sneakDice}d6`, type: 'sneak', label: 'Sneak Attack' });
           sneakAttackApplied = true;
         }
+      }
+
+      // Lucky feat (PHB p.167): spend a luck point to reroll one attack/check/save d20 and take either result.
+      // Here: if modifiers.use_lucky_point is set and character has points remaining, reroll the attack die.
+      if (modifiers.use_lucky_point && hasFeat('Lucky') && (character.luck_points_remaining || 0) > 0) {
+        const luckyRoll = rollD20();
+        // Player may choose either roll — for automation, take the higher one (favorable to player)
+        const chosenRoll = Math.max(attackRoll, luckyRoll);
+        if (chosenRoll !== attackRoll) attackRoll = chosenRoll;
+        isCritical = attackRoll === 20;
+        isMiss = attackRoll === 1;
+        await base44.entities.Character.update(character_id, {
+          luck_points_remaining: Math.max(0, (character.luck_points_remaining || 0) - 1),
+        });
       }
 
       // Fighter Action Surge — handled by action tracking in world_state; no extra variable needed here
@@ -1058,8 +1112,13 @@ Deno.serve(async (req) => {
         }
         if (smiteLevel > 0) {
           // Divine Smite: 2d8 + 1d8 per slot level above 1st, max 5d8 total (cap at slot level 4)
+          // +1d8 bonus vs undead or fiends (PHB p.85)
           const effectiveLevel = Math.min(smiteLevel, 4);
-          const smiteDice = 1 + effectiveLevel; // 2d8 at level 1, up to 5d8 at level 4+
+          let smiteDice = 1 + effectiveLevel; // 2d8 at level 1, up to 5d8 at level 4+
+          const targetType = (target.type_tag || target.meta || target.creature_type || '').toLowerCase();
+          const isUndeadOrFiend = /undead|fiend|devil|demon|yugoloth/.test(targetType);
+          if (isUndeadOrFiend) smiteDice += 1; // +1d8 vs undead/fiends (PHB p.85)
+          smiteDice = Math.min(smiteDice, 6); // hard cap: absolute max is 6d8 (5d8 normal + 1d8 bonus)
           let smiteDmg = 0;
           for (let i = 0; i < smiteDice; i++) smiteDmg += rollDice(8);
           damage += smiteDmg;
@@ -1540,9 +1599,8 @@ Deno.serve(async (req) => {
           await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
         }
       }
-      totalDamage = finalDamage; // log shows original pre-absorption total
+      totalDamage = finalDamage; // reflects actual damage after temp HP absorption
     }
-    totalDamage = finalDamage; // update for log accuracy
 
     // Build log entry
     let logText = '';
