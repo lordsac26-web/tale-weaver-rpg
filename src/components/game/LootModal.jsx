@@ -1,366 +1,206 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Loader2, X, Coins, ChevronRight, Package, ArrowLeftRight } from 'lucide-react';
-import { LOOT_RARITY, generateLootForEnemy, generateCoinsForEnemy } from './lootTables';
-import EquipmentComparePanel from './EquipmentComparePanel';
+import { Coins, Gift, Sparkles, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// ─── Single loot item card with reveal animation ────────────────────────────
-function LootItemCard({ item, index, onCompare, selected, onSelect }) {
-  const r = LOOT_RARITY[item.rarity] || LOOT_RARITY.common;
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.85, y: 16 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ delay: index * 0.1, type: 'spring', stiffness: 280 }}
-      onClick={() => onSelect(item)}
-      className="relative flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all"
-      style={{
-        background: selected ? r.bg : 'rgba(15,8,3,0.6)',
-        border: `1px solid ${selected ? r.border : 'rgba(184,115,51,0.12)'}`,
-        boxShadow: selected ? r.glow : 'none',
-      }}>
-      {/* Icon */}
-      <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl flex-shrink-0"
-        style={{ background: r.bg, border: `1px solid ${r.border}` }}>
-        {item.icon || '📦'}
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-sm font-fantasy font-bold truncate" style={{ color: r.color }}>{item.name}</span>
-          <span className="text-xs px-1.5 py-0.5 rounded font-fantasy flex-shrink-0"
-            style={{ background: r.bg, color: r.color, border: `1px solid ${r.border}`, fontSize: '0.58rem', opacity: 0.9 }}>
-            {r.label}
-          </span>
-          {item.requires_attunement && (
-            <span className="text-xs flex-shrink-0" style={{ color: 'rgba(192,132,252,0.6)', fontSize: '0.6rem' }}>✦ Attune</span>
-          )}
-        </div>
-        {item.source_enemy && (
-          <p className="text-xs mt-0.5" style={{ color: 'rgba(212,168,100,0.65)', fontFamily: 'EB Garamond, serif' }}>
-            from {item.source_enemy}
-          </p>
-        )}
-        {item.description && (
-          <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'rgba(220,190,140,0.8)', fontFamily: 'EB Garamond, serif' }}>
-            {item.description}
-          </p>
-        )}
-      </div>
-
-      {/* Compare button */}
-      {item.category !== 'material' && item.category !== 'consumable' && item.category !== 'gem' && item.category !== 'document' && (
-        <button
-          onClick={e => { e.stopPropagation(); onCompare(item); }}
-          className="flex-shrink-0 p-1.5 rounded-lg transition-all"
-          style={{ background: 'rgba(38,10,70,0.4)', border: '1px solid rgba(130,70,210,0.25)', color: 'rgba(192,132,252,0.55)' }}
-          title="Compare with equipped"
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,110,255,0.5)'; e.currentTarget.style.color = '#dfc8ff'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(130,70,210,0.25)'; e.currentTarget.style.color = 'rgba(192,132,252,0.55)'; }}>
-          <ArrowLeftRight className="w-3.5 h-3.5" />
-        </button>
-      )}
-    </motion.div>
-  );
-}
-
-// ─── Coin display row ────────────────────────────────────────────────────────
-function CoinRow({ gold, silver, copper }) {
-  const coins = [
-    { amount: gold,   label: 'Gold',   color: '#f0c040', border: 'rgba(240,192,64,0.3)' },
-    { amount: silver, label: 'Silver', color: '#e2e8f0', border: 'rgba(226,232,240,0.25)' },
-    { amount: copper, label: 'Copper', color: '#fb923c', border: 'rgba(251,146,60,0.3)' },
-  ].filter(c => c.amount > 0);
-
-  if (coins.length === 0) return null;
-
-  return (
-    <div className="rounded-xl p-3" style={{ background: 'rgba(45,28,5,0.7)', border: '1px solid rgba(201,169,110,0.22)' }}>
-      <div className="tavern-section-label mb-2.5">Coinage Found</div>
-      <div className="flex gap-4 justify-center">
-        {coins.map(c => (
-          <motion.div key={c.label} initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', delay: 0.2 }}
-            className="text-center">
-            <div className="font-fantasy font-bold text-2xl" style={{ color: c.color, textShadow: `0 0 12px ${c.color}55` }}>
-              {c.amount}
-            </div>
-            <div className="text-xs font-fantasy" style={{ color: 'rgba(212,180,110,0.8)' }}>{c.label}</div>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Main LootModal ──────────────────────────────────────────────────────────
 /**
- * Props:
- *  enemies     — array of {name, type, cr} combat combatants
- *  character   — current character object
- *  onClose     — dismiss callback
- *  onCollect   — (charUpdates, lootSnapshot) => void
+ * LootModal - Collect loot from defeated enemies with
+ * coin distribution and item selection.
  */
-export default function LootModal({ enemies, character, onClose, onCollect }) {
-  const [loot, setLoot] = useState(null);          // { gold, silver, copper, items[] }
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [compareItem, setCompareItem] = useState(null);  // item being compared
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [collectedItems, setCollectedItems] = useState(new Set()); // names already added
+export default function LootModal({ enemies = [], character, onClose, onCollect }) {
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [collecting, setCollecting] = useState(false);
+  const [collected, setCollected] = useState(false);
 
-  useEffect(() => { buildLoot(); }, []);
+  if (!character) return null;
 
-  const buildLoot = async () => {
-    setLoading(true);
-    try {
-      // Try backend loot generation for enhanced variety
-      const result = await base44.functions.invoke('generateLoot', {
-        level: character.level || 1,
-        enemy_type: enemies[0]?.type || enemies[0]?.meta?.split(' ')[0] || 'humanoid',
-        enemy_cr: parseFloat(enemies[0]?.cr || enemies[0]?.challenge) || 1,
-        num_enemies: enemies.length,
-        character_class: character.class || null,
-      });
+  // Generate loot based on enemy CR
+  const generateLoot = () => {
+    const loot = {
+      gold: 0,
+      silver: 0,
+      copper: 0,
+      items: [],
+    };
 
-      if (result.data?.success) {
-        const { coins, items, artifact } = result.data;
-        const allItems = [...items];
-        if (artifact) allItems.push({ ...artifact, icon: '✨', quantity: 1 });
-        setLoot({ gold: coins.gold, silver: coins.silver, copper: coins.copper, items: allItems });
-        setLoading(false);
-        return;
+    enemies.forEach(enemy => {
+      const cr = enemy.cr || 1;
+      // Gold based on CR (DMG p.136)
+      loot.gold += Math.floor(cr * 10 * (1 + Math.random()));
+      
+      // Chance for items based on CR
+      if (Math.random() < Math.min(0.3 * cr, 0.9)) {
+        const itemTable = getItemForCR(cr);
+        if (itemTable) {
+          loot.items.push({
+            ...itemTable,
+            quantity: 1,
+            source: enemy.name,
+          });
+        }
       }
-    } catch (error) {
-      console.warn('Backend loot generation failed, using fallback:', error);
-    }
-
-    // Fallback: client-side generation
-    const allItems = [];
-    let totalGold = 0, totalSilver = 0, totalCopper = 0;
-    const enemyList = enemies?.length > 0 ? enemies : [{ name: 'Unknown Enemy', type: 'Humanoid', cr: 1 }];
-
-    enemyList.forEach(enemy => {
-      const type = enemy.type || enemy.meta?.split(' ')[0] || 'Humanoid';
-      const cr = parseFloat(enemy.cr || enemy.challenge) || 1;
-      const items = generateLootForEnemy(enemy.name || 'Enemy', type, cr);
-      allItems.push(...items);
-      const coins = generateCoinsForEnemy(type, cr);
-      totalGold   += coins.gold;
-      totalSilver += coins.silver;
-      totalCopper += coins.copper;
     });
 
-    const seen = new Set();
-    const uniqueItems = allItems.filter(it => {
-      if (seen.has(it.name)) return false;
-      seen.add(it.name);
-      return true;
-    });
-
-    setLoot({ gold: totalGold, silver: totalSilver, copper: totalCopper, items: uniqueItems });
-    setLoading(false);
+    return loot;
   };
 
-  // Collect all at once — adds everything to inventory + coin purse
-  const handleTakeAll = async () => {
-    if (!loot) return;
-    setSaving(true);
-    const newItems = loot.items.map(it => ({ ...it, magic_properties: [] }));
+  const getItemForCR = (cr) => {
+    if (cr < 1) return { name: 'Minor Potion', category: 'consumable', rarity: 'common', value: 10, weight: 0.5, icon: '🧪' };
+    if (cr < 5) return { name: 'Potion of Healing', category: 'consumable', rarity: 'common', value: 50, weight: 0.5, icon: '🧪' };
+    if (cr < 10) return { name: 'Magic Weapon +1', category: 'weapon', rarity: 'uncommon', value: 200, weight: 3, icon: '⚔️' };
+    if (cr < 15) return { name: 'Rare Magic Item', category: 'magic', rarity: 'rare', value: 500, weight: 2, icon: '💎' };
+    return { name: 'Legendary Artifact', category: 'artifact', rarity: 'legendary', value: 2000, weight: 5, icon: '👑' };
+  };
+
+  const loot = generateLoot();
+
+  const handleCollect = async () => {
+    setCollecting(true);
+    
     const updates = {
-      gold:      (character.gold   || 0) + (loot.gold   || 0),
-      silver:    (character.silver || 0) + (loot.silver || 0),
-      copper:    (character.copper || 0) + (loot.copper || 0),
-      inventory: [...(character.inventory || []), ...newItems],
+      gold: (character.gold || 0) + loot.gold,
+      silver: (character.silver || 0) + loot.silver,
+      copper: (character.copper || 0) + loot.copper,
+      inventory: [...(character.inventory || []), ...selectedItems],
     };
-    await base44.entities.Character.update(character.id, updates);
-    const snapshot = {
-      gold: loot.gold, silver: loot.silver, copper: loot.copper,
-      items: loot.items.map(it => ({ name: it.name, icon: it.icon, rarity: it.rarity })),
-    };
-    onCollect(updates, snapshot);
-    setSaving(false);
-    onClose();
+
+    await onCollect(updates, loot);
+    setCollected(true);
+    setCollecting(false);
   };
 
-  // Equip an item directly from loot (add to inventory + set equipped slot)
-  const handleEquipItem = async (item) => {
-    if (!item) return;
-    setSaving(true);
-    const equipped = { ...(character.equipped || {}) };
-    // Use correct unified slot keys: mainhand for weapons, armor for armor
-    const catLower = (item.category || '').toLowerCase();
-    const slot = catLower.includes('weapon') ? 'mainhand' : catLower.includes('armor') ? 'armor' : catLower.includes('shield') ? 'offhand' : catLower.includes('ring') ? 'ring' : catLower.includes('helmet') ? 'helmet' : catLower.includes('cloak') ? 'cloak' : catLower.includes('boot') ? 'boots' : catLower.includes('glove') ? 'gloves' : catLower.includes('amulet') ? 'amulet' : catLower.includes('belt') ? 'belt' : null;
-    if (slot) equipped[slot] = item;
-    // Write the weapon alias for CombatPanel
-    if (slot === 'mainhand') {
-      const dmgStr = item.damage || item.damage_dice || '1d6';
-      equipped.weapon = { ...item, damage_dice: dmgStr.split(' ')[0] || '1d6', type: item.type || 'melee', attack_bonus: item.attack_bonus || 0, damage_bonus: item.damage_bonus || 0, properties: item.properties || [] };
-    }
-
-    const newInventory = [...(character.inventory || []), { ...item, magic_properties: [] }];
-    const updates = {
-      inventory: newInventory,
-      equipped,
-    };
-    await base44.entities.Character.update(character.id, updates);
-
-    // Mark as collected
-    setCollectedItems(prev => new Set([...prev, item.name]));
-    setCompareItem(null);
-    setSelectedItem(null);
-    setSaving(false);
-    onCollect({ ...character, ...updates }, null);
+  const toggleItem = (item) => {
+    setSelectedItems(prev => 
+      prev.includes(item) 
+        ? prev.filter(i => i !== item)
+        : [...prev, item]
+    );
   };
-
-  // Keep in bag only — add to inventory without equipping
-  const handleKeepInBag = async (item) => {
-    if (!item) return;
-    setSaving(true);
-    const newInventory = [...(character.inventory || []), { ...item, magic_properties: [] }];
-    const updates = { inventory: newInventory };
-    await base44.entities.Character.update(character.id, updates);
-
-    setCollectedItems(prev => new Set([...prev, item.name]));
-    setCompareItem(null);
-    setSelectedItem(null);
-    setSaving(false);
-    onCollect({ ...character, ...updates }, null);
-  };
-
-  // Get the currently equipped item in the same category for comparison
-  const getEquippedForSlot = (item) => {
-    const catLower = (item.category || '').toLowerCase();
-    const slot = catLower.includes('weapon') ? 'mainhand' : catLower.includes('armor') ? 'armor' : catLower.includes('shield') ? 'offhand' : catLower.includes('ring') ? 'ring' : catLower.includes('helmet') ? 'helmet' : catLower.includes('cloak') ? 'cloak' : null;
-    return slot ? (character.equipped?.[slot] || null) : null;
-  };
-
-  const hasCoins = loot && (loot.gold > 0 || loot.silver > 0 || loot.copper > 0);
-  const hasItems = loot?.items?.length > 0;
-  const isEmpty  = !hasCoins && !hasItems;
-  const allCollected = hasItems && loot.items.every(it => collectedItems.has(it.name));
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.9)' }}>
-
-      {/* Compare overlay */}
-      <AnimatePresence>
-        {compareItem && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 z-10 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.7)' }}
-            onClick={() => setCompareItem(null)}>
-            <div onClick={e => e.stopPropagation()}>
-              <EquipmentComparePanel
-                newItem={compareItem}
-                equipped={getEquippedForSlot(compareItem)}
-                onEquip={() => handleEquipItem(compareItem)}
-                onKeepBag={() => handleKeepInBag(compareItem)}
-                onClose={() => setCompareItem(null)}
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Main modal */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}
+      onClick={onClose}>
       <motion.div
-        initial={{ scale: 0.88, y: 24 }} animate={{ scale: 1, y: 0 }}
-        className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col"
-        style={{
-          background: 'linear-gradient(160deg, rgba(28,14,5,0.99), rgba(18,9,3,0.99))',
-          border: '1px solid rgba(201,169,110,0.35)',
-          boxShadow: '0 0 60px rgba(201,169,110,0.08), 0 20px 60px rgba(0,0,0,0.8)',
-          maxHeight: '85vh',
-        }}>
-
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl"
+        style={{ background: 'rgba(12,8,4,0.98)', border: '1px solid rgba(180,140,90,0.3)' }}
+        onClick={e => e.stopPropagation()}>
+        
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
-          <div>
-            <h2 className="font-fantasy-deco font-bold text-xl text-glow-gold" style={{ color: '#f0c040' }}>
-              ⚔️ Victory Spoils
-            </h2>
-            <p className="text-xs font-body mt-0.5" style={{ color: 'rgba(212,180,110,0.75)' }}>
-              {loading ? 'Searching the fallen...' : isEmpty ? 'Nothing of value found.' : `${loot.items.length} item${loot.items.length !== 1 ? 's' : ''} found — tap ↔ to compare before equipping`}
-            </p>
+        <div className="flex items-center justify-between px-5 py-3 sticky top-0"
+          style={{ background: 'rgba(30,20,8,0.95)', borderBottom: '1px solid rgba(180,140,90,0.15)', backdropFilter: 'blur(8px)' }}>
+          <div className="flex items-center gap-3">
+            <Gift className="w-6 h-6" style={{ color: '#fbbf24' }} />
+            <div>
+              <h2 className="font-fantasy font-bold text-xl" style={{ color: '#f0c040' }}>Loot Collection</h2>
+              <p className="text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>
+                {enemies.length} enemy{enemies.length > 1 ? 'ies' : 'y'} defeated
+              </p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg transition-colors"
-            style={{ color: 'rgba(180,140,90,0.35)' }}
-            onMouseEnter={e => e.currentTarget.style.color = '#c9a96e'}
-            onMouseLeave={e => e.currentTarget.style.color = 'rgba(180,140,90,0.35)'}>
-            <X className="w-4 h-4" />
+          <button onClick={onClose} className="p-2 rounded-lg transition-colors" style={{ color: 'rgba(180,140,90,0.5)' }}>
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Scrollable content */}
-        <div className="px-5 pb-3 overflow-y-auto flex-1 space-y-3">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#c9a96e' }} />
-              <span className="text-xs font-fantasy" style={{ color: 'rgba(212,180,110,0.75)' }}>Searching bodies...</span>
+        {/* Content */}
+        <div className="p-5 space-y-6">
+          {/* Coins */}
+          <div className="p-4 rounded-xl" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.15)' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <Coins className="w-5 h-5" style={{ color: '#fbbf24' }} />
+              <h3 className="font-fantasy text-sm tracking-widest" style={{ color: 'rgba(201,169,110,0.6)' }}>COINS FOUND</h3>
             </div>
-          ) : isEmpty ? (
-            <div className="flex flex-col items-center py-12 gap-2">
-              <Package className="w-10 h-10 opacity-30" style={{ color: '#c9a96e' }} />
-              <p className="text-sm font-body italic" style={{ color: 'rgba(212,180,110,0.7)' }}>Nothing of value remains.</p>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-3 rounded-lg" style={{ background: 'rgba(20,15,10,0.5)' }}>
+                <div className="text-2xl font-fantasy font-bold" style={{ color: '#fbbf24' }}>{loot.gold}</div>
+                <div className="text-xs mt-1" style={{ color: 'rgba(180,140,90,0.5)' }}>Gold Pieces</div>
+              </div>
+              <div className="text-center p-3 rounded-lg" style={{ background: 'rgba(20,15,10,0.5)' }}>
+                <div className="text-2xl font-fantasy font-bold" style={{ color: '#e8d5b7' }}>{loot.silver}</div>
+                <div className="text-xs mt-1" style={{ color: 'rgba(180,140,90,0.5)' }}>Silver Pieces</div>
+              </div>
+              <div className="text-center p-3 rounded-lg" style={{ background: 'rgba(20,15,10,0.5)' }}>
+                <div className="text-2xl font-fantasy font-bold" style={{ color: '#9ca3af' }}>{loot.copper}</div>
+                <div className="text-xs mt-1" style={{ color: 'rgba(180,140,90,0.5)' }}>Copper Pieces</div>
+              </div>
             </div>
-          ) : (
-            <>
-              {/* Coins */}
-              {hasCoins && <CoinRow gold={loot.gold} silver={loot.silver} copper={loot.copper} />}
-
-              {/* Items */}
-              {hasItems && (
-                <div className="space-y-2">
-                  <div className="tavern-section-label">Items Found</div>
-                  {loot.items.map((item, i) => (
-                    <div key={item.name} className="relative">
-                      {collectedItems.has(item.name) && (
-                        <div className="absolute inset-0 z-10 rounded-xl flex items-center justify-center"
-                          style={{ background: 'rgba(10,6,2,0.75)', backdropFilter: 'blur(2px)' }}>
-                          <span className="text-xs font-fantasy" style={{ color: '#86efac' }}>✓ Collected</span>
-                        </div>
-                      )}
-                      <LootItemCard
-                        item={item}
-                        index={i}
-                        selected={selectedItem?.name === item.name}
-                        onSelect={setSelectedItem}
-                        onCompare={setCompareItem}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Footer actions */}
-        {!loading && (
-          <div className="px-5 pb-5 pt-3 flex gap-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(184,115,51,0.12)' }}>
-            {!isEmpty && !allCollected && (
-              <button onClick={handleTakeAll} disabled={saving}
-                className="flex-1 py-2.5 rounded-xl font-fantasy font-bold text-sm btn-fantasy flex items-center justify-center gap-2 disabled:opacity-50">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : '🎒'}
-                {saving ? 'Collecting...' : 'Take All'}
-              </button>
-            )}
-            <button onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl text-sm font-fantasy transition-all"
-              style={{ border: '1px solid rgba(180,140,90,0.35)', color: 'rgba(212,180,110,0.75)' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.55)'; e.currentTarget.style.color = '#c9a96e'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,140,90,0.35)'; e.currentTarget.style.color = 'rgba(212,180,110,0.75)'; }}>
-              {allCollected ? '✓ Done' : 'Leave'}
-            </button>
           </div>
-        )}
+
+          {/* Items */}
+          {loot.items.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="w-5 h-5" style={{ color: '#c4b5fd' }} />
+                <h3 className="font-fantasy text-sm tracking-widest" style={{ color: 'rgba(196,181,253,0.6)' }}>MAGIC ITEMS</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {loot.items.map((item, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      selectedItems.includes(item) 
+                        ? 'border-green-500 bg-green-900/20' 
+                        : 'border-purple-500/30 bg-purple-900/10 hover:border-purple-500/50'
+                    }`}
+                    onClick={() => toggleItem(item)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="text-2xl">{item.icon}</div>
+                      <div className="flex-1">
+                        <div className="font-fantasy text-sm font-bold" style={{ color: '#c4b5fd' }}>{item.name}</div>
+                        <div className="text-xs mt-1" style={{ color: 'rgba(180,140,90,0.5)' }}>
+                          {item.rarity} · {item.category}
+                        </div>
+                        <div className="text-xs mt-1" style={{ color: 'rgba(232,213,183,0.6)' }}>
+                          From: {item.source}
+                        </div>
+                      </div>
+                      {selectedItems.includes(item) && (
+                        <div className="text-green-400 text-xl">✓</div>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Total Value */}
+          <div className="p-4 rounded-xl" style={{ background: 'rgba(30,20,8,0.6)', border: '1px solid rgba(201,169,110,0.2)' }}>
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-fantasy" style={{ color: 'rgba(201,169,110,0.6)' }}>Total Value:</span>
+              <span className="text-xl font-fantasy font-bold" style={{ color: '#fbbf24' }}>
+                {loot.gold + selectedItems.reduce((sum, item) => sum + (item.value || 0), 0)} gp
+              </span>
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <button
+            onClick={handleCollect}
+            disabled={collecting || collected}
+            className="w-full py-3 rounded-xl font-fantasy font-bold text-sm transition-all"
+            style={collected ? {
+              background: 'rgba(40,100,60,0.8)',
+              border: '1px solid rgba(40,160,80,0.4)',
+              color: '#86efac',
+            } : {
+              background: 'linear-gradient(135deg, rgba(100,60,20,0.9), rgba(60,40,10,0.95))',
+              border: '1px solid rgba(201,169,110,0.5)',
+              color: '#f0c040',
+              boxShadow: '0 0 20px rgba(201,169,110,0.2)',
+            }}
+          >
+            {collected ? '✓ Loot Collected' : collecting ? 'Collecting...' : `Collect ${selectedItems.length > 0 ? `${selectedItems.length} Items + ` : ''}${loot.gold} Gold`}
+          </button>
+        </div>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }
