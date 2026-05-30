@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
-import { createPageUrl } from '@/utils';
+
 import { ChevronLeft, TrendingUp, Award, Star, Sparkles, Heart, Shield, Zap, User, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CLASSES, PROFICIENCY_BY_LEVEL, calcStatMod } from '@/components/game/gameData';
-import LevelUpModal from '@/components/game/LevelUpModal';
+import LevelUpWorkflow from '@/components/game/LevelUpWorkflow';
 
 const XP_THRESHOLDS = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
 
@@ -13,7 +13,7 @@ export default function Progression() {
   const navigate = useNavigate();
   const [characters, setCharacters] = useState([]);
   const [selectedChar, setSelectedChar] = useState(null);
-  const [showLevelUp, setShowLevelUp] = useState(false);
+    const [levelingChar, setLevelingChar] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,10 +25,17 @@ export default function Progression() {
     load();
   }, []);
 
-  const handleLevelUp = async (character, updates, details) => {
-    await base44.entities.Character.update(character.id, updates);
-    setCharacters(prev => prev.map(c => c.id === character.id ? { ...c, ...updates } : c));
-    setSelectedChar(null);
+    const handleLevelUp = async (character, updates, details) => {
+    // Use autoLevelUp to process the level up and apply changes
+    const result = await base44.functions.invoke('autoLevelUp', { 
+      character_id: character.id, 
+      level_into_class: updates.level_into_class 
+    });
+    
+    // Refetch characters to show updated state
+    const chars = await base44.entities.Character.list('-updated_date', 20);
+    setCharacters(chars.filter(c => c.is_active));
+    setLevelingChar(null);
   };
 
   const canLevelUp = (char) => {
@@ -49,7 +56,7 @@ export default function Progression() {
       {/* Header */}
       <div className="sticky top-0 z-20 flex items-center justify-between px-4 py-3"
         style={{ background: 'rgba(8,5,2,0.96)', borderBottom: '1px solid rgba(180,140,90,0.15)', backdropFilter: 'blur(8px)' }}>
-        <button onClick={() => navigate(createPageUrl('Home'))}
+        <button onClick={() => navigate('/Home')}
           className="flex items-center gap-1.5 text-sm font-fantasy transition-all"
           style={{ color: 'rgba(201,169,110,0.5)' }}
           onMouseEnter={e => e.currentTarget.style.color = '#c9a96e'}
@@ -93,7 +100,7 @@ export default function Progression() {
             {characters.map((char, i) => {
               const currentLevel = char.level || 1;
               const currentXP = char.xp || 0;
-              const xpForNext = XP_THRESHOLDS[currentLevel] || XP_THRESHOLDS[XP_THRESHOLDS.length - 1];
+                            const xpForNext = XP_THRESHOLDS[currentLevel] || Infinity;
               const xpForCurrent = XP_THRESHOLDS[currentLevel - 1] || 0;
               const xpProgress = xpForNext > xpForCurrent ? ((currentXP - xpForCurrent) / (xpForNext - xpForCurrent)) * 100 : 100;
               const readyToLevel = canLevelUp(char);
@@ -238,7 +245,7 @@ export default function Progression() {
                     {/* Action Button */}
                     {readyToLevel ? (
                       <motion.button
-                        onClick={() => { setSelectedChar(char); setShowLevelUp(true); }}
+                        onClick={() => setLevelingChar(char)}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         className="w-full py-3 rounded-xl font-fantasy font-bold text-sm btn-fantasy flex items-center justify-center gap-2"
@@ -270,13 +277,13 @@ export default function Progression() {
         )}
       </div>
 
-      {/* Level Up Modal */}
+      {/* Level Up Workflow Modal */}
       <AnimatePresence>
-        {showLevelUp && selectedChar && (
-          <LevelUpModal
-            character={selectedChar}
-            onLevelUp={(updates, details) => handleLevelUp(selectedChar, updates, details)}
-            onClose={() => { setShowLevelUp(false); setSelectedChar(null); }}
+        {levelingChar && (
+          <LevelUpWorkflow
+            character={levelingChar}
+            onLevelUp={(updates, details) => handleLevelUp(levelingChar, updates, details)}
+            onClose={() => setLevelingChar(null)}
           />
         )}
       </AnimatePresence>
