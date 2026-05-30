@@ -15,7 +15,10 @@ const RACE_ICONS = {
   'Half-Elf': '🌟', 'Half-Orc': '💪', Tiefling: '😈', Dragonborn: '🐉',
   Aasimar: '😇', Genasi: '🌊', Goliath: '🏔️', Firbolg: '🌲', Tabaxi: '🐱',
   Kenku: '🐦', Triton: '🔱', Lizardfolk: '🦎', 'Yuan-ti Pureblood': '🐍',
-  Minotaur: '🐂', Tortle: '🐢'
+  Minotaur: '🐂', Tortle: '🐢', Warforged: '🤖',
+  Aarakocra: '🦅', Changeling: '🎭', Goblin: '👺', Hobgoblin: '⚔️',
+  Kobold: '🦎', Orc: '💀', Centaur: '🐎', Leonin: '🦁',
+  Harengon: '🐇', Owlin: '🦉', Bugbear: '🐻', 'Ogrekin (Half-Ogre)': '👹',
 };
 
 export default function StepGenderRace({ character, set }) {

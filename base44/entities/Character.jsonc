@@ -28,7 +28,19 @@
         "Yuan-ti Pureblood",
         "Minotaur",
         "Tortle",
-        "Warforged"
+        "Warforged",
+        "Aarakocra",
+        "Changeling",
+        "Goblin",
+        "Hobgoblin",
+        "Kobold",
+        "Orc",
+        "Centaur",
+        "Leonin",
+        "Harengon",
+        "Owlin",
+        "Bugbear",
+        "Ogrekin (Half-Ogre)"
       ]
     },
     "class": {

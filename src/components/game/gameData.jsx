@@ -206,71 +206,184 @@ export const RACES = {
       'Composite Plating (natural armor integrates with worn armor, +1 AC bonus)',
     ],
     stat_bonuses: { constitution: 2 },
-    stat_choices: 1, // +1 to any one other ability score
-    skill_proficiencies: [], // granted via Specialized Design (player chooses 1)
-    tool_proficiencies: 1, // player chooses 1 tool
-    natural_armor_bonus: 1, // +1 AC from Composite Plating
+    stat_choices: 1,
+    skill_proficiencies: [],
+    tool_proficiencies: 1,
+    natural_armor_bonus: 1,
     speed: 30, size: 'Medium',
     languages: ['Common', 'one extra language'],
     description: 'Living constructs forged for war and imbued with sentience. Warforged blend the durability of metal and wood with the adaptability of flesh. They do not sleep, cannot be poisoned, and are immune to disease — making them relentless warriors and tireless adventurers.',
     subraces: [
-      {
-        name: 'Envoy',
-        stat_bonuses: {},
-        traits: [
-          'Integrated Tool (one tool built into body, proficiency with it, can use it as part of an action)',
-          'Specialized Design (one skill + one tool proficiency)',
-        ],
-        description: 'Envoys were built for specific functions beyond combat, with a tool integrated directly into their frame.',
-      },
-      {
-        name: 'Juggernaut',
-        // Juggernauts do NOT grant extra stat bonuses — base Warforged already gives CON +2 + one +1.
-        // Subrace only adds traits (Eberron: RftLW p.36)
-        stat_bonuses: {},
-        traits: [
-          'Iron Fists (unarmed strikes deal 1d4 bludgeoning damage)',
-          'Powerful Build (count as Large for carry/push/lift)',
-          'Constructed Resilience (all base Warforged traits apply)',
-        ],
-        description: 'The largest and most heavily armored of the Warforged, Juggernauts were built as frontline siege weapons. They gain Iron Fists and Powerful Build on top of base Warforged traits.',
-      },
-      {
-        name: 'Skirmisher',
-        stat_bonuses: { dexterity: 1 },
-        traits: [
-          'Light Step (speed increases by 5 ft when not wearing heavy armor)',
-          'Integrated Weapon (can integrate one light weapon into body; counts as unarmed for purpose of monk and similar features)',
-        ],
-        description: 'Lightweight Warforged built for speed and stealth operations, favored by scouts and rangers.',
-      },
+      { name: 'Envoy', stat_bonuses: {}, traits: ['Integrated Tool (one tool built into body, proficiency with it, can use it as part of an action)', 'Specialized Design (one skill + one tool proficiency)'], description: 'Envoys were built for specific functions beyond combat, with a tool integrated directly into their frame.' },
+      { name: 'Juggernaut', stat_bonuses: {}, traits: ['Iron Fists (unarmed strikes deal 1d4 bludgeoning damage)', 'Powerful Build (count as Large for carry/push/lift)', 'Constructed Resilience (all base Warforged traits apply)'], description: 'The largest and most heavily armored of the Warforged, Juggernauts were built as frontline siege weapons.' },
+      { name: 'Skirmisher', stat_bonuses: { dexterity: 1 }, traits: ['Light Step (speed increases by 5 ft when not wearing heavy armor)', 'Integrated Weapon (can integrate one light weapon into body)'], description: 'Lightweight Warforged built for speed and stealth operations, favored by scouts and rangers.' },
     ],
     warforged_feats: [
-      {
-        name: 'Armor of the Colossus',
-        desc: 'Your Integrated Protection increases to +2 AC. When you are hit by a melee attack, the attacker takes 1d6 + STR modifier bludgeoning damage.',
-        prerequisite: 'Warforged',
-      },
-      {
-        name: 'Enhanced Arcane Focus',
-        desc: 'You can use your body as an arcane focus. You gain +1 to spell attack rolls and spell save DC increases by 1.',
-        prerequisite: 'Warforged, spellcasting class',
-      },
-      {
-        name: 'Integrated Defense Protocol',
-        desc: 'As a reaction when you are targeted by an attack, you can grant yourself resistance to that attack\'s damage type until the start of your next turn (usable once per short rest).',
-        prerequisite: 'Warforged',
-      },
-      {
-        name: 'Warforged Resilience',
-        desc: 'Increase CON by 1 (max 20). When you succeed on a death saving throw, you regain 1 HP instead of stabilizing at 0.',
-        prerequisite: 'Warforged',
-      },
-      {
-        name: 'Self-Repair Protocol',
-        desc: 'As a bonus action, you can spend one Hit Die to heal yourself (roll the die + CON modifier). Usable a number of times equal to your proficiency bonus per long rest.',
-        prerequisite: 'Warforged',
-      },
+      { name: 'Armor of the Colossus', desc: 'Your Integrated Protection increases to +2 AC. Attacker takes 1d6+STR bludgeoning on melee hit.', prerequisite: 'Warforged' },
+      { name: 'Enhanced Arcane Focus', desc: 'Use your body as arcane focus. +1 to spell attack rolls and spell save DC.', prerequisite: 'Warforged, spellcasting class' },
+      { name: 'Integrated Defense Protocol', desc: 'Reaction: gain resistance to one attack\'s damage type until start of your next turn. 1/short rest.', prerequisite: 'Warforged' },
+      { name: 'Warforged Resilience', desc: 'CON +1 (max 20). On successful death save, regain 1 HP instead of stabilizing.', prerequisite: 'Warforged' },
+      { name: 'Self-Repair Protocol', desc: 'Bonus action: spend a Hit Die to heal (die + CON mod). Proficiency bonus uses per long rest.', prerequisite: 'Warforged' },
+    ],
+  },
+
+  // ── NEW RACES ──────────────────────────────────────────────────────────────
+
+  Aarakocra: {
+    traits: ['Flight (50 ft fly speed, cannot wear medium/heavy armor to fly)', 'Talons (1d4 slashing unarmed strike)', 'Darkvision (60 ft)', 'Wind Caller (Gust of Wind 1/long rest at level 3)'],
+    stat_bonuses: { dexterity: 2, wisdom: 1 },
+    skill_proficiencies: ['Perception'],
+    speed: 25, fly_speed: 50, size: 'Medium',
+    languages: ['Common', 'Aarakocra', 'Auran'],
+    description: 'Bird-folk from the Elemental Plane of Air who serve as scouts and messengers. Aarakocra soar above the clouds and are fiercely protective of their mountain homes. Their flight makes them exceptionally mobile — but they cannot wear medium or heavy armor while flying.',
+    subraces: [],
+  },
+
+  Changeling: {
+    traits: ['Shapechanger (change appearance as action: face, hair, voice, skin — but not equipment or size)', 'Changeling Instincts (proficiency in 2 of: Deception, Insight, Intimidation, Persuasion)', 'Unsettling Visage (reaction when hit: impose disadvantage on attacker\'s roll, 1/short rest)'],
+    stat_bonuses: { charisma: 2 },
+    stat_choices: 1,
+    speed: 30, size: 'Medium',
+    languages: ['Common', 'two extra languages'],
+    description: 'Natural shapeshifters who can alter their appearance at will. Changelings are masters of disguise and social manipulation, blending seamlessly into any society. Their true form is whatever they choose it to be.',
+    subraces: [
+      { name: 'Traveler', stat_bonuses: { dexterity: 1 }, traits: ['Fluid Steps (Disengage as bonus action while transformed)', 'Mimicry (copy voices heard within 1 min; WIS Insight vs. Deception to detect)'], description: 'Changelings who wander the world, mastering movement and mimicry.' },
+      { name: 'Pretender', stat_bonuses: { intelligence: 1 }, traits: ['False Memory (implant a false memory of you into one creature per short rest, WIS save DC 8+prof+CHA)', 'Social Chameleon (proficiency in Persuasion if not already)'], description: 'Changelings who specialize in long-term infiltration and social manipulation.' },
+    ],
+  },
+
+  Goblin: {
+    traits: ['Darkvision (60 ft)', 'Fury of the Small (once per short rest: add level to damage vs creature larger than you)', 'Nimble Escape (Disengage or Hide as bonus action)', 'Small (advantage squeezing through tight spaces)'],
+    stat_bonuses: { dexterity: 2, constitution: 1 },
+    speed: 30, size: 'Small',
+    languages: ['Common', 'Goblin'],
+    description: 'Cunning and small, goblins are survivors who thrive in the margins of society. Often dismissed as nuisances, goblins who turn their talents toward heroism prove to be nimble, resourceful, and surprisingly fierce.',
+    subraces: [
+      { name: 'Nilbog', stat_bonuses: { charisma: 1 }, traits: ['Nilbogism (when creature targets you with attack, it must make WIS save DC 8+prof+CHA or be forced to target another creature)', 'Trickster\'s Luck (advantage on Deception checks to create diversions)'], description: 'Goblins touched by the trickster spirit of the Nilbog — chaos incarnate.' },
+      { name: 'Boggle', stat_bonuses: { intelligence: 1 }, traits: ['Oil Puddle (create slick oil puddle 5 ft as bonus action, lasts 1 minute; any creature moving through makes DC 12 DEX save or falls prone)', 'Dimensional Rift (teleport up to 30 ft 1/short rest)'], description: 'Goblins descended from boggle fey, capable of minor dimensional tricks.' },
+    ],
+  },
+
+  Hobgoblin: {
+    traits: ['Darkvision (60 ft)', 'Martial Training (light/medium armor + 2 martial weapons of choice)', 'Saving Face (add number of allies within 30 ft to a failed ability check/attack/save, 1/short rest)', 'Fey Ancestry (advantage on saves vs charmed, cannot be put to sleep by magic)'],
+    stat_bonuses: { constitution: 2, intelligence: 1 },
+    speed: 30, size: 'Medium',
+    languages: ['Common', 'Goblin'],
+    description: 'Disciplined and militaristic, hobgoblins are the soldiers of the goblinoid races. They prize order, strategy, and martial excellence above all else. Their military culture produces formidable warriors who fight with precision and coordination.',
+    subraces: [
+      { name: 'Devastator', stat_bonuses: { strength: 1 }, traits: ['Army Arcana (when you cast a spell, choose one ally — they gain 1d6 temp HP)', 'Battle Ready (use INT instead of STR or DEX for attack/damage rolls with magic weapons)'], description: 'Hobgoblin warmages who blend arcane power with military discipline.' },
+      { name: 'Iron Shadows', stat_bonuses: { dexterity: 1 }, traits: ['Specialized Training (proficiency in Stealth and Acrobatics)', 'Infiltrator (Disguise Self 1/long rest; advantage on Stealth in dim light or darkness)'], description: 'Elite hobgoblin spies and assassins trained to operate behind enemy lines.' },
+    ],
+  },
+
+  Kobold: {
+    traits: ['Darkvision (60 ft)', 'Draconic Cry (bonus action: all enemies within 10 ft have disadvantage on saves vs your allies until start of your next turn, 1/short rest)', "Dragon's Gift (choose one: Draconic Resilience — +1 HP/level; or Draconic Senses — advantage on Perception; or Draconic Scales — +1 AC unarmored)", 'Pack Tactics (advantage on attacks vs creature if ally is adjacent to it and you are not incapacitated)'],
+    stat_bonuses: { dexterity: 2, intelligence: 1 },
+    speed: 30, size: 'Small',
+    languages: ['Common', 'Draconic'],
+    description: 'Small, cunning dragon-kin who combine pack tactics with a fierce survival instinct. Kobolds who overcome their cowardly reputation become clever and dangerous foes. Their deep connection to dragons fills them with either terror or ambition.',
+    subraces: [
+      { name: 'Dragonwrought', stat_bonuses: { charisma: 1 }, traits: ['Draconic Lineage (choose dragon type: gain resistance to its damage, breath weapon 2d6 in 15 ft cone/line, 1/long rest)'], description: 'Kobolds with a direct draconic bloodline who can breathe elemental energy.' },
+      { name: 'Urds (Winged)', stat_bonuses: { wisdom: 1 }, traits: ['Flight (30 ft fly speed)', 'Sunlight Sensitivity (disadvantage on attack rolls and Perception in direct sunlight)'], description: 'Rare winged kobolds, shunned by their kin but gifted with flight.' },
+    ],
+  },
+
+  Orc: {
+    traits: ['Darkvision (60 ft)', 'Adrenaline Rush (Dash as bonus action; gain temp HP = proficiency bonus; usable proficiency bonus times per long rest)', 'Powerful Build (count as Large for carry/push/lift)', 'Relentless Endurance (when reduced to 0 HP, drop to 1 HP instead, 1/long rest)'],
+    stat_bonuses: { strength: 2, constitution: 1 },
+    skill_proficiencies: ['Intimidation'],
+    speed: 30, size: 'Medium',
+    languages: ['Common', 'Orc'],
+    description: 'Powerful and driven, orcs have a long history as both warriors and survivors. Their great strength and relentless endurance make them formidable combatants. Orcs who find purpose in adventure bring that same ferocity to protecting their companions.',
+    subraces: [
+      { name: 'Gruumsh\'s Chosen', stat_bonuses: { wisdom: 1 }, traits: ['Eye of Gruumsh (if you have the Blinded condition while raging, you can still see normally; your eye glows red)', 'Orcish Fury (once per short rest: add one weapon die of extra damage on a hit)'], description: 'Orcs bearing the mark of their war god, with uncanny senses and savage fury.' },
+      { name: 'Luthic\'s Blessed', stat_bonuses: { intelligence: 1 }, traits: ['Mending Claws (touch ally as action: heal 1d4+WIS mod HP, 2/long rest)', 'Cavern Delver (climb speed = walk speed; can move through difficult terrain made of stone without penalty)'], description: 'Orcs devoted to the cave mother, balancing orcish might with nurturing power.' },
+    ],
+  },
+
+  Tiefling: {
+    traits: ['Darkvision (60 ft)', 'Hellish Resistance (fire resistance)', 'Infernal Legacy (Thaumaturgy cantrip; Hellish Rebuke at 3rd; Darkness at 5th)'],
+    stat_bonuses: { intelligence: 1, charisma: 2 },
+    speed: 30, size: 'Medium',
+    languages: ['Common', 'Infernal'],
+    description: 'Touched by infernal magic, tieflings wield dark power. Though distrusted, their strength and magic are undeniable.',
+    subraces: [
+      { name: 'Asmodeus (Standard)', stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Hellish Rebuke (2nd level, 1/long rest)', 'Darkness (2nd level, 1/long rest)'], description: 'The classic tiefling lineage descended from the Lord of the Nine Hells.' },
+      { name: 'Dispater', stat_bonuses: { dexterity: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Disguise Self (1/long rest)', 'Detect Thoughts (1/long rest)'], description: 'Tieflings touched by the Iron Duke, masters of disguise and manipulation.' },
+      { name: 'Fierna', stat_bonuses: { wisdom: 1, charisma: 2 }, traits: ['Friends cantrip', 'Charm Person (1/long rest)', 'Suggestion (1/long rest)'], description: 'Tieflings of Fierna\'s line, supernaturally persuasive and beguiling.' },
+      { name: 'Glasya', stat_bonuses: { dexterity: 1, charisma: 2 }, traits: ['Minor Illusion cantrip', 'Disguise Self (1/long rest)', 'Invisibility (1/long rest)'], description: 'Tieflings of the Mistress of the Erinyes, skilled in illusion and escape.' },
+      { name: 'Levistus', stat_bonuses: { constitution: 1, charisma: 2 }, traits: ['Ray of Frost cantrip', 'Armor of Agathys (1/long rest)', 'Darkness (1/long rest)'], description: 'Tieflings of the Lord of Stygia, cold-blooded and calculating.' },
+      { name: 'Mammon', stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Mage Hand cantrip', 'Tenser\'s Floating Disk (1/long rest)', 'Arcane Lock (1/long rest)'], description: 'Tieflings of the Lord of Minauros, gifted with arcane theft and acquisition.' },
+      { name: 'Mephistopheles', stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Mage Hand cantrip', 'Burning Hands (1/long rest)', 'Flame Blade (1/long rest)'], description: 'Tieflings of the Lord of Cania, masters of arcane flame.' },
+      { name: 'Zariel', stat_bonuses: { strength: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Searing Smite (1/long rest)', 'Branding Smite (1/long rest)'], description: 'Tieflings of the fallen angel Zariel, built for righteous warfare.' },
+      { name: 'Baalzebul', stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Ray of Sickness (1/long rest)', 'Crown of Madness (1/long rest)'], description: 'Tieflings of the Lord of Flies, spreading corruption and madness.' },
+    ],
+  },
+
+  Centaur: {
+    traits: ['Equine Build (count as Large for carry; cannot mount other creatures)', 'Charge (if you move 30+ ft straight toward target and hit with melee, deal extra 1d6 damage)', 'Hooves (1d6+STR bludgeoning unarmed strike)', 'Natural Affinity (proficiency in one of: Animal Handling, Medicine, Nature, or Survival)'],
+    stat_bonuses: { strength: 2, wisdom: 1 },
+    skill_proficiencies: ['Survival'],
+    speed: 40, size: 'Medium',
+    languages: ['Common', 'Sylvan'],
+    description: 'Half-humanoid, half-horse beings who roam open plains and deep forests. Centaurs are proud, fierce, and deeply connected to the natural world. Their powerful frames and charging attack make them fearsome in open combat.',
+    subraces: [
+      { name: 'Lagonna-Band', stat_bonuses: { wisdom: 1 }, traits: ['Lore of the Lagonna (proficiency in History and Medicine)', 'Seer\'s Gallop (Diviniation cantrip of your choice)'], description: 'Diplomatic centaurs of the white band, scholars and lorekeepers.' },
+      { name: 'Pheres-Band', stat_bonuses: { strength: 1 }, traits: ['Warrior\'s Gallop (bonus action: move up to 10 ft toward an enemy after making a melee attack)', 'Trampling Charge (when you use Charge, target must make STR save DC 8+prof+STR or be knocked prone)'], description: 'Warlike centaurs of the red band, raiders and fierce warriors.' },
+    ],
+  },
+
+  Leonin: {
+    traits: ['Darkvision (60 ft)', 'Claws (1d4+STR slashing unarmed strike; climb speed 20 ft)', "Daunting Roar (bonus action: all creatures within 10 ft must make WIS save DC 8+prof+CON or be frightened until end of your next turn; 1/short rest)", "Hunter's Instincts (proficiency in one of: Athletics, Intimidation, Perception, or Survival)"],
+    stat_bonuses: { constitution: 2, strength: 1 },
+    skill_proficiencies: ['Intimidation'],
+    speed: 35, size: 'Medium',
+    languages: ['Common', 'Leonin'],
+    description: 'Proud lion-folk who guard the sun-drenched plains of their homeland. Leonin are fierce protectors who value strength, community, and honor above all else. Their terrifying roar and powerful claws make them natural warriors and leaders.',
+    subraces: [],
+  },
+
+  Harengon: {
+    traits: ['Hare-Trigger (add proficiency bonus to Initiative rolls)', 'Leporine Senses (proficiency in Perception)', 'Lucky Footwork (when you fail a DEX saving throw, use your reaction to add 1d4 to the roll — possibly turning the failure into a success)', 'Rabbit Hop (bonus action jump = proficiency bonus × 5 ft without triggering opportunity attacks; usable proficiency bonus times per long rest)'],
+    stat_bonuses: { dexterity: 2 },
+    stat_choices: 1,
+    skill_proficiencies: ['Perception'],
+    speed: 30, size: 'Medium',
+    languages: ['Common', 'Sylvan'],
+    description: 'Rabbit-folk from the Feywild who bounded into the material plane full of energy and curiosity. Harengon are alert, quick, and blessed with supernatural luck — their powerful legs let them leap out of danger in an instant.',
+    subraces: [],
+  },
+
+  Owlin: {
+    traits: ['Flight (fly speed = walking speed; cannot wear medium/heavy armor and fly)', 'Darkvision (120 ft)', 'Keen Senses (proficiency in Perception)', 'Silent Feathers (proficiency in Stealth)'],
+    stat_bonuses: { wisdom: 2 },
+    stat_choices: 1,
+    skill_proficiencies: ['Perception', 'Stealth'],
+    fly_speed: 30, speed: 30, size: 'Medium',
+    languages: ['Common', 'Auran', 'one extra'],
+    description: 'Owl-folk from the Feywild who value silence, wisdom, and the night. Owlin glide soundlessly through darkness on powerful wings, using keen senses to hunt and observe. Their exceptional darkvision and innate stealth make them exceptional scouts and rangers.',
+    subraces: [],
+  },
+
+  Bugbear: {
+    traits: ['Darkvision (60 ft)', 'Long-Limbed (melee reach is 5 ft greater than size on first round of combat)', 'Powerful Build (count as Large for carry/push/lift)', 'Sneaky (proficiency in Stealth)', 'Surprise Attack (extra 2d6 damage on first hit against creature that has not yet taken a turn in combat)'],
+    stat_bonuses: { strength: 2, dexterity: 1 },
+    skill_proficiencies: ['Stealth'],
+    speed: 30, size: 'Medium',
+    languages: ['Common', 'Goblin'],
+    description: 'Hulking, hairy goblinoids who are master ambushers. Bugbears combine surprising stealth with savage strength, making them terrifying hunters. Despite their brutish reputation, bugbears are patient stalkers who prefer to strike from hiding.',
+    subraces: [],
+  },
+
+  'Ogrekin (Half-Ogre)': {
+    traits: ['Powerful Build (count as Large for carry/push/lift; advantage on STR checks and saves)', 'Natural Armor (AC = 11 + CON modifier when unarmored)', 'Ogre Resilience (resistance to bludgeoning damage)', 'Savage Slam (1d8+STR bludgeoning unarmed strike)', 'Intimidating Presence (proficiency in Intimidation; when you make a Intimidation check, add CON modifier on top of CHA modifier)'],
+    stat_bonuses: { strength: 2, constitution: 2 },
+    speed: 30, size: 'Large',
+    languages: ['Common', 'Giant'],
+    description: 'Half-ogre humanoids who combine ogre brawn with human wit. Ogrekin are massive and powerful, their natural armor and savage strength making them walking fortresses. Often outcasts from both societies, those who find their place among adventurers become invaluable front-line powerhouses.',
+    subraces: [
+      { name: 'Hill Ogrekin', stat_bonuses: { constitution: 1 }, traits: ['Toughened Hide (Natural Armor AC increases by +1)', 'Regeneration (regain 1 HP at the start of your turn if you have at least 1 HP remaining; only while below half max HP)'], description: 'Ogrekin with the thickest hides, almost trollish in their resilience.' },
+      { name: 'Stone Ogrekin', stat_bonuses: { strength: 1 }, traits: ['Rock Throw (ranged attack: 30/60 ft, 2d6+STR bludgeoning; can use any rock or debris as improvised weapon without penalty)', 'Earthen Stomp (melee attack: all creatures within 5 ft must make DEX save DC 8+prof+STR or fall prone, 1/short rest)'], description: 'Ogrekin descended from stone ogre lines, hurling boulders and shaking the earth.' },
     ],
   },
 };

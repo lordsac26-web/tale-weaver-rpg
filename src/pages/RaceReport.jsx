@@ -8,6 +8,8 @@ const IN_GAME = new Set([
   'Tiefling', 'Dragonborn', 'Aasimar', 'Genasi', 'Goliath', 'Firbolg',
   'Tabaxi', 'Kenku', 'Triton', 'Lizardfolk', 'Yuan-ti Pureblood',
   'Minotaur', 'Tortle', 'Warforged',
+  'Aarakocra', 'Changeling', 'Goblin', 'Hobgoblin', 'Kobold', 'Orc',
+  'Centaur', 'Leonin', 'Harengon', 'Owlin', 'Bugbear', 'Ogrekin (Half-Ogre)',
 ]);
 
 // ─── In DB but NOT in gameData.js ───────────────────────────────────────────
