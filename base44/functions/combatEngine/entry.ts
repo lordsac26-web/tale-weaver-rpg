@@ -58,6 +58,33 @@ Deno.serve(async (req) => {
     return { amount: Math.max(0, damage), applied: null };
   };
 
+  // Centralized condition mechanics (PHB p.290-292). Mirrors components/game/conditionEffects.js.
+  const CONDITION_FLAGS = {
+    blinded:     { no_actions: false, incoming_attack_advantage: true },
+    paralyzed:   { no_actions: true, incoming_attack_advantage: true, melee_auto_crit: true },
+    stunned:     { no_actions: true, incoming_attack_advantage: true },
+    unconscious: { no_actions: true, incoming_attack_advantage: true, melee_auto_crit: true },
+    petrified:   { no_actions: true, incoming_attack_advantage: true, resist_all: true },
+    incapacitated:{ no_actions: true },
+    grappled:    { speed_zero: true },
+    restrained:  { speed_zero: true, incoming_attack_advantage: true },
+    banished:    { no_actions: true, removed_from_combat: true },
+    polymorphed: { no_actions: false },
+    prone:       {},
+    invisible:   { incoming_attack_disadvantage: true },
+  };
+  const condNames = (arr) => (arr || []).map(c => String(typeof c === 'string' ? c : c?.name || '').toLowerCase().trim());
+  const hasNoActions = (arr) => condNames(arr).some(n => CONDITION_FLAGS[n]?.no_actions);
+  // Conditions that get a save at the end of each turn to shake off (engine handles at turn start).
+  const SAVEABLE_CONDITIONS = {
+    paralyzed: 'wisdom', // Hold Person / Hold Monster — WIS save
+    banished: 'charisma',
+    charmed: 'wisdom',
+    frightened: 'wisdom',
+    polymorphed: 'wisdom',
+    stunned: 'constitution',
+  };
+
   // Advance initiative tracker past current combatant, skipping unconscious
   const advanceTurn = (currentIndex, currentRound, combatantsArr) => {
     let nextIndex = (currentIndex + 1) % combatantsArr.length;
@@ -238,6 +265,27 @@ Deno.serve(async (req) => {
         });
       }
 
+      // === SORCERER METAMAGIC: spend sorcery points (PHB p.101-102) ===
+      // Quickened = 2 SP, Heightened = 3 SP, Twinned = spell level (min 1).
+      const meta = modifiers.metamagic || {};
+      if ((character.class || '').toLowerCase() === 'sorcerer' && (meta.quickened || meta.twinned || meta.heightened)) {
+        const lvl = spell.slot_level || 1;
+        let spCost = 0;
+        if (meta.quickened) spCost += 2;
+        if (meta.heightened) spCost += 3;
+        if (meta.twinned) spCost += Math.max(1, lvl);
+        // Self-heal: initialize SP pool (= sorcerer level from level 2) if not yet set.
+        const spMax = character.sorcery_points_max ?? ((character.level || 1) >= 2 ? (character.level || 1) : 0);
+        const spAvail = character.sorcery_points_current ?? spMax;
+        if (spCost > spAvail) {
+          return Response.json({ error: `Not enough sorcery points (need ${spCost}, have ${spAvail}).`, invalid: true }, { status: 400 });
+        }
+        await base44.entities.Character.update(character_id, {
+          sorcery_points_max: spMax,
+          sorcery_points_current: spAvail - spCost,
+        });
+      }
+
       // === UTILITY / BUFF spells ===
       if (spell.is_utility) {
         const utilEntry = {
@@ -311,39 +359,103 @@ Deno.serve(async (req) => {
         const saveTotal = saveRoll + targetSaveMod;
         const saveFailed = saveTotal < spellSaveDC;
 
+        // Heightened Spell metamagic: target rolls its save with disadvantage (PHB p.102)
+        let effectiveSaveTotal = saveTotal;
+        let effectiveSaveFailed = saveFailed;
+        if (modifiers.metamagic?.heightened) {
+          const saveRoll2 = rollD20();
+          const saveTotal2 = saveRoll2 + targetSaveMod;
+          effectiveSaveTotal = Math.min(saveTotal, saveTotal2);
+          effectiveSaveFailed = effectiveSaveTotal < spellSaveDC;
+        }
+
         const dmg2 = rollDiceStr(damageDice);
         // On save failure: minimum 1 damage. On success: half damage (can be 0 for weak saves)
-        const finalDmg = saveFailed ? Math.max(1, dmg2) : Math.max(0, Math.floor(dmg2 / 2));
+        const finalDmg = effectiveSaveFailed ? Math.max(1, dmg2) : Math.max(0, Math.floor(dmg2 / 2));
         if (finalDmg > 0) {
           target.hp_current = Math.max(0, target.hp_current - finalDmg);
           if (target.hp_current === 0) target.is_conscious = false;
         }
 
+        // === STATUS-EFFECT spells (Hold Person/Monster, Banishment, Polymorph, etc.) ===
+        // If the spell inflicts a condition and the save failed, apply it to the target.
+        let appliedCondition = null;
+        const specialEffects = spell.special_effects || [];
+        const CONDITION_EFFECT_NAMES = ['paralyzed','banished','polymorphed','charmed','frightened','stunned','restrained','prone','blinded','incapacitated'];
+        const conditionToApply = specialEffects.find(e => CONDITION_EFFECT_NAMES.includes(e));
+        if (effectiveSaveFailed && conditionToApply && target.hp_current > 0) {
+          const existing = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
+          if (!existing.includes(conditionToApply)) {
+            // Store the save DC + ability so the affected creature can re-save each turn.
+            target.conditions = [
+              ...(target.conditions || []),
+              { name: conditionToApply, source: spell.name, save_dc: spellSaveDC, save_ability: spell.save_type, caster: character.name }
+            ];
+            appliedCondition = conditionToApply;
+          }
+        }
+
         const saveEntry = {
           round: combatLog.round, actor: character.name, action: 'spell', target: target.name,
-          hit: saveFailed, spell_name: spell.name,
-          text: `${character.name} casts ${spell.name}! DC${spellSaveDC} ${spell.save_type} save: ${target.name} rolled ${saveTotal} — ${saveFailed ? 'FAILED' : 'success'}. Takes ${finalDmg} ${spell.damage_type || ''} damage.${target.hp_current === 0 ? ` ${target.name} falls!` : ''}`
+          hit: effectiveSaveFailed, spell_name: spell.name,
+          text: `${character.name} casts ${spell.name}! DC${spellSaveDC} ${spell.save_type} save: ${target.name} rolled ${effectiveSaveTotal}${modifiers.metamagic?.heightened ? ' (Heightened: disadvantage)' : ''} — ${effectiveSaveFailed ? 'FAILED' : 'success'}.${finalDmg > 0 ? ` Takes ${finalDmg} ${spell.damage_type || ''} damage.` : ''}${appliedCondition ? ` ${target.name} is ${appliedCondition.toUpperCase()}!` : ''}${target.hp_current === 0 ? ` ${target.name} falls!` : ''}`
         };
 
-        const updatedC = combatants.map(c => c.id === target_id ? target : c);
+        // Twinned Spell: resolve the same spell against a second creature (PHB p.102).
+        let twinTarget = null;
+        let twinText = '';
+        if (modifiers.metamagic?.twinned && payload.twin_target_id && payload.twin_target_id !== target_id) {
+          twinTarget = combatants.find(c => c.id === payload.twin_target_id);
+          if (twinTarget && twinTarget.is_conscious) {
+            const tStat = twinTarget[spell.save_type] || twinTarget.save_stats?.[spell.save_type] || 10;
+            const tMod = statMod(tStat);
+            const tr1 = rollD20();
+            const tr2 = modifiers.metamagic?.heightened ? rollD20() : tr1;
+            const tTotal = Math.min(tr1 + tMod, tr2 + tMod);
+            const tFailed = tTotal < spellSaveDC;
+            const tDmgRaw = rollDiceStr(damageDice);
+            const tDmg = tFailed ? Math.max(1, tDmgRaw) : Math.max(0, Math.floor(tDmgRaw / 2));
+            if (tDmg > 0) { twinTarget.hp_current = Math.max(0, twinTarget.hp_current - tDmg); if (twinTarget.hp_current === 0) twinTarget.is_conscious = false; }
+            if (tFailed && conditionToApply && twinTarget.hp_current > 0) {
+              const tExisting = (twinTarget.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
+              if (!tExisting.includes(conditionToApply)) {
+                twinTarget.conditions = [...(twinTarget.conditions || []), { name: conditionToApply, source: spell.name, save_dc: spellSaveDC, save_ability: spell.save_type, caster: character.name }];
+              }
+            }
+            twinText = ` Twinned → ${twinTarget.name}: rolled ${tTotal}, ${tFailed ? 'FAILED' : 'success'}.${tDmg > 0 ? ` ${tDmg} damage.` : ''}${tFailed && conditionToApply ? ` ${conditionToApply.toUpperCase()}!` : ''}`;
+            saveEntry.text += twinText;
+          }
+        }
+
+        const updatedC = combatants.map(c => {
+          if (c.id === target_id) return target;
+          if (twinTarget && c.id === twinTarget.id) return twinTarget;
+          return c;
+        });
         const allDead = updatedC.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
         const playerDead2 = updatedC.find(c => c.type === 'player')?.is_conscious === false;
         let result2 = 'ongoing';
         if (allDead) result2 = 'victory';
         if (playerDead2) result2 = 'defeat';
 
+        // Quickened Spell: cast as a bonus action — does NOT consume an action.
+        const isQuickened = !!modifiers.metamagic?.quickened;
         const apt = getActionsPerTurn(character);
-        const acu = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
+        const acu = isQuickened
+          ? (combatLog.world_state?.actions_used_this_turn || 0)
+          : (combatLog.world_state?.actions_used_this_turn || 0) + 1;
         const ar2 = apt - acu;
         let ni = combatLog.current_turn_index;
         let nr = combatLog.round;
         // Track concentration spell in world_state
         let ws = { ...(combatLog.world_state || {}), actions_used_this_turn: acu };
+        if (isQuickened) ws.bonus_action_used = true;
         if (spell.requires_concentration) {
           ws.concentration_spell = spell.name;
           ws.concentration_caster = character.name;
         }
-        if (result2 !== 'ongoing' || ar2 <= 0) {
+        // Quickened keeps the player's turn (bonus action), unless combat ended.
+        if (result2 !== 'ongoing' || (ar2 <= 0 && !isQuickened)) {
           if (result2 === 'ongoing') {
             const adv2 = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedC);
             ni = adv2.nextIndex; nr = adv2.nextRound;
@@ -754,15 +866,20 @@ Deno.serve(async (req) => {
     if (allEnemiesDead) result = 'victory';
     if (playerDead) result = 'defeat';
 
-    // Track actions used this turn in the combat log's world_state
+    // Track actions used this turn in the combat log's world_state.
+    // Quickened Spell (Sorcerer): spell costs a bonus action, not an action.
+    const isQuickenedMain = !!modifiers.metamagic?.quickened && !!spell;
     const actionsPerTurn = getActionsPerTurn(character);
-    const currentActionsUsed = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
+    const currentActionsUsed = isQuickenedMain
+      ? (combatLog.world_state?.actions_used_this_turn || 0)
+      : (combatLog.world_state?.actions_used_this_turn || 0) + 1;
     const actionsRemaining = actionsPerTurn - currentActionsUsed;
 
     // Advance turn only if all actions for this turn are exhausted
     let nextIndex = combatLog.current_turn_index;
     let nextRound = combatLog.round;
     let newWorldState = { ...(combatLog.world_state || {}), actions_used_this_turn: currentActionsUsed };
+    if (isQuickenedMain) newWorldState.bonus_action_used = true;
 
     // Track concentration spells
     if (spell?.requires_concentration) {
@@ -770,7 +887,7 @@ Deno.serve(async (req) => {
       newWorldState.concentration_caster = character.name;
     }
 
-    if (result !== 'ongoing' || actionsRemaining <= 0) {
+    if (result !== 'ongoing' || (actionsRemaining <= 0 && !isQuickenedMain)) {
       if (result === 'ongoing') {
         const adv = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCombatants);
         nextIndex = adv.nextIndex; nextRound = adv.nextRound;
@@ -920,6 +1037,46 @@ Deno.serve(async (req) => {
     const currentCombatant = combatants[combatLog.current_turn_index];
     if (!currentCombatant || currentCombatant.type !== 'enemy' || !currentCombatant.is_conscious) {
       return Response.json({ skipped: true });
+    }
+
+    // === AUTO-SAVE: shake off saveable conditions at the start of the turn ===
+    // Hold Person/Monster, Banishment, etc. grant a save at the end of each turn;
+    // we resolve it here at the start of the affected creature's turn for simplicity.
+    let conditionCleared = null;
+    let stillIncapacitated = false;
+    if ((currentCombatant.conditions || []).length > 0) {
+      const remaining = [];
+      for (const cond of currentCombatant.conditions) {
+        const cName = (typeof cond === 'string' ? cond : cond?.name || '').toLowerCase();
+        const saveAbility = SAVEABLE_CONDITIONS[cName];
+        if (saveAbility && typeof cond === 'object' && cond.save_dc) {
+          const saveStat = currentCombatant[saveAbility] || currentCombatant.save_stats?.[saveAbility] || 10;
+          const roll = rollD20() + statMod(saveStat);
+          if (roll >= cond.save_dc) {
+            conditionCleared = cName; // saved — drop the condition
+            continue;
+          }
+        }
+        remaining.push(cond);
+      }
+      currentCombatant.conditions = remaining;
+      stillIncapacitated = hasNoActions(remaining);
+    }
+
+    // If still incapacitated (paralyzed/stunned/banished, etc.), the enemy loses its turn.
+    if (stillIncapacitated) {
+      const updatedSkip = combatants.map(c => c.id === currentCombatant.id ? currentCombatant : c);
+      const { nextIndex: niSk, nextRound: nrSk } = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedSkip);
+      const skipText = conditionCleared
+        ? `${currentCombatant.name} shakes off ${conditionCleared}, but is still incapacitated and loses its turn!`
+        : `${currentCombatant.name} is incapacitated and can take no actions!`;
+      await base44.entities.CombatLog.update(combat_id, {
+        combatants: updatedSkip,
+        log_entries: [...(combatLog.log_entries || []), { round: combatLog.round, actor: currentCombatant.name, action: 'incapacitated', text: skipText }],
+        current_turn_index: niSk, round: nrSk,
+        world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0 },
+      });
+      return Response.json({ skipped_incapacitated: true, log_entry: { text: skipText }, next_turn_index: niSk, round: nrSk });
     }
 
     // Enemy attacks player
@@ -1132,6 +1289,7 @@ Deno.serve(async (req) => {
 
     // Build log entry
     let logText = '';
+    if (conditionCleared) logText += `${currentCombatant.name} breaks free of ${conditionCleared}! `;
     if (strategyDesc) logText += `[${currentCombatant.name} ${strategyDesc}] `;
     if (anyHit) {
       logText += attackLogs.join('; ') + `. ${player.name} takes ${totalDamage} total damage! (${player.hp_current}/${player.hp_max} HP)`;

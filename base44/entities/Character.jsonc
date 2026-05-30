@@ -193,6 +193,27 @@
         "type": "string"
       }
     },
+    "resistances": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Damage types this character has resistance to (damage halved). e.g. ['fire','cold']"
+    },
+    "vulnerabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Damage types this character is vulnerable to (damage doubled)."
+    },
+    "immunities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Damage types this character is immune to (damage reduced to 0)."
+    },
     "luck_points_remaining": {
       "type": "number",
       "default": 0,
@@ -202,6 +223,23 @@
       "type": "number",
       "default": 0,
       "description": "Maximum luck points (3 if the character has the Lucky feat, else 0)."
+    },
+    "sorcery_points_max": {
+      "type": "number",
+      "default": 0,
+      "description": "Sorcerer Font of Magic (PHB p.101): maximum sorcery points = sorcerer level (from level 2). 0 for non-sorcerers."
+    },
+    "sorcery_points_current": {
+      "type": "number",
+      "default": 0,
+      "description": "Sorcery points currently available. Spent on Metamagic. Refreshes to sorcery_points_max on a long rest."
+    },
+    "metamagic_known": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Metamagic options the Sorcerer knows (PHB p.102). e.g. ['Quickened Spell','Twinned Spell','Heightened Spell']"
     },
     "portrait": {
       "type": "string"

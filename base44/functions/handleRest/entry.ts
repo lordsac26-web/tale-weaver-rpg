@@ -150,6 +150,15 @@ Deno.serve(async (req) => {
       restorations.push(`Luck points restored (${character.luck_points_max})`);
     }
 
+    // Sorcerer Font of Magic: sorcery points = sorcerer level (from level 2),
+    // fully restored on a long rest (PHB p.101).
+    if (charClass === 'Sorcerer' && charLevel >= 2) {
+      const spMax = charLevel;
+      updates.sorcery_points_max = spMax;
+      updates.sorcery_points_current = spMax;
+      restorations.push(`Sorcery points restored (${spMax})`);
+    }
+
     updates.death_saves_success = 0;
     updates.death_saves_failure = 0;
     updates.short_rest_abilities = {};

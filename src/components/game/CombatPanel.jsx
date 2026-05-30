@@ -11,6 +11,8 @@ import ActionPointBar from './ActionPointBar';
 import CombatFloatingText from './CombatFloatingText';
 import CombatModifiersPanel from './CombatModifiersPanel';
 import ClassAbilitiesPanel from './ClassAbilitiesPanel';
+import MetamagicSelector from './MetamagicSelector';
+import ConditionBadges from './ConditionBadges';
 
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 
@@ -49,6 +51,9 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const [abilityMessages, setAbilityMessages] = useState([]);
   // Default to 'equipped' if character has an equipped weapon, else first inventory weapon
   const [selectedWeaponIdx, setSelectedWeaponIdx] = useState('equipped');
+  // Sorcerer Metamagic toggles + optional second target for Twinned Spell
+  const [metamagic, setMetamagic] = useState({ quickened: false, twinned: false, heightened: false });
+  const [twinTargetId, setTwinTargetId] = useState(null);
 
   if (!combat) return null;
 
@@ -119,9 +124,10 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         is_utility: details.is_utility || false,
         heal_dice: details.heal_dice || null,
         requires_concentration: details.requires_concentration || false,
+        special_effects: details.special_effects || [],
         slot_level: selectedSpellLevel || selectedSpellBaseLevel || 1,
         base_level: selectedSpellBaseLevel || 1,
-      }, combatModifiers);
+      }, { ...combatModifiers, metamagic, twin_target_id: metamagic.twinned ? twinTargetId : null });
     } else if (action === 'attack') {
       const weapon = getActiveWeapon() || { 
         name: 'Unarmed Strike',
@@ -168,6 +174,9 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
               style={{ background: 'rgba(80,40,120,0.6)', border: '1px solid rgba(160,100,255,0.4)', color: '#c4b5fd' }}>
               🔮 {concentrationSpell}
             </div>
+          )}
+          {(player?.conditions || character?.conditions || []).length > 0 && (
+            <ConditionBadges conditions={player?.conditions || character?.conditions || []} max={4} />
           )}
         </div>
         <div className="flex items-center gap-2 text-xs">
@@ -256,16 +265,8 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                         </p>
                       )}
                       {(enemy.conditions || []).length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {enemy.conditions.slice(0, 3).map((cond, ci) => {
-                            const condName = typeof cond === 'string' ? cond : cond.name;
-                            return (
-                              <span key={ci} className="px-1.5 py-0.5 rounded-full text-xs"
-                                style={{ background: 'rgba(80,20,60,0.5)', border: '1px solid rgba(200,80,150,0.3)', color: '#f9a8d4', fontSize: '0.6rem' }}>
-                                {condName}
-                              </span>
-                            );
-                          })}
+                        <div className="mt-1">
+                          <ConditionBadges conditions={enemy.conditions} max={4} />
                         </div>
                       )}
                     </>
@@ -402,6 +403,43 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                     onSelectSlotLevel={setSelectedSpellLevel}
                   />
                 </div>
+              )}
+
+              {/* Sorcerer Metamagic (only when a spell is selected) */}
+              {action === 'spell' && selectedSpell && (
+                <>
+                  <MetamagicSelector
+                    character={character}
+                    spell={(() => {
+                      const d = SPELL_DETAILS[selectedSpell] || {};
+                      return {
+                        attack_type: d.attack_type,
+                        slot_level: selectedSpellLevel || selectedSpellBaseLevel || 1,
+                        is_bonus_action: d.is_bonus_action || false,
+                        single_target: !(d.attack_type === 'saving_throw' && /cone|cube|sphere|radius|line/i.test(d.range || '')),
+                      };
+                    })()}
+                    active={metamagic}
+                    onToggle={(id) => setMetamagic(prev => {
+                      const next = { ...prev, [id]: !prev[id] };
+                      if (id === 'twinned' && !next.twinned) setTwinTargetId(null);
+                      return next;
+                    })}
+                  />
+                  {/* Twinned Spell second-target picker */}
+                  {metamagic.twinned && (
+                    <select
+                      value={twinTargetId || ''}
+                      onChange={e => setTwinTargetId(e.target.value || null)}
+                      className="w-full rounded-lg px-2 py-1.5 text-xs"
+                      style={{ background: 'rgba(20,8,40,0.7)', border: '1px solid rgba(150,90,230,0.4)', color: '#d4b3ff', fontFamily: 'EB Garamond, serif' }}>
+                      <option value="">👥 Twinned: choose 2nd target…</option>
+                      {enemies.filter(en => en.is_conscious && en.id !== selectedTarget).map(en => (
+                        <option key={en.id} value={en.id}>{en.name} (AC {en.ac})</option>
+                      ))}
+                    </select>
+                  )}
+                </>
               )}
 
               {/* Inline dice roller toggle */}
