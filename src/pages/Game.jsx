@@ -115,6 +115,16 @@ export default function Game() {
     return () => window.removeEventListener('open-rest-modal', handler);
   }, []);
 
+  // Reload combat when a server-authoritative ability (e.g. Action Surge) changes combat state
+  useEffect(() => {
+    const handler = () => {
+      const combatId = combat?.id || session?.combat_state?.combat_id;
+      if (combatId) reloadCombat(combatId);
+    };
+    window.addEventListener('reload-combat', handler);
+    return () => window.removeEventListener('reload-combat', handler);
+  }, [combat?.id, session?.combat_state?.combat_id]);
+
   const startAdventure = async () => {
     setStoryLoading(true);
     setStarted(true);

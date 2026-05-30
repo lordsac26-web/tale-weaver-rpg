@@ -74,6 +74,16 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
       effect: `+${sneakDice}d6 damage once per turn — need advantage OR ally adjacent to target`,
       description: `Once per turn, add ${sneakDice}d6 extra damage when using a finesse or ranged weapon AND you have advantage on the roll, OR an ally is within 5 ft of the target (and you don't have disadvantage). Only once per turn regardless of number of attacks.`,
     });
+
+    // Ally adjacent — satisfies Sneak Attack's "ally within 5 ft" condition without advantage
+    availableModifiers.push({
+      id: 'ally_adjacent',
+      name: 'Ally Adjacent to Target',
+      icon: <Crosshair className="w-3.5 h-3.5" />,
+      color: '#a78bfa',
+      effect: 'Enables Sneak Attack without advantage',
+      description: 'An ally of yours is within 5 ft of the target and is not incapacitated. This satisfies the Sneak Attack condition even when you do not have advantage (as long as you do not have disadvantage).',
+    });
   }
 
   // ── Monk: Flurry of Blows (bonus action, level 2+) ──────────────────────────

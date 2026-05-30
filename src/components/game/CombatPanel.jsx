@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
 import { Loader2, SkipForward, Swords, Dices } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { calcStatMod, PROFICIENCY_BY_LEVEL } from './gameData';
@@ -296,10 +297,30 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                 worldState={world_state}
                 onCharacterUpdate={onCharacterUpdate}
                 onMessage={(msg) => setAbilityMessages(prev => [...prev.slice(-2), { id: Date.now(), text: msg }])}
-                onAbilityUsed={(id, data) => {
-                  // Action Surge: grant extra action this turn
+                onAbilityUsed={async (id, data) => {
+                  // Action Surge: grant extra action this turn — server-authoritative.
+                  // The backend validates Fighter L2+, enforces once/short-rest, and
+                  // refunds one action in world_state so actionsRemaining increases.
                   if (id === 'action_surge') {
                     setCombatModifiers(prev => ({ ...prev, action_surge_active: true }));
+                    try {
+                      const res = await base44.functions.invoke('combatEngine', {
+                        action: 'action_surge',
+                        session_id: combat?.session_id,
+                        combat_id: combat?.id,
+                        character_id: character?.id,
+                        payload: {},
+                      });
+                      if (res.data?.success) {
+                        setAbilityMessages(prev => [...prev.slice(-2), { id: Date.now(), text: res.data.log_entry?.text || '⚡ Action Surge active!' }]);
+                        // Ask the Game page to reload combat so the extra action appears in the action bar
+                        window.dispatchEvent(new CustomEvent('reload-combat'));
+                      } else if (res.data?.error) {
+                        setAbilityMessages(prev => [...prev.slice(-2), { id: Date.now(), text: res.data.error }]);
+                      }
+                    } catch (err) {
+                      console.error('Action Surge failed:', err);
+                    }
                   }
                 }}
               />
