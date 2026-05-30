@@ -32,6 +32,7 @@ Deno.serve(async (req) => {
   const charLevel = character.level || 1;
   const currentSlots = character.spell_slots || {};
   const maxSlots = SPELL_SLOTS_BY_CLASS[charClass]?.[charLevel - 1] || [];
+  const shortRestAbilities = character.short_rest_abilities || {};
 
   const updates = {};
   const restorations = [];
@@ -72,11 +73,7 @@ Deno.serve(async (req) => {
       restorations.push('All pact slots recovered');
     }
 
-    // Wizard: reset Arcane Recovery availability
-    if (charClass === 'Wizard') {
-      updates.arcane_recovery_used = false;
-      restorations.push('Arcane Recovery available');
-    }
+    // NOTE: Wizard Arcane Recovery is once per LONG rest (PHB p.115) — NOT reset on a short rest.
 
     if (charClass === 'Fighter') {
       restorations.push('Action Surge & Second Wind recovered');
@@ -95,9 +92,10 @@ Deno.serve(async (req) => {
       restorations.push(`Bardic Inspiration recovered (${biMax})`);
     }
 
-    // Reset all short-rest ability tracking (Action Surge, Second Wind, Arcane Recovery, etc.)
-    // arcane_recovery is gated by arcane_recovery_used flag (long rest only) — reset here to allow use again if not yet used
-    updates.short_rest_abilities = {};
+    // Reset short-rest ability tracking (Action Surge, Second Wind, Channel Divinity/Turn Undead,
+    // Wild Shape, Artificer infusions, etc.) — these all recharge on a short rest (PHB class tables).
+    // EXCEPTION: arcane_recovery is once per LONG rest, so preserve it across short rests.
+    updates.short_rest_abilities = { arcane_recovery: !!shortRestAbilities.arcane_recovery };
 
   } else if (rest_type === 'long') {
     // LONG REST (8 hours)
