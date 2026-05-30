@@ -61,7 +61,7 @@ export default function Home() {
           <PWAInstallButton />
           
           {/* PWA Debug Info - Remove after testing */}
-          <div className="hidden lg:block">
+          <div className="hidden lg:block" style={{ maxWidth: '400px' }}>
             <PWADebugger />
           </div>
           <div className="relative" onClick={e => e.stopPropagation()}>

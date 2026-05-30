@@ -22,57 +22,81 @@ export default function PWADebugger() {
     setIsInstalled(isStandalone);
     logs.push(`Already installed: ${isStandalone ? 'Yes' : 'No'}`);
 
-    // Check browser support
-    const hasInstallSupport = 'beforeinstallprompt' in window;
+    // Check browser support - Chrome/Edge/Safari all support PWA
+    const userAgent = navigator.userAgent;
+    const isChrome = /Chrome/.test(userAgent) && /Google Inc/.test(navigator.vendor);
+    const isEdge = /Edg/.test(userAgent);
+    const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent);
+    const hasInstallSupport = isChrome || isEdge || isSafari;
     setBrowserSupport(hasInstallSupport);
-    logs.push(`Browser supports PWA: ${hasInstallSupport ? 'Yes' : 'No'}`);
+    logs.push(`Browser: ${isChrome ? 'Chrome' : isEdge ? 'Edge' : isSafari ? 'Safari' : 'Other'}`);
+    logs.push(`Browser supports PWA: ${hasInstallSupport ? 'Yes (Chrome/Edge/Safari)' : 'No'}`);
 
     // Check manifest
     fetch('/manifest.json')
       .then(r => {
+        console.log('[PWA] Manifest response:', r.status, r.ok);
         if (r.ok) {
           setManifestLoaded(true);
-          logs.push('Manifest loaded: Yes');
+          logs.push('✓ Manifest loaded successfully');
           return r.json();
         } else {
-          logs.push('Manifest loaded: No (404)');
+          setManifestLoaded(false);
+          logs.push(`✗ Manifest error: ${r.status}`);
         }
       })
       .catch(err => {
-        logs.push(`Manifest error: ${err.message}`);
+        setManifestLoaded(false);
+        console.error('[PWA] Manifest fetch error:', err);
+        logs.push(`✗ Manifest fetch failed: ${err.message}`);
       });
 
     // Check service worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations()
         .then(registrations => {
+          console.log('[PWA] Service worker registrations:', registrations);
           const hasActive = registrations.some(reg => reg.active);
           setServiceWorkerActive(hasActive);
-          logs.push(`Service worker active: ${hasActive ? 'Yes' : 'No'}`);
+          logs.push(`✓ Service worker: ${hasActive ? 'Active' : 'Registered (waiting)'}`);
+          if (!hasActive) {
+            logs.push('  (May take a few seconds to activate)');
+          }
         })
         .catch(err => {
-          logs.push(`Service worker error: ${err.message}`);
+          console.error('[PWA] SW registration check failed:', err);
+          logs.push(`✗ Service worker error: ${err.message}`);
         });
     } else {
-      logs.push('Service worker: Not supported');
+      logs.push('✗ Service worker: Not supported by browser');
     }
 
     // Listen for install prompt
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
+      console.log('✅ beforeinstallprompt event fired!');
       setInstallReady(true);
-      logs.push('Install prompt ready: Yes');
+      logs.push('Install prompt ready: Yes (event fired)');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // Check after a delay (browser needs time to evaluate)
+    // Check after delays (browser needs time to evaluate)
     setTimeout(() => {
       if (!installReady) {
-        logs.push('Install prompt ready: No (not triggered yet)');
+        logs.push('Install prompt: Not ready yet (browser still evaluating)');
       }
       setDebugInfo(logs);
-    }, 2000);
+    }, 3000);
+
+    // Second check at 30 seconds (browser minimum)
+    setTimeout(() => {
+      if (!installReady) {
+        logs.push('Install prompt: Still not ready (need more user engagement)');
+        logs.push('TIP: Click around the app, wait longer, or try manual install');
+      }
+      setDebugInfo(prev => [...prev, ...logs.filter(l => !prev.includes(l))]);
+    }, 30000);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -108,7 +132,7 @@ export default function PWADebugger() {
             <AlertCircle className="w-4 h-4 text-yellow-500" />
           )}
           <span style={{ color: browserSupport ? '#86efac' : '#fbbf24' }}>
-            Browser supports PWA: {browserSupport ? 'Yes' : 'No'}
+            {browserSupport ? 'Browser supports PWA (Chrome/Edge/Safari)' : 'Browser does not support PWA'}
           </span>
         </div>
 
@@ -141,7 +165,7 @@ export default function PWADebugger() {
             <AlertCircle className="w-4 h-4 text-yellow-500" />
           )}
           <span style={{ color: installReady ? '#86efac' : '#fbbf24' }}>
-            Install prompt ready: {installReady ? 'Yes' : 'No (needs user engagement)'}
+            Install prompt: {installReady ? 'Ready! Click install button' : 'Waiting (need 30+ sec of interaction)'}
           </span>
         </div>
       </div>
@@ -169,16 +193,28 @@ export default function PWADebugger() {
         </div>
       )}
 
-      {!browserSupport && (
+      {browserSupport && !installReady && (
         <div className="mt-4 p-3 rounded-lg" style={{ 
-          background: 'rgba(120,40,40,0.2)', 
-          border: '1px solid rgba(220,80,80,0.3)' 
+          background: 'rgba(120,80,40,0.2)', 
+          border: '1px solid rgba(220,140,80,0.3)' 
         }}>
-          <div className="text-xs text-red-400 font-fantasy mb-1">
-            ⚠️ Browser doesn't support PWA
+          <div className="text-xs text-yellow-400 font-fantasy mb-1">
+            ⏳ Waiting for browser...
           </div>
-          <div className="text-xs text-slate-400">
-            Please use Chrome, Edge, or Safari for installation.
+          <div className="text-xs text-slate-400 space-y-1">
+            <div>Your browser (Chrome/Edge) supports PWA.</div>
+            <div>The install prompt needs:</div>
+            <ul className="list-disc ml-4 mt-1 space-y-0.5">
+              <li>30+ seconds of page interaction</li>
+              <li>Service worker to fully activate</li>
+              <li>Browser to evaluate the app</li>
+            </ul>
+            <div className="mt-2 text-green-400">
+              💡 Try: Click around the app, then check back in 30 seconds
+            </div>
+            <div className="text-blue-400">
+              📥 Or use manual install: Browser menu → "Install" or "Create shortcut"
+            </div>
           </div>
         </div>
       )}
