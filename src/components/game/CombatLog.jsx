@@ -20,13 +20,13 @@ function getEntryStyle(entry) {
     background: 'rgba(40,5,5,0.5)', color: '#fca5a5',
   };
   if (entry.hit === false) return {
-    border: '1px solid rgba(80,60,30,0.2)', borderLeft: '3px solid rgba(100,70,30,0.4)',
-    background: 'rgba(15,10,5,0.3)', color: 'rgba(180,150,100,0.5)',
+    border: '1px solid rgba(120,95,50,0.35)', borderLeft: '3px solid rgba(160,120,60,0.6)',
+    background: 'rgba(25,18,8,0.5)', color: 'rgba(220,190,140,0.95)',
   };
   // System / round messages
   return {
-    border: '1px solid rgba(60,80,180,0.2)', borderLeft: '3px solid rgba(80,100,220,0.4)',
-    background: 'rgba(10,10,30,0.4)', color: 'rgba(147,197,253,0.6)',
+    border: '1px solid rgba(80,105,210,0.3)', borderLeft: '3px solid rgba(110,135,235,0.55)',
+    background: 'rgba(14,16,40,0.55)', color: 'rgba(185,215,255,0.95)',
   };
 }
 
@@ -50,7 +50,7 @@ function RoundSeparator({ round }) {
   return (
     <div className="flex items-center gap-2 my-2">
       <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(180,50,50,0.3))' }} />
-      <span className="font-fantasy text-xs tracking-widest px-2" style={{ color: 'rgba(180,50,50,0.5)', fontSize: '0.6rem' }}>
+      <span className="font-fantasy text-xs tracking-widest px-2 font-bold" style={{ color: 'rgba(245,170,170,0.95)', fontSize: '0.62rem' }}>
         ROUND {round}
       </span>
       <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, rgba(180,50,50,0.3), transparent)' }} />
@@ -83,11 +83,11 @@ export default function CombatLog({ logEntries = [], player }) {
       {/* Header */}
       <div className="px-3 py-2 flex-shrink-0 flex items-center gap-2"
         style={{ borderBottom: '1px solid rgba(180,50,50,0.15)', background: 'rgba(15,5,5,0.5)' }}>
-        <Scroll className="w-3 h-3" style={{ color: 'rgba(180,100,100,0.5)' }} />
-        <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(180,100,100,0.5)', fontSize: '0.65rem' }}>
+        <Scroll className="w-3 h-3" style={{ color: 'rgba(230,150,150,0.85)' }} />
+        <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(235,155,155,0.9)', fontSize: '0.65rem' }}>
           COMBAT LOG
         </span>
-        <span className="ml-auto text-xs font-fantasy" style={{ color: 'rgba(180,100,100,0.3)', fontSize: '0.6rem' }}>
+        <span className="ml-auto text-xs font-fantasy" style={{ color: 'rgba(210,140,140,0.6)', fontSize: '0.6rem' }}>
           {logEntries.length} events
         </span>
       </div>

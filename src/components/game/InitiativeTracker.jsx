@@ -45,7 +45,7 @@ export default function InitiativeTracker({ combatants = [], currentTurnIndex, r
       <div className="px-3 py-2 flex items-center justify-between"
         style={{ borderBottom: '1px solid rgba(180,50,50,0.1)' }}>
         <div className="flex items-center gap-3">
-          <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(180,100,100,0.5)', fontSize: '0.6rem' }}>
+          <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(230,150,150,0.9)', fontSize: '0.6rem' }}>
             INITIATIVE ORDER
           </span>
           {combatStartTime && (
@@ -59,7 +59,7 @@ export default function InitiativeTracker({ combatants = [], currentTurnIndex, r
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="font-fantasy text-xs" style={{ color: 'rgba(180,50,50,0.5)', fontSize: '0.6rem' }}>
+          <span className="font-fantasy text-xs font-bold" style={{ color: 'rgba(245,170,170,0.95)', fontSize: '0.62rem' }}>
             ROUND {round}
           </span>
           {onAdvanceTurn && currentCombatant?.type === 'player' && (

@@ -11,8 +11,8 @@ export default function ActionPointBar({ actionsTotal, actionsUsed, bonusActionU
 
       {/* Actions */}
       <div className="flex items-center gap-1.5">
-        <Zap className="w-3 h-3" style={{ color: 'rgba(240,192,64,0.5)' }} />
-        <span className="font-fantasy text-xs" style={{ color: 'rgba(180,140,90,0.4)', fontSize: '0.6rem' }}>ACT</span>
+        <Zap className="w-3 h-3" style={{ color: 'rgba(240,192,64,0.9)' }} />
+        <span className="font-fantasy text-xs" style={{ color: 'rgba(240,200,140,0.95)', fontSize: '0.6rem' }}>ACT</span>
         <div className="flex gap-1">
           {Array.from({ length: actionsTotal }).map((_, i) => (
             <motion.div
@@ -40,7 +40,7 @@ export default function ActionPointBar({ actionsTotal, actionsUsed, bonusActionU
 
       {/* Bonus Action */}
       <div className="flex items-center gap-1">
-        <span className="font-fantasy text-xs" style={{ color: 'rgba(130,100,200,0.4)', fontSize: '0.6rem' }}>BONUS</span>
+        <span className="font-fantasy text-xs" style={{ color: 'rgba(190,160,255,0.95)', fontSize: '0.6rem' }}>BONUS</span>
         <div className="w-3.5 h-3.5 rounded-sm rotate-45"
           style={!bonusActionUsed ? {
             background: 'rgba(120,80,220,0.7)',
@@ -54,7 +54,7 @@ export default function ActionPointBar({ actionsTotal, actionsUsed, bonusActionU
 
       {/* Reaction */}
       <div className="flex items-center gap-1">
-        <span className="font-fantasy text-xs" style={{ color: 'rgba(100,180,100,0.4)', fontSize: '0.6rem' }}>REACT</span>
+        <span className="font-fantasy text-xs" style={{ color: 'rgba(120,225,140,0.95)', fontSize: '0.6rem' }}>REACT</span>
         <div className="w-3.5 h-3.5 rounded-full"
           style={!reactionUsed ? {
             background: 'rgba(40,160,80,0.7)',
@@ -68,7 +68,7 @@ export default function ActionPointBar({ actionsTotal, actionsUsed, bonusActionU
 
       {/* Movement label */}
       <div className="ml-auto">
-        <span className="font-fantasy text-xs" style={{ color: 'rgba(100,140,200,0.4)', fontSize: '0.6rem' }}>
+        <span className="font-fantasy text-xs" style={{ color: 'rgba(150,185,240,0.9)', fontSize: '0.6rem' }}>
           {actionsRemaining === 0 ? '⏳ End Turn' : '🎯 Choose Action'}
         </span>
       </div>
