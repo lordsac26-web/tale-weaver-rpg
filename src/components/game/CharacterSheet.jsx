@@ -8,6 +8,7 @@ import SpellbookTab from './SpellbookTab';
 import { SkillTooltip, FeatureTooltip, ConditionTooltip } from './GameTooltip';
 import SkillProficiencyRow from './SkillProficiencyRow';
 import StatBreakdownTooltip from './StatBreakdownTooltip';
+import SubclassSection from './SubclassSection';
  
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
@@ -543,6 +544,9 @@ function FeaturesTab({ character }) {
           </div>
         </Section>
       )}
+
+      {/* Subclass (e.g. Path of the Totem Warrior) */}
+      <SubclassSection character={character} Section={Section} />
 
       {/* Character Features */}
       <Section title="Character Features" icon="⚡">
