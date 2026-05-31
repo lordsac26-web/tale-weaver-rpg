@@ -960,15 +960,19 @@ export default function Game() {
                 </button>
               ))}
             </div>
-            {/* Desktop: side-by-side. Mobile: tabbed */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden min-h-0 h-full">
-              <div className={`overflow-hidden flex flex-col min-h-0 ${combatViewTab !== 'story' ? 'hidden lg:flex' : ''}`}
+            {/* Desktop: side-by-side. Mobile: tabbed.
+                Explicit single grid row (grid-rows-1) so each cell fills the
+                track height — otherwise auto-row tracks collapse to content
+                and CombatPanel's h-full resolves against zero height,
+                causing panels to overlap on combat resume. */}
+            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 grid-rows-1 overflow-hidden">
+              <div className={`min-h-0 h-full overflow-hidden flex flex-col ${combatViewTab !== 'story' ? 'hidden lg:flex' : ''}`}
                 style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
                 <StoryPanel narrative={narrative} choices={[]} loading={storyLoading}
                   onChoice={() => {}} customInput={customInput}
                   setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} />
               </div>
-              <div className={`overflow-hidden flex flex-col min-h-0 ${combatViewTab !== 'combat' ? 'hidden lg:flex' : ''}`}>
+              <div className={`min-h-0 h-full overflow-hidden flex flex-col ${combatViewTab !== 'combat' ? 'hidden lg:flex' : ''}`}>
                 <CombatPanel combat={combat} character={character}
                   onPlayerAttack={handlePlayerAttack}
                   onOffhandAttack={handleOffhandAttack}
