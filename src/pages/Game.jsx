@@ -245,6 +245,10 @@ export default function Game() {
 
       if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP earned!` }]);
+      if (data.hp_change) {
+        setNarrative(prev => [...prev, { type: 'xp_gain', text: data.hp_change > 0 ? `❤️ Healed +${data.hp_change} HP` : `💔 Took ${Math.abs(data.hp_change)} damage` }]);
+        if (typeof data.hp_current === 'number') setCharacter(prev => prev ? { ...prev, hp_current: data.hp_current } : prev);
+      }
 
       if (data.combat_trigger && data.enemies?.length > 0) {
         setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
@@ -309,6 +313,10 @@ export default function Game() {
       const data = result.data;
       if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);
+      if (data.hp_change) {
+        setNarrative(prev => [...prev, { type: 'xp_gain', text: data.hp_change > 0 ? `❤️ Healed +${data.hp_change} HP` : `💔 Took ${Math.abs(data.hp_change)} damage` }]);
+        if (typeof data.hp_current === 'number') setCharacter(prev => prev ? { ...prev, hp_current: data.hp_current } : prev);
+      }
       if (data.combat_trigger && data.enemies?.length > 0) {
         setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
         await startCombat(data.enemies);

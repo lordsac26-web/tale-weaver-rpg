@@ -216,6 +216,8 @@ Player Action: ${selectedChoice}
 ${skillCheckNote}
 
 Write the consequence narrative (2-3 paragraphs) reacting directly to the action and any skill check outcome. Then provide 4 new choices. Consider active conditions, reputation, environment (${session.season}, ${session.time_of_day}).${session.adult_mode ? ' Mature content permitted.' : ''}
+
+HIT POINTS: If the narrative heals the character (potion, spell, rest, divine blessing, etc.) set hp_change to a POSITIVE integer equal to the HP restored. If the narrative harms the character (trap, fall, environmental hazard, etc.) set hp_change to a NEGATIVE integer equal to the damage taken. If HP is unchanged, omit hp_change or set it to 0. The character currently has ${character?.hp_current ?? '?'}/${character?.hp_max ?? '?'} HP — never heal above max. Whatever number you narrate (e.g. "healed for 10 HP") MUST match hp_change exactly.
 ${combatNote}`;
 
     responseSchema = {
@@ -226,6 +228,7 @@ ${combatNote}`;
         combat_trigger:    { type: 'boolean' },
         enemies:           { type: 'array', items: enemyItemSchema },
         reputation_change: { type: 'number' },
+        hp_change:         { type: 'number', description: 'Integer change to the character HP from this scene. Positive = healing, negative = damage. Must match the amount narrated. 0 or omit if unchanged.' },
         xp_earned:         { type: 'number' },
         loot:              { type: 'array', items: { type: 'object' } },
         location_update:   { type: 'string' },
@@ -340,6 +343,16 @@ If it's a combat event, use the enemy schema with real monster stats.`;
       await base44.entities.Character.update(character.id, {
         xp: (character.xp || 0) + result.xp_earned
       });
+    }
+
+    // Apply narrative HP change (healing/damage described in the story) to the character.
+    // Clamp between 0 and hp_max so we never overheal or go negative.
+    if (result.hp_change && character && typeof result.hp_change === 'number') {
+      const newHp = Math.max(0, Math.min(character.hp_max || 0, (character.hp_current || 0) + result.hp_change));
+      if (newHp !== character.hp_current) {
+        await base44.entities.Character.update(character.id, { hp_current: newHp });
+        result.hp_current = newHp; // surface to frontend for immediate UI sync
+      }
     }
 
     // Validate combat trigger: if true, enemies must exist and be non-empty
