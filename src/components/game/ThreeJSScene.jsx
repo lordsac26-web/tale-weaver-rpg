@@ -17,10 +17,22 @@ export default function ThreeJSScene({ inCombat = false, season = 'Spring', time
     const scene = new THREE.Scene();
     sceneRef.current = scene;
     
+    // Size to the CONTAINER, not the window. Using window.innerHeight made the
+    // canvas as tall as the whole viewport inside a smaller frame, which forced
+    // the browser to scroll/jump whenever the scene re-mounted (e.g. combat start).
+    const getSize = () => {
+      const el = containerRef.current;
+      return {
+        w: el?.clientWidth || window.innerWidth,
+        h: el?.clientHeight || window.innerHeight,
+      };
+    };
+    const { w: initW, h: initH } = getSize();
+
     // Camera
     const camera = new THREE.PerspectiveCamera(
       75,
-      window.innerWidth / window.innerHeight,
+      initW / initH,
       0.1,
       1000
     );
@@ -32,8 +44,13 @@ export default function ThreeJSScene({ inCombat = false, season = 'Spring', time
       antialias: true,
       powerPreference: 'high-performance'
     });
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(initW, initH);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Force the canvas to fill its container via CSS instead of fixed pixel
+    // dimensions, so it can never exceed the frame and trigger a scroll.
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+    renderer.domElement.style.display = 'block';
     containerRef.current.appendChild(renderer.domElement);
 
     // Create atmospheric particles
@@ -159,11 +176,15 @@ export default function ThreeJSScene({ inCombat = false, season = 'Spring', time
 
     animate();
 
-    // Handle resize
+    // Handle resize — measure the container, not the window, and keep the
+    // canvas CSS-filling so it never overflows the frame.
     const handleResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+      const { w, h } = getSize();
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setSize(w, h, false);
+      renderer.domElement.style.width = '100%';
+      renderer.domElement.style.height = '100%';
     };
 
     window.addEventListener('resize', handleResize);
