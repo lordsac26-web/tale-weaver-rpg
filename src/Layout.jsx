@@ -7,33 +7,33 @@ export default function Layout({ children, currentPageName }) {
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;900&family=IM+Fell+English:ital@0;1&family=Cinzel+Decorative:wght@400;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');
 
         :root {
-          /* Tavern Palette */
-          --wood-deep:    #1a0e06;
-          --wood-dark:    #2a1608;
-          --wood-mid:     #3d2010;
-          --wood-light:   #5c3318;
-          --wood-plank:   #7a4520;
+          /* Tavern Palette — lightened for legibility */
+          --wood-deep:    #241406;
+          --wood-dark:    #38200c;
+          --wood-mid:     #4d2a12;
+          --wood-light:   #6e3f1d;
+          --wood-plank:   #8a5226;
 
-          --brass:        #b87333;
-          --brass-bright: #d4955a;
-          --brass-gold:   #e8b86d;
-          --brass-shine:  #f5d08a;
-          --brass-glow:   rgba(184,115,51,0.5);
+          --brass:        #c98a45;
+          --brass-bright: #e3a868;
+          --brass-gold:   #f2c87e;
+          --brass-shine:  #ffdc9a;
+          --brass-glow:   rgba(210,140,70,0.55);
 
-          --parchment:    #f0dfc0;
-          --parchment-mid:#dcc49a;
-          --parchment-dim:#b89a72;
+          --parchment:    #f8ecd6;
+          --parchment-mid:#e6d2ad;
+          --parchment-dim:#cbac82;
 
-          --ember:        #c0452a;
-          --ember-glow:   rgba(192,69,42,0.4);
-          --hearth:       #e8732a;
+          --ember:        #d4543a;
+          --ember-glow:   rgba(210,84,58,0.45);
+          --hearth:       #f0832f;
 
-          --arcane:       #7c3aed;
-          --arcane-glow:  rgba(124,58,237,0.35);
+          --arcane:       #9560f0;
+          --arcane-glow:  rgba(149,96,240,0.4);
 
-          --text-bright:  #f5dfc8;
-          --text-mid:     #d4b896;
-          --text-dim:     #9a7a58;
+          --text-bright:  #fbeed6;
+          --text-mid:     #e4c9a0;
+          --text-dim:     #b89770;
         }
 
         .tavern-root {
@@ -75,21 +75,21 @@ export default function Layout({ children, currentPageName }) {
 
         /* ── Tavern panels ── */
         .glass-panel {
-          background: linear-gradient(160deg, rgba(45,22,8,0.92), rgba(28,13,4,0.95));
-          border: 1px solid rgba(184,115,51,0.35);
+          background: linear-gradient(160deg, rgba(62,34,14,0.94), rgba(42,22,9,0.96));
+          border: 1px solid rgba(210,140,70,0.5);
           box-shadow:
             0 0 0 1px rgba(0,0,0,0.6),
-            inset 0 1px 0 rgba(232,184,109,0.12),
+            inset 0 1px 0 rgba(232,184,109,0.16),
             inset 0 -1px 0 rgba(0,0,0,0.4),
             0 8px 32px rgba(0,0,0,0.7);
         }
 
         .glass-panel-light {
-          background: linear-gradient(160deg, rgba(55,28,10,0.85), rgba(38,18,6,0.9));
-          border: 1px solid rgba(184,115,51,0.22);
+          background: linear-gradient(160deg, rgba(74,42,18,0.88), rgba(52,28,12,0.92));
+          border: 1px solid rgba(210,140,70,0.38);
           box-shadow:
             0 0 0 1px rgba(0,0,0,0.5),
-            inset 0 1px 0 rgba(232,184,109,0.08),
+            inset 0 1px 0 rgba(232,184,109,0.12),
             0 4px 16px rgba(0,0,0,0.6);
         }
 
@@ -130,8 +130,8 @@ export default function Layout({ children, currentPageName }) {
 
         /* ── Brass button ── */
         .btn-fantasy {
-          background: linear-gradient(160deg, #5c3318, #3d2010);
-          border: 1px solid rgba(212,149,90,0.5);
+          background: linear-gradient(160deg, #7a4824, #543018);
+          border: 1px solid rgba(232,170,110,0.65);
           color: var(--parchment);
           font-family: 'Cinzel', serif;
           letter-spacing: 0.06em;
@@ -193,14 +193,14 @@ export default function Layout({ children, currentPageName }) {
 
         /* ── Stat box ── */
         .stat-box {
-          background: linear-gradient(160deg, rgba(30,15,5,0.9), rgba(20,10,3,0.95));
-          border: 1px solid rgba(184,115,51,0.22);
-          box-shadow: inset 0 2px 8px rgba(0,0,0,0.65), 0 0 0 1px rgba(0,0,0,0.4);
+          background: linear-gradient(160deg, rgba(48,26,11,0.92), rgba(34,18,8,0.96));
+          border: 1px solid rgba(200,135,70,0.4);
+          box-shadow: inset 0 2px 8px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.4);
           transition: all 0.2s ease;
         }
         .stat-box:hover {
-          border-color: rgba(212,149,90,0.45);
-          box-shadow: inset 0 2px 8px rgba(0,0,0,0.55), 0 0 14px rgba(184,115,51,0.1);
+          border-color: rgba(232,170,110,0.6);
+          box-shadow: inset 0 2px 8px rgba(0,0,0,0.45), 0 0 14px rgba(210,140,70,0.18);
         }
 
         /* ── Text glows ── */
@@ -315,32 +315,32 @@ export default function Layout({ children, currentPageName }) {
 
         /* ── Badges ── */
         .badge-gold {
-          background: rgba(92,51,24,0.85);
-          border: 1px solid rgba(212,149,90,0.45);
-          color: #f0d090;
+          background: rgba(112,66,32,0.9);
+          border: 1px solid rgba(232,170,110,0.6);
+          color: #ffe0a8;
           font-family: 'Cinzel', serif;
           font-size: 0.62rem;
           letter-spacing: 0.06em;
           text-shadow: 0 1px 2px rgba(0,0,0,0.8);
         }
         .badge-blood {
-          background: rgba(80,12,8,0.85);
-          border: 1px solid rgba(200,65,40,0.45);
-          color: #ffbba0;
+          background: rgba(110,22,14,0.9);
+          border: 1px solid rgba(230,90,60,0.6);
+          color: #ffcdb8;
           font-family: 'Cinzel', serif;
           font-size: 0.62rem;
         }
         .badge-arcane {
-          background: rgba(48,18,80,0.85);
-          border: 1px solid rgba(150,90,230,0.45);
-          color: #dfc8ff;
+          background: rgba(64,26,108,0.9);
+          border: 1px solid rgba(180,120,250,0.6);
+          color: #ead8ff;
           font-family: 'Cinzel', serif;
           font-size: 0.62rem;
         }
         .badge-green {
-          background: rgba(8,45,18,0.85);
-          border: 1px solid rgba(40,170,80,0.45);
-          color: #90f4b0;
+          background: rgba(12,62,26,0.9);
+          border: 1px solid rgba(60,200,100,0.6);
+          color: #a8f8c0;
           font-size: 0.62rem;
         }
 
@@ -376,7 +376,7 @@ export default function Layout({ children, currentPageName }) {
           font-family: 'Cinzel', serif;
           font-size: 0.6rem;
           letter-spacing: 0.18em;
-          color: rgba(212,149,90,0.6);
+          color: rgba(232,178,120,0.92);
           text-transform: uppercase;
           text-shadow: 0 0 10px rgba(184,115,51,0.2);
         }
