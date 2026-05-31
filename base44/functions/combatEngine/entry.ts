@@ -410,12 +410,11 @@ Deno.serve(async (req) => {
   if (action === 'player_attack') {
     const { target_id, weapon, spell, modifiers = {} } = payload;
     const combatLog = await base44.entities.CombatLog.get(combat_id);
+    // User-scoped fetch: RLS only returns the record if the user may read (owns) it,
+    // so a successful fetch proves ownership. (Manual created_by/email compare was
+    // fragile and caused false 403s for the legitimate owner.)
     const character = await base44.entities.Character.get(character_id);
-
-    // ── SECURITY: verify the authenticated user owns this character ──────────
-    if (character.created_by !== user.email) {
-      return Response.json({ error: 'Forbidden: character does not belong to this user.' }, { status: 403 });
-    }
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
 
     const combatants = [...combatLog.combatants];
     const target = combatants.find(c => c.id === target_id);
@@ -1891,9 +1890,7 @@ Deno.serve(async (req) => {
   // Nat 1  = counts as 2 failures.
   if (action === 'death_save') {
     const character = await base44.entities.Character.get(character_id);
-    if (character.created_by !== user.email) {
-      return Response.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
     const combatLog = await base44.entities.CombatLog.get(combat_id);
     const combatants = [...combatLog.combatants];
     const playerCombatant = combatants.find(c => c.type === 'player');
