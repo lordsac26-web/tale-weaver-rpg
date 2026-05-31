@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
-import { Zap, Shield, Flame, Sparkles, Swords, ChevronDown, ChevronUp, AlertCircle, Crosshair } from 'lucide-react';
+import { Zap, Shield, Sparkles, Swords, ChevronDown, ChevronUp, AlertCircle, Crosshair } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-// D&D 5e Barbarian rage uses per level (PHB table)
-const RAGE_USES_BY_LEVEL = [2,2,3,3,3,4,4,4,4,4,4,5,5,5,5,6,6,6,6,Infinity];
 
 export default function CombatModifiersPanel({ character, onToggleModifier, activeModifiers = {} }) {
   const [expanded, setExpanded] = useState(false);
@@ -16,26 +13,8 @@ export default function CombatModifiersPanel({ character, onToggleModifier, acti
 
   const availableModifiers = [];
 
-  // ── Barbarian: Rage ─────────────────────────────────────────────────────────
-  if (charClass === 'Barbarian') {
-    const rageDamage  = level < 9 ? 2 : level < 16 ? 3 : 4;
-    const maxRageUses = RAGE_USES_BY_LEVEL[level - 1] ?? 2;
-    const usedRages   = character?.rage_uses_spent || 0;
-    const ragesLeft   = maxRageUses === Infinity ? '∞' : Math.max(0, maxRageUses - usedRages);
-    const outOfRages  = maxRageUses !== Infinity && usedRages >= maxRageUses;
-
-    availableModifiers.push({
-      id: 'rage',
-      name: 'Rage',
-      icon: <Flame className="w-3.5 h-3.5" />,
-      color: '#fca5a5',
-      effect: outOfRages
-        ? 'No rages remaining — recharges on long rest'
-        : `+${rageDamage} melee dmg, B/P/S resist — ${ragesLeft}/${maxRageUses === Infinity ? '∞' : maxRageUses} remaining`,
-      description: `Bonus action. +${rageDamage} melee damage, resistance to bludgeoning/piercing/slashing. Advantage on STR checks/saves. Cannot cast or concentrate on spells. Ends if you don't attack or take damage for a turn. Recharges on long rest.`,
-      disabled: outOfRages,
-    });
-  }
+  // NOTE: Barbarian Rage & Reckless Attack are handled in ClassAbilitiesPanel
+  // (they toggle the same combatModifiers state), so they are intentionally not duplicated here.
 
   // ── Fighter: Action Surge (level 2+, once per short rest) ───────────────────
   if (charClass === 'Fighter' && level >= 2) {

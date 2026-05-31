@@ -327,6 +327,8 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                 combat={combat}
                 worldState={world_state}
                 onCharacterUpdate={onCharacterUpdate}
+                activeModifiers={combatModifiers}
+                onToggleModifier={(id) => setCombatModifiers(prev => ({ ...prev, [id]: !prev[id] }))}
                 onMessage={(msg) => setAbilityMessages(prev => [...prev.slice(-2), { id: Date.now(), text: msg }])}
                 onAbilityUsed={async (id, data) => {
                   // Action Surge: grant extra action this turn — server-authoritative.

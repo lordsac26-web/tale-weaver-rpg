@@ -11,6 +11,7 @@ const TYPE_COLOR = { action: '#fde68a', bonus_action: '#86efac', reaction: '#93c
 export default function AbilityRow({ ability }) {
   const isClickable = ability.onUse && ability.available && !ability.used;
   const isPassive = ability.type === 'passive';
+  const isActive = !!ability.active; // toggle currently ON (Rage, Reckless Attack)
 
   return (
     <motion.button
@@ -23,6 +24,11 @@ export default function AbilityRow({ ability }) {
         border: '1px solid rgba(60,45,20,0.15)',
         opacity: 0.45,
         cursor: 'not-allowed',
+      } : isActive ? {
+        background: ability.activeBg || ability.bgColor,
+        border: `1px solid ${ability.color}`,
+        boxShadow: `0 0 12px ${ability.color}66`,
+        cursor: 'pointer',
       } : isPassive ? {
         background: 'rgba(15,12,5,0.5)',
         border: `1px solid ${ability.borderColor}`,
@@ -33,8 +39,8 @@ export default function AbilityRow({ ability }) {
         boxShadow: `0 0 8px ${ability.borderColor}`,
         cursor: 'pointer',
       }}
-      onMouseEnter={e => { if (isClickable) e.currentTarget.style.background = ability.activeBg || ability.bgColor; }}
-      onMouseLeave={e => { if (isClickable) e.currentTarget.style.background = ability.bgColor; }}
+      onMouseEnter={e => { if (isClickable && !isActive) e.currentTarget.style.background = ability.activeBg || ability.bgColor; }}
+      onMouseLeave={e => { if (isClickable && !isActive) e.currentTarget.style.background = ability.bgColor; }}
     >
       {/* Icon */}
       <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
@@ -70,19 +76,26 @@ export default function AbilityRow({ ability }) {
         </div>
       </div>
 
-      {/* Status dot */}
-      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-        style={ability.used ? {
-          background: 'rgba(60,45,20,0.3)',
-          border: '1px solid rgba(80,60,25,0.2)',
-        } : isPassive ? {
-          background: ability.color,
-          boxShadow: `0 0 4px ${ability.color}88`,
-          opacity: 0.5,
-        } : {
-          background: ability.color,
-          boxShadow: `0 0 6px ${ability.color}99`,
-        }} />
+      {/* Status dot / ON badge */}
+      {isActive ? (
+        <span className="px-1.5 py-0.5 rounded-full flex-shrink-0 font-fantasy"
+          style={{ background: `${ability.color}22`, border: `1px solid ${ability.color}`, color: ability.color, fontSize: '0.55rem', letterSpacing: '0.06em' }}>
+          ON
+        </span>
+      ) : (
+        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+          style={ability.used ? {
+            background: 'rgba(60,45,20,0.3)',
+            border: '1px solid rgba(80,60,25,0.2)',
+          } : isPassive ? {
+            background: ability.color,
+            boxShadow: `0 0 4px ${ability.color}88`,
+            opacity: 0.5,
+          } : {
+            background: ability.color,
+            boxShadow: `0 0 6px ${ability.color}99`,
+          }} />
+      )}
     </motion.button>
   );
 }

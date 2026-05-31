@@ -895,6 +895,10 @@ Deno.serve(async (req) => {
         const rageDamage = level < 9 ? 2 : level < 16 ? 3 : 4;
         damageBonus += rageDamage;
       }
+      // Reckless Attack (PHB p.48): advantage on melee STR attacks this turn
+      if (modifiers.reckless_attack && character.class === 'Barbarian' && !isRanged && !modifiers.disadvantage) {
+        modifiers.advantage = true; attackRoll2 = rollD20(); attackRoll = Math.max(attackRoll1, attackRoll2); isCritical = attackRoll === 20; isMiss = attackRoll === 1;
+      }
 
       // Rogue Sneak Attack (PHB p.96) — server-authoritative validation:
       //  • once per TURN (tracked in world_state.sneak_attack_used)
