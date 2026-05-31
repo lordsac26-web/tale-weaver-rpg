@@ -4,19 +4,13 @@ import { CONDITIONS } from './gameData';
 import { motion } from 'framer-motion';
 import { getSpellSlotsForLevel } from './spellData';
 import { ConditionTooltip } from './GameTooltip';
+import XPBar from './XPBar';
  
 export default function HUD({ character, session }) {
   if (!character) return null;
  
   const hpPct = character.hp_max > 0 ? Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100)) : 0;
   const hpBarClass = hpPct > 60 ? 'hp-bar-high' : hpPct > 30 ? 'hp-bar-mid' : 'hp-bar-low';
- 
-  const xpThresholds = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
-  const currentXP = character.xp || 0;
-  const level = character.level || 1;
-  const xpForNext = xpThresholds[level] || xpThresholds[xpThresholds.length - 1];
-  const xpForCurrent = xpThresholds[level - 1] || 0;
-  const xpPct = xpForNext > xpForCurrent ? Math.min(100, ((currentXP - xpForCurrent) / (xpForNext - xpForCurrent)) * 100) : 100;
  
   const initials = character.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
  
@@ -91,20 +85,8 @@ export default function HUD({ character, session }) {
         </div>
  
         {/* XP Bar */}
-        <div className="hidden sm:flex items-center gap-2">
-          <Star className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#d97706' }} />
-          <div className="w-24">
-            <div className="flex justify-between text-xs mb-1">
-              <span style={{ color: 'rgba(201,169,110,0.8)', fontFamily: 'Cinzel, serif', fontSize: '0.65rem' }}>{currentXP} XP</span>
-            </div>
-            <div className="h-1.5 rounded-full overflow-hidden neuro-inset">
-              <motion.div
-                className="h-full rounded-full xp-bar"
-                animate={{ width: `${xpPct}%` }}
-                transition={{ duration: 0.7, ease: 'easeOut' }}
-              />
-            </div>
-          </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <XPBar character={character} compact />
         </div>
  
         {/* AC Badge */}
