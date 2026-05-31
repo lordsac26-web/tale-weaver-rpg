@@ -260,6 +260,20 @@ Deno.serve(async (req) => {
     return { nextIndex: ni, nextRound: nr, actionsRemaining: Math.max(0, ar), worldState: ws };
   };
 
+  // HELPER: resetTurnWorldState — produce a fresh world_state with all per-turn flags
+  // cleared (action/bonus/reaction budgets, sneak-attack, loading weapon). Pass `extra`
+  // to set turn-specific flags (e.g. { player_dodging: true }). Used by turn-ending
+  // actions: dodge, next_turn, enemy_turn, and death_save.
+  const resetTurnWorldState = (combatLog, extra = {}) => ({
+    ...(combatLog.world_state || {}),
+    actions_used_this_turn: 0,
+    bonus_action_used: false,
+    reaction_used: false,
+    sneak_attack_used: false,
+    loading_weapon_fired: false,
+    ...extra,
+  });
+
   // HELPER: finalizeAndPersistCombat — determine victory/defeat/ongoing, persist the
   // CombatLog, clear the session combat flag on end, and award victory XP exactly once.
   const finalizeAndPersistCombat = async (cid, sid, updatedCombatants, updatedLog,
@@ -1316,7 +1330,7 @@ Deno.serve(async (req) => {
         combatants: updatedSkip,
         log_entries: [...(combatLog.log_entries || []), { round: combatLog.round, actor: currentCombatant.name, action: 'incapacitated', text: skipText }],
         current_turn_index: niSk, round: nrSk,
-        world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0 },
+        world_state: resetTurnWorldState(combatLog),
       });
       return Response.json({ skipped_incapacitated: true, log_entry: { text: skipText }, next_turn_index: niSk, round: nrSk });
     }
@@ -1337,7 +1351,7 @@ Deno.serve(async (req) => {
       const hitDowned = !(atkRoll === 1) && (isCrit || (atkRoll + atkBonus) >= player.ac);
 
       let downedLog = `${currentCombatant.name} strikes at the fallen ${player.name}`;
-      const ws0 = { ...(combatLog.world_state || {}), actions_used_this_turn: 0 };
+      const ws0 = resetTurnWorldState(combatLog);
 
       if (hitDowned) {
         // Melee hit at 0 HP = auto-crit = 2 failures; ranged/normal hit = 1 failure
@@ -1527,7 +1541,7 @@ Deno.serve(async (req) => {
 
     // Carry over world_state, clear concentration if broken.
     // player_dodging expires once enemies have acted (it only lasts until the player's next turn).
-    const newWS = { ...(combatLog.world_state || {}), actions_used_this_turn: 0, player_dodging: false };
+    const newWS = resetTurnWorldState(combatLog, { player_dodging: false });
     const concentrationSpellCheck = combatLog.world_state?.concentration_spell;
     if (concentrationSpellCheck && finalDamage > 0) {
       const dc = Math.max(10, Math.floor(finalDamage / 2));
@@ -1752,7 +1766,7 @@ Deno.serve(async (req) => {
       log_entries: [...(combatLog.log_entries || []), logEntry],
       current_turn_index: nextIndex,
       round: nextRound,
-      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, sneak_attack_used: false, loading_weapon_fired: false, player_dodging: true }
+      world_state: resetTurnWorldState(combatLog, { player_dodging: true })
     });
     return Response.json({ success: true, log_entry: logEntry, next_turn_index: nextIndex, round: nextRound });
   }
@@ -1768,7 +1782,7 @@ Deno.serve(async (req) => {
     await base44.entities.CombatLog.update(combat_id, {
       current_turn_index: nextIndex,
       round: nextRound,
-      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, sneak_attack_used: false, loading_weapon_fired: false }
+      world_state: resetTurnWorldState(combatLog)
     });
     return Response.json({ next_turn_index: nextIndex, round: nextRound, current_combatant: combatants[nextIndex] });
   }
@@ -1866,7 +1880,7 @@ Deno.serve(async (req) => {
       log_entries: [...(combatLog.log_entries || []), logEntry],
       current_turn_index: nextIndex,
       round: nextRound,
-      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false },
+      world_state: resetTurnWorldState(combatLog),
     });
 
     return Response.json({
