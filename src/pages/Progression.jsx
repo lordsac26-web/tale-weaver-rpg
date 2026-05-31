@@ -84,7 +84,7 @@ export default function Progression() {
         {characters.length === 0 ? (
           <div className="text-center py-16">
             <User className="w-12 h-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--brass-gold)' }} />
-            <p className="font-fantasy text-sm" style={{ color: 'rgba(201,169,110,0.35)' }}>
+            <p className="font-fantasy text-sm" style={{ color: 'rgba(205,170,120,0.8)' }}>
               No characters yet. Create one to begin!
             </p>
           </div>
@@ -135,7 +135,7 @@ export default function Progression() {
                         <h3 className="font-fantasy font-bold text-sm" style={{ color: 'var(--parchment)' }}>
                           {char.name}
                         </h3>
-                        <p className="text-xs" style={{ color: 'rgba(212,149,90,0.6)', fontFamily: 'EB Garamond, serif' }}>
+                        <p className="text-xs" style={{ color: 'rgba(225,165,105,0.9)', fontFamily: 'EB Garamond, serif' }}>
                           {char.race} {char.class}{char.subclass ? ` · ${char.subclass}` : ''}
                         </p>
                       </div>
@@ -153,7 +153,7 @@ export default function Progression() {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-1.5">
                           <Star className="w-3.5 h-3.5" style={{ color: '#d97706' }} />
-                          <span className="text-xs font-fantasy tracking-widest" style={{ color: 'rgba(201,169,110,0.5)', fontSize: '0.6rem' }}>
+                          <span className="text-xs font-fantasy tracking-widest" style={{ color: 'rgba(215,178,125,0.85)', fontSize: '0.6rem' }}>
                             EXPERIENCE
                           </span>
                         </div>
@@ -170,7 +170,7 @@ export default function Progression() {
                           style={{ boxShadow: '0 0 8px rgba(184,115,51,0.3)' }} />
                       </div>
                       {currentLevel < 20 && (
-                        <div className="text-xs mt-1.5" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>
+                        <div className="text-xs mt-1.5" style={{ color: 'rgba(205,170,120,0.82)', fontFamily: 'EB Garamond, serif' }}>
                           {xpForNext - currentXP} XP needed for level {currentLevel + 1}
                         </div>
                       )}
@@ -183,28 +183,28 @@ export default function Progression() {
                         <div className="font-fantasy font-bold text-xs" style={{ color: '#fca5a5' }}>
                           {char.hp_current}/{char.hp_max}
                         </div>
-                        <div className="text-xs" style={{ color: 'rgba(180,140,90,0.35)', fontSize: '0.6rem' }}>HP</div>
+                        <div className="text-xs" style={{ color: 'rgba(202,168,118,0.8)', fontSize: '0.6rem' }}>HP</div>
                       </div>
                       <div className="stat-box rounded-lg p-2 text-center">
                         <Shield className="w-3 h-3 mx-auto mb-1" style={{ color: '#93c5fd' }} />
                         <div className="font-fantasy font-bold text-xs" style={{ color: '#93c5fd' }}>
                           {char.armor_class}
                         </div>
-                        <div className="text-xs" style={{ color: 'rgba(180,140,90,0.35)', fontSize: '0.6rem' }}>AC</div>
+                        <div className="text-xs" style={{ color: 'rgba(202,168,118,0.8)', fontSize: '0.6rem' }}>AC</div>
                       </div>
                       <div className="stat-box rounded-lg p-2 text-center">
                         <Sparkles className="w-3 h-3 mx-auto mb-1" style={{ color: '#a78bfa' }} />
                         <div className="font-fantasy font-bold text-xs" style={{ color: '#a78bfa' }}>
                           +{profBonus}
                         </div>
-                        <div className="text-xs" style={{ color: 'rgba(180,140,90,0.35)', fontSize: '0.6rem' }}>Prof</div>
+                        <div className="text-xs" style={{ color: 'rgba(202,168,118,0.8)', fontSize: '0.6rem' }}>Prof</div>
                       </div>
                       <div className="stat-box rounded-lg p-2 text-center">
                         <Zap className="w-3 h-3 mx-auto mb-1" style={{ color: '#fbbf24' }} />
                         <div className="font-fantasy font-bold text-xs" style={{ color: '#fbbf24' }}>
                           {char.speed}
                         </div>
-                        <div className="text-xs" style={{ color: 'rgba(180,140,90,0.35)', fontSize: '0.6rem' }}>Speed</div>
+                        <div className="text-xs" style={{ color: 'rgba(202,168,118,0.8)', fontSize: '0.6rem' }}>Speed</div>
                       </div>
                     </div>
                     
@@ -257,7 +257,7 @@ export default function Progression() {
                       </div>
                     ) : (
                       <div className="text-center py-2">
-                        <div className="text-xs" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>
+                        <div className="text-xs" style={{ color: 'rgba(205,170,120,0.82)', fontFamily: 'EB Garamond, serif' }}>
                           Keep adventuring to gain more XP
                         </div>
                       </div>

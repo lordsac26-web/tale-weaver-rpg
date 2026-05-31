@@ -239,7 +239,7 @@ export default function Inventory() {
                   <div key={slot} className="stat-box rounded-xl p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-fantasy tracking-wider uppercase"
-                        style={{ color: 'rgba(201,169,110,0.5)' }}>
+                        style={{ color: 'rgba(215,178,125,0.85)' }}>
                         {slot}
                       </span>
                       {item && (
@@ -272,7 +272,7 @@ export default function Inventory() {
                           </p>
                         )}
                         {item.description && (
-                          <p className="text-xs mt-1 italic" style={{ color: 'rgba(201,169,110,0.4)', fontFamily: 'EB Garamond, serif' }}>
+                          <p className="text-xs mt-1 italic" style={{ color: 'rgba(208,172,122,0.8)', fontFamily: 'EB Garamond, serif' }}>
                             {item.description.slice(0, 80)}...
                           </p>
                         )}
@@ -291,13 +291,13 @@ export default function Inventory() {
             <div className="mt-6 pt-4" style={{ borderTop: '1px solid rgba(201,169,110,0.15)' }}>
               <div className="grid grid-cols-2 gap-3">
                 <div className="text-center p-2 rounded-lg" style={{ background: 'rgba(80,20,20,0.3)' }}>
-                  <p className="text-xs" style={{ color: 'rgba(252,165,165,0.5)' }}>Attack Bonus</p>
+                  <p className="text-xs" style={{ color: 'rgba(252,180,180,0.85)' }}>Attack Bonus</p>
                   <p className="font-fantasy font-bold text-lg" style={{ color: '#fca5a5' }}>
                     +{(equipped.weapon?.attack_bonus || 0) + Math.floor(((character.strength || 10) - 10) / 2)}
                   </p>
                 </div>
                 <div className="text-center p-2 rounded-lg" style={{ background: 'rgba(20,60,140,0.3)' }}>
-                  <p className="text-xs" style={{ color: 'rgba(147,197,253,0.5)' }}>Armor Class</p>
+                  <p className="text-xs" style={{ color: 'rgba(170,205,255,0.85)' }}>Armor Class</p>
                   <p className="font-fantasy font-bold text-lg" style={{ color: '#93c5fd' }}>
                     {character.armor_class || 10}
                   </p>
@@ -313,7 +313,7 @@ export default function Inventory() {
                 style={{ color: '#f0c040' }}>
                 <Package className="w-5 h-5" />
                 Backpack
-                <span className="text-sm font-normal" style={{ color: 'rgba(201,169,110,0.5)' }}>
+                <span className="text-sm font-normal" style={{ color: 'rgba(215,178,125,0.85)' }}>
                   ({inventory.length} items)
                 </span>
               </h2>
@@ -372,7 +372,7 @@ export default function Inventory() {
               {filteredInventory.length === 0 ? (
                 <div className="col-span-2 text-center py-12">
                   <Package className="w-12 h-12 mx-auto mb-3" style={{ color: 'rgba(201,169,110,0.2)' }} />
-                  <p className="font-fantasy text-sm" style={{ color: 'rgba(201,169,110,0.4)' }}>
+                  <p className="font-fantasy text-sm" style={{ color: 'rgba(210,175,120,0.82)' }}>
                     {searchQuery ? 'No items match your search' : 'Your backpack is empty'}
                   </p>
                 </div>
@@ -411,15 +411,15 @@ export default function Inventory() {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs mb-2 line-clamp-2" style={{ color: 'rgba(232,213,183,0.6)', fontFamily: 'EB Garamond, serif' }}>
+                      <p className="text-xs mb-2 line-clamp-2" style={{ color: 'rgba(235,217,187,0.85)', fontFamily: 'EB Garamond, serif' }}>
                         {item.description || 'No description'}
                       </p>
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-fantasy" style={{ color: 'rgba(201,169,110,0.4)' }}>
+                        <span className="font-fantasy" style={{ color: 'rgba(208,172,122,0.8)' }}>
                           {item.rarity || 'common'}
                         </span>
                         {item.weight > 0 && (
-                          <span style={{ color: 'rgba(201,169,110,0.4)' }}>
+                          <span style={{ color: 'rgba(208,172,122,0.8)' }}>
                             {item.weight * (item.quantity || 1)} lbs
                           </span>
                         )}
@@ -474,7 +474,7 @@ export default function Inventory() {
                     <span className="text-xs font-fantasy px-2 py-0.5 rounded-full badge-gold">
                       {selectedItem.rarity || 'common'}
                     </span>
-                    <span className="text-xs" style={{ color: 'rgba(201,169,110,0.4)' }}>
+                    <span className="text-xs" style={{ color: 'rgba(210,175,120,0.82)' }}>
                       {selectedItem.category || 'misc'}
                     </span>
                   </div>
@@ -514,7 +514,7 @@ export default function Inventory() {
               {/* Description */}
               {selectedItem.description && (
                 <div className="mb-4 p-3 rounded-lg neuro-inset">
-                  <p className="text-sm leading-relaxed" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
+                  <p className="text-sm leading-relaxed" style={{ color: 'rgba(236,218,188,0.92)', fontFamily: 'EB Garamond, serif' }}>
                     {selectedItem.description}
                   </p>
                 </div>

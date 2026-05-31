@@ -68,7 +68,7 @@ export default function Encyclopedia() {
               <button key={t.id} onClick={() => setActiveTab(t.id)}
                 className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-fantasy whitespace-nowrap transition-all border-b-2"
                 style={{
-                  color: active ? t.color : 'rgba(201,169,110,0.4)',
+                  color: active ? t.color : 'rgba(220,185,135,0.85)',
                   borderColor: active ? t.color : 'transparent',
                   background: 'transparent',
                 }}>

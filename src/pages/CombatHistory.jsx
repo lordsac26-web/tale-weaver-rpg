@@ -93,7 +93,7 @@ export default function CombatHistory() {
         </button>
         <Sword className="w-4 h-4" style={{ color: 'var(--brass-gold)' }} />
         <h1 className="font-fantasy font-bold text-lg flex-1" style={{ color: 'var(--brass-gold)' }}>Combat History</h1>
-        <span className="text-xs font-fantasy" style={{ color: 'rgba(212,149,90,0.45)' }}>
+        <span className="text-xs font-fantasy" style={{ color: 'rgba(220,160,100,0.85)' }}>
           {filtered.length} / {logs.length} encounters
         </span>
       </div>
@@ -113,7 +113,7 @@ export default function CombatHistory() {
               <div key={label} className="rounded-xl p-4 text-center glass-panel">
                 <Icon className="w-4 h-4 mx-auto mb-1.5" style={{ color }} />
                 <div className="font-fantasy font-bold text-xl" style={{ color }}>{value}</div>
-                <div className="text-xs" style={{ color: 'rgba(212,149,90,0.5)', fontFamily: 'EB Garamond, serif' }}>{label}</div>
+                <div className="text-xs" style={{ color: 'rgba(220,160,100,0.85)', fontFamily: 'EB Garamond, serif' }}>{label}</div>
               </div>
             ))}
           </motion.div>
@@ -274,17 +274,17 @@ function EncounterCard({ log, index, expanded, onToggle, onNavigate }) {
           </div>
           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
             {log.session_title && (
-              <span className="text-xs" style={{ color: 'rgba(212,149,90,0.55)', fontFamily: 'EB Garamond, serif' }}>
+              <span className="text-xs" style={{ color: 'rgba(222,162,102,0.88)', fontFamily: 'EB Garamond, serif' }}>
                 📖 {log.session_title}
               </span>
             )}
             {log.location && (
-              <span className="text-xs" style={{ color: 'rgba(180,160,120,0.5)', fontFamily: 'EB Garamond, serif' }}>
+              <span className="text-xs" style={{ color: 'rgba(208,188,148,0.85)', fontFamily: 'EB Garamond, serif' }}>
                 📍 {log.location}
               </span>
             )}
             {log.character_name && (
-              <span className="text-xs" style={{ color: 'rgba(180,160,120,0.45)', fontFamily: 'EB Garamond, serif' }}>
+              <span className="text-xs" style={{ color: 'rgba(208,188,148,0.85)', fontFamily: 'EB Garamond, serif' }}>
                 ⚔️ {log.character_name}
               </span>
             )}
@@ -395,7 +395,7 @@ function EncounterCard({ log, index, expanded, onToggle, onNavigate }) {
                   <p className="tavern-section-label mb-2">Battle Summary ({log.log_entries.length} actions)</p>
                   <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
                     {log.log_entries.slice(-6).map((entry, i) => (
-                      <p key={i} className="text-xs font-serif" style={{ color: 'rgba(212,180,120,0.6)' }}>
+                      <p key={i} className="text-xs font-serif" style={{ color: 'rgba(222,190,135,0.88)' }}>
                         • {entry.text || JSON.stringify(entry)}
                       </p>
                     ))}

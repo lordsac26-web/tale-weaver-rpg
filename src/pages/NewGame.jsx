@@ -89,12 +89,12 @@ export default function NewGame() {
                       : 'border-slate-700/50 bg-slate-800/30 hover:border-amber-700/50'
                   }`}>
                   <div className="font-bold text-amber-200">{char.name}</div>
-                  <div className="text-amber-400/60 text-sm">Lv.{char.level} {char.race} {char.class}</div>
-                  <div className="text-slate-400 text-xs mt-1">HP: {char.hp_current}/{char.hp_max} · AC: {char.armor_class}</div>
+                  <div className="text-amber-300/90 text-sm">Lv.{char.level} {char.race} {char.class}</div>
+                  <div className="text-slate-300 text-xs mt-1">HP: {char.hp_current}/{char.hp_max} · AC: {char.armor_class}</div>
                 </button>
               ))}
               {characters.length === 0 && (
-                <div className="text-slate-500 col-span-2 text-center py-4">
+                <div className="text-slate-300 col-span-2 text-center py-4">
                   No characters yet. <button className="text-amber-400 underline" onClick={() => navigate(createPageUrl('CharacterCreation'))}>Create one first.</button>
                 </div>
               )}
@@ -113,7 +113,7 @@ export default function NewGame() {
             <div className="flex flex-wrap gap-2">
               {SETTINGS.map(s => (
                 <button key={s} onClick={() => setSetting(s)}
-                  className={`px-4 py-2 rounded-lg text-sm border transition-all ${setting === s ? 'border-purple-500 bg-purple-900/30 text-purple-200' : 'border-slate-700/50 text-slate-400 hover:border-purple-700/50'}`}>
+                  className={`px-4 py-2 rounded-lg text-sm border transition-all ${setting === s ? 'border-purple-500 bg-purple-900/30 text-purple-200' : 'border-slate-700/50 text-slate-300 hover:border-purple-700/50'}`}>
                   {s}
                 </button>
               ))}
@@ -124,22 +124,22 @@ export default function NewGame() {
           <Section title="World State" icon="🌤️">
             <div className="grid grid-cols-2 gap-6">
               <div>
-                <label className="text-amber-400/60 text-xs mb-2 block">Season</label>
+                <label className="text-amber-300/90 text-xs mb-2 block">Season</label>
                 <div className="flex flex-wrap gap-2">
                   {SEASONS.map(s => (
                     <button key={s} onClick={() => setSeason(s)}
-                      className={`px-3 py-1 rounded-lg text-xs border transition-all ${season === s ? 'border-amber-500 bg-amber-900/30 text-amber-200' : 'border-slate-700/50 text-slate-400'}`}>
+                      className={`px-3 py-1 rounded-lg text-xs border transition-all ${season === s ? 'border-amber-500 bg-amber-900/30 text-amber-200' : 'border-slate-700/50 text-slate-300'}`}>
                       {s}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="text-amber-400/60 text-xs mb-2 block">Time of Day</label>
+                <label className="text-amber-300/90 text-xs mb-2 block">Time of Day</label>
                 <div className="flex flex-wrap gap-2">
                   {TIMES.map(t => (
                     <button key={t} onClick={() => setTimeOfDay(t)}
-                      className={`px-3 py-1 rounded-lg text-xs border transition-all ${timeOfDay === t ? 'border-blue-500 bg-blue-900/30 text-blue-200' : 'border-slate-700/50 text-slate-400'}`}>
+                      className={`px-3 py-1 rounded-lg text-xs border transition-all ${timeOfDay === t ? 'border-blue-500 bg-blue-900/30 text-blue-200' : 'border-slate-700/50 text-slate-300'}`}>
                       {t}
                     </button>
                   ))}
@@ -169,7 +169,7 @@ export default function NewGame() {
               </div>
               <div>
                 <div className="font-medium text-amber-200">18+ Mature Mode</div>
-                <div className="text-slate-400 text-xs">Enables stronger language, graphic violence, and adult themes</div>
+                <div className="text-slate-300 text-xs">Enables stronger language, graphic violence, and adult themes</div>
               </div>
             </button>
           </Section>

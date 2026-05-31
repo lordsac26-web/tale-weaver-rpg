@@ -812,7 +812,7 @@ export default function Game() {
           style={{ border: '2px solid rgba(201,169,110,0.3)', boxShadow: '0 0 30px rgba(201,169,110,0.1)' }}>
           <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#c9a96e' }} />
         </div>
-        <p className="font-fantasy text-sm tracking-widest" style={{ color: 'rgba(201,169,110,0.5)' }}>Preparing your world...</p>
+        <p className="font-fantasy text-sm tracking-widest" style={{ color: 'rgba(220,190,140,0.85)' }}>Preparing your world...</p>
       </div>
     </div>
   );
@@ -838,7 +838,7 @@ export default function Game() {
           onMouseLeave={e => e.currentTarget.style.color = 'rgba(201,169,110,0.5)'}>
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <span className="text-sm italic truncate min-w-0 flex-shrink" style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'IM Fell English, serif' }}>
+        <span className="text-sm italic truncate min-w-0 flex-shrink" style={{ color: 'rgba(222,192,142,0.9)', fontFamily: 'IM Fell English, serif' }}>
           {session?.title || 'Adventure'}
         </span>
 
@@ -923,7 +923,7 @@ export default function Game() {
                   <h2 className="text-3xl font-fantasy font-bold mb-5 text-glow-gold" style={{ color: '#f0c040' }}>
                     Your Adventure Awaits
                   </h2>
-                  <p className="mb-8 leading-relaxed" style={{ color: 'rgba(232,213,183,0.65)', fontFamily: 'IM Fell English, serif', fontSize: '1.1rem' }}>
+                  <p className="mb-8 leading-relaxed" style={{ color: 'rgba(238,222,196,0.95)', fontFamily: 'IM Fell English, serif', fontSize: '1.1rem' }}>
                     {session?.story_seed || 'The realm is full of mystery and danger. Your legend begins now.'}
                   </p>
                   <motion.button onClick={startAdventure} disabled={storyLoading}
@@ -1074,7 +1074,7 @@ export default function Game() {
             className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full"
             style={{ background: 'rgba(10,6,3,0.92)', border: '1px solid rgba(201,169,110,0.3)' }}>
             <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#c9a96e' }} />
-            <span className="text-xs font-fantasy" style={{ color: 'rgba(201,169,110,0.7)' }}>DM is considering...</span>
+            <span className="text-xs font-fantasy" style={{ color: 'rgba(225,192,142,0.95)' }}>DM is considering...</span>
           </motion.div>
         )}
       </AnimatePresence>

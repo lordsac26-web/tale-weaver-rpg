@@ -61,7 +61,7 @@ export default function HUD({ character, session }) {
             <div className="font-fantasy font-semibold text-sm truncate" style={{ color: '#f0c040', textShadow: '0 0 12px rgba(201,169,110,0.4)' }}>
               {character.name}
             </div>
-            <div className="text-xs truncate" style={{ color: 'rgba(201,169,110,0.6)', fontFamily: 'EB Garamond, serif' }}>
+            <div className="text-xs truncate" style={{ color: 'rgba(220,185,135,0.9)', fontFamily: 'EB Garamond, serif' }}>
               Lv.{character.level} {character.race} {character.class}
             </div>
           </div>
@@ -78,7 +78,7 @@ export default function HUD({ character, session }) {
               <span className="font-bold" style={{ color: '#fca5a5', fontFamily: 'Cinzel, serif', fontSize: '0.7rem' }}>
                 {character.hp_current}
               </span>
-              <span style={{ color: 'rgba(180,120,120,0.5)', fontSize: '0.65rem' }}>/ {character.hp_max}</span>
+              <span style={{ color: 'rgba(210,150,150,0.85)', fontSize: '0.65rem' }}>/ {character.hp_max}</span>
             </div>
             <div className="h-2 rounded-full overflow-hidden neuro-inset">
               <motion.div
@@ -111,7 +111,7 @@ export default function HUD({ character, session }) {
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg stat-box">
           <Shield className="w-3.5 h-3.5" style={{ color: '#93c5fd' }} />
           <span className="font-bold text-sm font-fantasy" style={{ color: '#93c5fd' }}>{character.armor_class}</span>
-          <span className="text-xs" style={{ color: 'rgba(147,197,253,0.5)', fontFamily: 'EB Garamond, serif' }}>AC</span>
+          <span className="text-xs" style={{ color: 'rgba(170,205,255,0.85)', fontFamily: 'EB Garamond, serif' }}>AC</span>
         </div>
  
         {/* Quick Rest in HUD — Suggestion #7 */}
@@ -132,13 +132,13 @@ export default function HUD({ character, session }) {
             <span className="font-bold text-sm font-fantasy" style={{ color: totalSlotsUsed < totalSlotsMax ? '#a78bfa' : '#fca5a5' }}>
               {totalSlotsMax - totalSlotsUsed}/{totalSlotsMax}
             </span>
-            <span className="text-xs" style={{ color: 'rgba(167,139,250,0.5)', fontFamily: 'EB Garamond, serif' }}>Slots</span>
+            <span className="text-xs" style={{ color: 'rgba(190,165,255,0.85)', fontFamily: 'EB Garamond, serif' }}>Slots</span>
           </div>
         )}
  
         {/* Location & Time — hidden on small screens to prevent overflow */}
         {session && (
-          <div className="hidden md:flex items-center gap-3 ml-auto" style={{ color: 'rgba(201,169,110,0.45)', fontFamily: 'EB Garamond, serif', fontSize: '0.75rem' }}>
+          <div className="hidden md:flex items-center gap-3 ml-auto" style={{ color: 'rgba(215,180,130,0.85)', fontFamily: 'EB Garamond, serif', fontSize: '0.75rem' }}>
             <span className="flex items-center gap-1.5">
               <MapPin className="w-3 h-3" />
               <span className="italic truncate max-w-[120px]">{session.current_location || 'Unknown'}</span>

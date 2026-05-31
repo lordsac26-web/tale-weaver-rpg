@@ -63,7 +63,7 @@ export default function Market() {
           <h1 className="font-fantasy-deco font-bold text-base text-glow-gold" style={{ color: '#f0c040' }}>
             Market Square
           </h1>
-          <p className="text-xs" style={{ color: 'rgba(201,169,110,0.4)', fontFamily: 'EB Garamond, serif' }}>
+          <p className="text-xs" style={{ color: 'rgba(218,180,128,0.85)', fontFamily: 'EB Garamond, serif' }}>
             {session?.current_location || 'Local merchants'}
           </p>
         </div>
@@ -84,7 +84,7 @@ export default function Market() {
           {localVendors.length === 0 ? (
             <div className="text-center py-12">
               <ShoppingBag className="w-16 h-16 mx-auto mb-4 opacity-20" style={{ color: '#c9a96e' }} />
-              <p className="text-sm" style={{ color: 'rgba(180,140,90,0.4)' }}>
+              <p className="text-sm" style={{ color: 'rgba(205,170,120,0.8)' }}>
                 No merchants available in this area
               </p>
             </div>

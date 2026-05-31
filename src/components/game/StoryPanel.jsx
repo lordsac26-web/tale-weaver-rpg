@@ -403,7 +403,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                       fontFamily: 'EB Garamond, serif',
                       boxShadow: '0 0 16px rgba(60,100,220,0.08), inset 0 1px 0 rgba(100,150,255,0.1)',
                     }}>
-                    <span style={{ color: 'rgba(147,197,253,0.5)', marginRight: '0.5em' }}>You:</span>
+                    <span style={{ color: 'rgba(170,210,255,0.85)', marginRight: '0.5em' }}>You:</span>
                     {entry.text}
                   </div>
                 </div>
@@ -472,8 +472,8 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
         {loading && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className="flex items-center gap-3 py-2">
-            <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'rgba(201,169,110,0.6)' }} />
-            <span className="text-sm italic" style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'IM Fell English, serif' }}>
+            <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'rgba(220,190,140,0.85)' }} />
+            <span className="text-sm italic" style={{ color: 'rgba(220,190,140,0.85)', fontFamily: 'IM Fell English, serif' }}>
               The story unfolds...
             </span>
           </motion.div>
@@ -491,7 +491,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
           }}>
           {!loading && choices.length > 0 && (
             <>
-              <div className="flex items-center gap-2 mb-2" style={{ color: 'rgba(201,169,110,0.5)' }}>
+              <div className="flex items-center gap-2 mb-2" style={{ color: 'rgba(225,190,140,0.9)' }}>
                 <Scroll className="w-3 h-3" />
                 <span className="font-fantasy text-xs tracking-widest uppercase">What do you do?</span>
               </div>
@@ -514,9 +514,9 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 flex-1">
                           <span className="font-fantasy font-bold text-sm flex-shrink-0 mt-0.5"
-                            style={{ color: 'rgba(201,169,110,0.6)' }}>{i + 1}.</span>
+                            style={{ color: 'rgba(235,200,150,0.95)' }}>{i + 1}.</span>
                           <span className="text-sm leading-relaxed"
-                            style={{ color: 'rgba(232,213,183,0.9)', fontFamily: 'EB Garamond, serif', fontSize: '1rem' }}>
+                            style={{ color: 'rgba(240,224,200,0.98)', fontFamily: 'EB Garamond, serif', fontSize: '1rem' }}>
                             {choice.text}
                           </span>
                         </div>

@@ -161,7 +161,7 @@ export default function SpellManagement() {
         <Sparkles className="w-5 h-5" style={{ color: '#c084fc' }} />
         <div className="flex-1">
           <h1 className="font-fantasy font-bold text-base" style={{ color: '#c084fc' }}>Spell Management</h1>
-          <p className="text-xs" style={{ color: 'rgba(201,169,110,0.4)' }}>
+          <p className="text-xs" style={{ color: 'rgba(215,178,125,0.85)' }}>
             {character?.name} · Lvl {character?.level} {character?.class}
           </p>
         </div>
@@ -204,7 +204,7 @@ export default function SpellManagement() {
             if (max === 0) return <div key={level} />;
             return (
               <div key={level} className="text-center">
-                <div className="text-xs font-fantasy mb-1" style={{ color: 'rgba(192,132,252,0.5)' }}>{level}</div>
+                <div className="text-xs font-fantasy mb-1" style={{ color: 'rgba(205,160,255,0.9)' }}>{level}</div>
                 <div className="flex flex-col gap-1">
                   {Array.from({ length: max }).map((_, i) => (
                     <button key={i}
@@ -217,7 +217,7 @@ export default function SpellManagement() {
                       }} />
                   ))}
                 </div>
-                <div className="text-xs mt-1 font-fantasy" style={{ color: used > 0 ? 'rgba(180,140,90,0.4)' : '#c084fc' }}>
+                <div className="text-xs mt-1 font-fantasy" style={{ color: used > 0 ? 'rgba(205,170,120,0.8)' : '#c084fc' }}>
                   {max - used}/{max}
                 </div>
               </div>
@@ -250,7 +250,7 @@ export default function SpellManagement() {
           } : {
             background: 'rgba(15,10,5,0.5)',
             border: '1px solid rgba(180,140,90,0.12)',
-            color: 'rgba(180,140,90,0.4)',
+            color: 'rgba(205,170,120,0.82)',
           }}>
           <Book className="w-3 h-3 inline mr-1" /> Prepared Only
         </button>
@@ -312,7 +312,7 @@ export default function SpellManagement() {
                                 <span className="text-xs" style={{ color: 'rgba(168,85,247,0.7)' }}>📜</span>
                               )}
                             </div>
-                            <div className="text-xs mt-0.5" style={{ color: 'rgba(180,140,90,0.5)' }}>
+                            <div className="text-xs mt-0.5" style={{ color: 'rgba(210,175,120,0.85)' }}>
                               {spell.school} · {spell.casting_time}
                             </div>
                             {spell.description && (
@@ -335,7 +335,7 @@ export default function SpellManagement() {
       {/* Prepared Count Footer */}
       <div className="px-4 py-2 flex items-center justify-between flex-shrink-0"
         style={{ background: 'rgba(8,5,2,0.95)', borderTop: '1px solid rgba(140,80,220,0.2)' }}>
-        <div className="text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>
+        <div className="text-xs" style={{ color: 'rgba(210,175,120,0.85)' }}>
           <Info className="w-3 h-3 inline mr-1" />
           Click spells to prepare/unprepare
         </div>

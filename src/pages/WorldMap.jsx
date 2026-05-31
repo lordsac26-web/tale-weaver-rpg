@@ -127,8 +127,8 @@ export default function WorldMap() {
         <div className="flex-1">
           <h1 className="font-fantasy font-bold text-base" style={{ color: '#c9a96e' }}>World Map & Portal Network</h1>
           {currentLocation && (
-            <p className="text-xs" style={{ color: 'rgba(201,169,110,0.4)', fontFamily: 'EB Garamond, serif' }}>
-              Current location: <span style={{ color: 'rgba(201,169,110,0.7)' }}>{currentLocation}</span>
+            <p className="text-xs" style={{ color: 'rgba(212,178,128,0.85)', fontFamily: 'EB Garamond, serif' }}>
+              Current location: <span style={{ color: 'rgba(235,200,150,0.95)' }}>{currentLocation}</span>
             </p>
           )}
         </div>
@@ -159,7 +159,7 @@ export default function WorldMap() {
             {label}
           </button>
         ))}
-        <div className="ml-auto flex items-center gap-1 text-xs" style={{ color: 'rgba(180,140,90,0.35)', fontFamily: 'EB Garamond, serif' }}>
+        <div className="ml-auto flex items-center gap-1 text-xs" style={{ color: 'rgba(200,165,115,0.8)', fontFamily: 'EB Garamond, serif' }}>
           <Info className="w-3 h-3" /> Tap a portal to travel
         </div>
       </div>
@@ -303,7 +303,7 @@ export default function WorldMap() {
         <div className="w-full lg:w-80 flex flex-col overflow-hidden" style={{ borderLeft: '1px solid rgba(180,140,90,0.12)' }}>
           <div className="px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(180,140,90,0.12)', background: 'rgba(10,6,3,0.8)' }}>
             <div className="font-fantasy text-sm" style={{ color: '#c9a96e' }}>Available Portals</div>
-            <div className="text-xs mt-0.5" style={{ color: 'rgba(201,169,110,0.35)', fontFamily: 'EB Garamond, serif' }}>
+            <div className="text-xs mt-0.5" style={{ color: 'rgba(205,170,120,0.8)', fontFamily: 'EB Garamond, serif' }}>
               {sanctionedPortals.length + sketchyPortals.length} portals discovered
             </div>
           </div>
@@ -311,7 +311,7 @@ export default function WorldMap() {
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {(filter === 'all' || filter === 'sanctioned') && sanctionedPortals.length > 0 && (
               <>
-                <div className="font-fantasy text-xs tracking-widest px-1" style={{ color: 'rgba(201,169,110,0.4)', fontSize: '0.62rem' }}>GUILD SANCTIONED</div>
+                <div className="font-fantasy text-xs tracking-widest px-1" style={{ color: 'rgba(215,178,125,0.85)', fontSize: '0.62rem' }}>GUILD SANCTIONED</div>
                 {sanctionedPortals.map(portal => (
                   <button key={portal.id} onClick={() => { setSelectedPortal(portal); setSelectedType('sanctioned'); }}
                     className="w-full text-left rounded-xl p-3 transition-all fantasy-card"
@@ -321,7 +321,7 @@ export default function WorldMap() {
                         className="text-lg flex-shrink-0">✦</motion.div>
                       <div className="flex-1 min-w-0">
                         <div className="font-fantasy text-sm font-semibold truncate" style={{ color: '#f0c040' }}>{portal.name}</div>
-                        <div className="text-xs mt-0.5" style={{ color: 'rgba(201,169,110,0.45)', fontFamily: 'EB Garamond, serif' }}>{portal.city}</div>
+                        <div className="text-xs mt-0.5" style={{ color: 'rgba(212,178,128,0.85)', fontFamily: 'EB Garamond, serif' }}>{portal.city}</div>
                         <div className="flex items-center gap-3 mt-1">
                           <span className="text-xs" style={{ color: '#86efac' }}>
                             <Shield className="w-2.5 h-2.5 inline mr-0.5" />Safe
@@ -329,7 +329,7 @@ export default function WorldMap() {
                           <span className="text-xs" style={{ color: '#f0c040' }}>
                             <Coins className="w-2.5 h-2.5 inline mr-0.5" />{portal.cost_gp}gp
                           </span>
-                          <span className="text-xs" style={{ color: 'rgba(180,140,90,0.35)' }}>
+                          <span className="text-xs" style={{ color: 'rgba(200,165,115,0.8)' }}>
                             {(portal.destination_hubs || []).length} routes
                           </span>
                         </div>
@@ -342,7 +342,7 @@ export default function WorldMap() {
 
             {(filter === 'all' || filter === 'sketchy') && sketchyPortals.length > 0 && (
               <>
-                <div className="font-fantasy text-xs tracking-widest px-1 mt-2" style={{ color: 'rgba(192,132,252,0.4)', fontSize: '0.62rem' }}>UNAUTHORIZED</div>
+                <div className="font-fantasy text-xs tracking-widest px-1 mt-2" style={{ color: 'rgba(205,160,255,0.85)', fontSize: '0.62rem' }}>UNAUTHORIZED</div>
                 {sketchyPortals.map(portal => (
                   <button key={portal.id} onClick={() => { setSelectedPortal(portal); setSelectedType('sketchy'); }}
                     className="w-full text-left rounded-xl p-3 transition-all fantasy-card"
@@ -351,7 +351,7 @@ export default function WorldMap() {
                       <span className="text-lg flex-shrink-0">💀</span>
                       <div className="flex-1 min-w-0">
                         <div className="font-fantasy text-sm font-semibold truncate" style={{ color: '#c084fc' }}>{portal.name}</div>
-                        <div className="text-xs mt-0.5 truncate" style={{ color: 'rgba(192,132,252,0.45)', fontFamily: 'EB Garamond, serif' }}>{portal.operator_name}</div>
+                        <div className="text-xs mt-0.5 truncate" style={{ color: 'rgba(205,165,255,0.85)', fontFamily: 'EB Garamond, serif' }}>{portal.operator_name}</div>
                         <div className="flex items-center gap-3 mt-1">
                           <span className="text-xs"
                             style={{ color: portal.safety_pct >= 70 ? '#86efac' : portal.safety_pct >= 50 ? '#fde68a' : '#fca5a5' }}>
@@ -360,7 +360,7 @@ export default function WorldMap() {
                           <span className="text-xs" style={{ color: '#fb923c' }}>
                             <Coins className="w-2.5 h-2.5 inline mr-0.5" />{portal.cost_gp}gp
                           </span>
-                          <span className="text-xs" style={{ color: 'rgba(192,132,252,0.35)' }}>
+                          <span className="text-xs" style={{ color: 'rgba(200,160,250,0.8)' }}>
                             {(portal.destinations || []).length} routes
                           </span>
                         </div>
