@@ -237,6 +237,48 @@ Deno.serve(async (req) => {
     await base44.entities.CombatLog.update(cid, { xp_awarded: true });
   };
 
+  // HELPER: resolveActionAndAdvance — action economy. Increments the per-turn action
+  // counter, computes remaining actions, and advances initiative when the turn is spent.
+  // Quickened spells / bonus actions do NOT consume a full action.
+  const resolveActionAndAdvance = (combatLog, combatants, character, opts = {}) => {
+    const { isQuickened = false, isBonusAction = false } = opts;
+    const apt = getActionsPerTurn(character);
+    const acu = (isQuickened || isBonusAction)
+      ? (combatLog.world_state?.actions_used_this_turn || 0)
+      : (combatLog.world_state?.actions_used_this_turn || 0) + 1;
+    const ar = apt - acu;
+    let ni = combatLog.current_turn_index;
+    let nr = combatLog.round;
+    let ws = { ...(combatLog.world_state || {}), actions_used_this_turn: acu };
+    if (isBonusAction) ws.bonus_action_used = true;
+    if (ar <= 0) {
+      const adv = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
+      ni = adv.nextIndex; nr = adv.nextRound;
+      ws = { ...ws, actions_used_this_turn: 0, bonus_action_used: false,
+             sneak_attack_used: false, loading_weapon_fired: false };
+    }
+    return { nextIndex: ni, nextRound: nr, actionsRemaining: Math.max(0, ar), worldState: ws };
+  };
+
+  // HELPER: finalizeAndPersistCombat — determine victory/defeat/ongoing, persist the
+  // CombatLog, clear the session combat flag on end, and award victory XP exactly once.
+  const finalizeAndPersistCombat = async (cid, sid, updatedCombatants, updatedLog,
+    nextIndex, nextRound, worldState, extraFields = {}) => {
+    const allDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
+    const playerDead = updatedCombatants.find(c => c.type === 'player')?.is_conscious === false;
+    const result = allDead ? 'victory' : playerDead ? 'defeat' : 'ongoing';
+    await base44.entities.CombatLog.update(cid, {
+      combatants: updatedCombatants, log_entries: updatedLog,
+      current_turn_index: nextIndex, round: nextRound,
+      world_state: worldState, is_active: result === 'ongoing', result, ...extraFields
+    });
+    if (result !== 'ongoing') {
+      await base44.entities.GameSession.update(sid, { in_combat: false });
+      if (result === 'victory') await awardVictoryXP(cid, updatedCombatants, character_id);
+    }
+    return result;
+  };
+
   // ═══════════════════════════════════════════════════════════════════════════
   // ACTION: start_combat — roll initiative for player + enemies, sort the order,
   // and create the CombatLog record that drives the whole encounter.
@@ -450,6 +492,16 @@ Deno.serve(async (req) => {
     let extraDamageDice = []; // For smite, sneak attack, etc
     let sneakAttackApplied = false; // tracks if Sneak Attack was used this attack (once-per-turn guard)
 
+    // Apply disadvantage once: re-rolls and takes the lower die (PHB p.173). No-op if already at disadvantage.
+    const applyDisadvantage = () => {
+      if (modifiers.disadvantage) return;
+      modifiers.disadvantage = true;
+      attackRoll2 = rollD20();
+      attackRoll = Math.min(attackRoll1, attackRoll2);
+      isCritical = attackRoll === 20;
+      isMiss = attackRoll === 1;
+    };
+
     if (spell) {
       // Barbarian Rage (PHB p.48): cannot cast or concentrate on spells while raging.
       const playerConds = (character.conditions || []).map(c => String(typeof c === 'string' ? c : c?.name || '').toLowerCase());
@@ -495,6 +547,7 @@ Deno.serve(async (req) => {
         // We inline a simplified full-caster/half-caster check here.
         const FULL_CASTER_MAX = [4,3,3,3,3,2,2,1,1];
         const HALF_CASTER_CLASSES = ['Paladin', 'Ranger', 'Artificer'];
+        const NON_CASTERS = ['Fighter', 'Barbarian', 'Rogue', 'Monk'];
         const THIRD_CASTER_SUBCLASSES = ['eldritch knight', 'arcane trickster'];
         const isHalfCaster = HALF_CASTER_CLASSES.includes(character.class);
         const isThirdCaster = NON_CASTERS.includes(character.class) &&
@@ -540,23 +593,8 @@ Deno.serve(async (req) => {
           spell_name: spell.name, is_utility: true
         };
         const updatedLog = [...(combatLog.log_entries || []), utilEntry];
-        const actionsPerTurn2 = getActionsPerTurn(character);
-        const currentActionsUsed2 = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
-        const actionsRemaining2 = actionsPerTurn2 - currentActionsUsed2;
-        let nextIndex2 = combatLog.current_turn_index;
-        let nextRound2 = combatLog.round;
-        let newWorldState2 = { ...(combatLog.world_state || {}), actions_used_this_turn: currentActionsUsed2 };
-        if (actionsRemaining2 <= 0) {
-          nextIndex2 = (combatLog.current_turn_index + 1) % combatants.length;
-          if (nextIndex2 === 0) nextRound2 += 1;
-          let safety2 = 0;
-          while (!combatants[nextIndex2]?.is_conscious && safety2 < combatants.length) {
-            nextIndex2 = (nextIndex2 + 1) % combatants.length;
-            if (nextIndex2 === 0) nextRound2 += 1;
-            safety2++;
-          }
-          newWorldState2.actions_used_this_turn = 0;
-        }
+        const { nextIndex: nextIndex2, nextRound: nextRound2, actionsRemaining: actionsRemaining2, worldState: newWorldState2 } =
+          resolveActionAndAdvance(combatLog, combatants, character);
         await base44.entities.CombatLog.update(combat_id, {
           log_entries: updatedLog, current_turn_index: nextIndex2, round: nextRound2, world_state: newWorldState2
         });
@@ -578,17 +616,8 @@ Deno.serve(async (req) => {
           spell_name: spell.name, heal_amount: healAmt
         };
         const updatedCombatants2 = combatants.map(c => c.type === 'player' ? player2 : c);
-        const actionsPerTurn3 = getActionsPerTurn(character);
-        const actionsUsed3 = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
-        const actionsRem3 = actionsPerTurn3 - actionsUsed3;
-        let ni3 = combatLog.current_turn_index;
-        let nr3 = combatLog.round;
-        let ws3 = { ...(combatLog.world_state || {}), actions_used_this_turn: actionsUsed3 };
-        if (actionsRem3 <= 0) {
-          ni3 = (combatLog.current_turn_index + 1) % updatedCombatants2.length;
-          if (ni3 === 0) nr3++;
-          ws3.actions_used_this_turn = 0;
-        }
+        const { nextIndex: ni3, nextRound: nr3, actionsRemaining: actionsRem3, worldState: ws3 } =
+          resolveActionAndAdvance(combatLog, updatedCombatants2, character);
         await base44.entities.CombatLog.update(combat_id, {
           combatants: updatedCombatants2, log_entries: [...(combatLog.log_entries || []), healEntry],
           current_turn_index: ni3, round: nr3, world_state: ws3
@@ -687,44 +716,18 @@ Deno.serve(async (req) => {
           if (twinTarget && c.id === twinTarget.id) return twinTarget;
           return c;
         });
-        const allDead = updatedC.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
-        const playerDead2 = updatedC.find(c => c.type === 'player')?.is_conscious === false;
-        let result2 = 'ongoing';
-        if (allDead) result2 = 'victory';
-        if (playerDead2) result2 = 'defeat';
 
         // Quickened Spell: cast as a bonus action — does NOT consume an action.
         const isQuickened = !!modifiers.metamagic?.quickened;
-        const apt = getActionsPerTurn(character);
-        const acu = isQuickened
-          ? (combatLog.world_state?.actions_used_this_turn || 0)
-          : (combatLog.world_state?.actions_used_this_turn || 0) + 1;
-        const ar2 = apt - acu;
-        let ni = combatLog.current_turn_index;
-        let nr = combatLog.round;
+        const { nextIndex: ni, nextRound: nr, actionsRemaining: ar2, worldState: ws } =
+          resolveActionAndAdvance(combatLog, updatedC, character, { isQuickened });
         // Track concentration spell in world_state
-        let ws = { ...(combatLog.world_state || {}), actions_used_this_turn: acu };
-        if (isQuickened) ws.bonus_action_used = true;
         if (spell.requires_concentration) {
           ws.concentration_spell = spell.name;
           ws.concentration_caster = character.name;
         }
-        // Quickened keeps the player's turn (bonus action), unless combat ended.
-        if (result2 !== 'ongoing' || (ar2 <= 0 && !isQuickened)) {
-          if (result2 === 'ongoing') {
-            const adv2 = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedC);
-            ni = adv2.nextIndex; nr = adv2.nextRound;
-          }
-          ws.actions_used_this_turn = 0;
-        }
-        await base44.entities.CombatLog.update(combat_id, {
-          combatants: updatedC, log_entries: [...(combatLog.log_entries || []), saveEntry],
-          current_turn_index: ni, round: nr, world_state: ws, is_active: result2 === 'ongoing', result: result2
-        });
-        if (result2 !== 'ongoing') {
-          await base44.entities.GameSession.update(session_id, { in_combat: false });
-          if (result2 === 'victory') await awardVictoryXP(combat_id, updatedC, character_id);
-        }
+        const result2 = await finalizeAndPersistCombat(combat_id, session_id, updatedC,
+          [...(combatLog.log_entries || []), saveEntry], ni, nr, ws);
         return Response.json({ hit: saveFailed, damage: finalDmg, log_entry: saveEntry, result: result2, combat_ended: result2 !== 'ongoing', actions_remaining: Math.max(0, ar2), next_turn_index: ni });
       }
 
@@ -739,27 +742,15 @@ Deno.serve(async (req) => {
         target.hp_current = Math.max(0, target.hp_current - totalMissileDmg);
         if (target.hp_current === 0) target.is_conscious = false;
         const updatedCMM = combatants.map(c => c.id === target_id ? target : c);
-        const allDeadMM = updatedCMM.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
-        const resultMM = allDeadMM ? 'victory' : 'ongoing';
         const mmEntry = {
           round: combatLog.round, actor: character.name, action: 'spell', target: target.name,
           hit: true, damage: totalMissileDmg, spell_name: spell.name,
           text: `${character.name} fires ${numMissiles} Magic Missile${numMissiles > 1 ? 's' : ''} at ${target.name} for ${totalMissileDmg} force damage! (auto-hit)${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`
         };
-        const aptMM = getActionsPerTurn(character);
-        const acuMM = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
-        const arMM = aptMM - acuMM;
-        let niMM = combatLog.current_turn_index; let nrMM = combatLog.round;
-        const wsMM = { ...(combatLog.world_state || {}), actions_used_this_turn: acuMM };
-        if (resultMM !== 'ongoing' || arMM <= 0) {
-          if (resultMM === 'ongoing') { const a = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCMM); niMM = a.nextIndex; nrMM = a.nextRound; }
-          wsMM.actions_used_this_turn = 0;
-        }
-        await base44.entities.CombatLog.update(combat_id, { combatants: updatedCMM, log_entries: [...(combatLog.log_entries || []), mmEntry], current_turn_index: niMM, round: nrMM, world_state: wsMM, is_active: resultMM === 'ongoing', result: resultMM });
-        if (resultMM !== 'ongoing') {
-          await base44.entities.GameSession.update(session_id, { in_combat: false });
-          if (resultMM === 'victory') await awardVictoryXP(combat_id, updatedCMM, character_id);
-        }
+        const { nextIndex: niMM, nextRound: nrMM, actionsRemaining: arMM, worldState: wsMM } =
+          resolveActionAndAdvance(combatLog, updatedCMM, character);
+        const resultMM = await finalizeAndPersistCombat(combat_id, session_id, updatedCMM,
+          [...(combatLog.log_entries || []), mmEntry], niMM, nrMM, wsMM);
         return Response.json({ hit: true, damage: totalMissileDmg, log_entry: mmEntry, result: resultMM, combat_ended: resultMM !== 'ongoing', actions_remaining: Math.max(0, arMM), next_turn_index: niMM });
       }
 
@@ -792,27 +783,15 @@ Deno.serve(async (req) => {
           if (target.hp_current === 0) target.is_conscious = false;
         }
         const updatedCEB = combatants.map(c => c.id === target_id ? target : c);
-        const allDeadEB = updatedCEB.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
-        const resultEB = allDeadEB ? 'victory' : 'ongoing';
         const ebEntry = {
           round: combatLog.round, actor: character.name, action: 'spell', target: target.name,
           hit: anyBeamHit, critical: beamCrit, damage: totalBeamDmg, spell_name: 'Eldritch Blast',
           text: `${character.name} fires ${beams} Eldritch Blast beam${beams>1?'s':''} at ${target.name}! ${beamLogs.join(' | ')} — Total: ${totalBeamDmg} force damage.${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`
         };
-        const aptEB = getActionsPerTurn(character);
-        const acuEB = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
-        const arEB = aptEB - acuEB;
-        let niEB = combatLog.current_turn_index; let nrEB = combatLog.round;
-        const wsEB = { ...(combatLog.world_state || {}), actions_used_this_turn: acuEB };
-        if (resultEB !== 'ongoing' || arEB <= 0) {
-          if (resultEB === 'ongoing') { const a = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCEB); niEB = a.nextIndex; nrEB = a.nextRound; }
-          wsEB.actions_used_this_turn = 0;
-        }
-        await base44.entities.CombatLog.update(combat_id, { combatants: updatedCEB, log_entries: [...(combatLog.log_entries || []), ebEntry], current_turn_index: niEB, round: nrEB, world_state: wsEB, is_active: resultEB === 'ongoing', result: resultEB });
-        if (resultEB !== 'ongoing') {
-          await base44.entities.GameSession.update(session_id, { in_combat: false });
-          if (resultEB === 'victory') await awardVictoryXP(combat_id, updatedCEB, character_id);
-        }
+        const { nextIndex: niEB, nextRound: nrEB, actionsRemaining: arEB, worldState: wsEB } =
+          resolveActionAndAdvance(combatLog, updatedCEB, character);
+        const resultEB = await finalizeAndPersistCombat(combat_id, session_id, updatedCEB,
+          [...(combatLog.log_entries || []), ebEntry], niEB, nrEB, wsEB);
         return Response.json({ hit: anyBeamHit, damage: totalBeamDmg, log_entry: ebEntry, result: resultEB, combat_ended: resultEB !== 'ongoing', actions_remaining: Math.max(0, arEB), next_turn_index: niEB });
       }
 
@@ -877,13 +856,7 @@ Deno.serve(async (req) => {
       const isSmallRace = SMALL_RACES.includes(character.race);
       const weapon2H = (weapon.properties || []).map(p => p.toLowerCase());
       const isHeavyWeapon = weapon2H.includes('heavy');
-      if (isSmallRace && isHeavyWeapon && !modifiers.disadvantage) {
-        modifiers.disadvantage = true;
-        attackRoll2 = rollD20();
-        attackRoll = Math.min(attackRoll1, attackRoll2);
-        isCritical = attackRoll === 20;
-        isMiss = attackRoll === 1;
-      }
+      if (isSmallRace && isHeavyWeapon) applyDisadvantage();
 
       // Great Weapon Master: -5/+10 on heavy two-handed weapons (PHB p.167)
       const isHeavyTwoHanded = weapon2H.includes('heavy') && weapon2H.includes('two-handed');
@@ -958,41 +931,16 @@ Deno.serve(async (req) => {
     const conditions = (character.conditions || []).map(c => c.name || c);
 
     // EXHAUSTION level 3+ : disadvantage on attack rolls (PHB p.291)
-    if ((character.exhaustion_level || 0) >= 3 && !modifiers.disadvantage) {
-      modifiers.disadvantage = true;
-      attackRoll2 = rollD20();
-      attackRoll = Math.min(attackRoll1, attackRoll2);
-      isCritical = attackRoll === 20;
-      isMiss = attackRoll === 1;
-    }
+    if ((character.exhaustion_level || 0) >= 3) applyDisadvantage();
 
     // POISONED: disadvantage on attack rolls (PHB p.292) — NOT a flat penalty
-    if (conditions.includes('poisoned') && !modifiers.disadvantage) {
-      modifiers.disadvantage = true;
-      // Re-roll for disadvantage if we didn't already have it
-      attackRoll2 = rollD20();
-      attackRoll = Math.min(attackRoll1, attackRoll2);
-      isCritical = attackRoll === 20;
-      isMiss = attackRoll === 1;
-    }
+    if (conditions.includes('poisoned')) applyDisadvantage();
 
     // BLINDED: disadvantage on attack rolls (PHB p.290)
-    if (conditions.includes('blinded') && !modifiers.disadvantage) {
-      modifiers.disadvantage = true;
-      attackRoll2 = rollD20();
-      attackRoll = Math.min(attackRoll1, attackRoll2);
-      isCritical = attackRoll === 20;
-      isMiss = attackRoll === 1;
-    }
+    if (conditions.includes('blinded')) applyDisadvantage();
 
     // FRIGHTENED: disadvantage on attack rolls while source visible (PHB p.290)
-    if (conditions.includes('frightened') && !modifiers.disadvantage) {
-      modifiers.disadvantage = true;
-      attackRoll2 = rollD20();
-      attackRoll = Math.min(attackRoll1, attackRoll2);
-      isCritical = attackRoll === 20;
-      isMiss = attackRoll === 1;
-    }
+    if (conditions.includes('frightened')) applyDisadvantage();
 
     // Target modifiers (cover, etc)
     let targetACBonus = 0;
@@ -1187,31 +1135,16 @@ Deno.serve(async (req) => {
     const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
     const updatedLog = [...(combatLog.log_entries || []), logEntry];
 
-    // Check combat end
-    const allEnemiesDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
-    const playerDead = updatedCombatants.find(c => c.type === 'player')?.is_conscious === false;
-    let result = 'ongoing';
-    if (allEnemiesDead) result = 'victory';
-    if (playerDead) result = 'defeat';
-
     // Track actions used this turn in the combat log's world_state.
     // Quickened Spell (Sorcerer): spell costs a bonus action, not an action.
     const isQuickenedMain = !!modifiers.metamagic?.quickened && !!spell;
     const actionsPerTurn = getActionsPerTurn(character);
-    const currentActionsUsed = isQuickenedMain
-      ? (combatLog.world_state?.actions_used_this_turn || 0)
-      : (combatLog.world_state?.actions_used_this_turn || 0) + 1;
-    const actionsRemaining = actionsPerTurn - currentActionsUsed;
-
-    // Advance turn only if all actions for this turn are exhausted
-    let nextIndex = combatLog.current_turn_index;
-    let nextRound = combatLog.round;
-    let newWorldState = { ...(combatLog.world_state || {}), actions_used_this_turn: currentActionsUsed };
-    if (isQuickenedMain) newWorldState.bonus_action_used = true;
+    const { nextIndex, nextRound, actionsRemaining, worldState: newWorldState } =
+      resolveActionAndAdvance(combatLog, updatedCombatants, character, { isQuickened: isQuickenedMain });
     // Mark Sneak Attack consumed for this turn so it can't trigger again until next turn
-    if (sneakAttackApplied) newWorldState.sneak_attack_used = true;
+    if (sneakAttackApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.sneak_attack_used = true;
     // Mark a Loading weapon as fired so it can't fire again this turn (PHB p.147)
-    if (weapon && (weapon.properties || []).map(p => p.toLowerCase()).includes('loading') && weapon.type === 'ranged') {
+    if (weapon && (weapon.properties || []).map(p => p.toLowerCase()).includes('loading') && weapon.type === 'ranged' && newWorldState.actions_used_this_turn !== 0) {
       newWorldState.loading_weapon_fired = true;
     }
 
@@ -1221,31 +1154,8 @@ Deno.serve(async (req) => {
       newWorldState.concentration_caster = character.name;
     }
 
-    if (result !== 'ongoing' || (actionsRemaining <= 0 && !isQuickenedMain)) {
-      if (result === 'ongoing') {
-        const adv = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCombatants);
-        nextIndex = adv.nextIndex; nextRound = adv.nextRound;
-      }
-      newWorldState.actions_used_this_turn = 0;
-      newWorldState.bonus_action_used = false;
-      newWorldState.sneak_attack_used = false; // player turn ended — refresh for next turn
-      newWorldState.loading_weapon_fired = false; // refresh Loading weapon for next turn
-    }
-
-    await base44.entities.CombatLog.update(combat_id, {
-      combatants: updatedCombatants,
-      log_entries: updatedLog,
-      current_turn_index: nextIndex,
-      round: nextRound,
-      world_state: newWorldState,
-      is_active: result === 'ongoing',
-      result
-    });
-
-    if (result !== 'ongoing') {
-      await base44.entities.GameSession.update(session_id, { in_combat: false });
-      if (result === 'victory') await awardVictoryXP(combat_id, updatedCombatants, character_id);
-    }
+    const result = await finalizeAndPersistCombat(combat_id, session_id, updatedCombatants,
+      updatedLog, nextIndex, nextRound, newWorldState);
 
     return Response.json({
       hit, damage, damage_rolls: damageRolls, attack_roll: totalAttack, log_entry: logEntry,
@@ -1332,24 +1242,13 @@ Deno.serve(async (req) => {
     };
 
     const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
-    const allEnemiesDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
-    const result = allEnemiesDead ? 'victory' : 'ongoing';
 
     // Off-hand uses the BONUS ACTION, not an action — do not consume an action or advance the turn
-    const newWorldState = { ...(combatLog.world_state || {}), bonus_action_used: true };
+    const { worldState: newWorldState } = resolveActionAndAdvance(combatLog, updatedCombatants, character, { isBonusAction: true });
 
-    await base44.entities.CombatLog.update(combat_id, {
-      combatants: updatedCombatants,
-      log_entries: [...(combatLog.log_entries || []), logEntry],
-      world_state: newWorldState,
-      is_active: result === 'ongoing',
-      result
-    });
-
-    if (result !== 'ongoing') {
-      await base44.entities.GameSession.update(session_id, { in_combat: false });
-      if (result === 'victory') await awardVictoryXP(combat_id, updatedCombatants, character_id);
-    }
+    const result = await finalizeAndPersistCombat(combat_id, session_id, updatedCombatants,
+      [...(combatLog.log_entries || []), logEntry],
+      combatLog.current_turn_index, combatLog.round, newWorldState);
 
     return Response.json({
       hit, damage, damage_rolls: damageRolls, attack_roll: totalAttack, log_entry: logEntry,
@@ -1521,7 +1420,9 @@ Deno.serve(async (req) => {
     const isRaging = playerConditions.includes('raging');
     const enemyDamageType = (currentCombatant.damage_type || 'bludgeoning').toLowerCase();
     const physicalTypes = ['bludgeoning', 'piercing', 'slashing'];
-    const charFull = await base44.entities.Character.get(player.id);
+    // PERFORMANCE: only fetch the full character record when an attack actually landed —
+    // all mitigation, temp-HP, and concentration logic below depends on a hit.
+    const charFull = anyHit ? await base44.entities.Character.get(player.id) : null;
     const charFeats = charFull?.feats || [];
     const charFeatFlags = charFull?._feat_flags || [];
     const playerHasFeat = (name) => charFeats.includes(name) || charFeatFlags.includes(name.toLowerCase().replace(/\s+/g,'_'));
@@ -1756,7 +1657,7 @@ Deno.serve(async (req) => {
         laRemainingDmg -= absorbed;
         await base44.entities.Character.update(player.id, { temp_hp: laTempHP - absorbed });
       }
-      if (laRemainingDmg > 0) {
+      if (laRemainingDmg > 0) { // legendary damage is only computed inside `if (hit)`, so dmg>0 here
         player.hp_current = Math.max(0, player.hp_current - laRemainingDmg);
         if (player.hp_current === 0) player.is_conscious = false;
         await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
@@ -1819,20 +1720,8 @@ Deno.serve(async (req) => {
     const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
 
     // Grapple replaces one attack — consume one action from the turn budget.
-    const actionsPerTurn = getActionsPerTurn(character);
-    const actionsUsed = (combatLog.world_state?.actions_used_this_turn || 0) + 1;
-    const actionsRemaining = actionsPerTurn - actionsUsed;
-    let nextIndex = combatLog.current_turn_index;
-    let nextRound = combatLog.round;
-    const newWorldState = { ...(combatLog.world_state || {}), actions_used_this_turn: actionsUsed };
-    if (actionsRemaining <= 0) {
-      const adv = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCombatants);
-      nextIndex = adv.nextIndex; nextRound = adv.nextRound;
-      newWorldState.actions_used_this_turn = 0;
-      newWorldState.bonus_action_used = false;
-      newWorldState.sneak_attack_used = false;
-      newWorldState.loading_weapon_fired = false;
-    }
+    const { nextIndex, nextRound, actionsRemaining, worldState: newWorldState } =
+      resolveActionAndAdvance(combatLog, updatedCombatants, character);
 
     await base44.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants,
