@@ -34,6 +34,7 @@ export default function Game() {
   const [combat, setCombat] = useState(null);
   const [narrative, setNarrative] = useState([]);
   const [choices, setChoices] = useState([]);
+  const [sceneObjects, setSceneObjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [storyLoading, setStoryLoading] = useState(false);
   const [combatLoading, setCombatLoading] = useState(false);
@@ -92,6 +93,7 @@ export default function Game() {
       setStarted(true);
       const lastEntry = sess.story_log[sess.story_log.length - 1];
       if (lastEntry?.choices?.length > 0) setChoices(lastEntry.choices);
+      if (lastEntry?.scene_objects?.length > 0) setSceneObjects(lastEntry.scene_objects);
     }
 
     if (sess.in_combat && sess.combat_state?.combat_id) {
@@ -135,6 +137,7 @@ export default function Game() {
       const data = result.data;
       setNarrative([{ type: 'narration', text: data.narrative }]);
       setChoices(data.choices || []);
+      setSceneObjects(data.scene_objects || []);
       await loadState();
     } catch (err) {
       console.error('Failed to start adventure:', err);
@@ -203,6 +206,7 @@ export default function Game() {
     const choice = choices[choiceIndex];
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
     setChoices([]);
+    setSceneObjects([]);
 
     let skillSuccess = undefined;
 
@@ -253,11 +257,65 @@ export default function Game() {
         await startCombat(data.enemies);
       } else {
         setChoices(data.choices || []);
+        setSceneObjects(data.scene_objects || []);
       }
 
       await loadState();
     } catch (err) {
       console.error('Failed to process choice:', err);
+      setNarrative(prev => [...prev, { type: 'narration', text: 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
+    } finally {
+      setStoryLoading(false);
+    }
+  };
+
+  // Scene Interaction — player manipulates a highlighted environment object.
+  // Reuses the same skill-check engine as choices, then asks the DM for the consequence.
+  const handleSceneInteract = async (obj) => {
+    if (!obj) return;
+    const actionText = obj.action || `Interact with ${obj.label}`;
+    setNarrative(prev => [...prev, { type: 'player_action', text: actionText }]);
+    setChoices([]);
+    setSceneObjects([]);
+
+    let skillSuccess = undefined;
+    if (obj.skill_check && obj.dc) {
+      const equipAdv = getEquipmentAdvantage(character?.equipped, obj.skill_check);
+      const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
+      const modifier = computeSkillModifier(obj.skill_check);
+      const final = raw + modifier;
+      const success = final >= obj.dc;
+      skillSuccess = success;
+      const feedback = getSkillFeedback(obj.skill_check, success, final, obj.dc, raw);
+      setNarrative(prev => [...prev, {
+        type: 'skill_check', skill: obj.skill_check, dc: obj.dc, raw, allRolls,
+        hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources,
+        modifier, final, success, feedback, character_name: character?.name,
+      }]);
+    }
+
+    setStoryLoading(true);
+    try {
+      const result = await base44.functions.invoke('generateStory', {
+        session_id: sessionId,
+        action: 'choice',
+        custom_input: obj.skill_check && obj.dc
+          ? `${actionText} [Skill Check: ${obj.skill_check} DC${obj.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}]`
+          : actionText,
+      });
+      const data = result.data;
+      if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
+      if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP earned!` }]);
+      if (data.combat_trigger && data.enemies?.length > 0) {
+        setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
+        await startCombat(data.enemies);
+      } else {
+        setChoices(data.choices || []);
+        setSceneObjects(data.scene_objects || []);
+      }
+      await loadState();
+    } catch (err) {
+      console.error('Failed to process scene interaction:', err);
       setNarrative(prev => [...prev, { type: 'narration', text: 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
     } finally {
       setStoryLoading(false);
@@ -292,6 +350,7 @@ export default function Game() {
 
     setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
     setChoices([]);
+    setSceneObjects([]);
 
     let checkResult = '';
     if (requires_check && skill && dc) {
@@ -316,6 +375,7 @@ export default function Game() {
         await startCombat(data.enemies);
       } else {
         setChoices(data.choices || []);
+        setSceneObjects(data.scene_objects || []);
       }
       await loadState();
     } catch (err) {
@@ -958,7 +1018,9 @@ export default function Game() {
                 onChoice={character?.hp_current <= 0 ? () => {} : handleChoice} 
                 customInput={customInput}
                 setCustomInput={character?.hp_current <= 0 ? () => {} : setCustomInput} 
-                onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} />
+                onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput}
+                sceneObjects={character?.hp_current <= 0 ? [] : sceneObjects}
+                onSceneInteract={character?.hp_current <= 0 ? undefined : handleSceneInteract} />
             )}
           </div>
         )}

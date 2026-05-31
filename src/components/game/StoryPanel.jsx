@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Loader2, Scroll, Feather, Volume2, VolumeX, Pause, Play, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SkillCheckResult from './SkillCheckResult';
+import SceneInteractionBar from './SceneInteractionBar';
 import { base44 } from '@/api/base44Client';
  
 const RISK_STYLES = {
@@ -20,7 +21,7 @@ function truncateForNarration(text, maxChars = 800) {
   return lastPeriod > 100 ? slice.slice(0, lastPeriod + 1) : slice;
 }
  
-export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit }) {
+export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit, sceneObjects = [], onSceneInteract }) {
   const endRef = useRef(null);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [isNarrating, setIsNarrating] = useState(false);
@@ -489,6 +490,9 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
             borderTop: '1px solid rgba(180,140,90,0.2)',
             boxShadow: 'inset 0 1px 0 rgba(201,169,110,0.08)'
           }}>
+          {!loading && onSceneInteract && sceneObjects.length > 0 && (
+            <SceneInteractionBar objects={sceneObjects} onInteract={onSceneInteract} disabled={loading} />
+          )}
           {!loading && choices.length > 0 && (
             <>
               <div className="flex items-center gap-2 mb-2" style={{ color: 'rgba(201,169,110,0.5)' }}>

@@ -148,6 +148,23 @@ Deno.serve(async (req) => {
     }
   };
 
+  // Interactive environment objects the player can manipulate (heavy door, glowing lever, trap, etc.)
+  const sceneObjectSchema = {
+    type: 'object',
+    properties: {
+      label:       { type: 'string', description: 'Short name of the object, e.g. "Heavy Oak Door", "Glowing Lever", "Pressure Plate Trap"' },
+      icon:        { type: 'string', description: 'A single emoji representing the object, e.g. 🚪, 🕯️, ⚙️, 🪤, 📦, 🗝️' },
+      action:      { type: 'string', description: 'What the player attempts, e.g. "Force the door open", "Pull the lever", "Disarm the trap"' },
+      description: { type: 'string', description: 'One vivid sentence describing the object in the scene' },
+      skill_check: { type: 'string', description: 'D&D 5e skill required to interact, e.g. Athletics, Investigation, Sleight of Hand, Perception, Arcana' },
+      dc:          { type: 'number', description: 'DC 10-25 for the interaction' },
+      risk_level:  { type: 'string', enum: ['low','medium','high','extreme'] }
+    },
+    required: ['label', 'action', 'skill_check', 'dc']
+  };
+
+  const sceneObjectsNote = `\n\nSCENE INTERACTION: Identify 0-3 notable INTERACTIVE OBJECTS in the current environment that the player could physically manipulate — such as a heavy door, a glowing lever, a locked chest, a pressure-plate trap, a crumbling wall, or arcane runes. Return them in "scene_objects". Each must have a skill_check and dc. Only include objects that genuinely exist in the scene you just described. Return an empty array if the scene has nothing to interact with.`;
+
   let prompt = '';
   let responseSchema = null;
 
@@ -162,13 +179,14 @@ Write an immersive opening narrative (3-4 paragraphs) that sets the scene vividl
 
 Then provide exactly 4 choices the player can make. Include skill checks and DCs on risky choices (at least 2-3 of 4 should have checks). Use diverse skills — Persuasion, Deception, Intimidation, Perception, Investigation, Athletics, Stealth, Insight, Acrobatics, Survival, Arcana, History, Medicine, Religion. DCs: 10=trivial, 15=moderate, 20=hard, 25=extreme.
 
-CRITICAL: Do NOT trigger combat in the opening scene. The first story beats should focus on exploration, NPC interaction, discovery, or investigation. Combat should only emerge after at least 3-5 player choices when it makes narrative sense.`;
+CRITICAL: Do NOT trigger combat in the opening scene. The first story beats should focus on exploration, NPC interaction, discovery, or investigation. Combat should only emerge after at least 3-5 player choices when it makes narrative sense.${sceneObjectsNote}`;
 
     responseSchema = {
       type: 'object',
       properties: {
         narrative:       { type: 'string' },
         choices:         { type: 'array', items: choiceItemSchema },
+        scene_objects:   { type: 'array', items: sceneObjectSchema },
         location_update: { type: 'string' },
         quest_trigger:   { type: 'string' },
         npc_present:     { type: 'string' }
@@ -232,13 +250,14 @@ Player Action: ${selectedChoice}
 ${skillCheckNote}
 
 Write the consequence narrative (2-3 paragraphs) reacting directly to the action and any skill check outcome. Then provide 4 new choices. Consider active conditions, reputation, environment (${session.season}, ${session.time_of_day}).${adultModeGuidelines}
-${combatNote}`;
+${combatNote}${sceneObjectsNote}`;
 
     responseSchema = {
       type: 'object',
       properties: {
         narrative:         { type: 'string' },
         choices:           { type: 'array', items: choiceItemSchema },
+        scene_objects:     { type: 'array', items: sceneObjectSchema },
         combat_trigger:    { type: 'boolean' },
         enemies:           { type: 'array', items: enemyItemSchema },
         reputation_change: { type: 'number' },
@@ -304,7 +323,8 @@ If it's a combat event, use the enemy schema with real monster stats.`;
         action,
         player_choice: custom_input ?? choice_index,
         text: result.narrative,
-        choices: result.choices || []
+        choices: result.choices || [],
+        scene_objects: result.scene_objects || []
       }
     ].slice(-50); // keep last 50 entries
 
