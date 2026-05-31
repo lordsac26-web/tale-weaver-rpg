@@ -901,14 +901,14 @@ export default function Game() {
               ))}
             </div>
             {/* Desktop: side-by-side. Mobile: tabbed */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden min-h-0">
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden min-h-0 h-full">
               <div className={`overflow-hidden flex flex-col min-h-0 ${combatViewTab !== 'story' ? 'hidden lg:flex' : ''}`}
                 style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
                 <StoryPanel narrative={narrative} choices={[]} loading={storyLoading}
                   onChoice={() => {}} customInput={customInput}
                   setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} />
               </div>
-              <div className={`overflow-hidden ${combatViewTab !== 'combat' ? 'hidden lg:block' : ''}`}>
+              <div className={`overflow-hidden flex flex-col min-h-0 ${combatViewTab !== 'combat' ? 'hidden lg:flex' : ''}`}>
                 <CombatPanel combat={combat} character={character}
                   onPlayerAttack={handlePlayerAttack}
                   onOffhandAttack={handleOffhandAttack}
