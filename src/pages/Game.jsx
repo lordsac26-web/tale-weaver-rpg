@@ -929,13 +929,17 @@ export default function Game() {
       </div>
 
       {/* Main Game Area with Cinematic Frame */}
-      <div className="flex-1 flex overflow-hidden min-h-0 relative">
-        {/* Three.js Background Scene */}
-        <ThreeJSScene 
-          inCombat={inCombat} 
-          season={session?.season || 'Spring'}
-          timeOfDay={session?.time_of_day || 'Morning'}
-        />
+      <div className="flex-1 overflow-hidden min-h-0 relative">
+        {/* Three.js Background Scene — absolutely positioned so its canvas
+            never participates in flex layout. When it resizes on combat
+            start it can't push/reflow the frame (which caused the scroll jump). */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <ThreeJSScene 
+            inCombat={inCombat} 
+            season={session?.season || 'Spring'}
+            timeOfDay={session?.time_of_day || 'Morning'}
+          />
+        </div>
         
         {/* Cinematic Frame Overlay */}
         <CinematicFrame 

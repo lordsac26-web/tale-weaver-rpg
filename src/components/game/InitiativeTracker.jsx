@@ -90,7 +90,6 @@ export default function InitiativeTracker({ combatants = [], currentTurnIndex, r
             return (
               <motion.div
                 key={c.id}
-                layout
                 animate={isActive ? {
                   scale: [1, 1.04, 1],
                   boxShadow: [
