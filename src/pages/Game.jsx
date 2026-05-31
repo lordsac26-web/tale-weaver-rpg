@@ -27,17 +27,36 @@ import CinematicFrame from '@/components/game/CinematicFrame';
 export default function Game() {
   const navigate = useNavigate();
 
-  // Lock document scroll for the entire Game page lifetime — this is a
-  // full-screen app (h-screen overflow-hidden). Any transient layout overflow
-  // from framer-motion mounts or Three.js canvas changes must never reach the
-  // document scroll position.
+  // Lock document scroll and fix viewport for the Game page.
+  // On mobile PWAs, the virtual keyboard shrinks the viewport when an input
+  // is focused, causing h-screen to recalculate and the layout to jump.
+  // We pin the height to the initial window.innerHeight so it never changes.
   useEffect(() => {
-    const prev = document.documentElement.style.overflow;
+    const prevDocOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevDocHeight = document.documentElement.style.height;
+    const prevBodyHeight = document.body.style.height;
+
+    const pinHeight = () => {
+      const h = `${window.innerHeight}px`;
+      document.documentElement.style.height = h;
+      document.body.style.height = h;
+    };
+
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
+    pinHeight();
+
+    // On some browsers the initial paint fires before the final viewport size
+    // is known, so pin again after a short delay.
+    const t = setTimeout(pinHeight, 300);
+
     return () => {
-      document.documentElement.style.overflow = prev;
-      document.body.style.overflow = '';
+      clearTimeout(t);
+      document.documentElement.style.overflow = prevDocOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.height = prevDocHeight;
+      document.body.style.height = prevBodyHeight;
     };
   }, []);
 
@@ -897,7 +916,7 @@ export default function Game() {
   const inCombat = session?.in_combat && combat;
 
   return (
-    <div className="h-screen flex flex-col parchment-bg overflow-hidden" style={{ color: '#e8d5b7' }}>
+    <div className="flex flex-col parchment-bg overflow-hidden" style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
       {/* HUD */}
       <HUD character={character} session={session} />
 
