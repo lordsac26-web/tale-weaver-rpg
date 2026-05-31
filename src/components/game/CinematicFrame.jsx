@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
  */
 export default function CinematicFrame({ children, inCombat = false, title = '' }) {
   return (
-    <div className="relative flex-1 min-h-0 min-w-0 h-full w-full overflow-hidden">
+    <div className="absolute inset-0 overflow-hidden">
       {/* Outer ornate frame */}
       <motion.div 
         className="absolute inset-0 pointer-events-none z-20"
@@ -101,8 +101,8 @@ export default function CinematicFrame({ children, inCombat = false, title = '' 
         background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.4) 100%)',
       }} />
 
-      {/* Content area */}
-      <div className="relative h-full w-full overflow-hidden flex flex-col min-h-0" style={{
+      {/* Content area — absolutely filled so height never collapses */}
+      <div className="absolute inset-0 overflow-hidden flex flex-col" style={{
         background: 'rgba(8,5,2,0.95)',
       }}>
         {children}
