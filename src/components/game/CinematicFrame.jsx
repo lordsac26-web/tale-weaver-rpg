@@ -102,7 +102,7 @@ export default function CinematicFrame({ children, inCombat = false, title = '' 
       }} />
 
       {/* Content area */}
-      <div className="relative h-full w-full overflow-hidden" style={{
+      <div className="relative h-full w-full overflow-hidden flex flex-col min-h-0" style={{
         background: 'rgba(8,5,2,0.95)',
       }}>
         {children}
