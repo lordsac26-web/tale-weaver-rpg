@@ -18,6 +18,7 @@ import { base44 } from '@/api/base44Client';
 export default function DeathSavesModal({ character, combat, onStabilize, onDeath, onClose }) {
   const [rolling, setRolling] = useState(false);
   const [lastRoll, setLastRoll] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
   // Use local state so UI updates immediately after each roll (not stale prop)
   const [successes, setSuccesses] = useState(character.death_saves_success || 0);
   const [failures, setFailures] = useState(character.death_saves_failure || 0);
@@ -25,10 +26,12 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
   const rollDeathSave = async () => {
     setRolling(true);
     setLastRoll(null);
+    setErrorMsg(null);
     await new Promise(resolve => setTimeout(resolve, 600));
 
-    // ── IN-COMBAT: route through combat engine (server-authoritative roll + log) ──
-    if (combat?.id) {
+    // ── IN-COMBAT: route through combat engine only if the combat is still ACTIVE.
+    // After defeat we set combat inactive, so an inactive log must use the client path. ──
+    if (combat?.id && combat?.is_active) {
       try {
         const res = await base44.functions.invoke('combatEngine', {
           action: 'death_save',
@@ -38,7 +41,7 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
           payload: {},
         });
         const d = res.data;
-        if (d?.error) { setRolling(false); return; }
+        if (d?.error) { setErrorMsg(d.error); setRolling(false); return; }
         const roll = d.roll;
         setLastRoll(roll);
         setSuccesses(d.death_saves_success);
@@ -48,7 +51,8 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
         window.dispatchEvent(new CustomEvent('reload-combat'));
         if (d.regained_hp || d.stabilized) { onStabilize(roll); return; }
         if (d.character_dead) { onDeath(); return; }
-      } catch {
+      } catch (err) {
+        setErrorMsg('The dice failed to roll. Please try again.');
         setRolling(false);
       }
       return;
@@ -183,6 +187,14 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Error message */}
+        {errorMsg && (
+          <div className="rounded-xl p-3 mb-4 text-center text-sm font-fantasy"
+            style={{ background: 'rgba(120,20,10,0.3)', border: '1px solid #dc2626', color: '#fca5a5' }}>
+            {errorMsg}
+          </div>
+        )}
 
         {/* Roll Button */}
         <button
