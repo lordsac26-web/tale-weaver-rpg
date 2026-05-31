@@ -23,6 +23,7 @@ function truncateForNarration(text, maxChars = 800) {
  
 export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit, sceneObjects = [], onSceneInteract }) {
   const endRef = useRef(null);
+  const scrollContainerRef = useRef(null);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [isNarrating, setIsNarrating] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -36,9 +37,12 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   const currentUtterance = useRef(null);
   const cancelledRef = useRef(false);
  
-  // Auto-scroll on new narrative entries
+  // Auto-scroll on new narrative entries — scroll ONLY this panel's own
+  // container (never scrollIntoView, which walks up and shifts the whole
+  // combat frame, leaving only the bottom enemy visible).
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [narrative, loading]);
 
   // Cleanup speech synthesis on unmount to prevent orphaned audio
@@ -372,7 +376,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
       </div>
  
       {/* Narrative Area */}
-      <div className="flex-1 overflow-y-auto p-5 md:p-7 space-y-5 min-h-0" style={{ background: 'transparent' }}>
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-5 md:p-7 space-y-5 min-h-0" style={{ background: 'transparent' }}>
         <AnimatePresence initial={false}>
           {narrative.map((entry, i) => (
             <motion.div key={i}
