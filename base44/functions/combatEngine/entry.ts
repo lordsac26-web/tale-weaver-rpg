@@ -256,9 +256,12 @@ Deno.serve(async (req) => {
         const baseHp = parseInt(e.hp) || e.hp_current || 10;
         const baseAtk = e.attack_bonus ?? 3;
         const baseDmgBonus = e.damage_bonus ?? 2;
+        const scaledMaxHp = Math.max(1, Math.round(baseHp * statMult));
+        const woundedPct = (e.current_hp != null && Number(e.current_hp) < baseHp) ? Math.max(0, Number(e.current_hp)) / baseHp : 1;
         return {
           ...e,
-          hp: Math.max(1, Math.round(baseHp * statMult)),
+          hp: scaledMaxHp,
+          current_hp: Math.max(1, Math.round(scaledMaxHp * woundedPct)),
           attack_bonus: Math.round(baseAtk + Math.max(0, level - 1) * 0.25),
           damage_bonus: Math.round(baseDmgBonus + Math.max(0, level - 4) * 0.2),
         };
@@ -336,13 +339,13 @@ Deno.serve(async (req) => {
         initiative_roll: initRoll,
         initiative_mod: initMod,
         initiative_total: initRoll + initMod,
-        hp_current: enemyHP,
+        hp_current: enemy.current_hp != null ? Math.max(1, Math.min(enemyHP, Number(enemy.current_hp))) : enemyHP,
         hp_max: enemyHP,
         ac: enemy.ac || 12,
         attack_bonus: enemy.attack_bonus || 3,
         damage_dice: enemy.damage_dice || '1d6',
         damage_bonus: enemy.damage_bonus || 2,
-        conditions: [],
+        conditions: Array.isArray(enemy.starting_conditions) ? enemy.starting_conditions.map(n => ({ name: String(n).toLowerCase().trim(), source: 'story' })) : [],
         is_conscious: true,
         cr,
         xp: enemy.xp || 100,

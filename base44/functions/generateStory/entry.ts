@@ -110,7 +110,9 @@ Deno.serve(async (req) => {
     type: 'object',
     properties: {
       name:          { type: 'string', description: 'Monster name exactly as listed above' },
-      hp:            { type: 'number', description: 'Hit points as an integer, e.g. 11' },
+      hp:            { type: 'number', description: 'Maximum hit points as an integer, e.g. 11' },
+      current_hp:    { type: 'number', description: 'Current hit points at the START of combat. If the narrative described this enemy as already wounded/injured, set this BELOW hp to reflect the damage. If unharmed, set equal to hp.' },
+      starting_conditions: { type: 'array', items: { type: 'string' }, description: 'Conditions the enemy already has when combat begins because of the narrative (e.g. "incapacitated", "prone", "stunned", "restrained"). Empty array if none.' },
       ac:            { type: 'number', description: 'Armor class as an integer, e.g. 13' },
       attack_bonus:  { type: 'number', description: 'Attack roll bonus, e.g. 4' },
       damage_dice:   { type: 'string', description: 'Damage dice string e.g. "1d6", "2d4"' },
@@ -202,6 +204,7 @@ CRITICAL: Do NOT trigger combat in the opening scene. The first story beats shou
 
 5. NEVER spawn CR ${character?.level || 1}+ enemies for a level ${character?.level || 1} character.
 6. Pull exact stats (HP, AC, attack bonus, damage) from the monster list above — do not invent values.
+7. CARRY NARRATIVE STATE INTO COMBAT: The combat encounter MUST reflect what you just narrated. If the narrative described an enemy as wounded, bleeding, struck, or otherwise hurt, set its current_hp BELOW its max hp accordingly (e.g. a badly wounded foe might start at 30-50% HP). If the narrative described an enemy as incapacitated, prone, stunned, or restrained, include those exact conditions in starting_conditions. NEVER spawn an enemy at full health when the narrative said it was already harmed or incapacitated — that contradicts the story.
 
 REMEMBER: A level 1 character has ~10 HP. Two bandits (CR 0.125 each with 11 HP, +3 attack, 1d6+1 damage) can easily kill them in 2 rounds. Be conservative with early encounters.`;
 
