@@ -1,0 +1,128 @@
+{
+  "name": "CombatLog",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "session_title": {
+      "type": "string",
+      "description": "Campaign/session title for display"
+    },
+    "character_id": {
+      "type": "string"
+    },
+    "character_name": {
+      "type": "string"
+    },
+    "round": {
+      "type": "number"
+    },
+    "combatants": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "initiative_order": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "current_turn_index": {
+      "type": "number",
+      "default": 0
+    },
+    "log_entries": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "world_state": {
+      "type": "object",
+      "description": "Combat turn state: {actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false}"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "ongoing",
+        "victory",
+        "defeat",
+        "fled",
+        "resolved"
+      ]
+    },
+    "enemies_faced": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Snapshot of enemies at combat end: name, max_hp, cr"
+    },
+    "loot_collected": {
+      "type": "object",
+      "description": "Coins and items collected after this combat",
+      "properties": {
+        "gold": {
+          "type": "number"
+        },
+        "silver": {
+          "type": "number"
+        },
+        "copper": {
+          "type": "number"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "xp_earned": {
+      "type": "number",
+      "default": 0
+    },
+    "xp_awarded": {
+      "type": "boolean",
+      "default": false,
+      "description": "Guard flag: true once victory XP has been granted, prevents double-awarding"
+    },
+    "location": {
+      "type": "string",
+      "description": "Where the encounter took place"
+    },
+    "total_rounds": {
+      "type": "number",
+      "description": "How many rounds the fight lasted"
+    },
+    "encounter_date": {
+      "type": "string",
+      "description": "ISO timestamp of when combat ended"
+    }
+  },
+  "required": [
+    "session_id"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

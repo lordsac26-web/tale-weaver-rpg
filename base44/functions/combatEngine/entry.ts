@@ -226,6 +226,17 @@ Deno.serve(async (req) => {
     return { nextIndex, nextRound };
   };
 
+  // Award victory XP exactly ONCE per combat. Re-reads the CombatLog and checks the
+  // xp_awarded flag to guard against duplicate/stale writes (race condition fix).
+  const awardVictoryXP = async (cid, combatantsArr, cid_char) => {
+    const freshLog = await base44.entities.CombatLog.get(cid);
+    if (freshLog.xp_awarded) return;
+    const totalXP = combatantsArr.filter(c => c.type === 'enemy').reduce((s, e) => s + (e.xp || 0), 0);
+    const ch = await base44.entities.Character.get(cid_char);
+    await base44.entities.Character.update(cid_char, { xp: (ch.xp || 0) + totalXP });
+    await base44.entities.CombatLog.update(cid, { xp_awarded: true });
+  };
+
   // ═══════════════════════════════════════════════════════════════════════════
   // ACTION: start_combat — roll initiative for player + enemies, sort the order,
   // and create the CombatLog record that drives the whole encounter.
@@ -712,11 +723,7 @@ Deno.serve(async (req) => {
         });
         if (result2 !== 'ongoing') {
           await base44.entities.GameSession.update(session_id, { in_combat: false });
-          if (result2 === 'victory') {
-            const totalXP2 = updatedC.filter(c => c.type === 'enemy').reduce((s2, e) => s2 + (e.xp || 0), 0);
-            const ch2 = await base44.entities.Character.get(character_id);
-            await base44.entities.Character.update(character_id, { xp: (ch2.xp || 0) + totalXP2 });
-          }
+          if (result2 === 'victory') await awardVictoryXP(combat_id, updatedC, character_id);
         }
         return Response.json({ hit: saveFailed, damage: finalDmg, log_entry: saveEntry, result: result2, combat_ended: result2 !== 'ongoing', actions_remaining: Math.max(0, ar2), next_turn_index: ni });
       }
@@ -751,7 +758,7 @@ Deno.serve(async (req) => {
         await base44.entities.CombatLog.update(combat_id, { combatants: updatedCMM, log_entries: [...(combatLog.log_entries || []), mmEntry], current_turn_index: niMM, round: nrMM, world_state: wsMM, is_active: resultMM === 'ongoing', result: resultMM });
         if (resultMM !== 'ongoing') {
           await base44.entities.GameSession.update(session_id, { in_combat: false });
-          if (resultMM === 'victory') { const ch = await base44.entities.Character.get(character_id); await base44.entities.Character.update(character_id, { xp: (ch.xp || 0) + updatedCMM.filter(c => c.type === 'enemy').reduce((s, e) => s + (e.xp || 0), 0) }); }
+          if (resultMM === 'victory') await awardVictoryXP(combat_id, updatedCMM, character_id);
         }
         return Response.json({ hit: true, damage: totalMissileDmg, log_entry: mmEntry, result: resultMM, combat_ended: resultMM !== 'ongoing', actions_remaining: Math.max(0, arMM), next_turn_index: niMM });
       }
@@ -804,7 +811,7 @@ Deno.serve(async (req) => {
         await base44.entities.CombatLog.update(combat_id, { combatants: updatedCEB, log_entries: [...(combatLog.log_entries || []), ebEntry], current_turn_index: niEB, round: nrEB, world_state: wsEB, is_active: resultEB === 'ongoing', result: resultEB });
         if (resultEB !== 'ongoing') {
           await base44.entities.GameSession.update(session_id, { in_combat: false });
-          if (resultEB === 'victory') { const ch = await base44.entities.Character.get(character_id); await base44.entities.Character.update(character_id, { xp: (ch.xp || 0) + updatedCEB.filter(c => c.type === 'enemy').reduce((s, e) => s + (e.xp || 0), 0) }); }
+          if (resultEB === 'victory') await awardVictoryXP(combat_id, updatedCEB, character_id);
         }
         return Response.json({ hit: anyBeamHit, damage: totalBeamDmg, log_entry: ebEntry, result: resultEB, combat_ended: resultEB !== 'ongoing', actions_remaining: Math.max(0, arEB), next_turn_index: niEB });
       }
@@ -1237,11 +1244,7 @@ Deno.serve(async (req) => {
 
     if (result !== 'ongoing') {
       await base44.entities.GameSession.update(session_id, { in_combat: false });
-      if (result === 'victory') {
-        const totalXP = updatedCombatants.filter(c => c.type === 'enemy').reduce((s, e) => s + (e.xp || 0), 0);
-        const ch = await base44.entities.Character.get(character_id);
-        await base44.entities.Character.update(character_id, { xp: (ch.xp || 0) + totalXP });
-      }
+      if (result === 'victory') await awardVictoryXP(combat_id, updatedCombatants, character_id);
     }
 
     return Response.json({
@@ -1345,11 +1348,7 @@ Deno.serve(async (req) => {
 
     if (result !== 'ongoing') {
       await base44.entities.GameSession.update(session_id, { in_combat: false });
-      if (result === 'victory') {
-        const totalXP = updatedCombatants.filter(c => c.type === 'enemy').reduce((s, e) => s + (e.xp || 0), 0);
-        const ch = await base44.entities.Character.get(character_id);
-        await base44.entities.Character.update(character_id, { xp: (ch.xp || 0) + totalXP });
-      }
+      if (result === 'victory') await awardVictoryXP(combat_id, updatedCombatants, character_id);
     }
 
     return Response.json({
