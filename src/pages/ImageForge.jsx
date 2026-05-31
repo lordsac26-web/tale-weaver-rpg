@@ -445,11 +445,11 @@ export default function ImageForge() {
                 <input type="checkbox" checked={matureContent} onChange={e => setMatureContent(e.target.checked)}
                   className="rounded" style={{ accentColor: '#f0c040' }} />
                 <div className="flex-1">
-                  <div className="font-fantasy text-sm" style={{ color: 'rgba(201,169,110,0.8)' }}>
-                    Mature Fantasy Art
+                  <div className="font-fantasy text-sm flex items-center gap-1.5" style={{ color: 'rgba(201,169,110,0.8)' }}>
+                    <span className="text-xs">🔞</span> Mature Fantasy Art (18+)
                   </div>
                   <div className="text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>
-                    Allow intense violence, gore, revealing fantasy costumes, dark themes
+                    Allow intense violence, blood, gore, dark themes, revealing costumes (R-rated max)
                   </div>
                 </div>
               </label>

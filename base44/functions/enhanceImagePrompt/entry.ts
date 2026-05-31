@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 Deno.serve(async (req) => {
   try {
@@ -9,44 +9,76 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { prompt, mature_content = false } = await req.json();
+    const { prompt, mature_content = false, category = 'custom' } = await req.json();
 
-    if (!prompt || typeof prompt !== 'string') {
+    if (!prompt) {
       return Response.json({ error: 'Prompt required' }, { status: 400 });
     }
 
-    const systemPrompt = `You are an expert at crafting detailed image generation prompts for D&D fantasy art.
-Transform the user's basic description into a rich, detailed prompt optimized for image generation.
+    // Build system prompt based on mature content setting
+    const systemPrompt = mature_content
+      ? `You are a professional fantasy art prompt enhancer for mature D&D campaigns.
+Enhance the user's prompt with vivid, dramatic details while keeping it R-rated maximum.
 
-Guidelines:
-- Add vivid details about lighting, atmosphere, composition, and artistic style
-- Specify D&D fantasy art aesthetic (detailed, dramatic, epic)
-- Include technical terms: "digital art", "detailed", "dramatic lighting", "cinematic"
-- Keep the core concept but enhance with visual details
-- Make it 2-3 sentences maximum
-${mature_content ? '- User has enabled 18+ content: you may include violence, gore, battle scenes, dark themes' : '- Keep content family-friendly: no violence, gore, or dark themes'}
-- NEVER include sexual content regardless of settings
+ALLOWED for mature fantasy art:
+- Intense battle scenes with blood, gore, wounds, and visceral combat
+- Dark themes: death, necromancy, demons, horror elements
+- Revealing fantasy costumes: chainmail bikinis, low-cut dresses, muscular bare-chested warriors
+- Artistic fantasy anatomy: exaggerated muscular definition, slight breast exposure on female warriors (sideboob, cleavage), artistic nudity in classical statue style
+- Grim atmosphere: torture devices (no graphic torture), dark dungeons, ominous lighting
+- Monster violence: impalement, dismemberment (stylized, not gratuitous)
 
-Output ONLY the enhanced prompt, nothing else.`;
+STILL PROHIBITED:
+- Explicit sexual acts or positions
+- Genital exposure or full frontal nudity
+- Pornographic content
+- Gratuitous gore focused on suffering
+- Real-world hate symbols or discrimination
 
+Focus on PROFESSIONAL FANTASY ART context - think Magic: The Gathering, heavy metal album covers, classic Frazetta paintings, mature D&D sourcebooks.
+
+Enhance with: dramatic lighting, dynamic composition, rich color palette, emotional intensity, and artistic merit.`
+      : `You are a professional fantasy art prompt enhancer for D&D campaigns.
+Enhance the user's prompt with vivid, dramatic details while keeping it family-friendly.
+
+Focus on: heroic compositions, vibrant colors, dynamic action, professional fantasy illustration quality.
+Avoid: excessive violence, gore, revealing clothing, dark/grim themes.
+
+Think: classic D&D sourcebook art, heroic fantasy posters, vibrant adventure scenes.`;
+
+    const enhancementPrompt = `Original prompt: "${prompt}"
+Category: ${category}
+Mature content: ${mature_content ? 'Yes (R-rated max)' : 'No (Family-friendly)'}
+
+Enhance this prompt for AI image generation. Make it more vivid, detailed, and artistically directed. Include:
+- Art style references (professional fantasy illustration)
+- Lighting and atmosphere
+- Composition guidance
+- Color palette suggestions
+- Emotional tone
+
+Return ONLY the enhanced prompt, no explanations.`;
+
+    // Use InvokeLLM with appropriate model
     const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `${systemPrompt}\n\nUser's description: "${prompt}"\n\nEnhance this into a detailed D&D fantasy art prompt:`,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          enhanced_prompt: { type: 'string' }
-        },
-        required: ['enhanced_prompt']
-      },
+      prompt: enhancementPrompt,
+      add_context_from_internet: false,
+      model: mature_content ? 'claude_sonnet_4_6' : 'automatic',
     });
+
+    const enhancedPrompt = typeof result === 'string' ? result : result.response || prompt;
 
     return Response.json({
       success: true,
-      enhanced_prompt: result.enhanced_prompt,
+      enhanced_prompt: enhancedPrompt,
       original_prompt: prompt,
+      mature_mode: mature_content,
     });
   } catch (error) {
     console.error('Prompt enhancement error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ 
+      error: error.message || 'Enhancement failed',
+      original_prompt: prompt 
+    }, { status: 500 });
   }
 });

@@ -18,18 +18,34 @@ Deno.serve(async (req) => {
     // Build enhanced prompt with D&D styling
     let finalPrompt = prompt || 'Transform this into D&D fantasy art style';
     
-    const stylePrefix = 'D&D fantasy art, epic digital painting, detailed, dramatic lighting, cinematic composition, ';
+    const stylePrefix = mature_content
+      ? 'Mature D&D fantasy art, R-rated dark fantasy illustration, professional concept art, dramatic lighting, cinematic composition, '
+      : 'D&D fantasy art, epic digital painting, detailed, dramatic lighting, cinematic composition, ';
+    
     const styleSuffix = mature_content 
-      ? ', dark fantasy, intense, gritty realism'
+      ? ', dark fantasy, intense battle scene, gritty realism, visceral details, atmospheric horror, professional mature fantasy art, award-winning concept art'
       : ', heroic fantasy, vibrant, detailed background';
 
     finalPrompt = `${stylePrefix}${finalPrompt}${styleSuffix}`;
 
-    // Content safety enforcement
+    // Content safety enforcement based on mature_content flag
     const safetyCheck = finalPrompt.toLowerCase();
-    const bannedTerms = ['nude', 'naked', 'sexual', 'nsfw', 'porn', 'explicit'];
-    if (bannedTerms.some(term => safetyCheck.includes(term))) {
-      return Response.json({ error: 'Sexual content is not allowed' }, { status: 400 });
+    
+    if (mature_content) {
+      // R-rated mode: Allow dark fantasy, violence, revealing costumes
+      // Block only explicit prohibited content
+      const hardBannedTerms = ['porn', 'porno', 'pornography', 'explicit sex', 'intercourse', 'genital', 'penis', 'vagina', 'pubic'];
+      if (hardBannedTerms.some(term => safetyCheck.includes(term))) {
+        return Response.json({ 
+          error: 'Content violates guidelines: No explicit sexual content or genital exposure allowed.' 
+        }, { status: 400 });
+      }
+    } else {
+      // Family-friendly mode: Strict filtering
+      const bannedTerms = ['nude', 'naked', 'sexual', 'nsfw', 'porn', 'explicit', 'blood', 'gore', 'violence', 'death', 'dismember', 'impale'];
+      if (bannedTerms.some(term => safetyCheck.includes(term))) {
+        return Response.json({ error: 'Content not suitable for family-friendly mode. Enable mature content or rephrase your prompt.' }, { status: 400 });
+      }
     }
 
     // Try generating with up to 2 attempts — content filters can be flaky
@@ -58,8 +74,8 @@ Deno.serve(async (req) => {
         lastError = genError;
         const msg = (genError.message || '').toLowerCase();
         
-        // If content filter triggered, soften the prompt and retry
-        if (msg.includes('filtered') || msg.includes('usage guidelines') || msg.includes('violated')) {
+        // If content filter triggered and NOT in mature mode, soften the prompt and retry
+        if ((msg.includes('filtered') || msg.includes('usage guidelines') || msg.includes('violated')) && !mature_content) {
           // Strip aggressive terms and retry with softer phrasing
           finalPrompt = finalPrompt
             .replace(/gore|blood|grit|violent|intense|dark fantasy|gritty/gi, '')
@@ -67,6 +83,16 @@ Deno.serve(async (req) => {
             .replace(/\s{2,}/g, ' ')
             .trim();
           finalPrompt += ', family-friendly fantasy illustration, safe content';
+          continue;
+        }
+        
+        // In mature mode, if filter triggers, try once with slightly softer language but keep dark themes
+        if ((msg.includes('filtered') || msg.includes('usage guidelines')) && mature_content) {
+          finalPrompt = finalPrompt
+            .replace(/excessive gore|gratuitous violence|torture/gi, 'intense dark fantasy')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+          finalPrompt += ', professional mature fantasy concept art, artistic composition';
           continue;
         }
         // For non-filter errors, don't retry
@@ -79,9 +105,15 @@ Deno.serve(async (req) => {
     const isFilterError = errorMsg.toLowerCase().includes('filtered') || errorMsg.toLowerCase().includes('usage guidelines');
     
     if (isFilterError) {
-      return Response.json({ 
-        error: 'The image was blocked by the AI content filter. Try rephrasing your prompt — remove any violent, dark, or potentially sensitive terms and try again.' 
-      }, { status: 422 });
+      if (mature_content) {
+        return Response.json({ 
+          error: 'The image was blocked by content filters even in mature mode. Try reducing explicit descriptions of violence or anatomy while keeping the dark fantasy theme.' 
+        }, { status: 422 });
+      } else {
+        return Response.json({ 
+          error: 'The image was blocked by the AI content filter. Try rephrasing your prompt — remove any violent, dark, or potentially sensitive terms, or enable "Mature Fantasy Art" mode for darker themes.' 
+        }, { status: 422 });
+      }
     }
 
     return Response.json({ error: errorMsg }, { status: 500 });
