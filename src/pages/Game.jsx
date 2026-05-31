@@ -26,6 +26,21 @@ import CinematicFrame from '@/components/game/CinematicFrame';
 
 export default function Game() {
   const navigate = useNavigate();
+
+  // Lock document scroll for the entire Game page lifetime — this is a
+  // full-screen app (h-screen overflow-hidden). Any transient layout overflow
+  // from framer-motion mounts or Three.js canvas changes must never reach the
+  // document scroll position.
+  useEffect(() => {
+    const prev = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.style.overflow = prev;
+      document.body.style.overflow = '';
+    };
+  }, []);
+
   const urlParams = new URLSearchParams(window.location.search);
   const sessionId = urlParams.get('session_id');
 
