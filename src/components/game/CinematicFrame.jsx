@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
  */
 export default function CinematicFrame({ children, inCombat = false, title = '' }) {
   return (
-    <div className="relative h-full w-full overflow-hidden">
+    <div className="relative flex-1 min-h-0 min-w-0 h-full w-full overflow-hidden">
       {/* Outer ornate frame */}
       <motion.div 
         className="absolute inset-0 pointer-events-none z-20"
