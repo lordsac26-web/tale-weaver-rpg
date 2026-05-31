@@ -230,11 +230,13 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* LEFT — targets + actions */}
-        <div className="flex flex-col w-1/2 overflow-hidden" style={{ borderRight: '1px solid rgba(180,50,50,0.2)' }}>
+        {/* LEFT — targets + actions (single unified scroll container so the
+            action panel / Attack button can never be clipped, regardless of
+            how many ability toasts are stacked) */}
+        <div className="flex flex-col w-1/2 overflow-y-auto min-h-0" style={{ borderRight: '1px solid rgba(180,50,50,0.2)' }}>
 
           {/* Enemy targets */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
+          <div className="p-3 space-y-2">
             <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(180,100,100,0.5)', fontSize: '0.65rem' }}>SELECT TARGET</div>
             {enemies.map(enemy => {
               // hp_current is the live value updated during combat; hp is the initial value set at start
@@ -307,8 +309,8 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
 
           {/* Action panel */}
           {isPlayerTurn ? (
-            <div className="flex-shrink-0 p-3 space-y-2"
-              style={{ borderTop: '1px solid rgba(180,50,50,0.2)', background: 'rgba(10,3,3,0.85)' }}>
+            <div className="p-3 space-y-2"
+              style={{ borderTop: '1px solid rgba(200,70,60,0.3)', background: 'rgba(28,12,10,0.9)' }}>
 
               {/* Player Status */}
               <CombatPlayerStatus character={character} combat={combat} />
@@ -534,7 +536,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
               </motion.button>
             </div>
           ) : (
-            <div className="flex-shrink-0 p-3"
+            <div className="p-3"
               style={{ borderTop: '1px solid rgba(180,50,50,0.15)', background: 'rgba(10,3,3,0.7)' }}>
               <button onClick={onNextTurn} disabled={loading}
                 className="w-full py-3 rounded-xl text-sm font-fantasy flex items-center justify-center gap-2 btn-fantasy">
