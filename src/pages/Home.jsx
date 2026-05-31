@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 
 import { Link } from 'react-router-dom';
-import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked, Book, Smartphone } from 'lucide-react';
-import PWAInstallButton from '@/components/PWAInstallButton';
-import PWADebugger from '@/components/PWADebugger';
+import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import CharacterSheet from '@/components/game/CharacterSheet';
@@ -49,24 +47,6 @@ export default function Home() {
       {/* Top brass accent bar */}
       <div className="fixed top-0 left-0 right-0 z-40 h-0.5 pointer-events-none"
         style={{ background: 'linear-gradient(90deg, transparent, rgba(232,184,109,0.7) 25%, rgba(245,208,138,0.85) 50%, rgba(232,184,109,0.7) 75%, transparent)' }} />
-      
-      {/* Show PWA Debug toggle button (bottom-left corner) */}
-      <button
-        onClick={() => {
-          const event = new CustomEvent('show-pwa-debugger');
-          window.dispatchEvent(event);
-        }}
-        className="fixed bottom-4 left-4 p-2.5 rounded-xl z-40 transition-all hover:scale-110"
-        style={{ 
-          background: 'rgba(20,15,10,0.9)',
-          border: '1px solid rgba(201,169,110,0.3)',
-          color: 'rgba(201,169,110,0.6)',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.6)'
-        }}
-        title="Show PWA Debugger"
-      >
-        <Smartphone className="w-4 h-4" />
-      </button>
 
       {/* Nav Bar */}
       {characters.length > 0 && (
@@ -74,13 +54,7 @@ export default function Home() {
           style={{ background: 'rgba(10,5,2,0.95)', borderBottom: '1px solid rgba(184,115,51,0.3)', backdropFilter: 'blur(10px)' }}>
           <div className="flex items-center gap-2">
             <div className="w-1 h-5 rounded-full" style={{ background: 'linear-gradient(180deg, #e8b86d, #b87333)' }} />
-            <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(240,200,120,0.85)' }}>TALE WEAVER</span>
-          </div>
-          <PWAInstallButton />
-          
-          {/* PWA Debug Info - Remove after testing */}
-          <div className="hidden lg:block" style={{ maxWidth: '400px' }}>
-            <PWADebugger />
+            <span className="font-fantasy text-xs tracking-widest" style={{ color: 'rgba(212,149,90,0.6)' }}>TALE WEAVER</span>
           </div>
           <div className="relative" onClick={e => e.stopPropagation()}>
             <button
@@ -112,7 +86,7 @@ export default function Home() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-fantasy truncate" style={{ color: 'var(--parchment)' }}>{char.name}</div>
-                        <div className="text-xs" style={{ color: 'rgba(232,200,150,0.8)', fontFamily: 'EB Garamond, serif' }}>Lv.{char.level} {char.class}</div>
+                        <div className="text-xs" style={{ color: 'rgba(212,149,90,0.55)', fontFamily: 'EB Garamond, serif' }}>Lv.{char.level} {char.class}</div>
                       </div>
                     </button>
                   ))}
@@ -153,7 +127,7 @@ export default function Home() {
             <div className="flex items-center gap-2 px-4 py-1.5 rounded-full"
               style={{ background: 'rgba(45,22,8,0.7)', border: '1px solid rgba(184,115,51,0.2)' }}>
               <Sparkles className="w-3 h-3" style={{ color: 'var(--brass-gold)' }} />
-              <span className="font-fantasy tracking-widest text-xs" style={{ color: 'rgba(255,240,200,0.85)' }}>D&D 5E · REAL DICE ENGINE · LIVING WORLD</span>
+              <span className="font-fantasy tracking-widest text-xs" style={{ color: 'rgba(212,149,90,0.7)' }}>D&D 5E · REAL DICE ENGINE · LIVING WORLD</span>
               <Sparkles className="w-3 h-3" style={{ color: 'var(--brass-gold)' }} />
             </div>
             <div className="h-px flex-1 max-w-16" style={{ background: 'linear-gradient(90deg, rgba(184,115,51,0.5), transparent)' }} />
@@ -163,17 +137,6 @@ export default function Home() {
         {/* ── Main Action Cards ── */}
         <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-14">
           {[
-            {
-              to: '/CustomBestiary',
-              icon: Book, iconColor: 'var(--brass-gold)',
-              accentColor: 'rgba(184,115,51,0.2)', glowColor: 'rgba(184,115,51,0.08)',
-              borderColor: 'rgba(184,115,51,0.3)',
-              title: 'Custom Bestiary', titleColor: '#f0d090',
-              desc: 'Create unique monster templates for your campaigns.',
-              descColor: 'rgba(232,212,168,0.85)',
-              iconBg: 'linear-gradient(135deg, #5c3318, #3d2010)',
-              iconBorder: 'rgba(212,149,90,0.35)',
-            },
             {
               to: '/ImageForge',
               icon: Wand2, iconColor: '#f0c040',
@@ -192,7 +155,7 @@ export default function Home() {
               borderColor: 'rgba(184,115,51,0.3)',
               title: 'Lore Archives', titleColor: '#f0d090',
               desc: 'History, factions, figures, locations & your adventurer\'s logbook.',
-              descColor: 'rgba(232,212,168,0.85)',
+              descColor: 'var(--parchment-dim)',
               iconBg: 'linear-gradient(135deg, #5c3318, #3d2010)',
               iconBorder: 'rgba(212,149,90,0.35)',
             },
@@ -203,7 +166,7 @@ export default function Home() {
               borderColor: 'rgba(184,115,51,0.28)',
               title: 'New Hero', titleColor: '#f5d08a',
               desc: 'Forge your legend. Choose race, class, roll stats, shape destiny.',
-              descColor: 'rgba(232,212,168,0.85)',
+              descColor: 'var(--parchment-dim)',
               iconBg: 'linear-gradient(135deg, #6b3d1a, #4a2510)',
               iconBorder: 'rgba(232,184,109,0.35)',
             },
@@ -326,7 +289,7 @@ export default function Home() {
             <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}>
               <Skull className="w-16 h-16 mx-auto mb-5" style={{ color: 'rgba(184,115,51,0.2)' }} />
             </motion.div>
-            <p className="font-fantasy text-lg" style={{ color: 'rgba(240,210,170,0.7)', textShadow: '0 0 16px rgba(184,115,51,0.15)' }}>
+            <p className="font-fantasy text-lg" style={{ color: 'rgba(212,149,90,0.35)', textShadow: '0 0 16px rgba(184,115,51,0.15)' }}>
               No heroes yet. Your legend begins now.
             </p>
           </motion.div>
@@ -413,7 +376,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
           <h3 className="font-fantasy font-bold text-sm truncate" style={{ color: 'var(--parchment)', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
             {character.name}
           </h3>
-          <p className="text-xs truncate" style={{ color: 'rgba(232,200,150,0.85)', fontFamily: 'EB Garamond, serif' }}>
+          <p className="text-xs truncate" style={{ color: 'rgba(212,149,90,0.6)', fontFamily: 'EB Garamond, serif' }}>
             {character.race} {character.class}
           </p>
         </div>
@@ -426,7 +389,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
           <div className="flex justify-between items-center mb-1.5">
             <div className="flex items-center gap-1.5">
               <Heart className="w-3 h-3" style={{ color: hpTextColor }} />
-              <span className="text-xs font-fantasy" style={{ color: 'rgba(240,210,170,0.75)', fontSize: '0.62rem', letterSpacing: '0.08em' }}>HIT POINTS</span>
+              <span className="text-xs font-fantasy" style={{ color: 'rgba(212,149,90,0.5)', fontSize: '0.62rem', letterSpacing: '0.08em' }}>HIT POINTS</span>
             </div>
             <span className="font-fantasy font-bold text-xs" style={{ color: hpTextColor }}>{character.hp_current}/{character.hp_max}</span>
           </div>
@@ -447,7 +410,7 @@ function CharacterCard({ character, sessions, onViewSheet }) {
               style={{ background: 'rgba(8,4,1,0.7)', border: '1px solid rgba(184,115,51,0.12)' }}>
               <Icon className="w-3 h-3 mx-auto mb-0.5" style={{ color }} />
               <div className="font-fantasy font-bold text-xs" style={{ color, textShadow: `0 0 8px ${color}55` }}>{val}</div>
-              <div className="font-body text-xs" style={{ color: 'rgba(220,195,155,0.7)', fontSize: '0.6rem' }}>{label}</div>
+              <div className="font-body text-xs" style={{ color: 'rgba(184,150,100,0.4)', fontSize: '0.6rem' }}>{label}</div>
             </div>
           ))}
         </div>
@@ -568,16 +531,16 @@ function SessionCard({ session, characters }) {
             </div>
           </div>
           <div className="px-4 py-3 space-y-1">
-            <p className="text-sm italic font-serif" style={{ color: 'rgba(220,200,180,0.85)' }}>
+            <p className="text-sm italic font-serif" style={{ color: 'rgba(196,181,253,0.65)' }}>
               📍 {session.current_location || 'Unknown Location'}
             </p>
             {char && (
-              <p className="text-xs font-body" style={{ color: 'rgba(232,200,150,0.85)' }}>
+              <p className="text-xs font-body" style={{ color: 'rgba(212,149,90,0.55)' }}>
                 Playing as <span style={{ color: 'var(--brass-gold)', fontWeight: 600 }}>{char.name}</span>
               </p>
             )}
             {(session.season || session.time_of_day) && (
-              <p className="text-xs font-body" style={{ color: 'rgba(200,180,220,0.7)' }}>
+              <p className="text-xs font-body" style={{ color: 'rgba(160,130,200,0.4)' }}>
                 {[session.season, session.time_of_day].filter(Boolean).join(' · ')}
               </p>
             )}

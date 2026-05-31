@@ -90,6 +90,7 @@ export default function InitiativeTracker({ combatants = [], currentTurnIndex, r
             return (
               <motion.div
                 key={c.id}
+                layout
                 animate={isActive ? {
                   scale: [1, 1.04, 1],
                   boxShadow: [
@@ -99,7 +100,7 @@ export default function InitiativeTracker({ combatants = [], currentTurnIndex, r
                   ]
                 } : { scale: 1 }}
                 transition={{ repeat: isActive ? Infinity : 0, duration: 2.5, ease: 'easeInOut' }}
-                className="flex-shrink-0 cursor-pointer relative"
+                className="flex-shrink-0 cursor-pointer"
                 onClick={() => setExpandedCombatant(isExpanded ? null : c.id)}
                 style={{
                   minWidth: isExpanded ? '180px' : '70px',

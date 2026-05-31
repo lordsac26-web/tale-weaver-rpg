@@ -54,20 +54,11 @@ Deno.serve(async (req) => {
     const totalXPBudget = xpPerCharacter * partySize;
     const adjustedBudget = adjustBudgetByPartySize(totalXPBudget, partySize);
 
-    // Fetch available monsters (standard + custom)
-    const [standardMonsters, customMonsters] = await Promise.all([
-      base44.asServiceRole.entities.Monster.list('-challenge', 50),
-      base44.asServiceRole.entities.CustomMonster.list('-challenge', 50)
-    ]);
-
-    // Combine monsters, marking custom ones
-    const allMonsters = [
-      ...(standardMonsters || []),
-      ...(customMonsters || []).map(m => ({ ...m, is_custom: true }))
-    ];
+    // Fetch available monsters
+    const monsters = await base44.asServiceRole.entities.Monster.list('-challenge', 50);
 
     // Generate encounter
-    const encounter = buildEncounter(allMonsters, adjustedBudget, partyLevel, environment);
+    const encounter = buildEncounter(monsters, adjustedBudget, partyLevel, environment);
 
     return Response.json({
       success: true,
@@ -123,37 +114,10 @@ function buildEncounter(monsters, xpBudget, partyLevel, environment) {
   }
 
   // Filter monsters by CR relevance to party level
-  let relevantMonsters = monsters.filter(m => {
+  const relevantMonsters = monsters.filter(m => {
     const cr = parseFloat(m.challenge) || 0;
     return cr <= partyLevel + 2 && cr >= Math.max(0, partyLevel - 3);
   });
-
-  // Filter by environment/biome if specified
-  if (environment) {
-    const envMap = {
-      'forest': ['Forest', 'Wood'],
-      'cave': ['Underground', 'Mountain'],
-      'dungeon': ['Underground', 'Urban'],
-      'ruins': ['Plains', 'Mountain'],
-      'town': ['Urban'],
-      'desert': ['Desert'],
-      'mountain': ['Mountain', 'Hill'],
-      'water': ['Aquatic', 'Coastal'],
-      'urban': ['Urban'],
-      'plains': ['Plains'],
-      'swamp': ['Swamp'],
-      'arctic': ['Arctic'],
-      'sky': ['Sky']
-    };
-    
-    const matchingBiomes = envMap[environment.toLowerCase()] || [];
-    if (matchingBiomes.length > 0) {
-      relevantMonsters = relevantMonsters.filter(m => {
-        if (!m.biomes) return false;
-        return matchingBiomes.some(biome => m.biomes.toLowerCase().includes(biome.toLowerCase()));
-      });
-    }
-  }
 
   if (relevantMonsters.length === 0) {
     return encounter;

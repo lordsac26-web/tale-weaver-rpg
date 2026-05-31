@@ -21,45 +21,9 @@ import LootModal from '@/components/game/LootModal.jsx';
 import CompanionPanel from '@/components/game/CompanionPanel';
 import RestModal from '@/components/game/RestModal';
 import GameToolbar from '@/components/game/GameToolbar';
-import ThreeJSScene from '@/components/game/ThreeJSScene';
-import CinematicFrame from '@/components/game/CinematicFrame';
 
 export default function Game() {
   const navigate = useNavigate();
-
-  // Lock document scroll and fix viewport for the Game page.
-  // On mobile PWAs, the virtual keyboard shrinks the viewport when an input
-  // is focused, causing h-screen to recalculate and the layout to jump.
-  // We pin the height to the initial window.innerHeight so it never changes.
-  useEffect(() => {
-    const prevDocOverflow = document.documentElement.style.overflow;
-    const prevBodyOverflow = document.body.style.overflow;
-    const prevDocHeight = document.documentElement.style.height;
-    const prevBodyHeight = document.body.style.height;
-
-    const pinHeight = () => {
-      const h = `${window.innerHeight}px`;
-      document.documentElement.style.height = h;
-      document.body.style.height = h;
-    };
-
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    pinHeight();
-
-    // On some browsers the initial paint fires before the final viewport size
-    // is known, so pin again after a short delay.
-    const t = setTimeout(pinHeight, 300);
-
-    return () => {
-      clearTimeout(t);
-      document.documentElement.style.overflow = prevDocOverflow;
-      document.body.style.overflow = prevBodyOverflow;
-      document.documentElement.style.height = prevDocHeight;
-      document.body.style.height = prevBodyHeight;
-    };
-  }, []);
-
   const urlParams = new URLSearchParams(window.location.search);
   const sessionId = urlParams.get('session_id');
 
@@ -68,7 +32,6 @@ export default function Game() {
   const [combat, setCombat] = useState(null);
   const [narrative, setNarrative] = useState([]);
   const [choices, setChoices] = useState([]);
-  const [sceneObjects, setSceneObjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [storyLoading, setStoryLoading] = useState(false);
   const [combatLoading, setCombatLoading] = useState(false);
@@ -127,7 +90,6 @@ export default function Game() {
       setStarted(true);
       const lastEntry = sess.story_log[sess.story_log.length - 1];
       if (lastEntry?.choices?.length > 0) setChoices(lastEntry.choices);
-      if (lastEntry?.scene_objects?.length > 0) setSceneObjects(lastEntry.scene_objects);
     }
 
     if (sess.in_combat && sess.combat_state?.combat_id) {
@@ -171,7 +133,6 @@ export default function Game() {
       const data = result.data;
       setNarrative([{ type: 'narration', text: data.narrative }]);
       setChoices(data.choices || []);
-      setSceneObjects(data.scene_objects || []);
       await loadState();
     } catch (err) {
       console.error('Failed to start adventure:', err);
@@ -240,7 +201,6 @@ export default function Game() {
     const choice = choices[choiceIndex];
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
     setChoices([]);
-    setSceneObjects([]);
 
     let skillSuccess = undefined;
 
@@ -291,65 +251,11 @@ export default function Game() {
         await startCombat(data.enemies);
       } else {
         setChoices(data.choices || []);
-        setSceneObjects(data.scene_objects || []);
       }
 
       await loadState();
     } catch (err) {
       console.error('Failed to process choice:', err);
-      setNarrative(prev => [...prev, { type: 'narration', text: 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
-    } finally {
-      setStoryLoading(false);
-    }
-  };
-
-  // Scene Interaction — player manipulates a highlighted environment object.
-  // Reuses the same skill-check engine as choices, then asks the DM for the consequence.
-  const handleSceneInteract = async (obj) => {
-    if (!obj) return;
-    const actionText = obj.action || `Interact with ${obj.label}`;
-    setNarrative(prev => [...prev, { type: 'player_action', text: actionText }]);
-    setChoices([]);
-    setSceneObjects([]);
-
-    let skillSuccess = undefined;
-    if (obj.skill_check && obj.dc) {
-      const equipAdv = getEquipmentAdvantage(character?.equipped, obj.skill_check);
-      const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
-      const modifier = computeSkillModifier(obj.skill_check);
-      const final = raw + modifier;
-      const success = final >= obj.dc;
-      skillSuccess = success;
-      const feedback = getSkillFeedback(obj.skill_check, success, final, obj.dc, raw);
-      setNarrative(prev => [...prev, {
-        type: 'skill_check', skill: obj.skill_check, dc: obj.dc, raw, allRolls,
-        hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources,
-        modifier, final, success, feedback, character_name: character?.name,
-      }]);
-    }
-
-    setStoryLoading(true);
-    try {
-      const result = await base44.functions.invoke('generateStory', {
-        session_id: sessionId,
-        action: 'choice',
-        custom_input: obj.skill_check && obj.dc
-          ? `${actionText} [Skill Check: ${obj.skill_check} DC${obj.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}]`
-          : actionText,
-      });
-      const data = result.data;
-      if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
-      if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP earned!` }]);
-      if (data.combat_trigger && data.enemies?.length > 0) {
-        setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
-        await startCombat(data.enemies);
-      } else {
-        setChoices(data.choices || []);
-        setSceneObjects(data.scene_objects || []);
-      }
-      await loadState();
-    } catch (err) {
-      console.error('Failed to process scene interaction:', err);
       setNarrative(prev => [...prev, { type: 'narration', text: 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
     } finally {
       setStoryLoading(false);
@@ -384,7 +290,6 @@ export default function Game() {
 
     setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
     setChoices([]);
-    setSceneObjects([]);
 
     let checkResult = '';
     if (requires_check && skill && dc) {
@@ -409,7 +314,6 @@ export default function Game() {
         await startCombat(data.enemies);
       } else {
         setChoices(data.choices || []);
-        setSceneObjects(data.scene_objects || []);
       }
       await loadState();
     } catch (err) {
@@ -916,7 +820,7 @@ export default function Game() {
   const inCombat = session?.in_combat && combat;
 
   return (
-    <div className="flex flex-col parchment-bg overflow-hidden" style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
+    <div className="h-screen flex flex-col parchment-bg overflow-hidden" style={{ color: '#e8d5b7' }}>
       {/* HUD */}
       <HUD character={character} session={session} />
 
@@ -962,26 +866,10 @@ export default function Game() {
         </div>
       </div>
 
-      {/* Main Game Area with Cinematic Frame */}
-      <div className="flex-1 overflow-hidden min-h-0 relative">
-        {/* Three.js Background Scene — absolutely positioned so its canvas
-            never participates in flex layout. When it resizes on combat
-            start it can't push/reflow the frame (which caused the scroll jump). */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          <ThreeJSScene 
-            inCombat={inCombat} 
-            season={session?.season || 'Spring'}
-            timeOfDay={session?.time_of_day || 'Morning'}
-          />
-        </div>
-        
-        {/* Cinematic Frame Overlay */}
-        <CinematicFrame 
-          inCombat={inCombat}
-          title={inCombat ? '⚔️ COMBAT' : session?.title || 'Adventure'}
-        >
-          {inCombat ? (
-            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+      {/* Main Game Area */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {inCombat ? (
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             {/* Mobile tab switcher — only visible on small screens */}
             <div className="flex lg:hidden flex-shrink-0" style={{ borderBottom: '1px solid rgba(180,30,30,0.2)', background: 'rgba(10,3,3,0.8)' }}>
               {['story', 'combat'].map(tab => (
@@ -998,18 +886,15 @@ export default function Game() {
                 </button>
               ))}
             </div>
-            {/* Desktop: side-by-side flex row. Mobile: tabbed (one panel at a time).
-                Plain flex (not grid) with explicit basis + min-w-0 + h-full is
-                breakpoint- and timing-independent, so panels never collapse or
-                overlap on combat resume. */}
-            <div className="flex-1 min-h-0 flex flex-row overflow-hidden">
-              <div className={`min-h-0 h-full overflow-hidden flex flex-col w-full lg:basis-1/2 lg:min-w-0 ${combatViewTab !== 'story' ? 'hidden lg:flex' : ''}`}
+            {/* Desktop: side-by-side. Mobile: tabbed */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden min-h-0">
+              <div className={`overflow-hidden flex flex-col min-h-0 ${combatViewTab !== 'story' ? 'hidden lg:flex' : ''}`}
                 style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
                 <StoryPanel narrative={narrative} choices={[]} loading={storyLoading}
                   onChoice={() => {}} customInput={customInput}
                   setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} />
               </div>
-              <div className={`min-h-0 h-full overflow-hidden flex flex-col w-full lg:basis-1/2 lg:min-w-0 ${combatViewTab !== 'combat' ? 'hidden lg:flex' : ''}`}>
+              <div className={`overflow-hidden ${combatViewTab !== 'combat' ? 'hidden lg:block' : ''}`}>
                 <CombatPanel combat={combat} character={character}
                   onPlayerAttack={handlePlayerAttack}
                   onOffhandAttack={handleOffhandAttack}
@@ -1059,13 +944,10 @@ export default function Game() {
                 onChoice={character?.hp_current <= 0 ? () => {} : handleChoice} 
                 customInput={customInput}
                 setCustomInput={character?.hp_current <= 0 ? () => {} : setCustomInput} 
-                onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput}
-                sceneObjects={character?.hp_current <= 0 ? [] : sceneObjects}
-                onSceneInteract={character?.hp_current <= 0 ? undefined : handleSceneInteract} />
+                onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} />
             )}
           </div>
         )}
-        </CinematicFrame>
       </div>
 
       {/* Dice Roller Side Panel */}

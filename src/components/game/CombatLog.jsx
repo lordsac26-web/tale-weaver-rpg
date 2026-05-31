@@ -59,13 +59,10 @@ function RoundSeparator({ round }) {
 }
 
 export default function CombatLog({ logEntries = [], player }) {
-  const listRef = useRef(null);
+  const bottomRef = useRef(null);
 
-  // Scroll ONLY this log's own container — never scrollIntoView, which walks up
-  // the ancestor chain and shifts the whole combat frame up at combat start.
   useEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logEntries.length]);
 
   // Group entries by round
@@ -96,7 +93,7 @@ export default function CombatLog({ logEntries = [], player }) {
       </div>
 
       {/* Log entries */}
-      <div ref={listRef} className="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
+      <div className="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
         <AnimatePresence initial={false}>
           {rendered.map((item) => {
             if (item.type === 'separator') {
@@ -154,6 +151,7 @@ export default function CombatLog({ logEntries = [], player }) {
             );
           })}
         </AnimatePresence>
+        <div ref={bottomRef} />
       </div>
 
       {/* Player HP bar */}

@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Loader2, Scroll, Feather, Volume2, VolumeX, Pause, Play, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SkillCheckResult from './SkillCheckResult';
-import SceneInteractionBar from './SceneInteractionBar';
 import { base44 } from '@/api/base44Client';
  
 const RISK_STYLES = {
@@ -21,9 +20,8 @@ function truncateForNarration(text, maxChars = 800) {
   return lastPeriod > 100 ? slice.slice(0, lastPeriod + 1) : slice;
 }
  
-export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit, sceneObjects = [], onSceneInteract }) {
+export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit }) {
   const endRef = useRef(null);
-  const scrollContainerRef = useRef(null);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [isNarrating, setIsNarrating] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -37,12 +35,9 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
   const currentUtterance = useRef(null);
   const cancelledRef = useRef(false);
  
-  // Auto-scroll on new narrative entries — scroll ONLY this panel's own
-  // container (never scrollIntoView, which walks up and shifts the whole
-  // combat frame, leaving only the bottom enemy visible).
+  // Auto-scroll on new narrative entries
   useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [narrative, loading]);
 
   // Cleanup speech synthesis on unmount to prevent orphaned audio
@@ -376,7 +371,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
       </div>
  
       {/* Narrative Area */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-5 md:p-7 space-y-5 min-h-0" style={{ background: 'transparent' }}>
+      <div className="flex-1 overflow-y-auto p-5 md:p-7 space-y-5 min-h-0" style={{ background: 'transparent' }}>
         <AnimatePresence initial={false}>
           {narrative.map((entry, i) => (
             <motion.div key={i}
@@ -494,9 +489,6 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
             borderTop: '1px solid rgba(180,140,90,0.2)',
             boxShadow: 'inset 0 1px 0 rgba(201,169,110,0.08)'
           }}>
-          {!loading && onSceneInteract && sceneObjects.length > 0 && (
-            <SceneInteractionBar objects={sceneObjects} onInteract={onSceneInteract} disabled={loading} />
-          )}
           {!loading && choices.length > 0 && (
             <>
               <div className="flex items-center gap-2 mb-2" style={{ color: 'rgba(201,169,110,0.5)' }}>

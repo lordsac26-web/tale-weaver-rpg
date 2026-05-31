@@ -57,8 +57,7 @@ export default function CharacterCreation() {
     skills: {}, inventory: [], conditions: [], active_modifiers: [], features: [], feats: [],
     gold: 0, silver: 0, copper: 0, xp: 0, spell_slots: {}, spells_known: [],
     portrait: '', chosen_stat_bonuses: [], feat_stat_choices: {},
-    class_choices: {},  // { favored_enemy, favored_terrain, fighting_style, expertise, draconic_ancestry, ... }
-    extra_starting_gold: false  // Option to add extra starting gold
+    class_choices: {}  // { favored_enemy, favored_terrain, fighting_style, expertise, draconic_ancestry, ... }
   });
  
   const set = (key, val) => setCharacter(prev => ({ ...prev, [key]: val }));
