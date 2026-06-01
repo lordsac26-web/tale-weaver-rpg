@@ -221,6 +221,8 @@ ${skillCheckNote}
 Write the consequence narrative (2-3 paragraphs) reacting directly to the action and any skill check outcome. Then provide 4 new choices. Consider active conditions, reputation, environment (${session.season}, ${session.time_of_day}).${session.adult_mode ? ' Mature content permitted.' : ''}
 
 HIT POINTS: If the narrative heals the character (potion, spell, rest, divine blessing, etc.) set hp_change to a POSITIVE integer equal to the HP restored. If the narrative harms the character (trap, fall, environmental hazard, etc.) set hp_change to a NEGATIVE integer equal to the damage taken. If HP is unchanged, omit hp_change or set it to 0. The character currently has ${character?.hp_current ?? '?'}/${character?.hp_max ?? '?'} HP — never heal above max. Whatever number you narrate (e.g. "healed for 10 HP") MUST match hp_change exactly.
+
+LOOT: If the narrative has the player find, take, loot, search up, or receive any physical items (weapons, armor, potions, scrolls, gear, treasure, trinkets), you MUST list each one in the loot array as a structured item so it gets added to their pack. If they find coins, put them in loot_coins. The items you describe in prose MUST match the items in the loot array exactly — never describe looting something without also adding it to loot. If nothing was acquired, leave loot empty.
 ${combatNote}`;
 
     responseSchema = {
@@ -233,7 +235,30 @@ ${combatNote}`;
         reputation_change: { type: 'number' },
         hp_change:         { type: 'number', description: 'Integer change to the character HP from this scene. Positive = healing, negative = damage. Must match the amount narrated. 0 or omit if unchanged.' },
         xp_earned:         { type: 'number' },
-        loot:              { type: 'array', items: { type: 'object' } },
+        loot: {
+          type: 'array',
+          description: 'Real items the player picks up / loots in this scene. ONLY include items the narrative explicitly says the player found, took, looted, or was given. Each becomes a real inventory item. Leave empty if nothing was acquired.',
+          items: {
+            type: 'object',
+            properties: {
+              name:        { type: 'string', description: 'Item name, e.g. "Cultist Dagger", "Health Potion", "Silver Ring"' },
+              type:        { type: 'string', description: 'Item category: weapon, armor, potion, scroll, gear, treasure, misc' },
+              quantity:    { type: 'number', description: 'How many were picked up (default 1)' },
+              description: { type: 'string', description: 'Short description of the item' },
+              value:       { type: 'number', description: 'Approximate value in gold pieces (0 if worthless)' }
+            },
+            required: ['name']
+          }
+        },
+        loot_coins: {
+          type: 'object',
+          description: 'Coins the player picks up in this scene. Omit or use 0 if no coins were found.',
+          properties: {
+            gold:   { type: 'number' },
+            silver: { type: 'number' },
+            copper: { type: 'number' }
+          }
+        },
         location_update:   { type: 'string' },
         quest_update: { type: 'object', properties: { new_quest: { type: 'string', description: 'Title of a newly discovered quest to add' }, completed_quest: { type: 'string', description: 'Title of an existing quest that was just completed' } } },
         new_condition:     { type: 'string' },
@@ -355,6 +380,36 @@ If it's a combat event, use the enemy schema with real monster stats.`;
       if (newHp !== character.hp_current) {
         await base44.entities.Character.update(character.id, { hp_current: newHp });
         result.hp_current = newHp; // surface to frontend for immediate UI sync
+      }
+    }
+
+    // Apply narrative LOOT — turn described items/coins into REAL inventory entries.
+    // Items found in the story (searching bodies, chests, gifts) are appended to the
+    // character's inventory; coins are added to their purse. Mirrors hp_change handling.
+    if (character && (Array.isArray(result.loot) && result.loot.length > 0 || result.loot_coins)) {
+      const lootUpdate = {};
+      if (Array.isArray(result.loot) && result.loot.length > 0) {
+        const newItems = result.loot
+          .filter(it => it && it.name)
+          .map(it => ({
+            name: it.name,
+            type: it.type || 'misc',
+            quantity: it.quantity && it.quantity > 0 ? it.quantity : 1,
+            description: it.description || '',
+            value: it.value || 0,
+            source: 'story_loot',
+            acquired_at: new Date().toISOString(),
+          }));
+        if (newItems.length > 0) {
+          lootUpdate.inventory = [...(character.inventory || []), ...newItems];
+        }
+      }
+      const coins = result.loot_coins || {};
+      if (coins.gold)   lootUpdate.gold   = (character.gold   || 0) + coins.gold;
+      if (coins.silver) lootUpdate.silver = (character.silver || 0) + coins.silver;
+      if (coins.copper) lootUpdate.copper = (character.copper || 0) + coins.copper;
+      if (Object.keys(lootUpdate).length > 0) {
+        await base44.entities.Character.update(character.id, lootUpdate);
       }
     }
 
