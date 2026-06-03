@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
   const concentration = session.combat_state?.concentration_spell || session.world_state?.concentration_spell || null;
 
   // Build compact character summary
-  const charSummary = character ? `${character.name}, Lvl ${character.level} ${character.race} ${character.class} | HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class} | Conditions: ${(character.conditions || []).map(c => c.name || c).join(', ') || 'None'} | Spell slots: ${slotSummary}${concentration ? ` | Concentrating on: ${concentration}` : ''} | Background: ${(character.backstory || 'Unknown').slice(0, 200)}` : '';
+  const charSummary = character ? `${character.name}, Lvl ${character.level} ${character.race} ${character.class}${character.subclass ? ` (${character.subclass})` : ''} | HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class} | Alignment: ${character.alignment || 'Neutral'} | Background: ${character.background || 'Unknown'} | Stats: STR ${character.strength}, DEX ${character.dexterity}, CON ${character.constitution}, INT ${character.intelligence}, WIS ${character.wisdom}, CHA ${character.charisma} | Proficient Skills: ${Object.entries(character.skills || {}).filter(([k,v])=>v).map(([k])=>k).join(', ')} | Conditions: ${(character.conditions || []).map(c => c.name || c).join(', ') || 'None'} | Spell slots: ${slotSummary}${concentration ? ` | Concentrating on: ${concentration}` : ''} | Backstory: ${(character.backstory || 'None').slice(0, 500)}` : '';
 
   const worldSummary = `Location: ${session.current_location || 'Unknown'} | Season: ${session.season} | Time: ${session.time_of_day} | Quests: ${(session.active_quests || []).map(q => q.title).join(', ') || 'None'} | Reputation: ${session.reputation || 0}${session.adult_mode ? ' | Adult mode: ON' : ''}`;
 
@@ -264,6 +264,8 @@ ${recentLog}
 
 Player Action: ${selectedChoice}
 ${skillCheckNote}
+
+CRITICAL INSTRUCTIONS: Remember and reflect the current season (${session.season}) and time of day (${session.time_of_day}) in your atmospheric descriptions. Take into consideration ALL elements of the character (race, class, alignment, stats, skills, background, backstory) when generating how the world and NPCs react to them.
 
 Write the consequence narrative (2-3 paragraphs) reacting directly to the action and any skill check outcome. Then provide 4 new choices. Consider active conditions, reputation, environment (${session.season}, ${session.time_of_day}).${session.adult_mode ? ' Mature content permitted.' : ''}
 

@@ -11,6 +11,8 @@ Deno.serve(async (req) => {
     const prompt = `You are a Dungeon Master evaluating a player's proposed action in a D&D 5e game.
     
 Character: ${character?.name}, ${character?.race} ${character?.class} Level ${character?.level}
+Background: ${character?.background || 'Unknown'}
+Stats: STR ${character?.strength}, DEX ${character?.dexterity}, CON ${character?.constitution}, INT ${character?.intelligence}, WIS ${character?.wisdom}, CHA ${character?.charisma}
 Skills trained: ${Object.entries(character?.skills || {}).filter(([k,v]) => v).map(([k]) => k).join(', ') || 'none'}
 Current scene: ${session_context || 'Unknown'}
 Proposed action: "${action}"
