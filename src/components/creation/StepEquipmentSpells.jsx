@@ -340,7 +340,7 @@ function EquipmentSubTab({ character, set, classEquipment, bgEquipment }) {
           className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
             mode === 'default'
               ? 'bg-amber-900/40 text-amber-200 border border-amber-700/40'
-              : 'text-slate-400 border border-slate-700/30 hover:border-slate-600'
+              : 'bg-slate-900/50 text-amber-100/80 border border-amber-800/30 hover:border-amber-600/60 hover:text-amber-100'
           }`}>
           <Package className="w-4 h-4" />
           Accept Default Gear
@@ -349,7 +349,7 @@ function EquipmentSubTab({ character, set, classEquipment, bgEquipment }) {
           className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
             mode === 'custom'
               ? 'bg-amber-900/40 text-amber-200 border border-amber-700/40'
-              : 'text-slate-400 border border-slate-700/30 hover:border-slate-600'
+              : 'bg-slate-900/50 text-amber-100/80 border border-amber-800/30 hover:border-amber-600/60 hover:text-amber-100'
           }`}>
           <ShoppingCart className="w-4 h-4" />
           Pick Your Own

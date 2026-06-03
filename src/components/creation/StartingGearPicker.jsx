@@ -5,8 +5,12 @@ import {
   ALL_STANDARD_ITEMS, ITEM_CATEGORIES, getItemsByCategory, searchItems,
   EQUIPMENT_PACKS
 } from '@/components/game/standardItems';
+import { SRD_MAGIC_ITEMS } from '@/components/game/itemData';
 
 const BUDGET_DEFAULT = 150; // default starting gold budget for custom gear
+const MAGIC_CATEGORY = { key: 'magic', label: 'Magic Items', icon: '✨' };
+const BROWSE_CATEGORIES = [...ITEM_CATEGORIES, MAGIC_CATEGORY];
+const ALL_AVAILABLE_ITEMS = [...ALL_STANDARD_ITEMS, ...SRD_MAGIC_ITEMS];
 
 export default function StartingGearPicker({ character, classGold, onUpdateInventory, onUpdateGold }) {
   const [query, setQuery] = useState('');
@@ -19,7 +23,7 @@ export default function StartingGearPicker({ character, classGold, onUpdateInven
   const remaining = Math.max(0, budget - spent);
 
   const results = useMemo(() => {
-    const catItems = getItemsByCategory(category);
+    const catItems = category === 'all' ? ALL_AVAILABLE_ITEMS : category === 'magic' ? SRD_MAGIC_ITEMS : getItemsByCategory(category);
     return query ? searchItems(query, catItems) : catItems;
   }, [query, category]);
 
@@ -90,12 +94,12 @@ export default function StartingGearPicker({ character, classGold, onUpdateInven
 
       {/* Equipment Packs shortcuts */}
       <div>
-        <div className="text-xs font-fantasy tracking-widest mb-2" style={{ color: 'rgba(201,169,110,0.4)', fontSize: '0.6rem' }}>QUICK ADD — EQUIPMENT PACKS</div>
+        <div className="text-xs font-fantasy tracking-widest mb-2" style={{ color: 'rgba(255,218,150,0.78)', fontSize: '0.6rem' }}>QUICK ADD — EQUIPMENT PACKS</div>
         <div className="flex flex-wrap gap-1.5">
           {Object.entries(EQUIPMENT_PACKS).map(([name, pack]) => (
             <button key={name} onClick={() => addPack(name)}
               className="px-2.5 py-1.5 rounded-lg text-xs font-fantasy transition-all"
-              style={{ background: 'rgba(20,13,5,0.6)', border: '1px solid rgba(180,140,90,0.15)', color: 'rgba(201,169,110,0.6)' }}>
+              style={{ background: 'rgba(31,20,9,0.85)', border: '1px solid rgba(225,180,110,0.38)', color: 'rgba(255,232,190,0.9)' }}>
               🎒 {name} <span style={{ color: '#d97706' }}>({pack.cost}gp)</span>
             </button>
           ))}
@@ -105,22 +109,22 @@ export default function StartingGearPicker({ character, classGold, onUpdateInven
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left: Item Browser */}
         <div>
-          <div className="text-xs font-fantasy tracking-widest mb-2" style={{ color: 'rgba(201,169,110,0.4)', fontSize: '0.6rem' }}>BROWSE ITEMS</div>
+          <div className="text-xs font-fantasy tracking-widest mb-2" style={{ color: 'rgba(255,218,150,0.78)', fontSize: '0.6rem' }}>BROWSE ITEMS</div>
           {/* Search */}
           <div className="relative mb-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'rgba(180,140,90,0.35)' }} />
             <input value={query} onChange={e => setQuery(e.target.value)}
-              placeholder="Search weapons, armor, gear..."
+              placeholder="Search weapons, armor, gear, magic items..."
               className="w-full pl-9 pr-3 py-2 rounded-lg text-sm input-fantasy" />
           </div>
           {/* Category tabs */}
           <div className="flex gap-1 flex-wrap mb-2">
-            {ITEM_CATEGORIES.filter(c => c.key !== 'all').map(cat => (
+            {BROWSE_CATEGORIES.map(cat => (
               <button key={cat.key} onClick={() => { setCategory(cat.key); setQuery(''); }}
                 className="px-2 py-1 rounded text-xs font-fantasy transition-all"
                 style={category === cat.key
-                  ? { background: 'rgba(60,40,10,0.8)', border: '1px solid rgba(201,169,110,0.4)', color: '#f0c040' }
-                  : { border: '1px solid rgba(180,140,90,0.12)', color: 'rgba(180,140,90,0.4)' }
+                  ? { background: 'rgba(82,55,18,0.95)', border: '1px solid rgba(240,192,64,0.65)', color: '#ffe8a3' }
+                  : { background: 'rgba(18,12,6,0.65)', border: '1px solid rgba(210,170,110,0.32)', color: 'rgba(245,222,185,0.82)' }
                 }>
                 {cat.icon} {cat.label}
               </button>
@@ -136,11 +140,13 @@ export default function StartingGearPicker({ character, classGold, onUpdateInven
                   <div className="text-sm truncate" style={{ color: '#e8d5b7', fontFamily: 'EB Garamond, serif' }}>
                     {item.name}
                   </div>
-                  <div className="flex items-center gap-2 text-xs" style={{ color: 'rgba(180,140,90,0.4)' }}>
-                    {item.damage && <span style={{ color: '#fca5a5' }}>{item.damage}</span>}
-                    {item.armor_class > 0 && <span style={{ color: '#93c5fd' }}>AC {item.armor_class}</span>}
+                  <div className="flex items-center gap-2 text-xs" style={{ color: 'rgba(236,210,170,0.78)' }}>
+                    {item.damage && <span style={{ color: '#fecaca' }}>{item.damage}</span>}
+                    {item.armor_class > 0 && <span style={{ color: '#bfdbfe' }}>AC {item.armor_class}</span>}
+                    {item.rarity && <span style={{ color: '#d8b4fe' }}>{item.rarity}</span>}
+                    {item.requires_attunement && <span style={{ color: '#f0c040' }}>attune</span>}
                     {item.weight > 0 && <span>{item.weight}lb</span>}
-                    <span style={{ color: '#d97706' }}>{item.cost}{item.cost_unit}</span>
+                    <span style={{ color: '#fbbf24' }}>{item.cost || 0}{item.cost_unit || 'gp'}</span>
                   </div>
                 </div>
                 <button onClick={() => addToCart(item)}
@@ -155,13 +161,13 @@ export default function StartingGearPicker({ character, classGold, onUpdateInven
 
         {/* Right: Shopping Cart */}
         <div>
-          <div className="text-xs font-fantasy tracking-widest mb-2" style={{ color: 'rgba(201,169,110,0.4)', fontSize: '0.6rem' }}>
+          <div className="text-xs font-fantasy tracking-widest mb-2" style={{ color: 'rgba(255,218,150,0.78)', fontSize: '0.6rem' }}>
             YOUR GEAR ({cart.length} items · {totalWeight.toFixed(1)}lb)
           </div>
           {cart.length === 0 ? (
             <div className="text-center py-8 rounded-xl" style={{ background: 'rgba(10,6,3,0.5)', border: '1px solid rgba(180,140,90,0.1)' }}>
               <Package className="w-8 h-8 mx-auto mb-2 opacity-20" style={{ color: '#c9a96e' }} />
-              <p className="text-xs" style={{ color: 'rgba(180,140,90,0.3)' }}>Add items from the left to build your loadout</p>
+              <p className="text-xs" style={{ color: 'rgba(236,210,170,0.72)' }}>Add items from the left to build your loadout</p>
             </div>
           ) : (
             <div className="space-y-1 max-h-60 overflow-y-auto">
@@ -172,7 +178,7 @@ export default function StartingGearPicker({ character, classGold, onUpdateInven
                     <div className="text-sm truncate" style={{ color: '#86efac', fontFamily: 'EB Garamond, serif' }}>
                       {item.name}
                     </div>
-                    <div className="text-xs" style={{ color: 'rgba(180,140,90,0.4)' }}>
+                    <div className="text-xs" style={{ color: 'rgba(236,210,170,0.78)' }}>
                       {((item.cost || 0) * (item.quantity || 1)).toFixed(1)}gp · {((item.weight || 0) * (item.quantity || 1)).toFixed(1)}lb
                     </div>
                   </div>
