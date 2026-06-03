@@ -559,9 +559,17 @@ export function meetsRaceReq(feat, character) {
  
 // Check if character can take a feat (caster-only)
 export function meetsCasterReq(feat, character) {
-  const CASTERS = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger'];
+  const CASTERS = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
   if (!feat.caster_only) return true;
-  return CASTERS.includes(character.class);
+  
+  if (CASTERS.includes(character.class)) return true;
+  if (character.multiclass && character.multiclass.some(mc => CASTERS.includes(mc.class))) return true;
+  
+  const isArcane = (sub) => String(sub || '').toLowerCase().includes('arcane') || String(sub || '').toLowerCase().includes('eldritch');
+  if (isArcane(character.subclass)) return true;
+  if (character.multiclass && character.multiclass.some(mc => isArcane(mc.subclass))) return true;
+  
+  return false;
 }
  
 export function canTakeFeat(feat, character) {
