@@ -33,8 +33,8 @@ import StepReview from '@/components/creation/StepReview';
 const STEPS = [
   { id: 'identity', label: 'Identity', icon: '👤' },
   { id: 'class', label: 'Class', icon: '⚔️' },
-  { id: 'subclass', label: 'Subclass', icon: '✨' },
   { id: 'stats', label: 'Stats', icon: '🎲' },
+  { id: 'subclass', label: 'Subclass', icon: '✨' },
   { id: 'skills', label: 'Skills', icon: '📋' },
   { id: 'choices', label: 'Choices', icon: '🎯' },
   { id: 'background', label: 'Background', icon: '📖' },
@@ -335,8 +335,8 @@ export default function CharacterCreation() {
         return chosenStats.length === statChoicesNeeded;
       }
       case 1: return !!character.class && !!character.name;
-      case 2: return true; // subclass (optional / level-gated)
-      case 3: return STATS.every(s => character[s] >= 3 && character[s] <= 20);
+      case 2: return STATS.every(s => character[s] >= 3 && character[s] <= 20);
+      case 3: return true; // subclass (optional / level-gated)
       case 4: return true; // skills
       case 5: return true; // class choices (optional selections)
       case 6: return !!character.background;
@@ -393,8 +393,8 @@ export default function CharacterCreation() {
         <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 md:p-8 min-h-[420px]">
           {step === 0 && <StepGenderRace character={character} set={set} />}
           {step === 1 && <StepClassInfo character={character} set={set} />}
-          {step === 2 && <StepSubclass character={character} set={set} />}
-          {step === 3 && <StepAbilityScores character={character} set={set} rollAll={rollAllStats} pointBuy={pointBuyStats} />}
+          {step === 2 && <StepAbilityScores character={character} set={set} rollAll={rollAllStats} pointBuy={pointBuyStats} />}
+          {step === 3 && <StepSubclass character={character} set={set} />}
           {step === 4 && <StepSkillsFeatures character={character} set={set} />}
           {step === 5 && <StepClassChoices character={character} set={set} />}
           {step === 6 && <StepBackground character={character} set={set} />}
