@@ -1,7 +1,40 @@
 import React from 'react';
 import { CLASSES, ALIGNMENTS } from '@/components/game/gameData';
 import { Input } from '@/components/ui/input';
+import { Dices } from 'lucide-react';
 import StepMulticlass from './StepMulticlass';
+
+const RACE_NAMES = {
+  Human:    { first: ['Aldric','Brynn','Cassian','Dareth','Elena','Fiona','Gareth','Helena','Ivar','Jorin','Kael','Lyra','Marcus','Nessa','Osric','Petra','Quinn','Rowan','Seren','Theron','Vala','Wren','Xander','Yara','Zara'], last: ['Ashford','Blackwood','Crestfall','Dunmore','Eldergrove','Fairwind','Greystone','Hartwell','Ironforge','Kingsley'] },
+  Elf:      { first: ['Aelindra','Caelion','Erevan','Faelora','Galanodel','Ielenia','Lythien','Miriael','Naevys','Quillathe','Rylai','Sylvaris','Thalion','Vaelora','Zephyria','Arannis','Daeron','Haelion','Ivellios','Korrilar'], last: ['Amakiir','Galanodel','Liadon','Meliamne','Naïlo','Siannodel','Xiloscient'] },
+  Dwarf:    { first: ['Barendd','Dagnal','Eberk','Falkrunn','Gardain','Helga','Ilikan','Kathra','Orsik','Runyak','Tordek','Vistra','Whurdred','Yuriel','Thoradin','Amber','Gurdis','Kildrak','Mardred','Rangrim'], last: ['Balderk','Battlehammer','Fireforge','Frostbeard','Holderhek','Ironfist','Strakeln','Torunn','Ungart'] },
+  Halfling: { first: ['Andry','Bree','Cade','Corrin','Eldon','Garret','Jillian','Lavinia','Merric','Nedda','Osborn','Paela','Roscoe','Seraphina','Wendle','Cora','Finnan','Kithri','Lidda','Wellby'], last: ['Brushgather','Goodbarrel','Greenbottle','Highhill','Leagallow','Tealeaf','Thorngage','Underbough'] },
+  Gnome:    { first: ['Alston','Brocc','Dimble','Ellywick','Frug','Gerbo','Jebeddo','Lilli','Namfoodle','Orryn','Roywyn','Scheppen','Warryn','Wrenn','Zook','Bimpnottin','Caramip','Donella','Nissa','Tana'], last: ['Beren','Daergel','Folkor','Garrick','Nackle','Scheppen','Timbers','Turen'] },
+  'Half-Elf':  { first: ['Aelric','Brenna','Caelum','Dara','Elowen','Finnian','Galen','Isolde','Kieran','Lirien','Maelis','Riven','Sable','Tanis','Varen'], last: ['Amastacia','Brightwood','Dawntracker','Moonshadow','Starweaver','Windwalker'] },
+  'Half-Orc':  { first: ['Baggi','Dench','Feng','Gell','Henk','Holg','Imsh','Keth','Mhurren','Ront','Shump','Thokk','Vola','Yevelda','Krusk','Sutha','Emen','Engong'], last: ['Ashbane','Bonecrusher','Doomhammer','Ironjaw','Skullsplitter','Warbringer'] },
+  Tiefling: { first: ['Akta','Bryseis','Criella','Damaia','Ekemon','Kairon','Lerissa','Makos','Nemeia','Orianna','Pelaios','Rieta','Skamos','Therai','Valeria','Zariel','Amnon','Leucis'], last: ['Virtue names are common — also: Ash','Despair','Glory','Hope','Music','Nowhere','Poetry','Quest','Torment','Weary'] },
+  Dragonborn: { first: ['Arjhan','Balasar','Bharash','Donaar','Ghesh','Heskan','Kriv','Medrash','Mehen','Nadarr','Pandjed','Patrin','Rhogar','Shamash','Shedinn','Tarhun','Torinn'], last: ['Clethtinthiallor','Daardendrian','Delmirev','Kerrhylon','Kimbatuul','Myastan','Norixius','Shestendeliath','Turnuroth','Verthisathurgiesh'] },
+  Aasimar:  { first: ['Auriel','Celestine','Dawneth','Elariel','Hariel','Israphel','Kalael','Lumiel','Mihrael','Raziel','Sariel','Uriel','Vaelith','Zaphiel','Seraphine'], last: ['Dawnbringer','Lightbane','Morningstar','Radiance','Sunwarden'] },
+  Goliath:  { first: ['Aukan','Eglath','Gae-Al','Ilikan','Keothi','Kuori','Lo-Kag','Manneo','Nalla','Orilo','Paavu','Thotham','Uthal','Vaunea','Vimak'], last: ['Anakalathai','Elanithino','Gathakanathi','Kolae-Gileana','Ogolakanu','Thuliaga','Uthela-Kaathi','Vaimei-Laga'] },
+  Tabaxi:   { first: ['Cloud on the Mountaintop','Dusk Runner','Jade Claw','Lightning on the Branch','Mist Walker','Night Whisper','Rain on Still Water','Seven Thundercloud','Star Gazer','Swift Hunter','Twilight Prowler','Whisper of Wind'], last: [] },
+  Kenku:    { first: ['Clatter','Creak','Dagger','Flicker','Hammer','Latch','Pluck','Scratch','Shimmer','Slash','Snap','Squall','Thump','Whistle'], last: [] },
+  Firbolg:  { first: ['Adran','Arannis','Beren','Dayereth','Galinndan','Immeral','Mindartis','Riardon','Soveliss','Theren','Varis'], last: [] },
+  Warforged:{ first: ['Anchor','Bastion','Bulwark','Clank','Crucible','Forge','Graven','Hammer','Iron','Mason','Pierce','Pivot','Piston','Relic','Sentinel','Torch','Warden'], last: [] },
+  Goblin:   { first: ['Blix','Droop','Fizgig','Grik','Krek','Lunk','Midge','Nix','Pog','Ratch','Skrag','Twig','Vex','Yik','Zurk'], last: [] },
+  Kobold:   { first: ['Arix','Drak','Eek','Gix','Irk','Kurtulmak','Meepo','Nesk','Pun-Pun','Rix','Sniv','Tik','Urd','Yik'], last: [] },
+};
+const GENERIC_FIRST = ['Ash','Blade','Cinder','Drake','Echo','Flint','Grey','Hawk','Ivory','Jade','Kaine','Lark','Morrow','Nyx','Onyx','Pike','Raven','Shade','Thorn','Vale','Wolf','Ember','Storm','Dusk'];
+const GENERIC_LAST = ['Blackthorn','Coldsteel','Dawnstrider','Farseer','Grimshaw','Hearthstone','Ironveil','Nighthollow','Ravencrest','Shadowmend','Stormwind','Thornwall','Winterborn','Ashvale'];
+
+function randomName(race) {
+  const pool = RACE_NAMES[race];
+  const firstNames = pool?.first?.length ? pool.first : GENERIC_FIRST;
+  const lastNames = pool?.last?.length ? pool.last : GENERIC_LAST;
+  const first = firstNames[Math.floor(Math.random() * firstNames.length)];
+  if (!lastNames.length) return first;
+  const last = lastNames[Math.floor(Math.random() * lastNames.length)];
+  return `${first} ${last}`;
+}
 
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 
@@ -23,9 +56,17 @@ export default function StepClassInfo({ character, set }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="sm:col-span-1">
           <label className="text-amber-400/80 text-xs uppercase tracking-widest mb-1.5 block">Hero Name</label>
-          <Input value={character.name} onChange={e => set('name', e.target.value)}
-            placeholder="Enter name..."
-            className="bg-slate-800/60 border-slate-600 text-amber-100 placeholder-slate-500" />
+          <div className="flex gap-2">
+            <Input value={character.name} onChange={e => set('name', e.target.value)}
+              placeholder="Enter name..."
+              className="bg-slate-800/60 border-slate-600 text-amber-100 placeholder-slate-500 flex-1" />
+            <button
+              onClick={() => set('name', randomName(character.race))}
+              title="Randomize name"
+              className="px-2.5 rounded-md border border-amber-700/50 bg-amber-900/30 text-amber-400 hover:bg-amber-800/40 hover:border-amber-600/60 transition-all flex-shrink-0">
+              <Dices className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <div>
           <label className="text-amber-400/80 text-xs uppercase tracking-widest mb-1.5 block">Starting Level</label>
