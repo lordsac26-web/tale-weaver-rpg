@@ -3,6 +3,7 @@ import { Check, Shield, Heart, Zap, Star } from 'lucide-react';
 import { calcStatMod, calcModDisplay } from '@/components/game/gameData';
 import { SPELL_DETAILS } from '@/components/game/spellData';
 import { CATEGORY_COLORS, FEATS } from '@/components/game/featData';
+import AlignmentRadar from '@/components/game/AlignmentRadar';
 
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
@@ -98,6 +99,8 @@ export default function StepReview({ character }) {
               </div>
             </div>
           )}
+
+          <AlignmentRadar character={character} compact />
 
           {/* Inventory preview */}
           {(character.inventory || []).length > 0 && (

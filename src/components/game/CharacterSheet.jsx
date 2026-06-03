@@ -9,6 +9,7 @@ import { SkillTooltip, FeatureTooltip, ConditionTooltip } from './GameTooltip';
 import SkillProficiencyRow from './SkillProficiencyRow';
 import StatBreakdownTooltip from './StatBreakdownTooltip';
 import SubclassSection from './SubclassSection';
+import AlignmentRadar from './AlignmentRadar';
 import {
   characterHasSpellcasting,
   getClassFeatureSections,
@@ -216,6 +217,10 @@ function StatsTab({ character, profBonus }) {
           );
         })}
       </div>
+      <div className="mb-3">
+        <AlignmentRadar character={character} />
+      </div>
+
       {/* Passive Scores */}
       <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.1)' }}>
         <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(201,169,110,0.4)', fontSize: '0.6rem' }}>PASSIVE SCORES</div>

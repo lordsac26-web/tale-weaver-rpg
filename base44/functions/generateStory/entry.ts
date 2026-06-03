@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 /**
  * AI Story Engine - generates narrative, choices, events, NPC dialogue
@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
   const concentration = session.combat_state?.concentration_spell || session.world_state?.concentration_spell || null;
 
   // Build compact character summary
-  const charSummary = character ? `${character.name}, Lvl ${character.level} ${character.race} ${character.class}${character.subclass ? ` (${character.subclass})` : ''} | HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class} | Alignment: ${character.alignment || 'Neutral'} | Background: ${character.background || 'Unknown'} | Stats: STR ${character.strength}, DEX ${character.dexterity}, CON ${character.constitution}, INT ${character.intelligence}, WIS ${character.wisdom}, CHA ${character.charisma} | Proficient Skills: ${Object.entries(character.skills || {}).filter(([k,v])=>v).map(([k])=>k).join(', ')} | Conditions: ${(character.conditions || []).map(c => c.name || c).join(', ') || 'None'} | Spell slots: ${slotSummary}${concentration ? ` | Concentrating on: ${concentration}` : ''} | Backstory: ${(character.backstory || 'None').slice(0, 500)}` : '';
+  const charSummary = character ? `${character.name}, Lvl ${character.level} ${character.race} ${character.class}${character.subclass ? ` (${character.subclass})` : ''} | HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class} | Alignment: ${character.alignment || 'Neutral'} (${character.alignment_mode || 'static'}) | Alignment Scores: ${JSON.stringify(character.alignment_scores || {})} | Background: ${character.background || 'Unknown'} | Stats: STR ${character.strength}, DEX ${character.dexterity}, CON ${character.constitution}, INT ${character.intelligence}, WIS ${character.wisdom}, CHA ${character.charisma} | Proficient Skills: ${Object.entries(character.skills || {}).filter(([k,v])=>v).map(([k])=>k).join(', ')} | Conditions: ${(character.conditions || []).map(c => c.name || c).join(', ') || 'None'} | Spell slots: ${slotSummary}${concentration ? ` | Concentrating on: ${concentration}` : ''} | Backstory: ${(character.backstory || 'None').slice(0, 500)}` : '';
 
   const worldSummary = `Location: ${session.current_location || 'Unknown'} | Season: ${session.season} | Time: ${session.time_of_day} | Quests: ${(session.active_quests || []).map(q => q.title).join(', ') || 'None'} | Reputation: ${session.reputation || 0}${session.adult_mode ? ' | Adult mode: ON' : ''}`;
 
@@ -276,6 +276,8 @@ Write the consequence narrative (2-3 paragraphs) reacting directly to the action
 HIT POINTS: If the narrative heals the character (potion, spell, rest, divine blessing, etc.) set hp_change to a POSITIVE integer equal to the HP restored. If the narrative harms the character (trap, fall, environmental hazard, etc.) set hp_change to a NEGATIVE integer equal to the damage taken. If HP is unchanged, omit hp_change or set it to 0. The character currently has ${character?.hp_current ?? '?'}/${character?.hp_max ?? '?'} HP — never heal above max. Whatever number you narrate (e.g. "healed for 10 HP") MUST match hp_change exactly.
 
 LOOT: If the narrative has the player find, take, loot, search up, or receive any physical items (weapons, armor, potions, scrolls, gear, treasure, trinkets), you MUST list each one in the loot array as a structured item so it gets added to their pack. If they find coins, put them in loot_coins. The items you describe in prose MUST match the items in the loot array exactly — never describe looting something without also adding it to loot. If nothing was acquired, leave loot empty.
+
+DYNAMIC ALIGNMENT: If the character has dynamic alignment, evaluate the player's action and return alignment_shift. Use values from -10 to +10 based on severity. good_evil: positive=good/merciful/selfless, negative=evil/cruel/selfish. law_chaos: positive=lawful/responsible/disciplined, negative=chaotic/reckless/random. sanity: positive=logical/sane/responsible, negative=unhinged/irrational/outlandish. Minor choices should be 0-2, meaningful choices 3-5, critical story-defining choices 6-10. If static alignment or no meaningful shift, use 0 values.
 ${combatNote}`;
 
     responseSchema = {
@@ -315,7 +317,18 @@ ${combatNote}`;
         location_update:   { type: 'string' },
         quest_update: { type: 'object', properties: { new_quest: { type: 'string', description: 'Title of a newly discovered quest to add' }, completed_quest: { type: 'string', description: 'Title of an existing quest that was just completed' } } },
         new_condition:     { type: 'string' },
-        plot_flag:         { type: 'string' }
+        plot_flag:         { type: 'string' },
+        alignment_shift: {
+          type: 'object',
+          description: 'AI-assigned dynamic alignment drift for this decision. Values -10 to 10; use 0 for no shift or static alignment.',
+          properties: {
+            good_evil: { type: 'number' },
+            law_chaos: { type: 'number' },
+            sanity: { type: 'number' },
+            severity: { type: 'string', enum: ['none', 'minor', 'meaningful', 'critical'] },
+            reason: { type: 'string' }
+          }
+        }
       }
     };
 
@@ -415,6 +428,39 @@ If it's a combat event, use the enemy schema with real monster stats.`;
           conditions: [...currentConditions, { name: condName, source: 'story', applied_at: new Date().toISOString() }]
         });
       }
+    }
+
+    // Apply AI-assigned dynamic alignment drift.
+    if (character?.alignment_mode === 'dynamic' && result.alignment_shift) {
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
+      const currentScores = character.alignment_scores || { good_evil: 0, law_chaos: 0, sanity: 0 };
+      const shift = result.alignment_shift || {};
+      const nextScores = {
+        good_evil: clamp((currentScores.good_evil || 0) + clamp(shift.good_evil, -10, 10), -25, 25),
+        law_chaos: clamp((currentScores.law_chaos || 0) + clamp(shift.law_chaos, -10, 10), -25, 25),
+        sanity: clamp((currentScores.sanity || 0) + clamp(shift.sanity, -10, 10), -25, 25),
+      };
+      const order = nextScores.law_chaos >= 10 ? 'Lawful' : nextScores.law_chaos <= -10 ? 'Chaotic' : 'Neutral';
+      const moral = nextScores.good_evil >= 10 ? 'Good' : nextScores.good_evil <= -10 ? 'Evil' : 'Neutral';
+      const nextAlignment = order === 'Neutral' && moral === 'Neutral' ? 'True Neutral' : `${order} ${moral}`;
+      const alignmentEntry = {
+        timestamp: new Date().toISOString(),
+        action: custom_input ?? choice_index,
+        shift: {
+          good_evil: clamp(shift.good_evil, -10, 10),
+          law_chaos: clamp(shift.law_chaos, -10, 10),
+          sanity: clamp(shift.sanity, -10, 10),
+        },
+        severity: shift.severity || 'minor',
+        reason: shift.reason || 'Decision affected dynamic alignment.',
+      };
+      await base44.entities.Character.update(character.id, {
+        alignment: nextAlignment,
+        alignment_scores: nextScores,
+        alignment_history: [...(character.alignment_history || []), alignmentEntry].slice(-25),
+      });
+      result.alignment_scores = nextScores;
+      result.alignment = nextAlignment;
     }
 
     // Award XP for non-combat story beats only.

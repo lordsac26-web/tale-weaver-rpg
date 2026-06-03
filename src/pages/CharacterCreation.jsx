@@ -56,7 +56,8 @@ export default function CharacterCreation() {
  
   const [character, setCharacter] = useState({
     name: '', gender: 'male', race: '', subrace: '', class: '', subclass: '', level: 1,
-    background: '', backstory: '', alignment: 'True Neutral',
+    background: '', backstory: '', alignment: 'True Neutral', alignment_mode: 'static',
+    alignment_scores: { good_evil: 0, law_chaos: 0, sanity: 0 }, alignment_history: [],
     strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10,
     skills: {}, inventory: [], conditions: [], active_modifiers: [], features: [], feats: [],
     gold: 0, silver: 0, copper: 0, xp: 0, spell_slots: {}, spells_known: [],

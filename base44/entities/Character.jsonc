@@ -43,6 +43,9 @@
         "Ogrekin (Half-Ogre)"
       ]
     },
+    "subrace": {
+      "type": "string"
+    },
     "class": {
       "type": "string",
       "enum": [
@@ -87,6 +90,26 @@
     },
     "alignment": {
       "type": "string"
+    },
+    "alignment_mode": {
+      "type": "string",
+      "enum": [
+        "static",
+        "dynamic"
+      ],
+      "default": "static",
+      "description": "Static keeps chosen alignment fixed. Dynamic lets story decisions shift alignment scores."
+    },
+    "alignment_scores": {
+      "type": "object",
+      "description": "Dynamic alignment scores from -25 to 25: good_evil positive=good, negative=evil; law_chaos positive=lawful, negative=chaotic; sanity is hidden/background stability."
+    },
+    "alignment_history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Recent AI-assigned alignment shifts from campaign decisions."
     },
     "gender": {
       "type": "string"
@@ -140,6 +163,10 @@
     "saving_throws": {
       "type": "object",
       "description": "Saving throw proficiencies: {strength: true, dexterity: false, ...}"
+    },
+    "class_choices": {
+      "type": "object",
+      "description": "Character creation choices such as fighting style, favored enemy, expertise, and other class-specific selections."
     },
     "inventory": {
       "type": "array",
