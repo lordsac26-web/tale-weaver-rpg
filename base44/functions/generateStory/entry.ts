@@ -138,17 +138,64 @@ Deno.serve(async (req) => {
   let responseSchema = null;
 
   if (action === 'start') {
-    prompt = `You are the Dungeon Master for a high fantasy RPG. Begin the adventure.
-Character: ${charSummary}
-World: ${worldSummary}
+    // Build rich character context for varied intros
+    const charClass = character?.class || 'Fighter';
+    const charRace = character?.race || 'Human';
+    const charAlignment = character?.alignment || 'Neutral';
+    const charBackground = character?.background || '';
+    const charBackstory = (character?.backstory || '').slice(0, 300);
+    const charSubclass = character?.subclass || '';
+    const sessionSetting = session.setting || 'High Fantasy';
+    const storySeed = session.story_seed || '';
+
+    prompt = `You are the Dungeon Master for a ${sessionSetting} RPG. Begin a UNIQUE and ORIGINAL adventure.
+
+CHARACTER DETAILS (use these to tailor the opening):
+- Name: ${character?.name || 'Hero'}
+- Race: ${charRace} | Class: ${charClass}${charSubclass ? ` (${charSubclass})` : ''} | Level: ${character?.level || 1}
+- Alignment: ${charAlignment}
+- Background: ${charBackground || 'Unknown'}
+- Backstory: ${charBackstory || 'None provided'}
+Full stats: ${charSummary}
+
+WORLD STATE:
+${worldSummary}
+
 ${gameDataContext}
-Story Seed: ${session.story_seed || 'A mysterious summons has drawn our hero to action...'}
 
-Write an immersive opening narrative (3-4 paragraphs) that sets the scene vividly, introduces the situation, and ends with tension or a decision point.${session.adult_mode ? ' Mature/gritty tone permitted.' : ''}
+${storySeed ? `PLAYER'S STORY SEED (incorporate this theme/direction): ${storySeed}` : `No story seed provided — create an ORIGINAL scenario from scratch based on the character details above.`}
 
-Then provide exactly 4 choices the player can make. Include skill checks and DCs on risky choices (at least 2-3 of 4 should have checks). Use diverse skills — Persuasion, Deception, Intimidation, Perception, Investigation, Athletics, Stealth, Insight, Acrobatics, Survival, Arcana, History, Medicine, Religion. DCs: 10=trivial, 15=moderate, 20=hard, 25=extreme.
+CRITICAL INSTRUCTIONS FOR THE OPENING:
+1. DO NOT start at a tavern, inn, or crossroads unless the story seed specifically asks for it. Be creative with locations!
+2. The opening scenario MUST be influenced by the character's race, class, alignment, and background:
+   - A Rogue might start mid-heist, in a thieves' guild, overhearing a conspiracy, or fleeing a crime scene
+   - A Cleric might begin at a temple receiving a divine vision, tending to plague victims, or investigating a desecrated shrine
+   - A Wizard might be in a library discovering a forbidden tome, at an arcane academy, or investigating a magical anomaly
+   - A Ranger might start tracking something in the wilderness, discovering unnatural corruption, or at a frontier outpost
+   - A Paladin might be on a holy mission, mediating a dispute, or confronting an injustice
+   - A Barbarian might be in tribal lands, a fighting pit, arriving in an unfamiliar city, or defending their homeland
+   - A Bard might be mid-performance, gathering intelligence at a noble's court, or following a legendary tale
+   - A Druid might be in a sacred grove, sensing imbalance in nature, or confronting encroaching civilization
+   - A Warlock might be dealing with their patron's demands, investigating occult activity, or hiding their nature
+   - A Monk might be at a monastery, on a spiritual pilgrimage, or meditating when disrupted
+   - A Sorcerer might be dealing with uncontrolled magic, fleeing persecution, or discovering the source of their power
+   - A Fighter might be on guard duty, in a military camp, escorting a caravan, or returning from a mission
+   - An Artificer might be in a workshop, at a trade fair, or investigating a malfunctioning construct
+3. Race should flavor the world: Elves in ancient forests or elegant cities, Dwarves near mountains or forges, Tieflings facing prejudice, Halflings in pastoral villages, etc.
+4. Alignment matters: Good characters encounter people in need; Evil characters encounter opportunities for power; Chaotic characters face authority; Lawful characters face moral dilemmas.
+5. The ${sessionSetting} setting defines the tone: Dark Fantasy = gritty/horror, Sci-Fi = technology/space, Cyberpunk = neon/corporate, Historical = grounded/realistic, Anime = dramatic/stylized.
+6. Season (${session.season}) and time (${session.time_of_day}) should be woven into atmospheric descriptions.
+${session.adult_mode ? '7. Mature/gritty tone permitted — lean into the dark and morally complex.' : ''}
 
-CRITICAL: Do NOT trigger combat in the opening scene. The first story beats should focus on exploration, NPC interaction, discovery, or investigation. Combat should only emerge after at least 3-5 player choices when it makes narrative sense.`;
+Write an immersive opening narrative (3-4 paragraphs) that:
+- Sets a UNIQUE location appropriate to the character (return this in location_update)
+- Creates an immediately compelling situation with stakes
+- References the character's abilities, background, or nature naturally
+- Ends with tension, mystery, or a decision point
+
+Provide exactly 4 choices. Include skill checks and DCs on 2-3 of them. Use skills appropriate to the character's strengths AND weaknesses — Persuasion, Deception, Intimidation, Perception, Investigation, Athletics, Stealth, Insight, Acrobatics, Survival, Arcana, History, Medicine, Religion. DCs: 10=trivial, 15=moderate, 20=hard, 25=extreme.
+
+CRITICAL: Do NOT trigger combat in the opening scene. Focus on exploration, NPC interaction, discovery, or investigation first. Combat should emerge naturally after 3-5 player choices.`;
 
     responseSchema = {
       type: 'object',

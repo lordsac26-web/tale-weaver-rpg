@@ -54,7 +54,7 @@ export default function NewGame() {
       setting, adult_mode: adultMode, story_seed: storySeed,
       story_seed_file_url: storySeedFileUrl,
       season, time_of_day: timeOfDay,
-      current_location: 'The Crossroads Inn',
+      current_location: '',
       world_state: {}, active_quests: [], completed_quests: [],
       story_log: [], npc_relations: {}, reputation: 0,
       alignment_tracker: {}, in_combat: false, combat_state: {},
