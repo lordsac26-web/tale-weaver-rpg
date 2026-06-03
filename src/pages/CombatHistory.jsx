@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Search, Filter, Sword, Skull, Footprints, Clock, Coins, Trophy, Shield, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
+import TreasureRollButton from '@/components/combat/TreasureRollButton';
 
 const RESULT_CONFIG = {
   victory: { label: 'Victory', icon: Trophy, color: '#86efac', bg: 'rgba(22,163,74,0.15)', border: 'rgba(40,200,90,0.3)' },
@@ -23,21 +24,45 @@ export default function CombatHistory() {
   const [filterDateRange, setFilterDateRange] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [characters, setCharacters] = useState([]);
 
   useEffect(() => {
     Promise.all([
       base44.entities.CombatLog.filter({ is_active: false }),
       base44.entities.GameSession.list('-updated_date', 50),
-    ]).then(([rawLogs, sess]) => {
+      base44.entities.Character.list('name', 50),
+    ]).then(([rawLogs, sess, chars]) => {
       // Only show completed encounters that have an actual result
       const completed = rawLogs.filter(l => l.result && l.result !== 'ongoing');
       // Sort newest first
       completed.sort((a, b) => new Date(b.encounter_date || b.created_date) - new Date(a.encounter_date || a.created_date));
       setLogs(completed);
       setSessions(sess);
+      setCharacters(chars);
       setLoading(false);
     });
   }, []);
+
+  // Build a map of character_id → character for quick lookup
+  const charMap = useMemo(() => {
+    const map = {};
+    characters.forEach(c => { map[c.id] = c; });
+    return map;
+  }, [characters]);
+
+  // Resolve character for a combat log — check character_id field, then combatant player id
+  const getCharacterForLog = (log) => {
+    if (log.character_id && charMap[log.character_id]) return charMap[log.character_id];
+    const playerId = (log.combatants || []).find(c => c.type === 'player')?.id;
+    return playerId ? charMap[playerId] : characters[0] || null;
+  };
+
+  const handleLootCollected = (logId, updatedChar, lootSnapshot) => {
+    // Update local character state
+    setCharacters(prev => prev.map(c => c.id === updatedChar.id ? updatedChar : c));
+    // Update local log state so the loot section renders immediately
+    setLogs(prev => prev.map(l => l.id === logId ? { ...l, loot_collected: lootSnapshot } : l));
+  };
 
   const dateRangeOptions = [
     { value: 'all',   label: 'All Time' },
@@ -226,6 +251,8 @@ export default function CombatHistory() {
                 expanded={expandedId === log.id}
                 onToggle={() => setExpandedId(expandedId === log.id ? null : log.id)}
                 onNavigate={() => navigate(createPageUrl('Game') + `?session_id=${log.session_id}`)}
+                character={getCharacterForLog(log)}
+                onLootCollected={(updatedChar, lootSnapshot) => handleLootCollected(log.id, updatedChar, lootSnapshot)}
               />
             ))}
           </div>
@@ -235,7 +262,7 @@ export default function CombatHistory() {
   );
 }
 
-function EncounterCard({ log, index, expanded, onToggle, onNavigate }) {
+function EncounterCard({ log, index, expanded, onToggle, onNavigate, character, onLootCollected }) {
   const resultCfg = RESULT_CONFIG[log.result] || RESULT_CONFIG.victory;
   const ResultIcon = resultCfg.icon;
   const enemies = log.enemies_faced || [];
@@ -376,6 +403,17 @@ function EncounterCard({ log, index, expanded, onToggle, onNavigate }) {
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Roll for Treasure — only for victories without collected loot */}
+              {log.result === 'victory' && character && !hasCoin && !hasItems && (
+                <div onClick={e => e.stopPropagation()}>
+                  <TreasureRollButton
+                    combatLog={log}
+                    character={character}
+                    onLootCollected={onLootCollected}
+                  />
                 </div>
               )}
 
