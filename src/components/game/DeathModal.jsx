@@ -47,7 +47,7 @@ export default function DeathModal({ character, onMiracle, onDeath, onClose }) {
         initial={{ scale: 0.8, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        className="relative max-w-lg w-full rounded-2xl overflow-hidden"
+        className="relative max-w-xl w-full rounded-2xl overflow-hidden"
         style={{
           background: 'linear-gradient(160deg, rgba(30,10,10,0.98), rgba(15,5,5,0.99))',
           border: '1px solid rgba(180,30,30,0.4)',

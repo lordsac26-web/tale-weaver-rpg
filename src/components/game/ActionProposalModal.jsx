@@ -21,7 +21,7 @@ export default function ActionProposalModal({ proposal, onConfirm, onCancel }) {
       <motion.div
         initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-        className="w-full max-w-md rounded-2xl overflow-hidden"
+        className="w-full max-w-xl rounded-2xl overflow-hidden"
         style={{ background: '#0d0a07', border: '1px solid rgba(201,169,110,0.25)', boxShadow: '0 0 40px rgba(0,0,0,0.8)' }}>
 
         {/* Header */}
