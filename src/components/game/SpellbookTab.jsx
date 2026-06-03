@@ -1,196 +1,112 @@
-import React, { useState } from 'react';
-import { Zap, Info, Search, BookOpen, Star, CheckCircle, Moon, RotateCcw, Flame } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useMemo } from 'react';
+import { Search, BookOpen, Star, CheckCircle, Moon, RotateCcw, Flame } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import SpellSlotTracker from './SpellSlotTracker';
+import SpellCard from './SpellCard';
+import { SPELL_DETAILS } from './spellData';
 import {
-  SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS,
-  getCantripDamageDice
-} from './spellData';
-import {
-  getCombinedSpellList,
+  getCombinedSpellListWithSource,
   getMulticlassSpellSlots,
-  getPrimarySpellcastingEntry,
   getSpellcastingEntries,
   getTotalCharacterLevel,
   getTotalProficiencyBonus,
+  getPreparationLimits,
 } from './multiclassUtils';
 import { calcStatMod } from './gameData';
 
 const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
-// Classes that prepare spells from their full list vs classes that have a fixed known spells list
-const PREPARATION_CLASSES = ['Wizard', 'Cleric', 'Druid', 'Paladin'];
-const ATTACK_ICONS = {
-  ranged_spell_attack: '🎯',
-  melee_spell_attack: '⚔️',
-  saving_throw: '🎲',
-  healing: '💚',
-  auto_hit: '✨',
-  utility: '🔧',
-};
-
-function SpellCard({ spell, spellName, character, isKnown, isPrepared, onToggleKnown, onTogglePrepared, onCast, canCast, compact = false }) {
-  const [showDetail, setShowDetail] = useState(false);
-  const details = SPELL_DETAILS[spellName] || spell || {};
-  const schoolColor = SCHOOL_COLORS[details.school] || 'text-slate-400';
-  const dmgColor = DAMAGE_TYPE_COLORS[details.damage_type] || 'text-amber-300';
-  const attackIcon = ATTACK_ICONS[details.attack_type || 'utility'];
-  const charLevel = character?.level || 1;
-  
-  // Check for concentration and ritual from multiple sources
-  const isConcentration = details.requires_concentration || details.concentration;
-  const isRitual = details.is_reaction || details.ritual;
-  
-  // Get cantrip scaling
-  const isCantrip = details.level === 0;
-  const displayDice = isCantrip ? getCantripDamageDice(spellName, charLevel) : details.damage_dice;
-
-  return (
-    <div className={`rounded-xl transition-all ${
-      isPrepared ? 'glass-panel border-glow-gold' : 
-      isKnown ? 'glass-panel-light' : 
-      'glass-panel-light opacity-60'
-    }`}>
-      <div className="flex items-start gap-2.5 p-3">
-        <span className="text-base flex-shrink-0 mt-0.5">{attackIcon}</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`text-sm font-fantasy font-medium ${isPrepared ? 'text-glow-gold' : isKnown ? 'text-amber-200' : 'text-slate-300'}`} style={{ color: isPrepared ? '#f0c040' : undefined }}>
-              {spellName}
-            </span>
-            {isPrepared && <span className="px-1.5 py-0.5 rounded-full text-xs badge-gold">READY</span>}
-            {details.school && <span className={`text-xs ${schoolColor} opacity-70`}>{details.school}</span>}
-            {isConcentration && <span className="text-xs px-1.5 py-0.5 rounded badge-arcane">Concentration</span>}
-            {isRitual && <span className="text-xs text-yellow-400 opacity-70">Ritual</span>}
-          </div>
-          {!compact && (
-            <div className="flex items-center gap-3 mt-1.5 flex-wrap text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>
-              {details.casting_time && <span>⏱️ {details.casting_time}</span>}
-              {details.range && <span>📍 {details.range}</span>}
-              {displayDice && displayDice !== '0' && (
-                <span className={`font-mono font-bold ${dmgColor}`}>
-                  {displayDice} {details.damage_type}
-                  {isCantrip && charLevel >= 5 && <span className="text-xs opacity-50 ml-1">(lv{charLevel})</span>}
-                </span>
-              )}
-              {details.attack_type === 'healing' && details.heal_dice && (
-                <span className="font-mono font-bold text-green-400">{details.heal_dice} heal</span>
-              )}
-              {details.save_type && <span className="text-yellow-400 font-bold">{details.save_type.toUpperCase()} save</span>}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button onClick={() => setShowDetail(v => !v)} 
-            className="p-1 rounded transition-colors" 
-            style={{ color: 'rgba(180,140,90,0.4)' }}
-            onMouseEnter={e => e.currentTarget.style.color = '#c9a96e'}
-            onMouseLeave={e => e.currentTarget.style.color = 'rgba(180,140,90,0.4)'}>
-            <Info className="w-3.5 h-3.5" />
-          </button>
-          {onCast && isPrepared && (
-            <button onClick={() => onCast(spellName)}
-              disabled={!canCast}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-fantasy transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-              style={canCast ? {
-                background: 'linear-gradient(135deg, rgba(120,40,10,0.7), rgba(80,20,5,0.8))',
-                border: '1px solid rgba(240,100,40,0.5)',
-                color: '#ffcfa0',
-                textShadow: '0 0 6px rgba(240,140,60,0.4)',
-              } : {
-                background: 'rgba(30,15,5,0.4)',
-                border: '1px solid rgba(120,60,30,0.2)',
-                color: 'rgba(180,140,90,0.3)',
-              }}
-              title={canCast ? 'Cast this spell (uses a spell slot)' : 'No spell slots remaining'}>
-              <Flame className="w-3 h-3" />
-              Cast
-            </button>
-          )}
-          {onTogglePrepared && isKnown && (
-            <button onClick={() => onTogglePrepared(spellName)}
-              className={`p-1 rounded transition-colors ${isPrepared ? 'text-amber-400 hover:text-amber-300' : 'text-slate-500 hover:text-amber-400'}`}>
-              <CheckCircle className={`w-3.5 h-3.5 ${isPrepared ? 'fill-current' : ''}`} />
-            </button>
-          )}
-          {onToggleKnown && !isKnown && (
-            <button onClick={() => onToggleKnown(spellName)}
-              className="p-1 rounded transition-colors text-slate-500 hover:text-amber-400">
-              <Star className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {showDetail && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden px-4 pb-3 pt-2"
-            style={{ borderTop: '1px solid rgba(180,140,90,0.1)', background: 'rgba(8,5,2,0.5)' }}>
-            {details.visual_summary && (
-              <p className="text-xs leading-relaxed italic mb-2" style={{ color: 'rgba(192,132,252,0.75)' }}>✨ {details.visual_summary}</p>
-            )}
-            {details.effect_summary && (
-              <p className="text-xs leading-relaxed font-medium mb-2" style={{ color: 'rgba(147,197,253,0.8)' }}>⚡ {details.effect_summary}</p>
-            )}
-            <p className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
-              {details.description || 'No description available.'}
-            </p>
-            {details.higher_level_scaling && (
-              <p className="text-xs italic mb-1" style={{ color: 'rgba(240,192,64,0.7)' }}>
-                <strong>At Higher Levels:</strong> {details.higher_level_scaling}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2 mt-2 text-xs" style={{ color: 'rgba(180,140,90,0.45)' }}>
-              {details.components && <span>Components: {details.components}</span>}
-              {details.duration && <span>Duration: {details.duration}</span>}
-            </div>
-            {details.conditions_caused && details.conditions_caused.length > 0 && (
-              <p className="text-xs mt-2 px-2 py-1 rounded" style={{ background: 'rgba(80,5,5,0.3)', border: '1px solid rgba(180,30,30,0.2)', color: '#fca5a5' }}>
-                <strong>Conditions:</strong> {details.conditions_caused.join(', ')}
-              </p>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
 
 export default function SpellbookTab({ character, onUpdateCharacter }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLevel, setFilterLevel] = useState('all');
   const [filterType, setFilterType] = useState('all');
-  const [activeSection, setActiveSection] = useState('prepared'); // 'prepared' | 'available' | 'slots'
-  const [castFlash, setCastFlash] = useState(null); // spellName for flash effect
+  const [filterSource, setFilterSource] = useState('all');
+  const [activeSection, setActiveSection] = useState('prepared');
+  const [castFlash, setCastFlash] = useState(null);
 
-  // Guard must come AFTER all hooks (Rules of Hooks)
+  // All hooks BEFORE any early returns
   const preparedSpells = new Set(character?.spells_prepared || []);
+  const knownSpells = new Set(character?.spells_known || []);
+  const currentSlots = character?.spell_slots || {};
+
+  const spellcastingEntries = useMemo(() => character ? getSpellcastingEntries(character) : [], [character]);
+  const totalLevel = character ? getTotalCharacterLevel(character) : 1;
+  const profBonus = character ? getTotalProficiencyBonus(character) : 2;
+  const slotMaxArr = useMemo(() => character ? getMulticlassSpellSlots(character) : [0,0,0,0,0,0,0,0,0], [character]);
+
+  // Build per-entry stats for the multiclass stats panel
+  const entryStats = useMemo(() => {
+    return spellcastingEntries.map(entry => {
+      const ability = entry.ability;
+      const score = character?.[ability] || 10;
+      const mod = calcStatMod(score);
+      return {
+        className: entry.className,
+        subclass: entry.subclass,
+        levels: entry.levels,
+        ability,
+        score,
+        mod,
+        saveDC: 8 + mod + profBonus,
+        attackBonus: mod + profBonus,
+      };
+    });
+  }, [spellcastingEntries, character, profBonus]);
+
+  // Preparation limits per class
+  const prepLimits = useMemo(() => character ? getPreparationLimits(character) : [], [character]);
+  const totalMaxPrepared = prepLimits.reduce((sum, p) => sum + p.maxPrepared, 0);
+  const isPreparationCaster = prepLimits.length > 0;
+
+  // Combined spell list with source class tags
+  const allAvailableSpells = useMemo(() => character ? getCombinedSpellListWithSource(character) : [], [character]);
+
+  // Unique source classes for the filter dropdown
+  const sourceClasses = useMemo(() => {
+    const set = new Set(allAvailableSpells.map(s => s.sourceClass));
+    return [...set];
+  }, [allAvailableSpells]);
+
+  const isMulticlass = sourceClasses.length > 1;
+  const spellCardCharacter = character ? { ...character, level: totalLevel } : null;
+
+  // Build source lookup for known/prepared spells (must be before early returns)
+  const spellSourceMap = useMemo(() => {
+    const map = {};
+    allAvailableSpells.forEach(s => { if (!map[s.name]) map[s.name] = s.sourceClass; });
+    return map;
+  }, [allAvailableSpells]);
 
   if (!character) return null;
 
-  const totalLevel = getTotalCharacterLevel(character);
-  const spellcastingEntries = getSpellcastingEntries(character);
-  const primarySpellcaster = getPrimarySpellcastingEntry(character);
-  const charClass = primarySpellcaster?.className || character.class;
-  const spellcastingAbility = primarySpellcaster?.ability;
-  const profBonus = getTotalProficiencyBonus(character);
-  const spellcastingAbilityScore = spellcastingAbility ? (character[spellcastingAbility] || 10) : 10;
-  const spellcastingMod = calcStatMod(spellcastingAbilityScore);
-  const spellSaveDC = spellcastingAbility ? 8 + spellcastingMod + profBonus : null;
-  const spellAttackBonus = spellcastingAbility ? spellcastingMod + profBonus : null;
-  const currentSlots = character.spell_slots || {};
-  const knownSpells = new Set(character.spells_known || []);
-  const isPreparation = spellcastingEntries.some(entry => PREPARATION_CLASSES.includes(entry.className));
-  const spellCardCharacter = { ...character, level: totalLevel };
+  const hasSpellcasting = spellcastingEntries.length > 0;
 
-  const classSpells = getCombinedSpellList(character);
-  const allAvailableSpells = [];
-  Object.entries(classSpells).forEach(([lvl, spells]) => {
-    const numLevel = lvl === 'cantrips' ? 0 : parseInt(lvl);
-    spells.forEach(name => allAvailableSpells.push({ name, level: numLevel }));
-  });
+  if (!hasSpellcasting) {
+    return (
+      <div className="text-center py-12 text-slate-500">
+        <BookOpen className="w-10 h-10 opacity-20 mx-auto mb-3" />
+        <p className="text-sm">{character.class} cannot cast spells.</p>
+      </div>
+    );
+  }
 
+  // Slot helpers
+  const getRemainingSlots = (level) => {
+    if (level === 0) return Infinity;
+    const max = slotMaxArr[level - 1] || 0;
+    const used = currentSlots[`level_${level}`] || 0;
+    return Math.max(0, max - used);
+  };
+
+  const findLowestAvailableSlot = (spellLevel) => {
+    if (spellLevel === 0) return null;
+    for (let lvl = spellLevel; lvl <= 9; lvl++) {
+      if (getRemainingSlots(lvl) > 0) return lvl;
+    }
+    return null;
+  };
+
+  // Actions
   const toggleKnown = (spellName) => {
     const updated = knownSpells.has(spellName)
       ? [...knownSpells].filter(s => s !== spellName)
@@ -200,32 +116,41 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
 
   const togglePrepared = (spellName) => {
     const isPrepared = preparedSpells.has(spellName);
-    const maxPrepared = isPreparation ? Math.max(1, totalLevel + spellcastingMod) : 999;
-    
-    if (!isPrepared && preparedSpells.size >= maxPrepared && isPreparation) {
-      alert(`You can only prepare ${maxPrepared} spells at once. Unprepare a spell first.`);
+    if (!isPrepared && isPreparationCaster && totalMaxPrepared < 999 && preparedSpells.size >= totalMaxPrepared) {
+      alert(`You can only prepare ${totalMaxPrepared} spells at once. Unprepare a spell first.`);
       return;
     }
-    
     const updated = isPrepared
       ? [...preparedSpells].filter(s => s !== spellName)
       : [...preparedSpells, spellName];
-    
-    // Auto-add to known if not already
     const finalKnown = knownSpells.has(spellName) ? [...knownSpells] : [...knownSpells, spellName];
-    
     onUpdateCharacter({ spells_prepared: updated, spells_known: finalKnown });
   };
 
-  const filterSpell = ({ name, level: lvl }) => {
-    if (searchQuery && !name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (filterLevel !== 'all' && lvl !== parseInt(filterLevel)) return false;
+  const handleCastSpell = (spellName) => {
+    const details = SPELL_DETAILS[spellName] || {};
+    const spellLevel = details.level ?? 1;
+    if (spellLevel === 0) return;
+    const slotLevel = findLowestAvailableSlot(spellLevel);
+    if (slotLevel === null) return;
+    const slotKey = `level_${slotLevel}`;
+    const newUsed = (currentSlots[slotKey] || 0) + 1;
+    onUpdateCharacter({ spell_slots: { ...currentSlots, [slotKey]: newUsed } });
+    setCastFlash(spellName);
+    setTimeout(() => setCastFlash(null), 800);
+  };
+
+  // Filtering
+  const filterSpell = (s) => {
+    if (searchQuery && !s.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (filterLevel !== 'all' && s.level !== parseInt(filterLevel)) return false;
+    if (filterSource !== 'all' && s.sourceClass !== filterSource) return false;
     if (filterType !== 'all') {
-      const d = SPELL_DETAILS[name];
+      const d = SPELL_DETAILS[s.name];
       if (filterType === 'damage' && !d?.damage_dice) return false;
       if (filterType === 'healing' && d?.attack_type !== 'healing') return false;
       if (filterType === 'utility' && !d?.is_utility) return false;
-      if (filterType === 'concentration' && !d?.requires_concentration) return false;
+      if (filterType === 'concentration' && !(d?.requires_concentration || d?.concentration)) return false;
     }
     return true;
   };
@@ -234,99 +159,42 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
   const knownList = allAvailableSpells.filter(s => knownSpells.has(s.name) && !preparedSpells.has(s.name) && filterSpell(s));
   const availableList = allAvailableSpells.filter(s => !knownSpells.has(s.name) && filterSpell(s));
 
-  const hasSpellcasting = !!spellcastingAbility;
-
-  if (!hasSpellcasting) {
-    return (
-      <div className="text-center py-12 text-slate-500">
-        <BookOpen className="w-10 h-10 opacity-20 mx-auto mb-3" />
-        <p className="text-sm">{charClass} cannot cast spells.</p>
-      </div>
-    );
+  // Level range for rendering
+  const levelRange = [];
+  for (let i = 0; i <= 9; i++) {
+    if (i === 0 || (slotMaxArr[i - 1] || 0) > 0) levelRange.push(i);
   }
-
-  const slotMaxArr = getMulticlassSpellSlots(character);
-
-  // Compute remaining slots per level for inline indicators & cast eligibility
-  const getRemainingSlots = (level) => {
-    if (level === 0) return Infinity; // cantrips are unlimited
-    const max = slotMaxArr[level - 1] || 0;
-    const used = currentSlots[`level_${level}`] || 0;
-    return Math.max(0, max - used);
-  };
-
-  // Find the lowest available slot at or above the spell's base level
-  const findLowestAvailableSlot = (spellLevel) => {
-    if (spellLevel === 0) return null; // cantrips don't use slots
-    for (let lvl = spellLevel; lvl <= 9; lvl++) {
-      if (getRemainingSlots(lvl) > 0) return lvl;
-    }
-    return null; // no slots available
-  };
-
-  const handleCastSpell = (spellName) => {
-    const details = SPELL_DETAILS[spellName] || {};
-    const spellLevel = details.level ?? 1;
-    if (spellLevel === 0) return; // cantrips don't consume slots
-    
-    const slotLevel = findLowestAvailableSlot(spellLevel);
-    if (slotLevel === null) return; // no slots available
-    
-    const slotKey = `level_${slotLevel}`;
-    const newUsed = (currentSlots[slotKey] || 0) + 1;
-    onUpdateCharacter({ spell_slots: { ...currentSlots, [slotKey]: newUsed } });
-    
-    // Flash feedback
-    setCastFlash(spellName);
-    setTimeout(() => setCastFlash(null), 800);
-  };
-
-  const handleToggleSlot = (level, slotIndex, maxSlots) => {
-    const used = currentSlots[`level_${level}`] || 0;
-    const remaining = maxSlots - used;
-    // clicking a filled slot expends it, clicking empty slot recovers it
-    const newUsed = slotIndex < remaining ? used + 1 : Math.max(0, used - 1);
-    onUpdateCharacter({ spell_slots: { ...currentSlots, [`level_${level}`]: newUsed } });
-  };
 
   return (
     <div className="space-y-4">
-      {/* Spellcasting Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-purple-900/10 border border-purple-700/30 rounded-xl">
-        <div className="text-center">
-          <div className="text-xs text-slate-500 mb-0.5">Ability</div>
-          <div className="text-sm font-bold text-purple-300 capitalize">{spellcastingAbility || '—'}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-xs text-slate-500 mb-0.5">Score / Mod</div>
-          <div className="text-sm font-bold text-purple-300">{spellcastingAbilityScore} / {spellcastingMod >= 0 ? '+' : ''}{spellcastingMod}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-xs text-slate-500 mb-0.5">Save DC</div>
-          <div className="text-sm font-bold text-purple-300">{spellSaveDC}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-xs text-slate-500 mb-0.5">Spell Attack</div>
-          <div className="text-sm font-bold text-purple-300">+{spellAttackBonus}</div>
-        </div>
-      </div>
+      {/* Per-class spellcasting stats (multiclass shows each class) */}
+      {entryStats.length === 1 ? (
+        <SingleCasterStats entry={entryStats[0]} />
+      ) : (
+        <MultiCasterStats entries={entryStats} />
+      )}
+
+      {/* Spell source info */}
       {spellcastingEntries.length > 0 && (
         <div className="text-xs text-blue-300/70 bg-blue-900/10 border border-blue-700/20 rounded-lg px-3 py-2">
           Spell sources: {spellcastingEntries.map(entry => `${entry.className}${entry.subclass ? ` (${entry.subclass})` : ''} Lv.${entry.levels}`).join(' · ')}
         </div>
       )}
-      {isPreparation && (
+
+      {/* Preparation info */}
+      {isPreparationCaster && (
         <div className="text-xs text-purple-400/70 bg-purple-900/10 border border-purple-700/20 rounded-lg px-3 py-2">
-          📖 <strong>{charClass}</strong> prepares spells daily. Max prepared: {Math.max(1, totalLevel + spellcastingMod)} spells. Currently prepared: {preparedSpells.size}
+          📖 {prepLimits.map(p => `${p.className}: max ${p.maxPrepared} (Lv.${p.classLevel} + ${p.abilityMod >= 0 ? '+' : ''}${p.abilityMod} ${p.ability.slice(0,3).toUpperCase()})`).join(' · ')}
+          {' '}— Total max prepared: {totalMaxPrepared}. Currently: {preparedSpells.size}
         </div>
       )}
 
       {/* Section Tabs */}
       <div className="flex gap-1 bg-slate-800/40 p-1 rounded-lg">
         {[
-          ['prepared', `Prepared (${preparedSpells.size})`], 
-          ['known', `Known (${knownSpells.size})`], 
-          ['available', 'Spellbook'], 
+          ['prepared', `Prepared (${preparedSpells.size})`],
+          ['known', `Known (${knownSpells.size})`],
+          ['available', 'Spellbook'],
           ['slots', 'Spell Slots']
         ].map(([key, label]) => (
           <button key={key} onClick={() => setActiveSection(key)}
@@ -339,51 +207,19 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
       {/* Spell Slots Panel */}
       {activeSection === 'slots' && (
         <div className="space-y-3">
-          <SpellSlotTracker 
-            character={character}
-            onUpdateSlots={(newSlots) => onUpdateCharacter({ spell_slots: newSlots })}
-          />
-          
+          <SpellSlotTracker character={character} onUpdateSlots={(newSlots) => onUpdateCharacter({ spell_slots: newSlots })} />
           <div className="flex gap-2 pt-2">
-            <button onClick={async () => {
-              const result = await base44.functions.invoke('recoverSpellSlots', {
-                character_id: character.id,
-                rest_type: 'short'
-              });
-              if (result.data?.character) {
-                onUpdateCharacter({ 
-                  spell_slots: result.data.character.spell_slots,
-                  arcane_recovery_used: result.data.character.arcane_recovery_used
-                });
-              }
-            }}
-              className="flex-1 py-2 border text-xs rounded-xl transition-all flex items-center justify-center gap-2"
-              style={{ background: 'rgba(60,30,8,0.4)', border: '1px solid rgba(184,115,51,0.25)', color: 'rgba(201,169,110,0.7)' }}>
-              <RotateCcw className="w-3.5 h-3.5" />
-              Short Rest
-            </button>
-            <button onClick={async () => {
-              const result = await base44.functions.invoke('recoverSpellSlots', {
-                character_id: character.id,
-                rest_type: 'long'
-              });
-              if (result.data?.character) {
-                onUpdateCharacter({ 
-                  spell_slots: result.data.character.spell_slots,
-                  arcane_recovery_used: result.data.character.arcane_recovery_used
-                });
-              }
-            }}
-              className="flex-1 py-2 border text-xs rounded-xl transition-all flex items-center justify-center gap-2"
-              style={{ background: 'rgba(38,10,70,0.4)', border: '1px solid rgba(130,70,210,0.3)', color: 'rgba(192,132,252,0.7)' }}>
-              <Moon className="w-3.5 h-3.5" />
-              Long Rest
-            </button>
+            <RestButton label="Short Rest" restType="short" character={character} onUpdateCharacter={onUpdateCharacter}
+              style={{ background: 'rgba(60,30,8,0.4)', border: '1px solid rgba(184,115,51,0.25)', color: 'rgba(201,169,110,0.7)' }}
+              icon={<RotateCcw className="w-3.5 h-3.5" />} />
+            <RestButton label="Long Rest" restType="long" character={character} onUpdateCharacter={onUpdateCharacter}
+              style={{ background: 'rgba(38,10,70,0.4)', border: '1px solid rgba(130,70,210,0.3)', color: 'rgba(192,132,252,0.7)' }}
+              icon={<Moon className="w-3.5 h-3.5" />} />
           </div>
         </div>
       )}
 
-      {/* Filters (only for known/available) */}
+      {/* Filters */}
       {activeSection !== 'slots' && (
         <div className="flex gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[140px]">
@@ -394,8 +230,15 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
           <select value={filterLevel} onChange={e => setFilterLevel(e.target.value)}
             className="bg-slate-800/60 border border-slate-700/40 rounded-lg text-xs text-slate-400 px-2 py-1.5 outline-none">
             <option value="all">All Levels</option>
-            {[0,1,2,3,4,5].map(l => <option key={l} value={l}>{LEVEL_LABELS[l]}</option>)}
+            {levelRange.map(l => <option key={l} value={l}>{LEVEL_LABELS[l]}</option>)}
           </select>
+          {isMulticlass && (
+            <select value={filterSource} onChange={e => setFilterSource(e.target.value)}
+              className="bg-slate-800/60 border border-slate-700/40 rounded-lg text-xs text-slate-400 px-2 py-1.5 outline-none">
+              <option value="all">All Classes</option>
+              {sourceClasses.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
           <select value={filterType} onChange={e => setFilterType(e.target.value)}
             className="bg-slate-800/60 border border-slate-700/40 rounded-lg text-xs text-slate-400 px-2 py-1.5 outline-none">
             <option value="all">All Types</option>
@@ -409,100 +252,157 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
 
       {/* Spell Lists */}
       {activeSection !== 'slots' && (
-      <div className="space-y-3">
-        {activeSection === 'prepared' ? (
-          preparedList.length === 0 ? (
-            <div className="text-center py-8 text-slate-500 text-sm">
-              {preparedSpells.size === 0 ? 'No spells prepared. Click the star icon on spells to prepare them.' : 'No spells match your filters.'}
-            </div>
-          ) : (
-            [0,1,2,3,4,5,6,7,8,9].map(level => {
-              const levelSpells = preparedList.filter(s => s.level === level);
-              if (levelSpells.length === 0) return null;
-              const remaining = getRemainingSlots(level);
-              const maxForLevel = level === 0 ? Infinity : (slotMaxArr[level - 1] || 0);
-              return (
-                <div key={level}>
-                  <div className="text-xs text-purple-400/70 uppercase tracking-widest mb-2 flex items-center gap-2">
-                    <CheckCircle className="w-3 h-3" />
-                    {LEVEL_LABELS[level]} {level > 0 ? 'Level' : 's'}
-                    {level > 0 && maxForLevel > 0 && (
-                      <span className={`ml-auto font-mono text-xs px-1.5 py-0.5 rounded-md ${
-                        remaining === 0 ? 'text-red-400 bg-red-900/30 border border-red-700/30' :
-                        remaining <= 1 ? 'text-amber-400 bg-amber-900/20 border border-amber-700/20' :
-                        'text-purple-300 bg-purple-900/20 border border-purple-700/20'
-                      }`}>
-                        {remaining}/{maxForLevel} slots
-                      </span>
-                    )}
+        <div className="space-y-3">
+          {activeSection === 'prepared' && (
+            <SpellLevelGroups
+              spells={preparedList} icon={<CheckCircle className="w-3 h-3" />}
+              colorClass="text-purple-400/70" levelRange={levelRange}
+              slotMaxArr={slotMaxArr} getRemainingSlots={getRemainingSlots}
+              renderCard={(s) => {
+                const spellLvl = SPELL_DETAILS[s.name]?.level ?? s.level;
+                const canCast = spellLvl === 0 || findLowestAvailableSlot(spellLvl) !== null;
+                return (
+                  <div key={s.name} className={`transition-all ${castFlash === s.name ? 'crit-flash rounded-xl' : ''}`}>
+                    <SpellCard spellName={s.name} character={spellCardCharacter} isKnown isPrepared
+                      onTogglePrepared={togglePrepared}
+                      onCast={spellLvl > 0 ? handleCastSpell : undefined}
+                      canCast={canCast}
+                      sourceClass={isMulticlass ? s.sourceClass : undefined} />
                   </div>
-                  <div className="space-y-2">
-                    {levelSpells.map(({ name }) => {
-                      const spellLvl = SPELL_DETAILS[name]?.level ?? level;
-                      const canCast = spellLvl === 0 || findLowestAvailableSlot(spellLvl) !== null;
-                      return (
-                        <div key={name} className={`transition-all ${castFlash === name ? 'crit-flash rounded-xl' : ''}`}>
-                          <SpellCard spellName={name} character={spellCardCharacter} isKnown={true} isPrepared={true}
-                            onTogglePrepared={togglePrepared}
-                            onCast={spellLvl > 0 ? handleCastSpell : undefined}
-                            canCast={canCast} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })
-          )
-        ) : activeSection === 'known' ? (
-          knownList.length === 0 ? (
-            <div className="text-center py-8 text-slate-500 text-sm">
-              {knownSpells.size === 0 ? 'No spells known. Browse the Spellbook tab to learn spells.' : 'No spells match your filters.'}
-            </div>
-          ) : (
-            [0,1,2,3,4,5].map(level => {
-              const levelSpells = knownList.filter(s => s.level === level);
-              if (levelSpells.length === 0) return null;
-              return (
-                <div key={level}>
-                  <div className="text-xs text-amber-400/70 uppercase tracking-widest mb-2 flex items-center gap-2">
-                    <Star className="w-3 h-3" />
-                    {LEVEL_LABELS[level]} {level > 0 ? 'Level' : 's'}
-                  </div>
-                  <div className="space-y-2">
-                    {levelSpells.map(({ name }) => (
-                      <SpellCard key={name} spellName={name} character={spellCardCharacter} 
-                        isKnown={true} isPrepared={false}
-                        onTogglePrepared={togglePrepared} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })
-          )
-        ) : (
-          [0,1,2,3,4,5].map(level => {
-            const levelSpells = availableList.filter(s => s.level === level);
-            if (levelSpells.length === 0) return null;
-            return (
-              <div key={level}>
-                <div className="text-xs text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                  <BookOpen className="w-3 h-3" />
-                  {LEVEL_LABELS[level]} {level > 0 ? 'Level' : 's'}
-                </div>
-                <div className="space-y-2">
-                  {levelSpells.map(({ name }) => (
-                    <SpellCard key={name} spellName={name} character={spellCardCharacter} 
-                      isKnown={false} isPrepared={false}
-                      onToggleKnown={toggleKnown} />
-                  ))}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+                );
+              }}
+              emptyMsg={preparedSpells.size === 0 ? 'No spells prepared. Click the ✓ icon on spells to prepare them.' : 'No spells match your filters.'}
+            />
+          )}
+          {activeSection === 'known' && (
+            <SpellLevelGroups
+              spells={knownList} icon={<Star className="w-3 h-3" />}
+              colorClass="text-amber-400/70" levelRange={levelRange}
+              renderCard={(s) => (
+                <SpellCard key={s.name} spellName={s.name} character={spellCardCharacter}
+                  isKnown isPrepared={false}
+                  onTogglePrepared={togglePrepared}
+                  sourceClass={isMulticlass ? s.sourceClass : undefined} />
+              )}
+              emptyMsg={knownSpells.size === 0 ? 'No spells known. Browse the Spellbook tab to learn spells.' : 'No spells match your filters.'}
+            />
+          )}
+          {activeSection === 'available' && (
+            <SpellLevelGroups
+              spells={availableList} icon={<BookOpen className="w-3 h-3" />}
+              colorClass="text-slate-400" levelRange={levelRange}
+              renderCard={(s) => (
+                <SpellCard key={s.name} spellName={s.name} character={spellCardCharacter}
+                  isKnown={false} isPrepared={false}
+                  onToggleKnown={toggleKnown}
+                  sourceClass={isMulticlass ? s.sourceClass : undefined} />
+              )}
+              emptyMsg="No additional spells available for your filters."
+            />
+          )}
+        </div>
       )}
     </div>
+  );
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────
+
+function SingleCasterStats({ entry }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-purple-900/10 border border-purple-700/30 rounded-xl">
+      <StatCell label="Ability" value={entry.ability} capitalize />
+      <StatCell label="Score / Mod" value={`${entry.score} / ${entry.mod >= 0 ? '+' : ''}${entry.mod}`} />
+      <StatCell label="Save DC" value={entry.saveDC} />
+      <StatCell label="Spell Attack" value={`+${entry.attackBonus}`} />
+    </div>
+  );
+}
+
+function MultiCasterStats({ entries }) {
+  return (
+    <div className="space-y-2">
+      {entries.map(entry => (
+        <div key={entry.className} className="p-3 bg-purple-900/10 border border-purple-700/30 rounded-xl">
+          <div className="text-xs font-fantasy font-bold text-purple-200 mb-2">
+            {entry.className}{entry.subclass ? ` (${entry.subclass})` : ''} — Lv.{entry.levels}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <StatCell label="Ability" value={entry.ability} capitalize small />
+            <StatCell label="Score / Mod" value={`${entry.score} / ${entry.mod >= 0 ? '+' : ''}${entry.mod}`} small />
+            <StatCell label="Save DC" value={entry.saveDC} small />
+            <StatCell label="Attack" value={`+${entry.attackBonus}`} small />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StatCell({ label, value, capitalize, small }) {
+  return (
+    <div className="text-center">
+      <div className={`text-slate-500 mb-0.5 ${small ? 'text-[10px]' : 'text-xs'}`}>{label}</div>
+      <div className={`font-bold text-purple-300 ${capitalize ? 'capitalize' : ''} ${small ? 'text-xs' : 'text-sm'}`}>{value}</div>
+    </div>
+  );
+}
+
+function RestButton({ label, restType, character, onUpdateCharacter, style, icon }) {
+  return (
+    <button onClick={async () => {
+      const result = await base44.functions.invoke('recoverSpellSlots', {
+        character_id: character.id,
+        rest_type: restType
+      });
+      if (result.data?.character) {
+        onUpdateCharacter({
+          spell_slots: result.data.character.spell_slots,
+          arcane_recovery_used: result.data.character.arcane_recovery_used
+        });
+      }
+    }}
+      className="flex-1 py-2 border text-xs rounded-xl transition-all flex items-center justify-center gap-2"
+      style={style}>
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function SpellLevelGroups({ spells, icon, colorClass, levelRange, slotMaxArr, getRemainingSlots, renderCard, emptyMsg }) {
+  if (spells.length === 0) {
+    return <div className="text-center py-8 text-slate-500 text-sm">{emptyMsg}</div>;
+  }
+
+  return (
+    <>
+      {[0,1,2,3,4,5,6,7,8,9].map(level => {
+        const levelSpells = spells.filter(s => s.level === level);
+        if (levelSpells.length === 0) return null;
+        const remaining = getRemainingSlots ? getRemainingSlots(level) : null;
+        const maxForLevel = level === 0 ? Infinity : (slotMaxArr ? slotMaxArr[level - 1] || 0 : 0);
+        return (
+          <div key={level}>
+            <div className={`text-xs ${colorClass} uppercase tracking-widest mb-2 flex items-center gap-2`}>
+              {icon}
+              {LEVEL_LABELS[level]} {level > 0 ? 'Level' : 's'}
+              {level > 0 && maxForLevel > 0 && remaining !== null && (
+                <span className={`ml-auto font-mono text-xs px-1.5 py-0.5 rounded-md ${
+                  remaining === 0 ? 'text-red-400 bg-red-900/30 border border-red-700/30' :
+                  remaining <= 1 ? 'text-amber-400 bg-amber-900/20 border border-amber-700/20' :
+                  'text-purple-300 bg-purple-900/20 border border-purple-700/20'
+                }`}>
+                  {remaining}/{maxForLevel} slots
+                </span>
+              )}
+            </div>
+            <div className="space-y-2">
+              {levelSpells.map(s => renderCard(s))}
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 }

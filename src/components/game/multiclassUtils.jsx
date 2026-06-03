@@ -186,3 +186,52 @@ export function getClassFeatureSections(character = {}) {
 export function getSpellLevel(spellName) {
   return SPELL_DETAILS[spellName]?.level ?? 1;
 }
+
+/**
+ * Returns an array of { name, level, sourceClass } for all spells available
+ * across all spellcasting entries. Each spell is tagged with the class it
+ * comes from so the UI can group/filter by source. Deduplicates by name —
+ * if the same spell appears on multiple lists, the first source wins.
+ */
+export function getCombinedSpellListWithSource(character = {}) {
+  const seen = new Set();
+  const result = [];
+
+  getSpellcastingEntries(character).forEach(entry => {
+    const spellList = SPELLS_BY_CLASS[entry.spellClass] || {};
+    const maxSpellLevel = getMaxSpellLevelForEntry(entry);
+
+    (spellList.cantrips || []).forEach(name => {
+      if (!seen.has(name)) { seen.add(name); result.push({ name, level: 0, sourceClass: entry.className }); }
+    });
+
+    for (let level = 1; level <= maxSpellLevel; level++) {
+      (spellList[level] || []).forEach(name => {
+        if (!seen.has(name)) { seen.add(name); result.push({ name, level, sourceClass: entry.className }); }
+      });
+    }
+  });
+
+  return result;
+}
+
+/**
+ * For each spellcasting entry, compute the max prepared count using that
+ * entry's class level + that entry's spellcasting modifier.
+ * Returns an array of { className, maxPrepared, ability, abilityMod, classLevel }.
+ */
+const PREPARATION_CLASSES = ['Wizard', 'Cleric', 'Druid', 'Paladin'];
+
+export function getPreparationLimits(character = {}) {
+  const entries = getSpellcastingEntries(character);
+  const calcMod = (score) => Math.floor(((score || 10) - 10) / 2);
+
+  return entries
+    .filter(e => PREPARATION_CLASSES.includes(e.className))
+    .map(entry => {
+      const ability = entry.ability;
+      const abilityMod = calcMod(character[ability] || 10);
+      const maxPrepared = Math.max(1, entry.levels + abilityMod);
+      return { className: entry.className, maxPrepared, ability, abilityMod, classLevel: entry.levels };
+    });
+}
