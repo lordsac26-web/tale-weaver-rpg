@@ -6,12 +6,16 @@ import { ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   RACES, CLASSES, BACKGROUNDS, ALIGNMENTS,
-  calcStatMod, calcHP, roll4d6DropLowest,
+  calcStatMod, roll4d6DropLowest,
   PROFICIENCY_BY_LEVEL
 } from '@/components/game/gameData';
 import { FEATS } from '@/components/game/featData';
 import { computeFeatEffects } from '@/components/game/featEffects';
-import { getSpellSlotsForLevel } from '@/components/game/spellData';
+import {
+  getMulticlassHitPoints,
+  getMulticlassSpellSlots,
+  getTotalCharacterLevel,
+} from '@/components/game/multiclassUtils';
  
 import StepGenderRace from '@/components/creation/StepGenderRace';
 import StepClassInfo from '@/components/creation/StepClassInfo';
@@ -111,8 +115,9 @@ export default function CharacterCreation() {
     const conMod = calcStatMod(char.constitution);
     const dexMod = calcStatMod(char.dexterity);
     const wisMod = calcStatMod(char.wisdom);
-    const profBonus = PROFICIENCY_BY_LEVEL[(char.level || 1) - 1] || 2;
-    const hp = calcHP(char.class, char.level || 1, conMod);
+    const totalLevel = getTotalCharacterLevel(char);
+    const profBonus = PROFICIENCY_BY_LEVEL[totalLevel - 1] || 2;
+    const hp = getMulticlassHitPoints(char, conMod);
  
     // ── Armor Class ────────────────────────────────────────────────────────
     // Per D&D 5e: choose the BEST applicable AC formula
@@ -206,7 +211,7 @@ export default function CharacterCreation() {
   };
  
   const buildSpellSlots = (char) => {
-    const slots = getSpellSlotsForLevel(char.class, char.level || 1);
+    const slots = getMulticlassSpellSlots(char);
     const spell_slots = {};
     slots.forEach((max, i) => { if (max > 0) spell_slots[`level_${i + 1}`] = 0; }); // track used slots (start at 0 used)
     return { ...char, spell_slots };
@@ -268,6 +273,15 @@ export default function CharacterCreation() {
         if (!mcClassData) return;
         // Add multiclass features up to their level
         Object.entries(mcClassData.features || {}).forEach(([lvl, feats]) => {
+          if (parseInt(lvl) <= (mc.levels || 1)) {
+            feats.forEach(f => {
+              if (!finalChar.features.includes(f)) finalChar.features.push(f);
+            });
+          }
+        });
+
+        const mcSubclass = (mcClassData.subclasses || []).find(sub => sub.name === mc.subclass);
+        Object.entries(mcSubclass?.features || {}).forEach(([lvl, feats]) => {
           if (parseInt(lvl) <= (mc.levels || 1)) {
             feats.forEach(f => {
               if (!finalChar.features.includes(f)) finalChar.features.push(f);

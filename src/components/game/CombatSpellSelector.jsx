@@ -3,10 +3,17 @@ import { Zap, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS,
-  getSpellSlotsForLevel, calcSpellSaveDC, calcSpellAttackBonus,
   getCantripDamageDice, getEldritchBlastBeams
 } from './spellData';
 import { SpellTooltip } from './GameTooltip';
+import {
+  getMulticlassSpellSlots,
+  getPrimarySpellcastingEntry,
+  getSpellcastingEntries,
+  getTotalCharacterLevel,
+  getTotalProficiencyBonus,
+} from './multiclassUtils';
+import { calcStatMod } from './gameData';
 
 const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
 
@@ -14,8 +21,10 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
   const [showDetail,    setShowDetail]    = useState(null);
   const [expandedLevel, setExpandedLevel] = useState(0);
 
-  const charLevel      = character?.level || 1;
-  const charClass      = character?.class || '';
+  const charLevel      = getTotalCharacterLevel(character || {});
+  const primaryCaster  = getPrimarySpellcastingEntry(character || {});
+  const spellEntries   = getSpellcastingEntries(character || {});
+  const charClass      = primaryCaster?.className || character?.class || '';
 
   // PHB spell preparation rules:
   //  • Clerics, Druids, Paladins, Artificers: prepare a subset each long rest — only prepared spells available in combat.
@@ -23,7 +32,7 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
   //  • Bards, Rangers, Sorcerers, Warlocks: "spells known" = always available, no daily prep needed.
   // Cantrips are always available regardless.
   const PREP_CASTERS = ['Cleric', 'Druid', 'Paladin', 'Artificer', 'Wizard'];
-  const isPrepCaster = PREP_CASTERS.includes(charClass);
+  const isPrepCaster = spellEntries.some(entry => PREP_CASTERS.includes(entry.className));
   const preparedSpells = character?.spells_prepared || [];
   const knownSpells = (() => {
     const all = character?.spells_known || [];
@@ -37,10 +46,12 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
       return preparedSpells.includes(name);
     });
   })();
-  const slotMaxArr     = getSpellSlotsForLevel(charClass, charLevel);
+  const slotMaxArr     = getMulticlassSpellSlots(character || {});
   const currentSlots   = character?.spell_slots || {};
-  const spellSaveDC    = calcSpellSaveDC(character);
-  const spellAttackBonus = calcSpellAttackBonus(character);
+  const spellAbility   = primaryCaster?.ability;
+  const spellMod       = spellAbility ? calcStatMod(character?.[spellAbility] || 10) : 0;
+  const spellSaveDC    = spellAbility ? 8 + spellMod + getTotalProficiencyBonus(character || {}) : null;
+  const spellAttackBonus = spellAbility ? spellMod + getTotalProficiencyBonus(character || {}) : null;
 
   // Group spells by level
   const byLevel = {};

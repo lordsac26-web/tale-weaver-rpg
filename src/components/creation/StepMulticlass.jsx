@@ -11,6 +11,22 @@ const CLASS_ICONS = {
 
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 
+const MULTICLASS_PROFICIENCIES = {
+  Barbarian: 'Shields, simple weapons, martial weapons',
+  Bard: 'Light armor, one skill of your choice, one musical instrument',
+  Cleric: 'Light armor, medium armor, shields',
+  Druid: 'Light armor, medium armor, shields',
+  Fighter: 'Light armor, medium armor, shields, simple weapons, martial weapons',
+  Monk: 'Simple weapons, shortswords',
+  Paladin: 'Light armor, medium armor, shields, simple weapons, martial weapons',
+  Ranger: 'Light armor, medium armor, shields, simple weapons, martial weapons, one skill from Ranger list',
+  Rogue: 'Light armor, one skill from Rogue list, thieves’ tools',
+  Sorcerer: 'No additional proficiencies; gains Sorcerer spellcasting/features',
+  Warlock: 'Light armor, simple weapons',
+  Wizard: 'No additional proficiencies; gains Wizard spellcasting/features',
+  Artificer: "Light armor, medium armor, shields, thieves’ tools, tinker's tools",
+};
+
 // D&D 5e multiclass prerequisites
 const MULTICLASS_PREREQS = {
   Barbarian: { strength: 13 },
@@ -205,8 +221,9 @@ export default function StepMulticlass({ character, set }) {
               </div>
             )}
             {classData && (
-              <div className="text-xs text-slate-500 mt-2">
-                d{classData.hit_die} hit die · {classData.saves.map(s => STAT_LABELS[s]).join('/')} saves
+              <div className="text-xs text-slate-500 mt-2 space-y-1">
+                <div>d{classData.hit_die} hit die · {classData.saves.map(s => STAT_LABELS[s]).join('/')} saves</div>
+                <div className="text-blue-300/60">Multiclass proficiencies: {MULTICLASS_PROFICIENCIES[mc.class] || 'Class features only'}</div>
               </div>
             )}
           </div>

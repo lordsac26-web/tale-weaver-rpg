@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sparkles } from 'lucide-react';
 import { METAMAGIC_OPTIONS, metamagicCost, isMetamagicApplicable, maxSorceryPoints } from './metamagicData';
+import { getClassBreakdown } from './multiclassUtils';
 
 /**
  * Sorcerer Metamagic selector for combat. Shows sorcery points and lets the
@@ -13,8 +14,9 @@ import { METAMAGIC_OPTIONS, metamagicCost, isMetamagicApplicable, maxSorceryPoin
  *  - onToggle: (id) => void
  */
 export default function MetamagicSelector({ character, spell, active = {}, onToggle }) {
-  if ((character?.class || '').toLowerCase() !== 'sorcerer') return null;
-  if ((character?.level || 1) < 2) return null;
+  const sorcererEntry = getClassBreakdown(character || {}).find(entry => entry.className === 'Sorcerer');
+  if (!sorcererEntry) return null;
+  if ((sorcererEntry.levels || 1) < 3) return null;
 
   const known = character?.metamagic_known?.length
     ? character.metamagic_known
@@ -23,7 +25,7 @@ export default function MetamagicSelector({ character, spell, active = {}, onTog
   const available = known.filter(k => wired.includes(k));
   if (available.length === 0) return null;
 
-  const spMax = character?.sorcery_points_max || maxSorceryPoints(character);
+  const spMax = character?.sorcery_points_max || sorcererEntry.levels || maxSorceryPoints(character);
   const spCurrent = character?.sorcery_points_current ?? spMax;
   const slotLevel = spell?.slot_level || 1;
 

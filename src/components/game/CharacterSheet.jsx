@@ -9,6 +9,13 @@ import { SkillTooltip, FeatureTooltip, ConditionTooltip } from './GameTooltip';
 import SkillProficiencyRow from './SkillProficiencyRow';
 import StatBreakdownTooltip from './StatBreakdownTooltip';
 import SubclassSection from './SubclassSection';
+import {
+  characterHasSpellcasting,
+  getClassFeatureSections,
+  getMulticlassSpellSlots,
+  getTotalCharacterLevel,
+  getTotalProficiencyBonus,
+} from './multiclassUtils';
  
 const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 const STATS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
@@ -59,8 +66,9 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
   const [character, setCharacter] = useState(initialCharacter);
   if (!character) return null;
  
-  const isCaster = SPELLCASTING_CLASSES.includes(character.class);
-  const profBonus = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
+  const isCaster = characterHasSpellcasting(character);
+  const totalLevel = getTotalCharacterLevel(character);
+  const profBonus = getTotalProficiencyBonus(character);
   const visibleTabs = TABS.filter(t => t.id !== 'spells' || isCaster);
  
   const handleUpdateCharacter = async (updates) => {
@@ -99,8 +107,9 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
               {character.name}
             </h2>
             <p className="text-sm italic mt-0.5" style={{ color: 'rgba(201,169,110,0.55)', fontFamily: 'EB Garamond, serif' }}>
-              Level {character.level} {character.race} {character.class}
+              Level {totalLevel} {character.race} {character.class} {character.level}
               {character.subclass ? ` · ${character.subclass}` : ''}
+              {(character.multiclass || []).length > 0 ? ` / ${character.multiclass.map(mc => `${mc.class} ${mc.levels}${mc.subclass ? ` · ${mc.subclass}` : ''}`).join(' / ')}` : ''}
             </p>
             {character.alignment && (
               <p className="text-xs mt-0.5" style={{ color: 'rgba(180,150,100,0.35)', fontFamily: 'EB Garamond, serif' }}>
@@ -169,7 +178,7 @@ function QuickStatsBar({ character }) {
         { icon: Heart, color: hpColor, val: `${character.hp_current ?? '?'}/${character.hp_max ?? '?'}`, label: 'HP' },
         { icon: Shield, color: '#3b82f6', val: character.armor_class ?? '—', label: 'AC' },
         { icon: Zap, color: '#d97706', val: `${character.speed ?? 30}ft`, label: 'Speed' },
-        { icon: CircleDot, color: '#a78bfa', val: `+${PROFICIENCY_BY_LEVEL[(character.level||1)-1]||2}`, label: 'Prof' },
+        { icon: CircleDot, color: '#a78bfa', val: `+${getTotalProficiencyBonus(character)}`, label: 'Prof' },
         { icon: Star, color: '#c9a96e', val: character.xp ?? 0, label: 'XP' },
       ].map(({ icon: Icon, color, val, label }, i) => (
         <div key={label} className="text-center py-1">
@@ -283,8 +292,7 @@ function CombatTab({ character, profBonus, isCaster, onUpdate }) {
   const equipped = character.equipped || {};
  
   // Spell slots
-  const slotTable = isCaster ? SPELL_SLOTS_TABLE[character.class] : null;
-  const maxSlots = slotTable ? (slotTable[(character.level || 1) - 1] || []) : [];
+  const maxSlots = isCaster ? getMulticlassSpellSlots(character) : [];
   const usedSlots = character.spell_slots || {};
  
   const toggleSlot = (level, slotIdx) => {
@@ -511,13 +519,8 @@ function ConditionsTab({ character, onUpdate }) {
 // ─── Features Tab ─────────────────────────────────────────────────────────────
 function FeaturesTab({ character }) {
   const [expanded, setExpanded] = useState({});
-  const classData = CLASSES[character.class] || {};
-  const classFeatures = [];
-  Object.entries(classData.features || {}).forEach(([lvl, feats]) => {
-    if (parseInt(lvl) <= (character.level || 1)) {
-      feats.forEach(f => classFeatures.push({ name: f, level: parseInt(lvl) }));
-    }
-  });
+  const featureSections = getClassFeatureSections(character);
+  const classFeatures = featureSections.flatMap(section => section.features);
 
   const racialAbilities = getRacialAbilities(character.race);
 
@@ -571,18 +574,27 @@ function FeaturesTab({ character }) {
  
       {/* Class Features by Level */}
       {classFeatures.length > 0 && (
-        <Section title={`${character.class} Class Features`} icon="📖">
-          <div className="space-y-1">
-            {classFeatures.map((f, i) => (
-              <div key={i} className="flex items-start gap-2.5 py-2 px-3 rounded-lg"
-                style={{ background: 'rgba(15,10,5,0.4)', borderBottom: '1px solid rgba(180,140,90,0.06)' }}>
-                <span className="text-xs px-1.5 py-0.5 rounded font-fantasy flex-shrink-0 mt-0.5"
-                  style={{ background: 'rgba(60,40,8,0.6)', border: '1px solid rgba(201,169,110,0.2)', color: 'rgba(201,169,110,0.6)', fontSize: '0.6rem' }}>
-                  Lv.{f.level}
-                </span>
-                <FeatureTooltip featureName={f.name} className={character.class} position="right">
-                  <span className="text-sm" style={{ color: 'rgba(232,213,183,0.8)', fontFamily: 'EB Garamond, serif' }}>{f.name}</span>
-                </FeatureTooltip>
+        <Section title="Class Features by Class" icon="📖">
+          <div className="space-y-4">
+            {featureSections.filter(section => section.features.length > 0).map(section => (
+              <div key={`${section.className}-${section.primary ? 'primary' : 'multi'}`} className="space-y-1.5">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-fantasy" style={{ color: section.primary ? '#f0c040' : '#93c5fd' }}>
+                    {section.primary ? 'Primary' : 'Multiclass'}: {section.className} Lv.{section.levels}{section.subclass ? ` · ${section.subclass}` : ''}
+                  </span>
+                </div>
+                {section.features.map((f, i) => (
+                  <div key={`${section.className}-${f.name}-${i}`} className="flex items-start gap-2.5 py-2 px-3 rounded-lg"
+                    style={{ background: 'rgba(15,10,5,0.4)', borderBottom: '1px solid rgba(180,140,90,0.06)' }}>
+                    <span className="text-xs px-1.5 py-0.5 rounded font-fantasy flex-shrink-0 mt-0.5"
+                      style={{ background: 'rgba(60,40,8,0.6)', border: '1px solid rgba(201,169,110,0.2)', color: 'rgba(201,169,110,0.6)', fontSize: '0.6rem' }}>
+                      Lv.{f.level}
+                    </span>
+                    <FeatureTooltip featureName={f.name} className={section.className} position="right">
+                      <span className="text-sm" style={{ color: 'rgba(232,213,183,0.8)', fontFamily: 'EB Garamond, serif' }}>{f.name}</span>
+                    </FeatureTooltip>
+                  </div>
+                ))}
               </div>
             ))}
           </div>

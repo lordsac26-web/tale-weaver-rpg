@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Loader2, SkipForward, Swords, Dices } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { calcStatMod, PROFICIENCY_BY_LEVEL } from './gameData';
+import { calcStatMod } from './gameData';
+import { characterHasSpellcasting, getTotalCharacterLevel, getTotalProficiencyBonus } from './multiclassUtils';
 import CombatSpellSelector from './CombatSpellSelector';
 import { SPELL_DETAILS } from './spellData';
 import CombatDiceRoller from './CombatDiceRoller';
@@ -18,8 +19,6 @@ import CombatSpellSlotBar from './CombatSpellSlotBar';
 import { getActionsPerTurn } from './combatActionEconomy';
 import CombatActionBar from './CombatActionBar';
 import CombatPlayerStatus from './CombatPlayerStatus';
-
-const SPELLCASTING_CLASSES = ['Wizard','Sorcerer','Warlock','Bard','Cleric','Druid','Paladin','Ranger','Artificer'];
 
 export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent, onCharacterUpdate }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
@@ -44,7 +43,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const player = (combatants || []).find(c => c.type === 'player');
   const currentCombatant = combatants?.[current_turn_index];
   const isPlayerTurn = currentCombatant?.type === 'player';
-  const isCaster = SPELLCASTING_CLASSES.includes(character?.class);
+  const isCaster = characterHasSpellcasting(character || {});
   const actionsPerTurn = getActionsPerTurn(character);
   const actionsUsed = world_state?.actions_used_this_turn || 0;
   const actionsRemaining = Math.max(0, actionsPerTurn - actionsUsed);
@@ -71,8 +70,8 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   };
 
   // Derive attack modifier for dice roller display (must be after getActiveWeapon definition)
-  const charLevel   = character?.level || 1;
-  const profBonus   = PROFICIENCY_BY_LEVEL[(charLevel - 1)] || 2;
+  const charLevel   = getTotalCharacterLevel(character || {});
+  const profBonus   = getTotalProficiencyBonus(character || {});
   const strMod      = calcStatMod(character?.strength   || 10);
   const dexMod      = calcStatMod(character?.dexterity  || 10);
   const activeWeaponForMod = getActiveWeapon() || equippedWeaponObj;

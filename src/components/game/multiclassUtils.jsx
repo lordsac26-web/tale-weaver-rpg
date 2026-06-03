@@ -1,0 +1,188 @@
+import { CLASSES, PROFICIENCY_BY_LEVEL } from './gameData';
+import {
+  SPELLS_BY_CLASS,
+  SPELLCASTING_ABILITY,
+  SPELL_SLOTS_BY_CLASS_LEVEL,
+  CANTRIPS_KNOWN,
+  SPELL_DETAILS,
+} from './spellData';
+
+const FULL_CASTERS = ['Wizard', 'Sorcerer', 'Bard', 'Cleric', 'Druid'];
+const HALF_CASTERS = ['Paladin', 'Ranger', 'Artificer'];
+const THIRD_CASTER_CLASSES = ['Fighter', 'Rogue'];
+
+const isArcaneSubclass = (subclass = '') => {
+  const value = String(subclass).toLowerCase();
+  return value.includes('eldritch') || value.includes('arcane');
+};
+
+export function getClassBreakdown(character = {}) {
+  return [
+    {
+      className: character.class,
+      subclass: character.subclass || '',
+      levels: character.level || 1,
+      primary: true,
+    },
+    ...(character.multiclass || []).map(mc => ({
+      className: mc.class,
+      subclass: mc.subclass || '',
+      levels: mc.levels || 1,
+      primary: false,
+    })),
+  ].filter(entry => entry.className);
+}
+
+export function getTotalCharacterLevel(character = {}) {
+  return getClassBreakdown(character).reduce((sum, entry) => sum + (entry.levels || 0), 0) || 1;
+}
+
+export function getTotalProficiencyBonus(character = {}) {
+  return PROFICIENCY_BY_LEVEL[getTotalCharacterLevel(character) - 1] || 2;
+}
+
+export function getSpellcastingEntries(character = {}) {
+  return getClassBreakdown(character)
+    .map(entry => {
+      if (SPELLS_BY_CLASS[entry.className]) {
+        return {
+          ...entry,
+          spellClass: entry.className,
+          ability: SPELLCASTING_ABILITY[entry.className],
+        };
+      }
+
+      if (THIRD_CASTER_CLASSES.includes(entry.className) && isArcaneSubclass(entry.subclass)) {
+        return {
+          ...entry,
+          spellClass: 'Wizard',
+          ability: 'intelligence',
+          thirdCaster: true,
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+}
+
+export function characterHasSpellcasting(character = {}) {
+  return getSpellcastingEntries(character).length > 0;
+}
+
+export function getPrimarySpellcastingEntry(character = {}) {
+  const entries = getSpellcastingEntries(character);
+  return entries.find(entry => entry.primary) || entries[0] || null;
+}
+
+export function getMaxSpellLevelForEntry(entry) {
+  const effectiveLevel = entry.thirdCaster ? Math.max(1, Math.floor((entry.levels || 1) / 3)) : entry.levels;
+  const slots = SPELL_SLOTS_BY_CLASS_LEVEL[entry.spellClass]?.[effectiveLevel] || [];
+  for (let i = slots.length - 1; i >= 0; i--) {
+    if ((slots[i] || 0) > 0) return i + 1;
+  }
+  return 0;
+}
+
+export function getCombinedSpellList(character = {}) {
+  const combined = { cantrips: [] };
+
+  getSpellcastingEntries(character).forEach(entry => {
+    const spellList = SPELLS_BY_CLASS[entry.spellClass] || {};
+    const maxSpellLevel = getMaxSpellLevelForEntry(entry);
+
+    (spellList.cantrips || []).forEach(name => {
+      if (!combined.cantrips.includes(name)) combined.cantrips.push(name);
+    });
+
+    for (let level = 1; level <= maxSpellLevel; level++) {
+      combined[level] = combined[level] || [];
+      (spellList[level] || []).forEach(name => {
+        if (!combined[level].includes(name)) combined[level].push(name);
+      });
+    }
+  });
+
+  return combined;
+}
+
+export function getMaxCantripsKnown(character = {}) {
+  return getSpellcastingEntries(character).reduce((total, entry) => {
+    return total + (CANTRIPS_KNOWN[entry.spellClass]?.[entry.levels - 1] || 0);
+  }, 0);
+}
+
+export function getMaxSpellsKnown(character = {}) {
+  const entries = getSpellcastingEntries(character);
+  if (entries.some(entry => ['Cleric', 'Druid', 'Paladin', 'Ranger', 'Artificer'].includes(entry.className))) {
+    return 999;
+  }
+
+  return entries.reduce((total, entry) => {
+    if (entry.className === 'Wizard') return total + 6 + entry.levels;
+    if (entry.className === 'Sorcerer') return total + Math.ceil(entry.levels / 2) + entry.levels;
+    if (entry.className === 'Bard') return total + Math.ceil(entry.levels / 2) + entry.levels;
+    if (entry.className === 'Warlock') return total + Math.ceil(entry.levels / 2) + 1;
+    if (entry.thirdCaster) return total + Math.max(1, Math.ceil(entry.levels / 3));
+    return total;
+  }, 0);
+}
+
+export function getMulticlassSpellSlots(character = {}) {
+  const entries = getSpellcastingEntries(character);
+  if (entries.length === 0) return [0,0,0,0,0,0,0,0,0];
+  if (entries.length === 1) {
+    return SPELL_SLOTS_BY_CLASS_LEVEL[entries[0].spellClass]?.[entries[0].levels] || [0,0,0,0,0,0,0,0,0];
+  }
+
+  let casterLevel = 0;
+  entries.forEach(entry => {
+    if (FULL_CASTERS.includes(entry.className)) casterLevel += entry.levels;
+    else if (entry.className === 'Artificer') casterLevel += Math.ceil(entry.levels / 2);
+    else if (HALF_CASTERS.includes(entry.className)) casterLevel += Math.floor(entry.levels / 2);
+    else if (entry.thirdCaster) casterLevel += Math.floor(entry.levels / 3);
+  });
+
+  casterLevel = Math.max(1, Math.min(20, casterLevel));
+  return SPELL_SLOTS_BY_CLASS_LEVEL.Wizard[casterLevel] || [0,0,0,0,0,0,0,0,0];
+}
+
+export function getMulticlassHitPoints(character = {}, conMod = 0) {
+  const classes = getClassBreakdown(character);
+  if (classes.length === 0) return 1;
+
+  return classes.reduce((total, entry, index) => {
+    const hitDie = CLASSES[entry.className]?.hit_die || 8;
+    const averageGain = Math.floor(hitDie / 2) + 1 + conMod;
+    if (index === 0) {
+      return total + hitDie + conMod + Math.max(0, entry.levels - 1) * averageGain;
+    }
+    return total + entry.levels * averageGain;
+  }, 0);
+}
+
+export function getClassFeatureSections(character = {}) {
+  return getClassBreakdown(character).map(entry => {
+    const classData = CLASSES[entry.className] || {};
+    const features = [];
+
+    Object.entries(classData.features || {}).forEach(([level, names]) => {
+      if (parseInt(level) <= entry.levels) {
+        names.forEach(name => features.push({ name, level: parseInt(level), source: entry.className }));
+      }
+    });
+
+    const subclassData = (classData.subclasses || []).find(sub => sub.name === entry.subclass);
+    Object.entries(subclassData?.features || {}).forEach(([level, names]) => {
+      if (parseInt(level) <= entry.levels) {
+        names.forEach(name => features.push({ name, level: parseInt(level), source: entry.subclass || entry.className }));
+      }
+    });
+
+    return { ...entry, features };
+  });
+}
+
+export function getSpellLevel(spellName) {
+  return SPELL_DETAILS[spellName]?.level ?? 1;
+}

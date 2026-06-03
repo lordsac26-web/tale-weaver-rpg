@@ -4,10 +4,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
 import SpellSlotTracker from './SpellSlotTracker';
 import {
-  SPELLS_BY_CLASS, SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS,
-  getSpellSlotsForLevel, calcSpellSaveDC, calcSpellAttackBonus,
-  getSpellcastingAbility, getCantripDamageDice
+  SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS,
+  getCantripDamageDice
 } from './spellData';
+import {
+  getCombinedSpellList,
+  getPrimarySpellcastingEntry,
+  getSpellcastingEntries,
+  getTotalCharacterLevel,
+  getTotalProficiencyBonus,
+} from './multiclassUtils';
+import { calcStatMod } from './gameData';
 
 const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
 // Classes that prepare spells from their full list vs classes that have a fixed known spells list
@@ -141,20 +148,22 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
 
   if (!character) return null;
 
-  const charClass = character.class;
-  const charLevel = character.level || 1;
-  const spellcastingAbility = getSpellcastingAbility(charClass);
-  const spellSaveDC = calcSpellSaveDC(character);
-  const spellAttackBonus = calcSpellAttackBonus(character);
-  const slotArray = getSpellSlotsForLevel(charClass, charLevel);
+  const totalLevel = getTotalCharacterLevel(character);
+  const spellcastingEntries = getSpellcastingEntries(character);
+  const primarySpellcaster = getPrimarySpellcastingEntry(character);
+  const charClass = primarySpellcaster?.className || character.class;
+  const spellcastingAbility = primarySpellcaster?.ability;
+  const profBonus = getTotalProficiencyBonus(character);
+  const spellcastingAbilityScore = spellcastingAbility ? (character[spellcastingAbility] || 10) : 10;
+  const spellcastingMod = calcStatMod(spellcastingAbilityScore);
+  const spellSaveDC = spellcastingAbility ? 8 + spellcastingMod + profBonus : null;
+  const spellAttackBonus = spellcastingAbility ? spellcastingMod + profBonus : null;
   const currentSlots = character.spell_slots || {};
   const knownSpells = new Set(character.spells_known || []);
-  const isPreparation = PREPARATION_CLASSES.includes(charClass);
-  const profBonus = Math.floor((charLevel - 1) / 4) + 2;
-  const spellcastingAbilityScore = character[spellcastingAbility] || 10;
-  const spellcastingMod = Math.floor((spellcastingAbilityScore - 10) / 2);
+  const isPreparation = spellcastingEntries.some(entry => PREPARATION_CLASSES.includes(entry.className));
+  const spellCardCharacter = { ...character, level: totalLevel };
 
-  const classSpells = SPELLS_BY_CLASS[charClass] || {};
+  const classSpells = getCombinedSpellList(character);
   const allAvailableSpells = [];
   Object.entries(classSpells).forEach(([lvl, spells]) => {
     const numLevel = lvl === 'cantrips' ? 0 : parseInt(lvl);
@@ -170,7 +179,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
 
   const togglePrepared = (spellName) => {
     const isPrepared = preparedSpells.has(spellName);
-    const maxPrepared = isPreparation ? Math.max(1, charLevel + spellcastingMod) : 999;
+    const maxPrepared = isPreparation ? Math.max(1, totalLevel + spellcastingMod) : 999;
     
     if (!isPrepared && preparedSpells.size >= maxPrepared && isPreparation) {
       alert(`You can only prepare ${maxPrepared} spells at once. Unprepare a spell first.`);
@@ -229,7 +238,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-purple-900/10 border border-purple-700/30 rounded-xl">
         <div className="text-center">
           <div className="text-xs text-slate-500 mb-0.5">Ability</div>
-          <div className="text-sm font-bold text-purple-300 capitalize">{spellcastingAbility}</div>
+          <div className="text-sm font-bold text-purple-300 capitalize">{spellcastingAbility || '—'}</div>
         </div>
         <div className="text-center">
           <div className="text-xs text-slate-500 mb-0.5">Score / Mod</div>
@@ -244,9 +253,14 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
           <div className="text-sm font-bold text-purple-300">+{spellAttackBonus}</div>
         </div>
       </div>
+      {spellcastingEntries.length > 0 && (
+        <div className="text-xs text-blue-300/70 bg-blue-900/10 border border-blue-700/20 rounded-lg px-3 py-2">
+          Spell sources: {spellcastingEntries.map(entry => `${entry.className}${entry.subclass ? ` (${entry.subclass})` : ''} Lv.${entry.levels}`).join(' · ')}
+        </div>
+      )}
       {isPreparation && (
         <div className="text-xs text-purple-400/70 bg-purple-900/10 border border-purple-700/20 rounded-lg px-3 py-2">
-          📖 <strong>{charClass}</strong> prepares spells daily. Max prepared: {Math.max(1, charLevel + spellcastingMod)} spells. Currently prepared: {preparedSpells.size}
+          📖 <strong>{charClass}</strong> prepares spells daily. Max prepared: {Math.max(1, totalLevel + spellcastingMod)} spells. Currently prepared: {preparedSpells.size}
         </div>
       )}
 
@@ -356,7 +370,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
                   </div>
                   <div className="space-y-2">
                     {levelSpells.map(({ name }) => (
-                      <SpellCard key={name} spellName={name} character={character} isKnown={true} isPrepared={true} onTogglePrepared={togglePrepared} />
+                      <SpellCard key={name} spellName={name} character={spellCardCharacter} isKnown={true} isPrepared={true} onTogglePrepared={togglePrepared} />
                     ))}
                   </div>
                 </div>
@@ -380,7 +394,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
                   </div>
                   <div className="space-y-2">
                     {levelSpells.map(({ name }) => (
-                      <SpellCard key={name} spellName={name} character={character} 
+                      <SpellCard key={name} spellName={name} character={spellCardCharacter} 
                         isKnown={true} isPrepared={false}
                         onTogglePrepared={togglePrepared} />
                     ))}
@@ -401,7 +415,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
                 </div>
                 <div className="space-y-2">
                   {levelSpells.map(({ name }) => (
-                    <SpellCard key={name} spellName={name} character={character} 
+                    <SpellCard key={name} spellName={name} character={spellCardCharacter} 
                       isKnown={false} isPrepared={false}
                       onToggleKnown={toggleKnown} />
                   ))}

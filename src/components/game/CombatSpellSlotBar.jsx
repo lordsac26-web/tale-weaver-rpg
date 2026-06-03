@@ -1,6 +1,6 @@
 import React from 'react';
 import { Zap } from 'lucide-react';
-import { getSpellSlotsForLevel } from './spellData';
+import { getMulticlassSpellSlots } from './multiclassUtils';
 
 const LEVEL_LABELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
@@ -10,9 +10,7 @@ const LEVEL_LABELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
  * CombatSpellSelector when remaining === 0; this bar surfaces that state visibly.
  */
 export default function CombatSpellSlotBar({ character }) {
-  const charClass = character?.class || '';
-  const charLevel = character?.level || 1;
-  const slotMaxArr = getSpellSlotsForLevel(charClass, charLevel);
+  const slotMaxArr = getMulticlassSpellSlots(character || {});
   const currentSlots = character?.spell_slots || {};
 
   if (!slotMaxArr || slotMaxArr.length === 0) return null;

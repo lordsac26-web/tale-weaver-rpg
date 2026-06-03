@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import { Package, Sparkles, Check, ShoppingCart } from 'lucide-react';
 import { CLASSES, BACKGROUNDS } from '@/components/game/gameData';
-import { SPELLS_BY_CLASS, SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS, CANTRIPS_KNOWN } from '@/components/game/spellData';
+import { SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS } from '@/components/game/spellData';
 import { EquipmentTooltip } from '@/components/game/GameTooltip';
+import {
+  characterHasSpellcasting,
+  getCombinedSpellList,
+  getMaxCantripsKnown,
+  getMaxSpellsKnown,
+  getSpellcastingEntries,
+} from '@/components/game/multiclassUtils';
 import { ALL_STANDARD_ITEMS } from '@/components/game/standardItems';
 import StartingGearPicker from './StartingGearPicker';
-
-const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger'];
 
 // Starting equipment defined by item name + quantity.
 // resolveStartingGear() below matches these to the full standardItems database.
@@ -141,7 +146,8 @@ const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th'];
 
 export default function StepEquipmentSpells({ character, set }) {
   const [activeTab, setActiveTab] = useState('equipment');
-  const isCaster = SPELLCASTING_CLASSES.includes(character.class);
+  const isCaster = characterHasSpellcasting(character);
+  const spellcastingEntries = getSpellcastingEntries(character);
   const classEquipment = resolveStartingGear(STARTING_EQUIPMENT_DEFS[character.class]);
   const bgData = BACKGROUNDS.find(b => b.name === character.background);
   // Resolve background equipment through the standard DB too
@@ -159,29 +165,13 @@ export default function StepEquipmentSpells({ character, set }) {
   }
 
   // Spell selection with proper 5e limits
-  const charLevel = character.level || 1;
-  const classSpells = SPELLS_BY_CLASS[character.class] || {};
+  const classSpells = getCombinedSpellList(character);
   const selectedSpells = new Set(character.spells_known || []);
 
-  // Cantrips known (from spellData)
-  const maxCantrips = CANTRIPS_KNOWN[character.class]?.[charLevel - 1] || 0;
+  // Cantrips known across all spellcasting classes/subclasses
+  const maxCantrips = getMaxCantripsKnown(character);
 
-  // Spells known limits per 5e PHB (only for classes that "know" spells)
-  // Full casters that KNOW spells: Wizard, Sorcerer, Bard
-  // Full casters that PREPARE spells: Cleric, Druid, Paladin (half), Ranger (half)
-  // Warlock: Special - knows spells but has pact slots
-  const getMaxSpellsKnown = () => {
-    const class_ = character.class;
-    if (class_ === 'Wizard') return 6 + charLevel; // PHB p114
-    if (class_ === 'Sorcerer') return Math.ceil(charLevel / 2) + charLevel; // PHB p102
-    if (class_ === 'Bard') return Math.ceil(charLevel / 2) + charLevel; // PHB p54
-    if (class_ === 'Warlock') return Math.ceil(charLevel / 2) + 1; // PHB p107 (Invocations + spells known)
-    // Prepared casters (Cleric, Druid, Paladin, Ranger) don't have a "spells known" limit
-    // They prepare from entire class list - allow free selection
-    return 999; // No practical limit for prepared casters
-  };
-
-  const maxSpellsKnown = getMaxSpellsKnown();
+  const maxSpellsKnown = getMaxSpellsKnown(character);
 
   // Count selected spells by level
   const getCantripCount = () => [...selectedSpells].filter(s => {
@@ -232,6 +222,11 @@ export default function StepEquipmentSpells({ character, set }) {
       <div>
         <h2 className="text-2xl font-bold text-amber-300 mb-1">Equipment {isCaster ? '& Spells' : ''}</h2>
         <p className="text-amber-400/50 text-sm">Starting gear based on your class and background.</p>
+        {isCaster && spellcastingEntries.length > 0 && (
+          <p className="text-purple-300/60 text-xs mt-1">
+            Spell sources: {spellcastingEntries.map(entry => `${entry.className}${entry.subclass ? ` (${entry.subclass})` : ''} Lv.${entry.levels}`).join(' · ')}
+          </p>
+        )}
       </div>
 
       {isCaster && (
@@ -265,7 +260,7 @@ export default function StepEquipmentSpells({ character, set }) {
                 Spells Known: {totalSpellCount}/{maxSpellsKnown}
               </span>
             )}
-            {character.class && ['Cleric', 'Druid', 'Paladin', 'Ranger'].includes(character.class) && (
+            {spellcastingEntries.some(entry => ['Cleric', 'Druid', 'Paladin', 'Ranger', 'Artificer'].includes(entry.className)) && (
               <span className="px-3 py-1 rounded-lg border border-slate-600 text-slate-400 text-xs italic">
                 (Prepared caster — select spells now, prepare later)
               </span>

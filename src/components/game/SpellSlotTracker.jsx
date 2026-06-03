@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Zap, RotateCcw, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { getSpellSlotsForLevel } from './spellData';
+import { getMulticlassSpellSlots, getSpellcastingEntries } from './multiclassUtils';
 import {
   Tooltip,
   TooltipContent,
@@ -19,11 +19,12 @@ export default function SpellSlotTracker({ character, onUpdateSlots, compact = f
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   
   const charClass = character?.class || '';
-  const charLevel = character?.level || 1;
-  const slotMaxArr = getSpellSlotsForLevel(charClass, charLevel);
+  const spellcastingEntries = getSpellcastingEntries(character || {});
+  const slotMaxArr = getMulticlassSpellSlots(character || {});
   const currentSlots = character?.spell_slots || {};
-  const isWarlock = charClass === 'Warlock';
-  const isWizard = charClass === 'Wizard';
+  const isWarlock = spellcastingEntries.some(entry => entry.className === 'Warlock');
+  const wizardEntry = spellcastingEntries.find(entry => entry.className === 'Wizard');
+  const isWizard = !!wizardEntry;
 
   const toggleSlot = (level, slotIndex) => {
     const levelKey = `level_${level}`;
@@ -47,7 +48,7 @@ export default function SpellSlotTracker({ character, onUpdateSlots, compact = f
 
   // Wizard: Arcane Recovery (recover slots ≤ ½ wizard level)
   const handleWizardArcaneRecovery = () => {
-    const wizardLevel = charLevel;
+    const wizardLevel = wizardEntry?.levels || 1;
     const maxRecoverable = Math.floor(wizardLevel / 2);
     // Logic to recover appropriate slots would be implemented here
     restoreAllSlots(); // Simplified for demo
