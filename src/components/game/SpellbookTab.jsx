@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Zap, Info, Search, BookOpen, Star, CheckCircle, Moon, RotateCcw } from 'lucide-react';
+import { Zap, Info, Search, BookOpen, Star, CheckCircle, Moon, RotateCcw, Flame } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
 import SpellSlotTracker from './SpellSlotTracker';
@@ -9,6 +9,7 @@ import {
 } from './spellData';
 import {
   getCombinedSpellList,
+  getMulticlassSpellSlots,
   getPrimarySpellcastingEntry,
   getSpellcastingEntries,
   getTotalCharacterLevel,
@@ -28,7 +29,7 @@ const ATTACK_ICONS = {
   utility: '🔧',
 };
 
-function SpellCard({ spell, spellName, character, isKnown, isPrepared, onToggleKnown, onTogglePrepared, compact = false }) {
+function SpellCard({ spell, spellName, character, isKnown, isPrepared, onToggleKnown, onTogglePrepared, onCast, canCast, compact = false }) {
   const [showDetail, setShowDetail] = useState(false);
   const details = SPELL_DETAILS[spellName] || spell || {};
   const schoolColor = SCHOOL_COLORS[details.school] || 'text-slate-400';
@@ -87,6 +88,25 @@ function SpellCard({ spell, spellName, character, isKnown, isPrepared, onToggleK
             onMouseLeave={e => e.currentTarget.style.color = 'rgba(180,140,90,0.4)'}>
             <Info className="w-3.5 h-3.5" />
           </button>
+          {onCast && isPrepared && (
+            <button onClick={() => onCast(spellName)}
+              disabled={!canCast}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-fantasy transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              style={canCast ? {
+                background: 'linear-gradient(135deg, rgba(120,40,10,0.7), rgba(80,20,5,0.8))',
+                border: '1px solid rgba(240,100,40,0.5)',
+                color: '#ffcfa0',
+                textShadow: '0 0 6px rgba(240,140,60,0.4)',
+              } : {
+                background: 'rgba(30,15,5,0.4)',
+                border: '1px solid rgba(120,60,30,0.2)',
+                color: 'rgba(180,140,90,0.3)',
+              }}
+              title={canCast ? 'Cast this spell (uses a spell slot)' : 'No spell slots remaining'}>
+              <Flame className="w-3 h-3" />
+              Cast
+            </button>
+          )}
           {onTogglePrepared && isKnown && (
             <button onClick={() => onTogglePrepared(spellName)}
               className={`p-1 rounded transition-colors ${isPrepared ? 'text-amber-400 hover:text-amber-300' : 'text-slate-500 hover:text-amber-400'}`}>
@@ -142,6 +162,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
   const [filterLevel, setFilterLevel] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [activeSection, setActiveSection] = useState('prepared'); // 'prepared' | 'available' | 'slots'
+  const [castFlash, setCastFlash] = useState(null); // spellName for flash effect
 
   // Guard must come AFTER all hooks (Rules of Hooks)
   const preparedSpells = new Set(character?.spells_prepared || []);
@@ -223,6 +244,42 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
       </div>
     );
   }
+
+  const slotMaxArr = getMulticlassSpellSlots(character);
+
+  // Compute remaining slots per level for inline indicators & cast eligibility
+  const getRemainingSlots = (level) => {
+    if (level === 0) return Infinity; // cantrips are unlimited
+    const max = slotMaxArr[level - 1] || 0;
+    const used = currentSlots[`level_${level}`] || 0;
+    return Math.max(0, max - used);
+  };
+
+  // Find the lowest available slot at or above the spell's base level
+  const findLowestAvailableSlot = (spellLevel) => {
+    if (spellLevel === 0) return null; // cantrips don't use slots
+    for (let lvl = spellLevel; lvl <= 9; lvl++) {
+      if (getRemainingSlots(lvl) > 0) return lvl;
+    }
+    return null; // no slots available
+  };
+
+  const handleCastSpell = (spellName) => {
+    const details = SPELL_DETAILS[spellName] || {};
+    const spellLevel = details.level ?? 1;
+    if (spellLevel === 0) return; // cantrips don't consume slots
+    
+    const slotLevel = findLowestAvailableSlot(spellLevel);
+    if (slotLevel === null) return; // no slots available
+    
+    const slotKey = `level_${slotLevel}`;
+    const newUsed = (currentSlots[slotKey] || 0) + 1;
+    onUpdateCharacter({ spell_slots: { ...currentSlots, [slotKey]: newUsed } });
+    
+    // Flash feedback
+    setCastFlash(spellName);
+    setTimeout(() => setCastFlash(null), 800);
+  };
 
   const handleToggleSlot = (level, slotIndex, maxSlots) => {
     const used = currentSlots[`level_${level}`] || 0;
@@ -359,19 +416,39 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
               {preparedSpells.size === 0 ? 'No spells prepared. Click the star icon on spells to prepare them.' : 'No spells match your filters.'}
             </div>
           ) : (
-            [0,1,2,3,4,5].map(level => {
+            [0,1,2,3,4,5,6,7,8,9].map(level => {
               const levelSpells = preparedList.filter(s => s.level === level);
               if (levelSpells.length === 0) return null;
+              const remaining = getRemainingSlots(level);
+              const maxForLevel = level === 0 ? Infinity : (slotMaxArr[level - 1] || 0);
               return (
                 <div key={level}>
                   <div className="text-xs text-purple-400/70 uppercase tracking-widest mb-2 flex items-center gap-2">
                     <CheckCircle className="w-3 h-3" />
                     {LEVEL_LABELS[level]} {level > 0 ? 'Level' : 's'}
+                    {level > 0 && maxForLevel > 0 && (
+                      <span className={`ml-auto font-mono text-xs px-1.5 py-0.5 rounded-md ${
+                        remaining === 0 ? 'text-red-400 bg-red-900/30 border border-red-700/30' :
+                        remaining <= 1 ? 'text-amber-400 bg-amber-900/20 border border-amber-700/20' :
+                        'text-purple-300 bg-purple-900/20 border border-purple-700/20'
+                      }`}>
+                        {remaining}/{maxForLevel} slots
+                      </span>
+                    )}
                   </div>
                   <div className="space-y-2">
-                    {levelSpells.map(({ name }) => (
-                      <SpellCard key={name} spellName={name} character={spellCardCharacter} isKnown={true} isPrepared={true} onTogglePrepared={togglePrepared} />
-                    ))}
+                    {levelSpells.map(({ name }) => {
+                      const spellLvl = SPELL_DETAILS[name]?.level ?? level;
+                      const canCast = spellLvl === 0 || findLowestAvailableSlot(spellLvl) !== null;
+                      return (
+                        <div key={name} className={`transition-all ${castFlash === name ? 'crit-flash rounded-xl' : ''}`}>
+                          <SpellCard spellName={name} character={spellCardCharacter} isKnown={true} isPrepared={true}
+                            onTogglePrepared={togglePrepared}
+                            onCast={spellLvl > 0 ? handleCastSpell : undefined}
+                            canCast={canCast} />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
