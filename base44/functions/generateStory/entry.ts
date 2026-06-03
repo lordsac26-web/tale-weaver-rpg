@@ -101,6 +101,11 @@ Deno.serve(async (req) => {
   // Only last 3 log entries to reduce token usage and speed up response
   const recentLog = (session.story_log || []).slice(-3).map(e => e.text).join('\n');
 
+  const journalNotes = await base44.entities.PlayerNote.filter({ session_id }, '-updated_date', 20);
+  const journalSummary = journalNotes.length
+    ? journalNotes.map(note => `- [${note.category || 'General'}] ${note.title}: ${String(note.content || '').slice(0, 240)}`).join('\n')
+    : 'No campaign journal notes yet.';
+
   const recentOpeningSessions = action === 'start'
     ? await base44.entities.GameSession.filter({ character_id: session.character_id }, '-created_date', 8)
     : [];
@@ -176,6 +181,10 @@ Full stats: ${charSummary}
 
 WORLD STATE:
 ${worldSummary}
+
+PLAYER JOURNAL NOTES TO REMEMBER:
+${journalSummary}
+Use these notes as campaign memory. Respect player notes about NPC names, clues, suspicions, promises, and quest reminders when creating continuity.
 
 ${gameDataContext}
 
@@ -281,10 +290,12 @@ CRITICAL: Do NOT trigger combat in the opening scene. Focus on exploration, NPC 
 REMEMBER: A level 1 character has ~10 HP. Two bandits (CR 0.125 each with 11 HP, +3 attack, 1d6+1 damage) can easily kill them in 2 rounds. Be conservative with early encounters.`;
 
     prompt = `You are the Dungeon Master. Continue the story based on the player's choice.
-Character: ${charSummary}
-World: ${worldSummary}
-${gameDataContext}
-Recent Story:
+    Character: ${charSummary}
+    World: ${worldSummary}
+    Player Journal Notes to Remember:
+    ${journalSummary}
+    ${gameDataContext}
+    Recent Story:
 ${recentLog}
 
 Player Action: ${selectedChoice}
@@ -373,6 +384,8 @@ Write a vivid 1-2 paragraph combat narrative for this round.`;
     prompt = `Generate a random encounter or event appropriate for:
 Character: ${charSummary}
 World: ${worldSummary}
+Player Journal Notes to Remember:
+${journalSummary}
 ${gameDataContext}
 Type: ${custom_input || 'random'}
 

@@ -21,6 +21,7 @@ import LootModal from '@/components/game/LootModal.jsx';
 import CompanionPanel from '@/components/game/CompanionPanel';
 import RestModal from '@/components/game/RestModal';
 import GameToolbar from '@/components/game/GameToolbar';
+import CampaignJournal from '@/components/game/CampaignJournal';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -52,7 +53,8 @@ export default function Game() {
   const [showDeathModal, setShowDeathModal] = useState(false);
   const [showDeathSaves, setShowDeathSaves] = useState(false);
   const [showRestModal, setShowRestModal] = useState(false);
-  const [combatViewTab, setCombatViewTab] = useState('combat'); // 'story' | 'combat' — for mobile
+  const [mainViewTab, setMainViewTab] = useState('story');
+  const [combatViewTab, setCombatViewTab] = useState('combat'); // 'story' | 'combat' | 'journal' — for mobile
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate('/Home'); return; }
@@ -945,14 +947,41 @@ export default function Game() {
                 </motion.div>
               </div>
             ) : (
-              <StoryPanel 
-                narrative={narrative} 
-                choices={character?.hp_current <= 0 ? [] : choices} 
-                loading={storyLoading}
-                onChoice={character?.hp_current <= 0 ? () => {} : handleChoice} 
-                customInput={customInput}
-                setCustomInput={character?.hp_current <= 0 ? () => {} : setCustomInput} 
-                onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} />
+              <div className="h-full flex flex-col overflow-hidden">
+                <div className="flex flex-shrink-0" style={{ background: 'rgba(8,5,2,0.72)', borderBottom: '1px solid rgba(180,140,90,0.16)' }}>
+                  {[['story', '📜 Story'], ['journal', '📓 Journal']].map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setMainViewTab(key)}
+                      className="flex-1 sm:flex-none px-5 py-2.5 text-xs font-fantasy uppercase tracking-widest transition-all"
+                      style={mainViewTab === key ? {
+                        color: '#f0c040',
+                        borderBottom: '2px solid #c9a96e',
+                        background: 'rgba(60,38,12,0.45)',
+                      } : {
+                        color: 'rgba(201,169,110,0.52)',
+                        borderBottom: '2px solid transparent',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex-1 overflow-hidden min-h-0">
+                  {mainViewTab === 'journal' ? (
+                    <CampaignJournal sessionId={sessionId} characterId={character?.id} />
+                  ) : (
+                    <StoryPanel 
+                      narrative={narrative} 
+                      choices={character?.hp_current <= 0 ? [] : choices} 
+                      loading={storyLoading}
+                      onChoice={character?.hp_current <= 0 ? () => {} : handleChoice} 
+                      customInput={customInput}
+                      setCustomInput={character?.hp_current <= 0 ? () => {} : setCustomInput} 
+                      onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} />
+                  )}
+                </div>
+              </div>
             )}
           </div>
         )}
