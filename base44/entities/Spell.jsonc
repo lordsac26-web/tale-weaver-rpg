@@ -1,0 +1,108 @@
+{
+  "name": "Spell",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "level": {
+      "type": "number"
+    },
+    "school": {
+      "type": "string"
+    },
+    "casting_time": {
+      "type": "string"
+    },
+    "range": {
+      "type": "string"
+    },
+    "components": {
+      "type": "string"
+    },
+    "duration": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "visual_summary": {
+      "type": "string",
+      "description": "AI-generated visual description of spell effects"
+    },
+    "effect_summary": {
+      "type": "string",
+      "description": "AI-generated summary of spell mechanics and effects"
+    },
+    "classes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ritual": {
+      "type": "boolean",
+      "default": false
+    },
+    "concentration": {
+      "type": "boolean",
+      "default": false
+    },
+    "damage_type": {
+      "type": "string"
+    },
+    "damage_dice": {
+      "type": "string"
+    },
+    "save_type": {
+      "type": "string"
+    },
+    "attack_type": {
+      "type": "string",
+      "enum": [
+        "melee_spell_attack",
+        "ranged_spell_attack",
+        "saving_throw",
+        "healing",
+        "auto_hit",
+        "utility"
+      ],
+      "description": "Type of spell attack or effect"
+    },
+    "higher_level_scaling": {
+      "type": "string",
+      "description": "How spell scales at higher levels"
+    },
+    "conditions_caused": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Conditions the spell can inflict"
+    },
+    "raw_data": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

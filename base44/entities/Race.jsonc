@@ -1,0 +1,69 @@
+{
+  "name": "Race",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "ability_score_increase": {
+      "type": "object"
+    },
+    "age": {
+      "type": "string"
+    },
+    "alignment": {
+      "type": "string"
+    },
+    "size": {
+      "type": "string"
+    },
+    "speed": {
+      "type": "number"
+    },
+    "languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "traits": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "subraces": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "raw_data": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

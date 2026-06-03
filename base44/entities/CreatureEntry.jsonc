@@ -1,0 +1,54 @@
+{
+  "name": "CreatureEntry",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "Beast",
+        "Humanoid",
+        "Monstrosity",
+        "Undead",
+        "Fey",
+        "Dragon",
+        "Elemental",
+        "Fiend",
+        "Celestial",
+        "Construct",
+        "Plant",
+        "Ooze",
+        "Aberration"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "habitat": {
+      "type": "string"
+    },
+    "behavior": {
+      "type": "string"
+    },
+    "danger_level": {
+      "type": "string",
+      "enum": [
+        "Harmless",
+        "Low",
+        "Moderate",
+        "High",
+        "Deadly",
+        "Legendary"
+      ]
+    },
+    "image_url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "type"
+  ]
+}

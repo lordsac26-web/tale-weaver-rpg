@@ -1,0 +1,71 @@
+{
+  "name": "SketchyPortal",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "location_desc": {
+      "type": "string"
+    },
+    "operator_name": {
+      "type": "string"
+    },
+    "operator_personality": {
+      "type": "string"
+    },
+    "operator_greeting": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "destinations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "cost_gp": {
+      "type": "number",
+      "default": 15
+    },
+    "safety_pct": {
+      "type": "number",
+      "default": 60
+    },
+    "complications": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "reputation_required": {
+      "type": "number",
+      "default": 0
+    },
+    "flavor_text": {
+      "type": "string"
+    },
+    "map_x": {
+      "type": "number"
+    },
+    "map_y": {
+      "type": "number"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "offline_until": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "city"
+  ]
+}

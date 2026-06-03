@@ -1,0 +1,82 @@
+{
+  "name": "Location",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "City",
+        "Town",
+        "Village",
+        "Region",
+        "Landmark",
+        "Dungeon",
+        "Forest",
+        "Mountain",
+        "Coast",
+        "Ruins",
+        "Temple",
+        "Fortress"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "notable_features": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "inhabitants": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "connected_locations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "danger_level": {
+      "type": "string",
+      "enum": [
+        "Safe",
+        "Low",
+        "Moderate",
+        "High",
+        "Deadly"
+      ]
+    },
+    "image_url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "type"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

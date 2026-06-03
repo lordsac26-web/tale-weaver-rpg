@@ -1,0 +1,73 @@
+{
+  "name": "RollRecord",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "character_id": {
+      "type": "string"
+    },
+    "roll_type": {
+      "type": "string"
+    },
+    "dice": {
+      "type": "string"
+    },
+    "raw_rolls": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "raw_total": {
+      "type": "number"
+    },
+    "modifiers_applied": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "modifier_total": {
+      "type": "number"
+    },
+    "final_result": {
+      "type": "number"
+    },
+    "dc": {
+      "type": "number"
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "context": {
+      "type": "string"
+    },
+    "conditions_active": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "session_id",
+    "roll_type",
+    "final_result"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "name": "GameSession",
+  "type": "object",
+  "properties": {
+    "character_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "setting": {
+      "type": "string",
+      "enum": [
+        "High Fantasy",
+        "Dark Fantasy",
+        "Sci-Fi",
+        "Cyberpunk",
+        "Historical",
+        "Anime",
+        "Real World"
+      ],
+      "default": "High Fantasy"
+    },
+    "adult_mode": {
+      "type": "boolean",
+      "default": false
+    },
+    "story_seed": {
+      "type": "string"
+    },
+    "story_seed_file_url": {
+      "type": "string"
+    },
+    "current_location": {
+      "type": "string"
+    },
+    "world_state": {
+      "type": "object"
+    },
+    "season": {
+      "type": "string",
+      "enum": [
+        "Spring",
+        "Summer",
+        "Autumn",
+        "Winter"
+      ],
+      "default": "Spring"
+    },
+    "time_of_day": {
+      "type": "string",
+      "enum": [
+        "Dawn",
+        "Morning",
+        "Midday",
+        "Afternoon",
+        "Dusk",
+        "Evening",
+        "Night",
+        "Midnight"
+      ],
+      "default": "Morning"
+    },
+    "active_quests": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "completed_quests": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "story_log": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "npc_relations": {
+      "type": "object"
+    },
+    "reputation": {
+      "type": "number",
+      "default": 0
+    },
+    "alignment_tracker": {
+      "type": "object"
+    },
+    "in_combat": {
+      "type": "boolean",
+      "default": false
+    },
+    "combat_state": {
+      "type": "object"
+    },
+    "chapter": {
+      "type": "number",
+      "default": 1
+    },
+    "plot_flags": {
+      "type": "object"
+    },
+    "environmental_modifiers": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "auto_save_at": {
+      "type": "string"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "character_id"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

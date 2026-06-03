@@ -1,9 +1,60 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
 import { ALL_STANDARD_ITEMS, ITEM_CATEGORIES, getItemsByCategory, searchItems } from './standardItems';
-import { SRD_MAGIC_ITEMS, ITEM_RARITY, CATEGORY_ICONS } from './itemData';
+import { SRD_MAGIC_ITEMS, ITEM_RARITY, CATEGORY_ICONS, CATEGORY_TO_SLOT } from './itemData';
 
 const ALL_SEARCHABLE = [...ALL_STANDARD_ITEMS, ...SRD_MAGIC_ITEMS];
+
+const normalizeRarity = (rarity) => {
+  const value = String(rarity || 'common').toLowerCase();
+  if (value.includes('artifact')) return 'artifact';
+  if (value.includes('legendary')) return 'legendary';
+  if (value.includes('very rare') || value.includes('epic')) return 'epic';
+  if (value.includes('rare')) return 'rare';
+  if (value.includes('uncommon')) return 'uncommon';
+  return 'common';
+};
+
+const normalizeCategory = (category) => {
+  const categories = ['Weapon','Armor','Shield','Helmet','Cloak','Gloves','Boots','Belt','Ring','Amulet','Wondrous Item','Potion','Ammunition','Tool','Adventuring Gear','Other'];
+  const value = String(category || '').toLowerCase();
+  return categories.find(cat => cat.toLowerCase() === value) || 'Wondrous Item';
+};
+
+const normalizeMagicEntityItem = (item) => {
+  const category = normalizeCategory(item.category);
+  const modifiers = item.modifiers || {};
+  return {
+    name: item.name,
+    category,
+    equip_slot: CATEGORY_TO_SLOT[category] || null,
+    rarity: normalizeRarity(item.rarity),
+    requires_attunement: !!item.requires_attunement,
+    quantity: 1,
+    weight: category === 'Potion' ? 0.5 : 1,
+    cost: 0,
+    cost_unit: 'gp',
+    attack_bonus: modifiers.weapon_bonus || 0,
+    damage_bonus: modifiers.weapon_bonus || 0,
+    ac_bonus: modifiers.ac_bonus || 0,
+    description: item.description || item.unidentified_description || '',
+    magic_properties: [],
+    is_magic: true,
+    magic_item_id: item.id,
+  };
+};
+
+const dedupeByName = (items) => {
+  const seen = new Set();
+  return items.filter(item => {
+    const key = String(item.name || '').trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
 export default function ItemDatabaseSearch({ onSelectItem, compact = false }) {
   const [query, setQuery] = useState('');
@@ -11,16 +62,28 @@ export default function ItemDatabaseSearch({ onSelectItem, compact = false }) {
   const [showMagic, setShowMagic] = useState(false);
   const [expandedItem, setExpandedItem] = useState(null);
 
+  const { data: magicDatabaseItems = [] } = useQuery({
+    queryKey: ['magic-items-database'],
+    queryFn: () => base44.entities.MagicItem.list('name', 1500),
+    initialData: [],
+  });
+
+  const fullMagicCatalog = useMemo(() => {
+    const importedMagicItems = magicDatabaseItems.map(normalizeMagicEntityItem);
+    return dedupeByName([...SRD_MAGIC_ITEMS, ...importedMagicItems]);
+  }, [magicDatabaseItems]);
+
   const results = useMemo(() => {
     let pool;
     if (showMagic) {
-      pool = query ? searchItems(query, ALL_SEARCHABLE) : ALL_SEARCHABLE;
+      const searchable = [...ALL_STANDARD_ITEMS, ...fullMagicCatalog];
+      pool = query ? searchItems(query, searchable) : searchable;
     } else {
       const catItems = getItemsByCategory(category);
       pool = query ? searchItems(query, catItems) : catItems;
     }
     return pool.slice(0, 50);
-  }, [query, category, showMagic]);
+  }, [query, category, showMagic, fullMagicCatalog]);
 
   return (
     <div className="space-y-2">
@@ -31,7 +94,7 @@ export default function ItemDatabaseSearch({ onSelectItem, compact = false }) {
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search weapons, armor, gear..."
+            placeholder="Search weapons, armor, gear, magic items..."
             className="w-full pl-9 pr-3 py-2 rounded-lg text-sm input-fantasy"
           />
         </div>
@@ -42,7 +105,7 @@ export default function ItemDatabaseSearch({ onSelectItem, compact = false }) {
             ? { background: 'rgba(80,30,120,0.6)', border: '1px solid rgba(140,80,220,0.5)', color: '#d4b3ff' }
             : { background: 'rgba(15,10,5,0.5)', border: '1px solid rgba(180,140,90,0.15)', color: 'rgba(180,140,90,0.4)' }
           }>
-          ✨ Magic
+          ✨ Magic Items
         </button>
       </div>
 

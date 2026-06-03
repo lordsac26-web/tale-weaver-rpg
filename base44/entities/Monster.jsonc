@@ -1,0 +1,102 @@
+{
+  "name": "Monster",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "meta": {
+      "type": "string"
+    },
+    "armor_class": {
+      "type": "string"
+    },
+    "hit_points": {
+      "type": "string"
+    },
+    "speed": {
+      "type": "string"
+    },
+    "str": {
+      "type": "string"
+    },
+    "str_mod": {
+      "type": "string"
+    },
+    "dex": {
+      "type": "string"
+    },
+    "dex_mod": {
+      "type": "string"
+    },
+    "con": {
+      "type": "string"
+    },
+    "con_mod": {
+      "type": "string"
+    },
+    "int": {
+      "type": "string"
+    },
+    "int_mod": {
+      "type": "string"
+    },
+    "wis": {
+      "type": "string"
+    },
+    "wis_mod": {
+      "type": "string"
+    },
+    "cha": {
+      "type": "string"
+    },
+    "cha_mod": {
+      "type": "string"
+    },
+    "saving_throws": {
+      "type": "string"
+    },
+    "skills": {
+      "type": "string"
+    },
+    "damage_immunities": {
+      "type": "string"
+    },
+    "damage_resistances": {
+      "type": "string"
+    },
+    "condition_immunities": {
+      "type": "string"
+    },
+    "senses": {
+      "type": "string"
+    },
+    "languages": {
+      "type": "string"
+    },
+    "challenge": {
+      "type": "string"
+    },
+    "traits": {
+      "type": "string"
+    },
+    "actions": {
+      "type": "string"
+    },
+    "legendary_actions": {
+      "type": "string"
+    },
+    "reactions": {
+      "type": "string"
+    },
+    "biomes": {
+      "type": "string"
+    },
+    "loot": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

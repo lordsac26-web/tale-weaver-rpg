@@ -1,0 +1,70 @@
+{
+  "name": "VendorItem",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "rarity": {
+      "type": "string",
+      "enum": [
+        "common",
+        "uncommon",
+        "rare",
+        "legendary"
+      ]
+    },
+    "base_price": {
+      "type": "number"
+    },
+    "weight": {
+      "type": "number",
+      "default": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "effect": {
+      "type": "string"
+    },
+    "icon": {
+      "type": "string"
+    },
+    "vendor_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "min_level": {
+      "type": "number",
+      "default": 1
+    },
+    "max_level": {
+      "type": "number",
+      "default": 20
+    },
+    "is_magic": {
+      "type": "boolean",
+      "default": false
+    },
+    "is_rotating": {
+      "type": "boolean",
+      "default": true
+    },
+    "is_always_stocked": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "name",
+    "category",
+    "rarity",
+    "base_price",
+    "vendor_types"
+  ]
+}

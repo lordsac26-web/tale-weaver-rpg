@@ -1,0 +1,146 @@
+{
+  "name": "Companion",
+  "type": "object",
+  "properties": {
+    "character_id": {
+      "type": "string",
+      "description": "Owner character ID"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "familiar",
+        "beast_companion",
+        "mount",
+        "pact_familiar",
+        "other"
+      ],
+      "default": "familiar",
+      "description": "familiar=Find Familiar spell, beast_companion=Ranger Beast Master, pact_familiar=Warlock Pact of Chain"
+    },
+    "creature_type": {
+      "type": "string",
+      "description": "e.g. Owl, Wolf, Cat, Pseudodragon, Imp"
+    },
+    "description": {
+      "type": "string"
+    },
+    "hp_max": {
+      "type": "number",
+      "default": 1
+    },
+    "hp_current": {
+      "type": "number",
+      "default": 1
+    },
+    "armor_class": {
+      "type": "number",
+      "default": 10
+    },
+    "speed": {
+      "type": "number",
+      "default": 30
+    },
+    "fly_speed": {
+      "type": "number",
+      "description": "Flying speed in feet"
+    },
+    "climb_speed": {
+      "type": "number",
+      "description": "Climbing speed in feet"
+    },
+    "swim_speed": {
+      "type": "number",
+      "description": "Swimming speed in feet"
+    },
+    "strength": {
+      "type": "number",
+      "default": 3
+    },
+    "dexterity": {
+      "type": "number",
+      "default": 15
+    },
+    "constitution": {
+      "type": "number",
+      "default": 10
+    },
+    "intelligence": {
+      "type": "number",
+      "default": 2
+    },
+    "wisdom": {
+      "type": "number",
+      "default": 12
+    },
+    "charisma": {
+      "type": "number",
+      "default": 7
+    },
+    "abilities": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Special abilities like Flyby, Keen Senses, Pack Tactics"
+    },
+    "attacks": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Attack options: name, bonus, damage_dice, damage_type, special"
+    },
+    "bond_level": {
+      "type": "number",
+      "default": 1,
+      "description": "Companion bond strength (1-5)"
+    },
+    "is_summoned": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if companion is currently active/summoned"
+    },
+    "portrait_emoji": {
+      "type": "string",
+      "default": "\ud83d\udc3e"
+    },
+    "initiative_bonus": {
+      "type": "number",
+      "default": 0,
+      "description": "Initiative modifier for combat"
+    },
+    "proficiency_bonus": {
+      "type": "number",
+      "description": "For Ranger companions, uses master's proficiency"
+    },
+    "can_attack": {
+      "type": "boolean",
+      "default": true,
+      "description": "Familiars can't attack (except Pact of Chain); Beast companions can"
+    },
+    "action_type": {
+      "type": "string",
+      "enum": [
+        "independent",
+        "commanded",
+        "bonus_action"
+      ],
+      "default": "independent",
+      "description": "How companion acts in combat: independent=own turn, commanded=uses your action, bonus_action=uses bonus action"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "character_id",
+    "name",
+    "type",
+    "creature_type"
+  ]
+}

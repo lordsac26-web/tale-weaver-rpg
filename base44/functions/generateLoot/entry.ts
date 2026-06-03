@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const LOOT_TABLES = {
   // Coin ranges by CR
@@ -135,12 +135,77 @@ function pickItemForClass(pool, charClass) {
   const keywords = LOOT_TABLES.classAffinity[(charClass || '').toLowerCase()] || [];
   if (keywords.length > 0 && Math.random() < 0.55) {
     const matches = pool.filter(it => {
-      const hay = `${it.name} ${it.type} ${it.effect || ''}`.toLowerCase();
+      const hay = `${it.name} ${it.type || it.category || ''} ${it.effect || it.description || ''}`.toLowerCase();
       return keywords.some(k => hay.includes(k));
     });
     if (matches.length > 0) return matches[Math.floor(Math.random() * matches.length)];
   }
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+const CATEGORY_TO_SLOT = {
+  Weapon: 'mainhand', Armor: 'armor', Shield: 'offhand', Helmet: 'helmet',
+  Cloak: 'cloak', Gloves: 'gloves', Boots: 'boots', Belt: 'belt',
+  Ring: 'ring', Amulet: 'amulet', 'Wondrous Item': 'trinket',
+};
+
+function typeToCategory(type, name = '') {
+  const value = `${type || ''} ${name || ''}`.toLowerCase();
+  if (value.includes('weapon') || value.includes('sword') || value.includes('staff') || value.includes('wand')) return 'Weapon';
+  if (value.includes('armor')) return 'Armor';
+  if (value.includes('shield')) return 'Shield';
+  if (value.includes('boot')) return 'Boots';
+  if (value.includes('cloak')) return 'Cloak';
+  if (value.includes('ring')) return 'Ring';
+  if (value.includes('amulet') || value.includes('necklace')) return 'Amulet';
+  if (value.includes('potion') || value.includes('consumable')) return 'Potion';
+  if (value.includes('tool')) return 'Tool';
+  if (value.includes('gear') || value.includes('material')) return 'Adventuring Gear';
+  return 'Wondrous Item';
+}
+
+function canonicalCategory(category) {
+  const categories = ['Weapon','Armor','Shield','Helmet','Cloak','Gloves','Boots','Belt','Ring','Amulet','Wondrous Item','Potion','Ammunition','Tool','Adventuring Gear','Other'];
+  const value = String(category || '').toLowerCase();
+  return categories.find(cat => cat.toLowerCase() === value) || null;
+}
+
+function normalizeLootItem(item) {
+  if (!item) return null;
+  const category = canonicalCategory(item.category) || typeToCategory(item.type, item.name);
+  return {
+    ...item,
+    category,
+    equip_slot: item.equip_slot || CATEGORY_TO_SLOT[category] || null,
+    quantity: item.quantity || 1,
+    weight: item.weight ?? (category === 'Potion' ? 0.5 : 1),
+    cost: item.cost ?? item.value ?? 0,
+    cost_unit: item.cost_unit || 'gp',
+    description: item.description || item.effect || '',
+    is_magic: item.is_magic ?? (category === 'Wondrous Item' || item.rarity !== 'common'),
+  };
+}
+
+function normalizeMagicItemDrop(item) {
+  const category = canonicalCategory(item.category) || 'Wondrous Item';
+  return normalizeLootItem({
+    name: item.name,
+    type: category,
+    category,
+    rarity: item.rarity || 'uncommon',
+    description: item.description || item.unidentified_description || '',
+    requires_attunement: !!item.requires_attunement,
+    weight: category === 'Potion' ? 0.5 : 1,
+    value: 0,
+    is_magic: true,
+    source: 'magic_item_database',
+  });
+}
+
+async function pickMagicItemFromDatabase(base44, rarity, charClass) {
+  const pool = await base44.asServiceRole.entities.MagicItem.filter({ rarity }, 'name', 100);
+  if (!pool || pool.length === 0) return null;
+  return normalizeMagicItemDrop(pickItemForClass(pool, charClass));
 }
 
 function generateItems(tier, level, enemyType = 'humanoid', cr = null, charClass = null) {
@@ -201,7 +266,9 @@ Deno.serve(async (req) => {
 
     // Generate loot
     const coins = generateCoins(tier, effectiveEnemyType);
-    const items = generateItems(tier, level || 1, effectiveEnemyType, enemy_cr, character_class);
+    const items = generateItems(tier, level || 1, effectiveEnemyType, enemy_cr, character_class)
+      .map(normalizeLootItem)
+      .filter(Boolean);
 
     // Scale coins by number of enemies
     coins.gold *= num_enemies;
@@ -215,12 +282,15 @@ Deno.serve(async (req) => {
 
     if (Math.random() < artifactChance) {
       const artifactTier = effectiveLevel <= 5 ? 'uncommon' : effectiveLevel <= 10 ? 'rare' : effectiveLevel <= 15 ? 'rare' : 'legendary';
-      const artifactPools = {
-        uncommon: LOOT_TABLES.uncommonItems,
-        rare: LOOT_TABLES.rareItems,
-        legendary: LOOT_TABLES.legendaryItems,
-      };
-      artifact = pickItemForClass(artifactPools[artifactTier], character_class);
+      artifact = await pickMagicItemFromDatabase(base44, artifactTier, character_class);
+      if (!artifact) {
+        const artifactPools = {
+          uncommon: LOOT_TABLES.uncommonItems,
+          rare: LOOT_TABLES.rareItems,
+          legendary: LOOT_TABLES.legendaryItems,
+        };
+        artifact = normalizeLootItem(pickItemForClass(artifactPools[artifactTier], character_class));
+      }
     }
 
     return Response.json({

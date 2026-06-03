@@ -1,0 +1,65 @@
+{
+  "name": "PlayerNote",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "character_id": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "General",
+        "Quest",
+        "NPC",
+        "Location",
+        "Rumor",
+        "Secret",
+        "Reminder",
+        "Lore"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "is_pinned": {
+      "type": "boolean",
+      "default": false
+    },
+    "related_location": {
+      "type": "string"
+    },
+    "related_npc": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "content"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

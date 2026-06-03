@@ -1,0 +1,57 @@
+{
+  "name": "SanctionedPortal",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "destination_hubs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "cost_gp": {
+      "type": "number",
+      "default": 75
+    },
+    "guild_required": {
+      "type": "boolean",
+      "default": false
+    },
+    "guild_discount_cost": {
+      "type": "number",
+      "default": 40
+    },
+    "vip_only": {
+      "type": "boolean",
+      "default": false
+    },
+    "flavor_text": {
+      "type": "string"
+    },
+    "map_x": {
+      "type": "number"
+    },
+    "map_y": {
+      "type": "number"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "name",
+    "city"
+  ]
+}

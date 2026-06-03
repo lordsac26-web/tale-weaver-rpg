@@ -1,0 +1,84 @@
+{
+  "name": "DnDClass",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "hit_die": {
+      "type": "number"
+    },
+    "primary_ability": {
+      "type": "string"
+    },
+    "saving_throw_proficiencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "armor_proficiencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "weapon_proficiencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "skill_choices": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "skill_count": {
+      "type": "number"
+    },
+    "subclasses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "features_by_level": {
+      "type": "object"
+    },
+    "spell_slots_by_level": {
+      "type": "object"
+    },
+    "spellcasting_ability": {
+      "type": "string"
+    },
+    "raw_data": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

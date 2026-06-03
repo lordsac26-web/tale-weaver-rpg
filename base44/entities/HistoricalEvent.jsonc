@@ -1,0 +1,47 @@
+{
+  "name": "HistoricalEvent",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "date_era": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "key_figures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "significance": {
+      "type": "string"
+    },
+    "related_locations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "War",
+        "Discovery",
+        "Founding",
+        "Catastrophe",
+        "Treaty",
+        "Ascension",
+        "Betrayal",
+        "Prophecy",
+        "Other"
+      ]
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

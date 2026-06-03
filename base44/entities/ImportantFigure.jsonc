@@ -1,0 +1,78 @@
+{
+  "name": "ImportantFigure",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "title_role": {
+      "type": "string"
+    },
+    "race": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "alignment": {
+      "type": "string",
+      "enum": [
+        "Lawful Good",
+        "Neutral Good",
+        "Chaotic Good",
+        "Lawful Neutral",
+        "True Neutral",
+        "Chaotic Neutral",
+        "Lawful Evil",
+        "Neutral Evil",
+        "Chaotic Evil"
+      ]
+    },
+    "affiliations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "key_events": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Alive",
+        "Deceased",
+        "Unknown",
+        "Legendary",
+        "Mythical"
+      ]
+    },
+    "image_url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

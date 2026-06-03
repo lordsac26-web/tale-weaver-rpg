@@ -1,0 +1,70 @@
+{
+  "name": "MagicItem",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The current name of the item. This can be a generic 'Unidentified Magic Item' if not identified."
+    },
+    "identified_name": {
+      "type": "string",
+      "description": "The true name of the item, revealed upon identification."
+    },
+    "category": {
+      "type": "string"
+    },
+    "rarity": {
+      "type": "string"
+    },
+    "requires_attunement": {
+      "type": "boolean",
+      "default": false
+    },
+    "description": {
+      "type": "string",
+      "description": "The true description of the item, revealed upon identification."
+    },
+    "unidentified_description": {
+      "type": "string",
+      "description": "A generic placeholder description for the item when it is not yet identified."
+    },
+    "is_identified": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if the item's magical properties have been revealed."
+    },
+    "charges": {
+      "type": "number"
+    },
+    "recharge": {
+      "type": "string"
+    },
+    "modifiers": {
+      "type": "object"
+    },
+    "raw_data": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

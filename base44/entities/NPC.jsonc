@@ -1,0 +1,146 @@
+{
+  "name": "NPC",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "NPC's name"
+    },
+    "title": {
+      "type": "string",
+      "description": "Role or title (e.g., Village Elder, Mysterious Stranger)"
+    },
+    "race": {
+      "type": "string",
+      "enum": [
+        "Human",
+        "Elf",
+        "Dwarf",
+        "Halfling",
+        "Gnome",
+        "Half-Elf",
+        "Half-Orc",
+        "Tiefling",
+        "Dragonborn",
+        "Aasimar",
+        "Other"
+      ]
+    },
+    "personality_archetype": {
+      "type": "string",
+      "enum": [
+        "Wise Mentor",
+        "Gruff Veteran",
+        "Cheerful Merchant",
+        "Cunning Rogue",
+        "Noble Knight",
+        "Eccentric Mage",
+        "Humble Peasant",
+        "Mysterious Stranger",
+        "Jovial Innkeeper",
+        "Stern Guard",
+        "Naive Youth",
+        "Cynical Mercenary"
+      ],
+      "default": "Humble Peasant"
+    },
+    "personality_traits": {
+      "type": "string",
+      "description": "Free-form personality description (e.g., speaks in riddles, extremely talkative, paranoid)"
+    },
+    "alignment": {
+      "type": "string",
+      "enum": [
+        "Lawful Good",
+        "Neutral Good",
+        "Chaotic Good",
+        "Lawful Neutral",
+        "True Neutral",
+        "Chaotic Neutral",
+        "Lawful Evil",
+        "Neutral Evil",
+        "Chaotic Evil"
+      ],
+      "default": "True Neutral"
+    },
+    "current_mood": {
+      "type": "string",
+      "enum": [
+        "happy",
+        "neutral",
+        "anxious",
+        "angry",
+        "sad",
+        "excited",
+        "suspicious",
+        "friendly"
+      ],
+      "default": "neutral"
+    },
+    "location": {
+      "type": "string",
+      "description": "Where this NPC is typically found"
+    },
+    "occupation": {
+      "type": "string"
+    },
+    "backstory": {
+      "type": "string",
+      "description": "NPC's history and motivations"
+    },
+    "voice_style": {
+      "type": "string",
+      "description": "How they speak (e.g., formal, slang, archaic, poetic)"
+    },
+    "quest_giver": {
+      "type": "boolean",
+      "default": false
+    },
+    "available_quests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Quest IDs this NPC can offer"
+    },
+    "relationship_with_player": {
+      "type": "number",
+      "default": 0,
+      "description": "Relationship score from -100 (hostile) to +100 (devoted ally)"
+    },
+    "known_information": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Topics this NPC knows about"
+    },
+    "secrets": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Hidden information revealed under conditions"
+    },
+    "dialogue_history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Past conversation summaries"
+    },
+    "portrait_emoji": {
+      "type": "string",
+      "default": "\ud83e\uddd9"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "name",
+    "personality_archetype",
+    "alignment"
+  ]
+}

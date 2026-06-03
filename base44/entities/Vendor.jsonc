@@ -1,0 +1,70 @@
+{
+  "name": "Vendor",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "alchemist",
+        "blacksmith",
+        "armorer",
+        "general",
+        "tavern_inn",
+        "tavern_pub",
+        "brothel",
+        "traveling"
+      ]
+    },
+    "location": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "greeting": {
+      "type": "string"
+    },
+    "personality": {
+      "type": "string"
+    },
+    "portrait_emoji": {
+      "type": "string"
+    },
+    "gold_reserve": {
+      "type": "number",
+      "default": 200
+    },
+    "reputation_modifier": {
+      "type": "number",
+      "default": 0
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "is_traveling": {
+      "type": "boolean",
+      "default": false
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "last_stock_refresh": {
+      "type": "string"
+    },
+    "refresh_interval_days": {
+      "type": "number",
+      "default": 3
+    }
+  },
+  "required": [
+    "name",
+    "type"
+  ]
+}
