@@ -31,6 +31,14 @@
     "story_seed_file_url": {
       "type": "string"
     },
+    "opening_seed": {
+      "type": "object",
+      "description": "Unique random seed data used to force varied starting locations and scenarios per campaign."
+    },
+    "opening_signature": {
+      "type": "string",
+      "description": "Short summary of the generated campaign opening, used to prevent repetitive future starts."
+    },
     "current_location": {
       "type": "string"
     },

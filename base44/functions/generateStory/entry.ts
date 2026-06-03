@@ -101,6 +101,18 @@ Deno.serve(async (req) => {
   // Only last 3 log entries to reduce token usage and speed up response
   const recentLog = (session.story_log || []).slice(-3).map(e => e.text).join('\n');
 
+  const recentOpeningSessions = action === 'start'
+    ? await base44.entities.GameSession.filter({ character_id: session.character_id }, '-created_date', 8)
+    : [];
+  const recentOpenings = recentOpeningSessions
+    .filter(s => s.id !== session.id)
+    .map(s => s.opening_signature || s.story_log?.find(e => e.action === 'start')?.text?.slice(0, 220))
+    .filter(Boolean)
+    .slice(0, 5)
+    .map((text, index) => `${index + 1}. ${text}`)
+    .join('\n');
+  const openingSeed = session.opening_seed ? JSON.stringify(session.opening_seed) : `${session.id}-${Date.now()}`;
+
   const gameDataContext = combatBlocked
     ? `No monsters available in the database — do NOT trigger combat in this scene.`
     : `Available monsters (use EXACT stats when spawning enemies): ${monsterNames}`;
@@ -169,6 +181,14 @@ ${gameDataContext}
 
 ${storySeed ? `PLAYER'S STORY SEED (incorporate this theme/direction): ${storySeed}` : `No story seed provided — create an ORIGINAL scenario from scratch based on the character details above.`}
 
+CAMPAIGN UNIQUENESS SEED:
+${openingSeed}
+Use this seed to choose a distinctive opening location, inciting incident, NPC pressure, danger type, and mystery hook. Even for the same race/class, this campaign must not feel like a rerun.
+
+RECENT OPENINGS TO AVOID FOR THIS CHARACTER:
+${recentOpenings || 'None recorded yet.'}
+Do NOT reuse the same starting location type, central conflict, first NPC role, or opening dilemma from the recent openings above.
+
 CRITICAL INSTRUCTIONS FOR THE OPENING:
 1. DO NOT start at a tavern, inn, or crossroads unless the story seed specifically asks for it. Be creative with locations!
 2. The opening scenario MUST be influenced by the character's race, class, alignment, and background:
@@ -208,7 +228,8 @@ CRITICAL: Do NOT trigger combat in the opening scene. Focus on exploration, NPC 
         choices:         { type: 'array', items: choiceItemSchema },
         location_update: { type: 'string' },
         quest_trigger:   { type: 'string' },
-        npc_present:     { type: 'string' }
+        npc_present:     { type: 'string' },
+        opening_signature: { type: 'string', description: 'One concise sentence summarizing the unique starting location, scenario hook, and first dilemma for future anti-repetition checks.' }
       }
     };
 
@@ -391,6 +412,7 @@ If it's a combat event, use the enemy schema with real monster stats.`;
 
     const updateData = { story_log: updatedLog };
     if (result.location_update)   updateData.current_location = result.location_update;
+    if (action === 'start' && result.opening_signature) updateData.opening_signature = result.opening_signature;
     if (result.reputation_change) updateData.reputation = (session.reputation || 0) + result.reputation_change;
     if (result.plot_flag)         updateData.plot_flags = { ...(session.plot_flags || {}), [result.plot_flag]: true };
     if (result.combat_trigger)    updateData.in_combat = true;

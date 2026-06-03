@@ -48,12 +48,14 @@ export default function NewGame() {
     if (!selectedChar) return;
     setStarting(true);
     const char = characters.find(c => c.id === selectedChar);
+    const openingSeed = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const session = await base44.entities.GameSession.create({
       character_id: selectedChar,
       title: title || `${char?.name || 'Hero'}'s Adventure`,
       setting, adult_mode: adultMode, story_seed: storySeed,
       story_seed_file_url: storySeedFileUrl,
       season, time_of_day: timeOfDay,
+      opening_seed: { seed: openingSeed, race: char?.race, class: char?.class, roll: Math.floor(Math.random() * 1000000) },
       current_location: '',
       world_state: {}, active_quests: [], completed_quests: [],
       story_log: [], npc_relations: {}, reputation: 0,
