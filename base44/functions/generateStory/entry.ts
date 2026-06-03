@@ -147,8 +147,12 @@ Deno.serve(async (req) => {
     const charSubclass = character?.subclass || '';
     const sessionSetting = session.setting || 'High Fantasy';
     const storySeed = session.story_seed || '';
+    const adultToneInstruction = session.adult_mode 
+      ? 'This is an 18+ / NC-17 campaign. The writing MUST reflect a well-written, gritty R-rated movie or mature dark fantasy novel. Do not hold back on intense violence, morally abhorrent situations, explicit adult themes, terror, or visceral descriptions. Do NOT sanitize the narrative.' 
+      : '';
 
     prompt = `You are the Dungeon Master for a ${sessionSetting} RPG. Begin a UNIQUE and ORIGINAL adventure.
+${adultToneInstruction}
 
 CHARACTER DETAILS (use these to tailor the opening):
 - Name: ${character?.name || 'Hero'}
@@ -267,7 +271,7 @@ ${skillCheckNote}
 
 CRITICAL INSTRUCTIONS: Remember and reflect the current season (${session.season}) and time of day (${session.time_of_day}) in your atmospheric descriptions. Take into consideration ALL elements of the character (race, class, alignment, stats, skills, background, backstory) when generating how the world and NPCs react to them.
 
-Write the consequence narrative (2-3 paragraphs) reacting directly to the action and any skill check outcome. Then provide 4 new choices. Consider active conditions, reputation, environment (${session.season}, ${session.time_of_day}).${session.adult_mode ? ' Mature content permitted.' : ''}
+Write the consequence narrative (2-3 paragraphs) reacting directly to the action and any skill check outcome. Then provide 4 new choices. Consider active conditions, reputation, environment (${session.season}, ${session.time_of_day}).${session.adult_mode ? ' This is an 18+ campaign. Use mature, visceral, R-rated/NC-17 level writing. Do not shy away from extreme violence, horror, or explicit adult themes when appropriate.' : ''}
 
 HIT POINTS: If the narrative heals the character (potion, spell, rest, divine blessing, etc.) set hp_change to a POSITIVE integer equal to the HP restored. If the narrative harms the character (trap, fall, environmental hazard, etc.) set hp_change to a NEGATIVE integer equal to the damage taken. If HP is unchanged, omit hp_change or set it to 0. The character currently has ${character?.hp_current ?? '?'}/${character?.hp_max ?? '?'} HP — never heal above max. Whatever number you narrate (e.g. "healed for 10 HP") MUST match hp_change exactly.
 
