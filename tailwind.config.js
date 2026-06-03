@@ -59,6 +59,14 @@ module.exports = {
   				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
+  			},
+  			fantasy: {
+  				'wood-deep': 'var(--fantasy-wood-deep)',
+  				'wood-dark': 'var(--fantasy-wood-dark)',
+  				'wood-mid': 'var(--fantasy-wood-mid)',
+  				brass: 'var(--fantasy-brass)',
+  				parchment: 'var(--fantasy-parchment)',
+  				'parchment-dim': 'var(--fantasy-parchment-dim)'
   			}
   		},
   		keyframes: {

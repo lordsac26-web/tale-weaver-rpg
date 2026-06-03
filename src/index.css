@@ -37,6 +37,15 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    /* Fantasy Tavern Palette */
+    --fantasy-wood-deep: #241406;
+    --fantasy-wood-dark: #38200c;
+    --fantasy-wood-mid: #4d2a12;
+    --fantasy-brass: #c98a45;
+    --fantasy-brass-glow: rgba(210,140,70,0.55);
+    --fantasy-parchment: #f8ecd6;
+    --fantasy-parchment-dim: #cbac82;
   }
 
   .dark {

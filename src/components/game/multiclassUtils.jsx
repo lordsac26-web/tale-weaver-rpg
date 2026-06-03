@@ -131,20 +131,37 @@ export function getMaxSpellsKnown(character = {}) {
 export function getMulticlassSpellSlots(character = {}) {
   const entries = getSpellcastingEntries(character);
   if (entries.length === 0) return [0,0,0,0,0,0,0,0,0];
-  if (entries.length === 1) {
-    return SPELL_SLOTS_BY_CLASS_LEVEL[entries[0].spellClass]?.[entries[0].levels] || [0,0,0,0,0,0,0,0,0];
+
+  // Separate Warlock (Pact Magic) from standard spellcasting classes
+  const warlockEntry = entries.find(e => e.className === 'Warlock');
+  const standardEntries = entries.filter(e => e.className !== 'Warlock');
+
+  let standardSlots = [0,0,0,0,0,0,0,0,0];
+
+  if (standardEntries.length === 1 && entries.length === 1) {
+    // Single class (not Warlock)
+    standardSlots = SPELL_SLOTS_BY_CLASS_LEVEL[standardEntries[0].spellClass]?.[standardEntries[0].levels] || [0,0,0,0,0,0,0,0,0];
+  } else if (standardEntries.length > 0) {
+    // Multiclass standard casters
+    let casterLevel = 0;
+    standardEntries.forEach(entry => {
+      if (FULL_CASTERS.includes(entry.className)) casterLevel += entry.levels;
+      else if (entry.className === 'Artificer') casterLevel += Math.ceil(entry.levels / 2);
+      else if (HALF_CASTERS.includes(entry.className)) casterLevel += Math.floor(entry.levels / 2);
+      else if (entry.thirdCaster) casterLevel += Math.floor(entry.levels / 3);
+    });
+
+    casterLevel = Math.max(1, Math.min(20, casterLevel));
+    standardSlots = SPELL_SLOTS_BY_CLASS_LEVEL.Wizard[casterLevel] || [0,0,0,0,0,0,0,0,0];
   }
 
-  let casterLevel = 0;
-  entries.forEach(entry => {
-    if (FULL_CASTERS.includes(entry.className)) casterLevel += entry.levels;
-    else if (entry.className === 'Artificer') casterLevel += Math.ceil(entry.levels / 2);
-    else if (HALF_CASTERS.includes(entry.className)) casterLevel += Math.floor(entry.levels / 2);
-    else if (entry.thirdCaster) casterLevel += Math.floor(entry.levels / 3);
-  });
+  // Combine standard slots with Pact Magic slots if character has Warlock levels
+  if (warlockEntry) {
+    const warlockSlots = SPELL_SLOTS_BY_CLASS_LEVEL.Warlock[warlockEntry.levels] || [0,0,0,0,0,0,0,0,0];
+    return standardSlots.map((val, i) => val + (warlockSlots[i] || 0));
+  }
 
-  casterLevel = Math.max(1, Math.min(20, casterLevel));
-  return SPELL_SLOTS_BY_CLASS_LEVEL.Wizard[casterLevel] || [0,0,0,0,0,0,0,0,0];
+  return standardSlots;
 }
 
 export function getMulticlassHitPoints(character = {}, conMod = 0) {

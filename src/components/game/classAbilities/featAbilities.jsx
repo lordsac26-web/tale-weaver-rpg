@@ -1,9 +1,10 @@
 import React from 'react';
-import { Shield, Eye, Sparkles } from 'lucide-react';
+import { Shield, Eye, Sparkles, Wand2, RefreshCcw, Users } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 
-// Build feat passive reminders (War Caster, Heavy Armor Master, Alert).
+// Build feat passive reminders and active abilities.
 export function buildFeatAbilities(ctx) {
-  const { character } = ctx;
+  const { character, shortRestAbilities, onMessage, onAbilityUsed } = ctx;
   const abilities = [];
 
   const charFeats = character.feats || [];
@@ -56,6 +57,89 @@ export function buildFeatAbilities(ctx) {
       description: '+5 bonus to initiative. You cannot be surprised while conscious. Creatures don\'t gain advantage by being hidden from you.',
       used: false,
       available: true,
+    });
+  }
+
+  // --- Active Feats ---
+
+  if (hasFeat('Fey Teleportation')) {
+    const feyUsed = !!shortRestAbilities?.fey_teleportation;
+    abilities.push({
+      id: 'fey_teleportation',
+      name: 'Fey Teleportation',
+      icon: <Wand2 className="w-4 h-4" />,
+      color: '#c4b5fd',
+      borderColor: 'rgba(160,120,255,0.4)',
+      bgColor: 'rgba(28,12,55,0.7)',
+      activeBg: 'rgba(50,20,90,0.85)',
+      type: 'bonus_action',
+      description: 'Cast Misty Step without expending a spell slot. 1/short rest.',
+      shortDesc: 'Misty Step (Free)',
+      restType: 'short',
+      used: feyUsed,
+      usedLabel: 'Used (short rest)',
+      available: !feyUsed,
+      onUse: async () => {
+        await base44.entities.Character.update(character.id, {
+          short_rest_abilities: { ...shortRestAbilities, fey_teleportation: true }
+        });
+        onMessage?.(`✨ Fey Teleportation! ${character.name} casts Misty Step and vanishes in a silvery mist.`);
+        onAbilityUsed?.('fey_teleportation', {});
+      }
+    });
+  }
+
+  if (hasFeat('Second Chance')) {
+    const chanceUsed = !!shortRestAbilities?.second_chance;
+    abilities.push({
+      id: 'second_chance',
+      name: 'Second Chance',
+      icon: <RefreshCcw className="w-4 h-4" />,
+      color: '#fca5a5',
+      borderColor: 'rgba(252,165,165,0.4)',
+      bgColor: 'rgba(60,20,20,0.7)',
+      activeBg: 'rgba(90,30,30,0.85)',
+      type: 'reaction',
+      description: 'When a creature hits you with an attack, you can force that creature to reroll. 1/short rest.',
+      shortDesc: 'Force Attack Reroll',
+      restType: 'short',
+      used: chanceUsed,
+      usedLabel: 'Used (short rest)',
+      available: !chanceUsed,
+      onUse: async () => {
+        await base44.entities.Character.update(character.id, {
+          short_rest_abilities: { ...shortRestAbilities, second_chance: true }
+        });
+        onMessage?.(`🛡️ Second Chance! ${character.name} forces the attacker to reroll!`);
+        onAbilityUsed?.('second_chance', {});
+      }
+    });
+  }
+
+  if (hasFeat('Inspiring Leader')) {
+    const leaderUsed = !!shortRestAbilities?.inspiring_leader; // Tracking per short rest
+    abilities.push({
+      id: 'inspiring_leader',
+      name: 'Inspiring Leader',
+      icon: <Users className="w-4 h-4" />,
+      color: '#fde68a',
+      borderColor: 'rgba(250,220,40,0.4)',
+      bgColor: 'rgba(40,35,5,0.7)',
+      activeBg: 'rgba(70,55,8,0.85)',
+      type: 'action', // Technically 10 minutes, but simplified for UI
+      description: 'Spend 10 minutes inspiring your companions. Up to 6 allies gain Temporary HP equal to your Level + CHA modifier.',
+      shortDesc: 'Grant Temp HP (10 min)',
+      restType: 'short',
+      used: leaderUsed,
+      usedLabel: 'Used (short rest)',
+      available: !leaderUsed,
+      onUse: async () => {
+        await base44.entities.Character.update(character.id, {
+          short_rest_abilities: { ...shortRestAbilities, inspiring_leader: true }
+        });
+        onMessage?.(`🗣️ Inspiring Leader! ${character.name} gives a rousing speech, granting Temporary HP to allies.`);
+        onAbilityUsed?.('inspiring_leader', {});
+      }
     });
   }
 
