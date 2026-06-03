@@ -55,7 +55,7 @@ export default function CharacterCreation() {
   const [backstoryPrompt, setBackstoryPrompt] = useState('');
  
   const [character, setCharacter] = useState({
-    name: '', gender: 'male', race: '', subrace: '', class: '', subclass: '', level: 1,
+    name: '', gender: 'male', age: 25, race: '', subrace: '', class: '', subclass: '', level: 1,
     background: '', backstory: '', alignment: 'True Neutral', alignment_mode: 'static',
     alignment_scores: { good_evil: 0, law_chaos: 0, sanity: 0 }, alignment_history: [],
     strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10,
@@ -247,7 +247,7 @@ export default function CharacterCreation() {
     setGeneratingBackstory(true);
     const result = await base44.functions.invoke('generateBackstory', {
       name: character.name || 'The Hero',
-      race: character.race, class: character.class,
+      race: character.race, class: character.class, age: character.age,
       background: character.background, level: character.level,
       prompt: backstoryPrompt
     });

@@ -41,7 +41,18 @@ export default function StepGenderRace({ character, set }) {
       {/* Gender */}
       <div>
         <h2 className="text-2xl font-bold text-amber-300 mb-1">Identity</h2>
-        <p className="text-amber-400/50 text-sm mb-4">Choose your character's gender — this affects portrait generation.</p>
+        <p className="text-amber-400/50 text-sm mb-4">Choose your character's gender and age — these affect portrait and name generation.</p>
+        <div className="mb-4 max-w-xs">
+          <label className="text-amber-400/80 text-xs uppercase tracking-widest mb-1.5 block">Age</label>
+          <input
+            type="number"
+            min="1"
+            value={character.age || ''}
+            onChange={(e) => set('age', Number(e.target.value) || '')}
+            placeholder="25"
+            className="w-full bg-slate-800/60 border border-slate-600 rounded-md text-amber-100 px-3 py-2 text-sm outline-none placeholder-slate-500"
+          />
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {GENDERS.map(g => (
             <button key={g.id} onClick={() => set('gender', g.id)}

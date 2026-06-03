@@ -26,14 +26,41 @@ const RACE_NAMES = {
 const GENERIC_FIRST = ['Ash','Blade','Cinder','Drake','Echo','Flint','Grey','Hawk','Ivory','Jade','Kaine','Lark','Morrow','Nyx','Onyx','Pike','Raven','Shade','Thorn','Vale','Wolf','Ember','Storm','Dusk'];
 const GENERIC_LAST = ['Blackthorn','Coldsteel','Dawnstrider','Farseer','Grimshaw','Hearthstone','Ironveil','Nighthollow','Ravencrest','Shadowmend','Stormwind','Thornwall','Winterborn','Ashvale'];
 
-function randomName(race) {
+const RACE_AGE_PROFILES = {
+  Elf: { young: 100, elder: 600 }, Dwarf: { young: 50, elder: 300 }, Gnome: { young: 40, elder: 300 },
+  Halfling: { young: 20, elder: 100 }, Dragonborn: { young: 15, elder: 65 }, Aasimar: { young: 20, elder: 130 },
+  Goliath: { young: 18, elder: 65 }, Firbolg: { young: 30, elder: 300 }, Tabaxi: { young: 15, elder: 60 },
+  Kenku: { young: 12, elder: 50 }, Tortle: { young: 15, elder: 45 }, Warforged: { young: 5, elder: 80 },
+  Goblin: { young: 10, elder: 45 }, Kobold: { young: 8, elder: 80 }, Orc: { young: 12, elder: 45 },
+  Centaur: { young: 15, elder: 70 }, Leonin: { young: 15, elder: 70 }, Harengon: { young: 10, elder: 55 },
+  Owlin: { young: 12, elder: 60 }, Bugbear: { young: 12, elder: 55 }, 'Ogrekin (Half-Ogre)': { young: 14, elder: 60 },
+  default: { young: 18, elder: 65 },
+};
+
+const YOUNG_BY_RACE = {
+  Dwarf: ['Pebble','Cinder','Keg','Spark'], Elf: ['Lira','Fae','Ari','Nim'], Halfling: ['Pip','Merry','Nim','Tilly'],
+  Gnome: ['Fizz','Tink','Nib','Widget'], Goblin: ['Nib','Skik','Pip','Zit'], Kobold: ['Tik','Pip','Vix','Nib'],
+};
+const ELDER_TITLES = ['Elder', 'Old', 'Grey', 'Wise'];
+
+function getAgeCategory(race, age) {
+  const numberAge = Number(age);
+  if (!numberAge) return 'adult';
+  const profile = RACE_AGE_PROFILES[race] || RACE_AGE_PROFILES.default;
+  if (numberAge < profile.young) return 'young';
+  if (numberAge >= profile.elder) return 'elder';
+  return 'adult';
+}
+
+function randomName(race, age) {
   const pool = RACE_NAMES[race];
-  const firstNames = pool?.first?.length ? pool.first : GENERIC_FIRST;
+  const ageCategory = getAgeCategory(race, age);
+  const firstNames = ageCategory === 'young' && YOUNG_BY_RACE[race]?.length ? YOUNG_BY_RACE[race] : (pool?.first?.length ? pool.first : GENERIC_FIRST);
   const lastNames = pool?.last?.length ? pool.last : GENERIC_LAST;
   const first = firstNames[Math.floor(Math.random() * firstNames.length)];
-  if (!lastNames.length) return first;
-  const last = lastNames[Math.floor(Math.random() * lastNames.length)];
-  return `${first} ${last}`;
+  const baseName = lastNames.length ? `${first} ${lastNames[Math.floor(Math.random() * lastNames.length)]}` : first;
+  if (ageCategory === 'elder') return `${ELDER_TITLES[Math.floor(Math.random() * ELDER_TITLES.length)]} ${baseName}`;
+  return baseName;
 }
 
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
@@ -61,8 +88,8 @@ export default function StepClassInfo({ character, set }) {
               placeholder="Enter name..."
               className="bg-slate-800/60 border-slate-600 text-amber-100 placeholder-slate-500 flex-1" />
             <button
-              onClick={() => set('name', randomName(character.race))}
-              title="Randomize name"
+              onClick={() => set('name', randomName(character.race, character.age))}
+              title="Randomize name using race and age"
               className="px-2.5 rounded-md border border-amber-700/50 bg-amber-900/30 text-amber-400 hover:bg-amber-800/40 hover:border-amber-600/60 transition-all flex-shrink-0">
               <Dices className="w-4 h-4" />
             </button>

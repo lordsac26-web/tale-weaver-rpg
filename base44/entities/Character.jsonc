@@ -114,6 +114,11 @@
     "gender": {
       "type": "string"
     },
+    "age": {
+      "type": "number",
+      "default": 25,
+      "description": "Character age, used by portrait and name generation."
+    },
     "strength": {
       "type": "number"
     },
