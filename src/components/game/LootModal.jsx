@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Coins, Gift, Sparkles, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,50 +11,53 @@ export default function LootModal({ enemies = [], character, onClose, onCollect 
   const [selectedItems, setSelectedItems] = useState([]);
   const [collecting, setCollecting] = useState(false);
   const [collected, setCollected] = useState(false);
+  const [loot, setLoot] = useState(null);
+  const [loadingLoot, setLoadingLoot] = useState(true);
+  const [lootError, setLootError] = useState(null);
+
+  useEffect(() => {
+    if (!character) return;
+
+    const loadLoot = async () => {
+      setLoadingLoot(true);
+      setLootError(null);
+      const challengeCr = enemies.length
+        ? enemies.reduce((max, enemy) => Math.max(max, Number(enemy.cr || 1)), 0)
+        : 1;
+      const enemyType = enemies[0]?.creature_type || enemies[0]?.type_tag || enemies[0]?.meta || enemies[0]?.archetype || 'humanoid';
+
+      try {
+        const result = await base44.functions.invoke('generateLoot', {
+          level: character.level || 1,
+          enemy_type: enemyType,
+          enemy_cr: challengeCr,
+          num_enemies: Math.max(1, enemies.length),
+          character_class: character.class || null,
+        });
+        const data = result.data;
+        const generatedItems = [...(data.items || []), ...(data.artifact ? [data.artifact] : [])];
+        setLoot({
+          gold: data.coins?.gold || 0,
+          silver: data.coins?.silver || 0,
+          copper: data.coins?.copper || 0,
+          items: generatedItems,
+          tier: data.tier,
+          summary: data.summary,
+        });
+      } catch (err) {
+        setLootError('Loot generation failed. You can close this and continue the adventure.');
+      } finally {
+        setLoadingLoot(false);
+      }
+    };
+
+    loadLoot();
+  }, [character?.id, character?.level, character?.class, enemies]);
 
   if (!character) return null;
 
-  // Generate loot based on enemy CR
-  const generateLoot = () => {
-    const loot = {
-      gold: 0,
-      silver: 0,
-      copper: 0,
-      items: [],
-    };
-
-    enemies.forEach(enemy => {
-      const cr = enemy.cr || 1;
-      // Gold based on CR (DMG p.136)
-      loot.gold += Math.floor(cr * 10 * (1 + Math.random()));
-      
-      // Chance for items based on CR
-      if (Math.random() < Math.min(0.3 * cr, 0.9)) {
-        const itemTable = getItemForCR(cr);
-        if (itemTable) {
-          loot.items.push({
-            ...itemTable,
-            quantity: 1,
-            source: enemy.name,
-          });
-        }
-      }
-    });
-
-    return loot;
-  };
-
-  const getItemForCR = (cr) => {
-    if (cr < 1) return { name: 'Minor Potion', category: 'consumable', rarity: 'common', value: 10, weight: 0.5, icon: '🧪' };
-    if (cr < 5) return { name: 'Potion of Healing', category: 'consumable', rarity: 'common', value: 50, weight: 0.5, icon: '🧪' };
-    if (cr < 10) return { name: 'Magic Weapon +1', category: 'weapon', rarity: 'uncommon', value: 200, weight: 3, icon: '⚔️' };
-    if (cr < 15) return { name: 'Rare Magic Item', category: 'magic', rarity: 'rare', value: 500, weight: 2, icon: '💎' };
-    return { name: 'Legendary Artifact', category: 'artifact', rarity: 'legendary', value: 2000, weight: 5, icon: '👑' };
-  };
-
-  const loot = generateLoot();
-
   const handleCollect = async () => {
+    if (!loot) return;
     setCollecting(true);
     
     const updates = {
@@ -64,6 +67,7 @@ export default function LootModal({ enemies = [], character, onClose, onCollect 
       inventory: [...(character.inventory || []), ...selectedItems],
     };
 
+    await base44.entities.Character.update(character.id, updates);
     await onCollect(updates, loot);
     setCollected(true);
     setCollecting(false);
@@ -97,7 +101,7 @@ export default function LootModal({ enemies = [], character, onClose, onCollect 
             <div>
               <h2 className="font-fantasy font-bold text-xl" style={{ color: '#f0c040' }}>Loot Collection</h2>
               <p className="text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>
-                {enemies.length} enemy{enemies.length > 1 ? 'ies' : 'y'} defeated
+                {enemies.length} enemy{enemies.length > 1 ? 'ies' : 'y'} defeated{loot?.tier ? ` · ${loot.tier} challenge loot` : ''}
               </p>
             </div>
           </div>
@@ -108,6 +112,21 @@ export default function LootModal({ enemies = [], character, onClose, onCollect 
 
         {/* Content */}
         <div className="p-5 space-y-6">
+          {loadingLoot && (
+            <div className="p-5 rounded-xl text-center" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.15)' }}>
+              <div className="text-sm font-fantasy tracking-widest" style={{ color: '#f0c040' }}>Rolling treasure...</div>
+              <div className="text-xs mt-2" style={{ color: 'rgba(180,140,90,0.55)' }}>Searching the equipment vault for fitting drops.</div>
+            </div>
+          )}
+
+          {lootError && (
+            <div className="p-4 rounded-xl text-sm" style={{ background: 'rgba(90,20,20,0.35)', border: '1px solid rgba(220,80,80,0.3)', color: '#fecaca' }}>
+              {lootError}
+            </div>
+          )}
+
+          {loot && (
+          <>
           {/* Coins */}
           <div className="p-4 rounded-xl" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.15)' }}>
             <div className="flex items-center gap-2 mb-3">
@@ -135,7 +154,7 @@ export default function LootModal({ enemies = [], character, onClose, onCollect 
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="w-5 h-5" style={{ color: '#c4b5fd' }} />
-                <h3 className="font-fantasy text-sm tracking-widest" style={{ color: 'rgba(196,181,253,0.6)' }}>MAGIC ITEMS</h3>
+                <h3 className="font-fantasy text-sm tracking-widest" style={{ color: 'rgba(196,181,253,0.6)' }}>LOOT DROPS</h3>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {loot.items.map((item, idx) => (
@@ -151,14 +170,14 @@ export default function LootModal({ enemies = [], character, onClose, onCollect 
                     onClick={() => toggleItem(item)}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="text-2xl">{item.icon}</div>
+                      <div className="text-2xl">{item.icon || (item.category === 'Weapon' ? '⚔️' : item.category === 'Armor' ? '🛡️' : item.category === 'Potion' ? '🧪' : '🎒')}</div>
                       <div className="flex-1">
                         <div className="font-fantasy text-sm font-bold" style={{ color: '#c4b5fd' }}>{item.name}</div>
                         <div className="text-xs mt-1" style={{ color: 'rgba(180,140,90,0.5)' }}>
-                          {item.rarity} · {item.category}
+                          {item.rarity || 'common'} · {item.category || item.type || 'Item'}
                         </div>
                         <div className="text-xs mt-1" style={{ color: 'rgba(232,213,183,0.6)' }}>
-                          From: {item.source}
+                          From: {item.source || 'the encounter'}
                         </div>
                       </div>
                       {selectedItems.includes(item) && (
@@ -176,7 +195,7 @@ export default function LootModal({ enemies = [], character, onClose, onCollect 
             <div className="flex justify-between items-center">
               <span className="text-sm font-fantasy" style={{ color: 'rgba(201,169,110,0.6)' }}>Total Value:</span>
               <span className="text-xl font-fantasy font-bold" style={{ color: '#fbbf24' }}>
-                {loot.gold + selectedItems.reduce((sum, item) => sum + (item.value || 0), 0)} gp
+                {loot.gold + selectedItems.reduce((sum, item) => sum + (item.value || item.cost || 0), 0)} gp
               </span>
             </div>
           </div>
@@ -184,7 +203,7 @@ export default function LootModal({ enemies = [], character, onClose, onCollect 
           {/* Action Button */}
           <button
             onClick={handleCollect}
-            disabled={collecting || collected}
+            disabled={collecting || collected || !loot}
             className="w-full py-3 rounded-xl font-fantasy font-bold text-sm transition-all"
             style={collected ? {
               background: 'rgba(40,100,60,0.8)',
@@ -197,8 +216,10 @@ export default function LootModal({ enemies = [], character, onClose, onCollect 
               boxShadow: '0 0 20px rgba(201,169,110,0.2)',
             }}
           >
-            {collected ? '✓ Loot Collected' : collecting ? 'Collecting...' : `Collect ${selectedItems.length > 0 ? `${selectedItems.length} Items + ` : ''}${loot.gold} Gold`}
+            {collected ? '✓ Loot Collected' : collecting ? 'Collecting...' : `Collect ${selectedItems.length > 0 ? `${selectedItems.length} Items + ` : ''}${loot?.gold || 0} Gold`}
           </button>
+          </>
+          )}
         </div>
       </motion.div>
     </div>

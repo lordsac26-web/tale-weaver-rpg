@@ -198,8 +198,64 @@ function normalizeMagicItemDrop(item) {
     weight: category === 'Potion' ? 0.5 : 1,
     value: 0,
     is_magic: true,
-    source: 'magic_item_database',
+    source: 'Magic Item Database',
   });
+}
+
+function parseNumber(value, fallback = 0) {
+  const match = String(value ?? '').match(/[\d.]+/);
+  return match ? Number(match[0]) : fallback;
+}
+
+function parseDamageDice(value) {
+  const match = String(value || '').match(/\d+d\d+/i);
+  return match ? match[0].toLowerCase() : null;
+}
+
+function normalizeEquipmentDrop(item) {
+  if (!item?.name) return null;
+  const category = canonicalCategory(item.category) || typeToCategory(item.category, item.name);
+  return normalizeLootItem({
+    name: item.name,
+    type: category,
+    category,
+    rarity: 'common',
+    description: item.description || `${item.category || 'Equipment'} recovered after combat.`,
+    properties: item.properties || [],
+    damage_dice: parseDamageDice(item.damage),
+    damage_type: item.damage_type || null,
+    armor_class: item.armor_class || null,
+    weight: parseNumber(item.weight, category === 'Potion' ? 0.5 : 1),
+    value: parseNumber(item.cost, 0),
+    cost: parseNumber(item.cost, 0),
+    cost_unit: String(item.cost || '').toLowerCase().includes('sp') ? 'sp' : String(item.cost || '').toLowerCase().includes('cp') ? 'cp' : 'gp',
+    is_magic: false,
+    source: 'Equipment Database',
+    equipment_id: item.id,
+  });
+}
+
+function equipmentAllowedForTier(item, tier) {
+  const value = item.cost || item.value || 0;
+  const category = item.category || '';
+  if (tier === 'trivial') return value <= 50 || ['Tool', 'Adventuring Gear', 'Ammunition'].includes(category);
+  if (tier === 'low') return value <= 250 || ['Weapon', 'Armor', 'Shield', 'Tool', 'Adventuring Gear'].includes(category);
+  if (tier === 'medium') return value <= 1000 || ['Weapon', 'Armor', 'Shield'].includes(category);
+  return true;
+}
+
+async function getEquipmentDropPool(base44, tier, charClass) {
+  const records = await base44.asServiceRole.entities.Equipment.filter({}, 'name', 200);
+  const normalized = (records || []).map(normalizeEquipmentDrop).filter(Boolean);
+  const tierPool = normalized.filter(item => equipmentAllowedForTier(item, tier));
+  const pool = tierPool.length > 0 ? tierPool : normalized;
+  const keywords = LOOT_TABLES.classAffinity[(charClass || '').toLowerCase()] || [];
+  if (!keywords.length) return pool;
+  const classMatches = pool.filter(item => {
+    const hay = `${item.name} ${item.category || ''} ${item.description || ''}`.toLowerCase();
+    return keywords.some(keyword => hay.includes(keyword));
+  });
+  return classMatches.length >= 3 ? [...classMatches, ...pool] : pool;
 }
 
 async function pickMagicItemFromDatabase(base44, rarity, charClass) {
@@ -208,8 +264,9 @@ async function pickMagicItemFromDatabase(base44, rarity, charClass) {
   return normalizeMagicItemDrop(pickItemForClass(pool, charClass));
 }
 
-function generateItems(tier, level, enemyType = 'humanoid', cr = null, charClass = null) {
+async function generateItems(base44, tier, level, enemyType = 'humanoid', cr = null, charClass = null) {
   const items = [];
+  const equipmentPool = await getEquipmentDropPool(base44, tier, charClass);
   // Use CR to determine item count if available
   const effectiveLevel = cr ? Math.ceil(parseFloat(cr) * 2.5) : level;
   const itemCount = effectiveLevel <= 4 ? 1 : effectiveLevel <= 10 ? rollDice(1, 3) : effectiveLevel <= 16 ? rollDice(1, 4) : rollDice(2, 3);
@@ -227,11 +284,17 @@ function generateItems(tier, level, enemyType = 'humanoid', cr = null, charClass
     });
   }
 
-  // Generate random items based on tier
+  // Generate random items based on tier, preferring the Equipment database.
   for (let i = 0; i < itemCount; i++) {
     const roll = Math.random();
-    let pool;
 
+    if (equipmentPool.length > 0 && (i === 0 || roll < 0.75)) {
+      const equipment = pickItemForClass(equipmentPool, charClass);
+      items.push({ ...equipment, quantity: equipment.category === 'Ammunition' ? rollDice(1, 4) * 5 : 1 });
+      continue;
+    }
+
+    let pool;
     if (tier === 'trivial' || tier === 'low') {
       pool = roll < 0.9 ? LOOT_TABLES.commonItems : LOOT_TABLES.uncommonItems;
     } else if (tier === 'medium') {
@@ -243,7 +306,7 @@ function generateItems(tier, level, enemyType = 'humanoid', cr = null, charClass
     }
 
     const item = pickItemForClass(pool, charClass);
-    items.push({ ...item, quantity: item.type === 'consumable' ? rollDice(1, 3) : 1 });
+    items.push({ ...item, quantity: item.type === 'consumable' ? rollDice(1, 3) : 1, source: 'Loot Table' });
   }
 
   return items;
@@ -266,7 +329,7 @@ Deno.serve(async (req) => {
 
     // Generate loot
     const coins = generateCoins(tier, effectiveEnemyType);
-    const items = generateItems(tier, level || 1, effectiveEnemyType, enemy_cr, character_class)
+    const items = (await generateItems(base44, tier, level || 1, effectiveEnemyType, enemy_cr, character_class))
       .map(normalizeLootItem)
       .filter(Boolean);
 
