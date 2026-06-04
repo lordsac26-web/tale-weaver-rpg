@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PROFICIENCY_BY_LEVEL } from './gameData';
 import { FEATS as FEAT_LIST, canTakeFeat, CATEGORY_COLORS } from './featData';
 import { computeFeatEffects, getFeatEffectSummary } from './featEffects';
+import FeatChoiceControls from '@/components/creation/FeatChoiceControls';
+import { hasFeatChoicesComplete } from './featChoiceConfig';
 
 // ASI/Feat levels: 4, 8, 12, 16, 19 (Fighter gets extra at 6, 14)
 const getASILevels = (charClass) => {
@@ -32,6 +34,7 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
   const [activeCategory, setActiveCategory] = useState('all');
   const [selectedUpgrade, setSelectedUpgrade] = useState(null);
   const [processingUpgrade, setProcessingUpgrade] = useState(false);
+  const [featDraftCharacter, setFeatDraftCharacter] = useState(null);
 
   const charLevel = character?.level || 1;
   const charClass = character?.class || '';
@@ -62,12 +65,15 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
 
   const handlePurchaseFeat = async (featName, feat) => {
     if (availablePoints < 1) return;
+    const sourceCharacter = featDraftCharacter || character;
+    if (feat?.asi_choices && !sourceCharacter.feat_stat_choices?.[featName]) return;
+    if (!hasFeatChoicesComplete(featName, sourceCharacter)) return;
     setProcessingUpgrade(true);
 
     // Use the centralized feat effects engine
     const newFeats = [...takenFeats, featName];
-    const effectUpdates = computeFeatEffects(character, [featName], {});
-    const updates = { feats: newFeats, ...effectUpdates };
+    const effectUpdates = computeFeatEffects(sourceCharacter, [featName], sourceCharacter.feat_stat_choices || {});
+    const updates = { feats: newFeats, class_choices: sourceCharacter.class_choices, ...effectUpdates };
 
     // Apply feat AC bonus directly to armor_class
     if (updates._feat_ac_bonus) {
@@ -77,6 +83,7 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
 
     await onUpdate(updates);
     setSelectedUpgrade(null);
+    setFeatDraftCharacter(null);
     setProcessingUpgrade(false);
   };
 
@@ -102,6 +109,7 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
 
     await onUpdate(updates);
     setSelectedUpgrade(null);
+    setFeatDraftCharacter(null);
     setProcessingUpgrade(false);
   };
 
@@ -183,7 +191,11 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
               animate={{ opacity: 1, y: 0 }}
               className="p-4 rounded-xl cursor-pointer transition-all border"
               style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.15)' }}
-              onClick={() => availablePoints >= 1 && setSelectedUpgrade({ type: 'feat', name, data: feat })}
+              onClick={() => {
+                if (availablePoints < 1) return;
+                setFeatDraftCharacter({ ...character, feat_stat_choices: {}, class_choices: { ...(character.class_choices || {}) } });
+                setSelectedUpgrade({ type: 'feat', name, data: feat });
+              }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.35)'; e.currentTarget.style.background = 'rgba(30,18,7,0.6)'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(180,140,90,0.15)'; e.currentTarget.style.background = 'rgba(20,13,5,0.5)'; }}>
               <div className="flex items-start gap-3">
@@ -356,14 +368,42 @@ export default function CharacterGrowthTab({ character, onUpdate }) {
                     </div>
                   )}
 
+                  {selectedUpgrade.data.asi_choices && (
+                    <div className="mb-4 p-3 rounded-xl" style={{ background: 'rgba(80,50,10,0.25)', border: '1px solid rgba(201,169,110,0.22)' }}>
+                      <div className="text-xs font-fantasy mb-2" style={{ color: '#f0c040' }}>Choose ability score increase</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {selectedUpgrade.data.asi_choices.map(stat => (
+                          <button key={stat}
+                            onClick={() => setFeatDraftCharacter(prev => ({ ...prev, feat_stat_choices: { ...(prev?.feat_stat_choices || {}), [selectedUpgrade.name]: stat } }))}
+                            className="px-2 py-1 rounded text-xs"
+                            style={(featDraftCharacter?.feat_stat_choices || {})[selectedUpgrade.name] === stat ? {
+                              background: 'rgba(180,110,20,0.85)', color: '#fff'
+                            } : {
+                              background: 'rgba(20,13,5,0.7)', color: 'rgba(232,213,183,0.75)'
+                            }}>
+                            +1 {stat.slice(0, 3).toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mb-4">
+                    <FeatChoiceControls
+                      featName={selectedUpgrade.name}
+                      character={featDraftCharacter || character}
+                      set={(key, value) => setFeatDraftCharacter(prev => ({ ...(prev || character), [key]: value }))}
+                    />
+                  </div>
+
                   <div className="flex gap-2">
-                    <button onClick={() => setSelectedUpgrade(null)} disabled={processingUpgrade}
+                    <button onClick={() => { setSelectedUpgrade(null); setFeatDraftCharacter(null); }} disabled={processingUpgrade}
                       className="flex-1 py-2 rounded-lg text-sm font-fantasy"
                       style={{ background: 'rgba(20,13,5,0.7)', border: '1px solid rgba(180,140,90,0.2)', color: 'rgba(201,169,110,0.6)' }}>
                       Cancel
                     </button>
                     <button onClick={() => handlePurchaseFeat(selectedUpgrade.name, selectedUpgrade.data)}
-                      disabled={processingUpgrade || availablePoints < 1}
+                      disabled={processingUpgrade || availablePoints < 1 || (selectedUpgrade.data.asi_choices && !(featDraftCharacter?.feat_stat_choices || {})[selectedUpgrade.name]) || !hasFeatChoicesComplete(selectedUpgrade.name, featDraftCharacter || character)}
                       className="flex-1 py-2 rounded-lg text-sm font-fantasy btn-fantasy disabled:opacity-50 flex items-center justify-center gap-2">
                       {processingUpgrade ? <Zap className="w-4 h-4 animate-pulse" /> : <Star className="w-4 h-4" />}
                       {processingUpgrade ? 'Acquiring...' : 'Acquire (1 pt)'}

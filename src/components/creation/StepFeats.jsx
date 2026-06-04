@@ -3,6 +3,8 @@ import { Check, ChevronDown, ChevronUp, Search, Info, Lock, X } from 'lucide-rea
 import { base44 } from '@/api/base44Client';
 import { FEATS, FEAT_CATEGORIES, CATEGORY_COLORS, canTakeFeat, meetsPrerequisite, meetsRaceReq, meetsCasterReq } from '@/components/game/featData';
 import { getFeatEffectSummary } from '@/components/game/featEffects';
+import FeatChoiceControls from '@/components/creation/FeatChoiceControls';
+import { hasFeatChoicesComplete } from '@/components/game/featChoiceConfig';
 import { CLASSES } from '@/components/game/gameData';
 
 // Merge the curated FEATS (which carry engine metadata: stat_req, asi_choices, race_req,
@@ -77,17 +79,38 @@ export default function StepFeats({ character, set }) {
   const selectedFeats = character.feats || [];
   const maxFeats = getMaxFeats(character);
 
+  useEffect(() => {
+    const complete = selectedFeats.every(name => {
+      const feat = allFeats.find(f => f.name === name);
+      if (feat?.asi_choices && !character.feat_stat_choices?.[name]) return false;
+      return hasFeatChoicesComplete(name, character);
+    });
+    if (character._feat_choices_complete !== complete) set('_feat_choices_complete', complete);
+  }, [selectedFeats, allFeats, character.class_choices, character.feat_stat_choices, character._feat_choices_complete]);
+
   const toggle = (featName) => {
     const current = [...selectedFeats];
     const idx = current.indexOf(featName);
     if (idx !== -1) {
       current.splice(idx, 1);
-      // Remove associated stat choice
+      // Remove associated feat choices
       const choices = { ...character.feat_stat_choices };
       delete choices[featName];
       set('feat_stat_choices', choices);
+
+      const classChoices = { ...(character.class_choices || {}) };
+      if (classChoices.feat_spell_choices?.[featName]) {
+        classChoices.feat_spell_choices = { ...classChoices.feat_spell_choices };
+        delete classChoices.feat_spell_choices[featName];
+      }
+      if (classChoices.feat_skill_choices?.[featName]) {
+        classChoices.feat_skill_choices = { ...classChoices.feat_skill_choices };
+        delete classChoices.feat_skill_choices[featName];
+      }
+      set('class_choices', classChoices);
     } else if (current.length < maxFeats) {
       current.push(featName);
+      setExpanded(featName);
     }
     set('feats', current);
   };
@@ -265,6 +288,12 @@ export default function StepFeats({ character, set }) {
                           </button>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  {isSelected && <FeatChoiceControls featName={feat.name} character={character} set={set} />}
+                  {isSelected && !hasFeatChoicesComplete(feat.name, character) && (
+                    <div className="text-xs text-purple-300/80 bg-purple-950/20 border border-purple-700/30 rounded-lg px-3 py-2">
+                      Finish this feat's choices before continuing.
                     </div>
                   )}
                   {feat.tags && (

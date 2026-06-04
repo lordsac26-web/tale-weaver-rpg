@@ -131,7 +131,7 @@ export default function CharacterCreation() {
       armorClass = Math.max(armorClass, 10 + dexMod + conMod);
     }
 
-    // Racial Natural Armor — always an option, pick highest
+    // Racial / feat Natural Armor — always an option, pick highest
     if (char.race === 'Tortle') {
       armorClass = Math.max(armorClass, 17);
     } else if (char.race === 'Lizardfolk') {
@@ -139,6 +139,14 @@ export default function CharacterCreation() {
     } else if (char.race === 'Warforged') {
       armorClass = Math.max(armorClass, 11 + dexMod);
     }
+    if ((char.feats || []).includes('Dragon Hide')) {
+      armorClass = Math.max(armorClass, 13 + dexMod);
+    }
+
+    const hasFeat = (name) => (char.feats || []).includes(name);
+    const featHpBonus = hasFeat('Tough') ? 2 * totalLevel : 0;
+    const featInitiativeBonus = hasFeat('Alert') ? 5 : 0;
+    const featSpeedBonus = (hasFeat('Mobile') ? 10 : 0) + (hasFeat('Squat Nimbleness') ? 5 : 0);
  
     // ── Saving Throw Proficiencies ─────────────────────────────────────────
     // Write class saving throw proficiencies so CharacterSheetFull can read
@@ -147,14 +155,15 @@ export default function CharacterCreation() {
     const ALL_STATS = ['strength','dexterity','constitution','intelligence','wisdom','charisma'];
     const saving_throws = {};
     ALL_STATS.forEach(s => { saving_throws[s] = classSaves.includes(s); });
+    Object.assign(saving_throws, char.saving_throws || {});
  
     return {
       ...char,
-      hp_max: hp,
-      hp_current: hp,
+      hp_max: hp + featHpBonus,
+      hp_current: hp + featHpBonus,
       armor_class: armorClass,
-      initiative: dexMod,
-      speed: RACES[char.race]?.speed || 30,
+      initiative: dexMod + featInitiativeBonus,
+      speed: (RACES[char.race]?.speed || 30) + featSpeedBonus,
       proficiency_bonus: profBonus,
       saving_throws,
     };
@@ -162,9 +171,11 @@ export default function CharacterCreation() {
  
   const buildClassFeatures = (char) => {
     const classData = CLASSES[char.class];
-    const features = [];
+    const features = [...(char.features || [])];
     Object.entries(classData?.features || {}).forEach(([lvl, feats]) => {
-      if (parseInt(lvl) <= (char.level || 1)) feats.forEach(f => features.push(f));
+      if (parseInt(lvl) <= (char.level || 1)) feats.forEach(f => {
+        if (!features.includes(f)) features.push(f);
+      });
     });
     return { ...char, features };
   };
@@ -311,6 +322,7 @@ export default function CharacterCreation() {
     delete finalChar._gear_customized;
     delete finalChar.chosen_stat_bonuses;
     delete finalChar.feat_stat_choices;
+    delete finalChar._feat_choices_complete;
     delete finalChar._feat_ac_bonus;
     delete finalChar._feat_flags;
     const saved = await base44.entities.Character.create(finalChar);
@@ -343,7 +355,7 @@ export default function CharacterCreation() {
       case 7: return true; // portrait is optional
       case 8: return !!character.backstory;
       case 9: return true; // equipment
-      case 10: return true; // feats
+      case 10: return character._feat_choices_complete !== false; // feats
       case 11: return true;
       default: return true;
     }

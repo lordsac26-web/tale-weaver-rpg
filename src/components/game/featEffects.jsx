@@ -10,6 +10,7 @@
  */
 
 import { FEATS } from './featData';
+import { SPELL_FEAT_CONFIG, SKILL_FEAT_CONFIG } from './featChoiceConfig';
 
 // ─── Static effect map for feats that grant automatic mechanical bonuses ─────
 // Keys match feat names from featData.js exactly.
@@ -40,6 +41,7 @@ export const FEAT_EFFECTS = {
 
   // ── Speed bonuses ──
   'Mobile':              { speed: 10 },
+  'Squat Nimbleness':    { speed: 5 },
 
   // ── Saving throw proficiency (choice-based — via Resilient) ──
   // Resilient's +1 stat and save prof are handled in applyFeatStatChoices()
@@ -84,10 +86,16 @@ export function computeFeatEffects(character, featNames, featStatChoices = {}) {
   let luckPoints = 0;
   const extraSaveProfs = {};
   const flags = [];
+  const knownSpells = new Set(character.spells_known || []);
+  const preparedSpells = new Set(character.spells_prepared || []);
+  const features = new Set(character.features || []);
+  const skills = { ...(character.skills || {}) };
+  const featSpellChoices = character.class_choices?.feat_spell_choices || {};
+  const featSkillChoices = character.class_choices?.feat_skill_choices || {};
+  const resistances = new Set(character.resistances || []);
 
   for (const featName of featNames) {
-    const feat = FEATS.find(f => f.name === featName);
-    if (!feat) continue;
+    const feat = FEATS.find(f => f.name === featName) || { name: featName };
 
     // 1) Fixed stat bonuses from asi_bonus in featData
     if (feat.asi_bonus) {
@@ -128,6 +136,43 @@ export function computeFeatEffects(character, featNames, featStatChoices = {}) {
       // Lucky feat: grant luck points (PHB p.167)
       if (effect.luck_points) luckPoints += effect.luck_points;
     }
+
+    // 5) Feats with spell choices (Magic Initiate, Mystical Talent, etc.)
+    if (SPELL_FEAT_CONFIG[featName]) {
+      const choice = featSpellChoices[featName];
+      if (choice?.className) {
+        (choice.cantrips || []).forEach(spell => knownSpells.add(spell));
+        (choice.spells || []).forEach(spell => {
+          knownSpells.add(spell);
+          preparedSpells.add(spell);
+        });
+        features.add(`${featName}: ${choice.className} spell list`);
+      }
+    }
+
+    // 6) Feats with skill choices
+    if (SKILL_FEAT_CONFIG[featName]) {
+      const chosenSkills = featSkillChoices[featName]?.skills || [];
+      chosenSkills.forEach(skill => {
+        if (featName === 'Prodigy' && (skills[skill] === 'proficient' || skills[skill] === true)) skills[skill] = 'expert';
+        else if (!skills[skill]) skills[skill] = 'proficient';
+      });
+    }
+
+    // 7) Fixed feat properties not covered by numeric bonuses
+    if (featName === 'Infernal Constitution') {
+      resistances.add('cold');
+      resistances.add('poison');
+    }
+    if (featName === 'Dragon Hide') features.add('Dragon Hide Natural Armor (AC 13 + DEX)');
+    if (featName === 'Heavily Armored') features.add('Heavy Armor Proficiency');
+    if (featName === 'Lightly Armored') features.add('Light Armor Proficiency');
+    if (featName === 'Moderately Armored') features.add('Medium Armor and Shield Proficiency');
+    if (featName === 'Weapon Master') features.add('Weapon Master: four weapon proficiencies');
+    if (featName === 'Martial Adept') features.add('Martial Adept: two maneuvers and one superiority die (d6)');
+    if (featName === 'Drow High Magic') ['Detect Magic', 'Levitate', 'Dispel Magic'].forEach(spell => knownSpells.add(spell));
+    if (featName === 'Fey Teleportation') knownSpells.add('Misty Step');
+    if (featName === 'Wood Elf Magic') ['Druidcraft', 'Longstrider', 'Pass without Trace'].forEach(spell => knownSpells.add(spell));
   }
 
   // Apply stat bonuses (cap at 20 per D&D rules)
@@ -173,6 +218,22 @@ export function computeFeatEffects(character, featNames, featStatChoices = {}) {
   if (luckPoints > 0) {
     updates.luck_points_max = luckPoints;
     updates.luck_points_remaining = luckPoints;
+  }
+
+  if (knownSpells.size > (character.spells_known || []).length) {
+    updates.spells_known = Array.from(knownSpells);
+  }
+  if (preparedSpells.size > (character.spells_prepared || []).length) {
+    updates.spells_prepared = Array.from(preparedSpells);
+  }
+  if (Object.keys(skills).length !== Object.keys(character.skills || {}).length || Object.entries(skills).some(([k, v]) => character.skills?.[k] !== v)) {
+    updates.skills = skills;
+  }
+  if (features.size > (character.features || []).length) {
+    updates.features = Array.from(features);
+  }
+  if (resistances.size > (character.resistances || []).length) {
+    updates.resistances = Array.from(resistances);
   }
 
   return updates;
