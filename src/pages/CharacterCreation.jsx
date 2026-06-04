@@ -352,7 +352,13 @@ export default function CharacterCreation() {
       case 2: {
         const validRange = STATS.every(s => character[s] >= 3 && character[s] <= 20);
         if (character._stats_method === 'standard') {
-          return validRange && character._standard_complete === true;
+          // Robust check: the six stats must exactly match the standard array
+          // (15,14,13,12,10,8), so completion survives even if the transient
+          // assignment flag is lost on remount.
+          const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
+          const assigned = STATS.map(s => character[s]).sort((a, b) => b - a);
+          const matchesArray = STANDARD_ARRAY.every((v, i) => assigned[i] === v);
+          return validRange && (character._standard_complete === true || matchesArray);
         }
         return validRange;
       }
