@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ShoppingBag, Store, Coins } from 'lucide-react';
 import VendorCard from '@/components/shop/VendorCard';
 import VendorShop from '@/components/shop/VendorShop';
+import MagicItemMarket from '@/components/shop/MagicItemMarket';
 import { AnimatePresence } from 'framer-motion';
 
 export default function Market() {
@@ -98,6 +99,13 @@ export default function Market() {
                 />
               ))}
             </div>
+          )}
+
+          {character && (
+            <MagicItemMarket
+              character={character}
+              onTransaction={handleTransaction}
+            />
           )}
         </div>
       </div>
