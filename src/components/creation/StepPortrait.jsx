@@ -24,22 +24,35 @@ export default function StepPortrait({ character, set }) {
     const gender = character.gender || 'person';
     const race = character.race || 'human';
     const cls = character.class || 'adventurer';
-    const customPart = prompt.trim() ? `, ${prompt.trim()}` : '';
-    return `Character portrait of a ${gender} ${race} ${cls}${customPart}, ${style}, fantasy RPG character art, dramatic pose, full focus on face and upper body, highly detailed armor and clothing, professional artwork`;
+    const safeDetails = prompt
+      .trim()
+      .replace(/\b(bloody|blood-covered|gore|gory|wounded|injured|corpse|dead body)\b/gi, 'battle-worn')
+      .replace(/\bafter a battle\b/gi, 'after a long journey');
+    const customPart = safeDetails ? `, ${safeDetails}` : '';
+    return `Safe non-graphic fantasy character portrait of a ${gender} ${race} ${cls}${customPart}, ${style}, fantasy RPG character art, dramatic heroic pose, full focus on face and upper body, detailed armor and clothing, no gore, no blood, no visible injuries, professional artwork`;
   };
 
   const handleGenerate = async () => {
     setGenerating(true);
     setError(null);
     const fullPrompt = buildFullPrompt();
-    const result = await base44.integrations.Core.GenerateImage({ prompt: fullPrompt });
-    if (result?.url) {
-      setGeneratedUrl(result.url);
-      set('portrait', result.url);
-    } else {
-      setError('Generation failed. Please try again.');
+
+    try {
+      const result = await base44.integrations.Core.GenerateImage({ prompt: fullPrompt });
+      if (result?.url) {
+        setGeneratedUrl(result.url);
+        set('portrait', result.url);
+      } else {
+        setError('Generation failed. Please try again with a simpler portrait description.');
+      }
+    } catch (err) {
+      const blocked = /filtered out|usage guidelines|violated/i.test(err?.message || '');
+      setError(blocked
+        ? 'That portrait idea was blocked by the image safety filter. Try describing clothing, pose, colors, and mood without wounds, gore, or battle aftermath.'
+        : 'Portrait generation failed. Please try again in a moment.');
+    } finally {
+      setGenerating(false);
     }
-    setGenerating(false);
   };
 
   const handleDownload = async () => {
@@ -94,7 +107,11 @@ export default function StepPortrait({ character, set }) {
             {generating ? 'Painting your hero...' : generatedUrl ? 'Regenerate Portrait' : 'Generate Portrait'}
           </Button>
 
-          {error && <p className="text-red-400 text-sm">{error}</p>}
+          {error && (
+            <div className="rounded-lg border border-red-700/40 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+              {error}
+            </div>
+          )}
 
           <p className="text-slate-600 text-xs">Portrait generation is optional — you can skip this step.</p>
         </div>
