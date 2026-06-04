@@ -62,6 +62,25 @@ export default function StepAbilityScores({ character, set }) {
     set('_standard_complete', Object.keys(newAssigned).length === 6);
   };
 
+  // One-click fill: assigns the standard array to the class's most useful stats.
+  // Highest value goes to the class primary stat, then CON, then the rest.
+  const autoAssignStandard = () => {
+    const primary = CLASSES[character.class]?.primary_stat;
+    const priority = [
+      primary,
+      'constitution',
+      ...STATS.filter(s => s !== primary && s !== 'constitution'),
+    ].filter(Boolean);
+    const newAssigned = {};
+    priority.forEach((stat, i) => {
+      newAssigned[stat] = i;
+      set(stat, STANDARD_ARRAY[i]);
+    });
+    setStandardAssigned(newAssigned);
+    set('_stats_method', 'standard');
+    set('_standard_complete', true);
+  };
+
   // Get racial bonuses including subrace
   const getRacialBonuses = () => {
     const race = RACES[character.race];
@@ -151,6 +170,10 @@ export default function StepAbilityScores({ character, set }) {
           ) : (
             <span className="text-amber-400/70 text-xs ml-auto">Assign all 6 values to continue</span>
           )}
+          <button onClick={autoAssignStandard}
+            className="text-xs bg-amber-700/60 hover:bg-amber-600 border border-amber-600/50 text-amber-100 px-3 py-1 rounded-lg transition-all flex items-center gap-1 w-full sm:w-auto justify-center mt-2 sm:mt-0">
+            <RefreshCw className="w-3 h-3" /> Auto-assign
+          </button>
         </div>
       )}
 
