@@ -325,6 +325,8 @@ export default function CharacterCreation() {
     delete finalChar._feat_choices_complete;
     delete finalChar._feat_ac_bonus;
     delete finalChar._feat_flags;
+    delete finalChar._stats_method;
+    delete finalChar._standard_complete;
     const saved = await base44.entities.Character.create(finalChar);
     navigate(`/NewGame?character_id=${saved.id}`);
   };
@@ -347,7 +349,13 @@ export default function CharacterCreation() {
         return chosenStats.length === statChoicesNeeded;
       }
       case 1: return !!character.class && !!character.name;
-      case 2: return STATS.every(s => character[s] >= 3 && character[s] <= 20);
+      case 2: {
+        const validRange = STATS.every(s => character[s] >= 3 && character[s] <= 20);
+        if (character._stats_method === 'standard') {
+          return validRange && character._standard_complete === true;
+        }
+        return validRange;
+      }
       case 3: return true; // subclass (optional / level-gated)
       case 4: return true; // skills
       case 5: return true; // class choices (optional selections)

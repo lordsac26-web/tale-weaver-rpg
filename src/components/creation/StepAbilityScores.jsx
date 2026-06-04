@@ -58,6 +58,8 @@ export default function StepAbilityScores({ character, set }) {
     const newAssigned = { ...standardAssigned, [stat]: idx };
     setStandardAssigned(newAssigned);
     set(stat, STANDARD_ARRAY[idx]);
+    set('_stats_method', 'standard');
+    set('_standard_complete', Object.keys(newAssigned).length === 6);
   };
 
   // Get racial bonuses including subrace
@@ -101,8 +103,10 @@ export default function StepAbilityScores({ character, set }) {
           <button key={id}
             onClick={() => {
               setMethod(id);
-              if (id === 'pointbuy') STATS.forEach(s => set(s, 8));
-              else if (id === 'standard') { setStandardAssigned({}); STATS.forEach(s => set(s, 8)); }
+              set('_stats_method', id);
+              if (id === 'pointbuy') { STATS.forEach(s => set(s, 8)); set('_standard_complete', true); }
+              else if (id === 'standard') { setStandardAssigned({}); STATS.forEach(s => set(s, 8)); set('_standard_complete', false); }
+              else { set('_standard_complete', true); }
             }}
             className={`p-3 rounded-xl border text-left transition-all ${method === id ? 'border-amber-500 bg-amber-900/20 text-amber-200' : 'border-slate-700/50 text-slate-400 hover:border-amber-700/50'}`}>
             <div className="text-lg mb-1">{icon}</div>
