@@ -19,6 +19,7 @@ import CombatSpellSlotBar from './CombatSpellSlotBar';
 import { getActionsPerTurn } from './combatActionEconomy';
 import CombatActionBar from './CombatActionBar';
 import CombatPlayerStatus from './CombatPlayerStatus';
+import CombatStatusDashboard from './CombatStatusDashboard';
 
 export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent, onCharacterUpdate }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
@@ -310,6 +311,16 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
           {isPlayerTurn ? (
             <div className="p-3 space-y-2"
               style={{ borderTop: '1px solid rgba(200,70,60,0.3)', background: 'rgba(28,12,10,0.9)' }}>
+
+              {/* Status trends dashboard */}
+              <CombatStatusDashboard
+                combat={combat}
+                character={character}
+                actionsRemaining={actionsRemaining}
+                actionsPerTurn={actionsPerTurn}
+                bonusActionUsed={world_state?.bonus_action_used || false}
+                reactionUsed={world_state?.reaction_used || false}
+              />
 
               {/* Player Status */}
               <CombatPlayerStatus character={character} combat={combat} />
