@@ -146,8 +146,10 @@ export default function StepAbilityScores({ character, set }) {
             !Object.values(standardAssigned).includes(i) &&
             <span key={i} className="bg-amber-900/40 border border-amber-700/40 text-amber-300 font-bold px-3 py-1 rounded-lg text-sm">{val}</span>
           )}
-          {Object.keys(standardAssigned).length === 6 && (
+          {Object.keys(standardAssigned).length === 6 ? (
             <span className="text-green-400 text-xs ml-auto">✓ All assigned</span>
+          ) : (
+            <span className="text-amber-400/70 text-xs ml-auto">Assign all 6 values to continue</span>
           )}
         </div>
       )}
