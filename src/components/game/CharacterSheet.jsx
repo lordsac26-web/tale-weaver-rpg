@@ -10,6 +10,7 @@ import SkillProficiencyRow from './SkillProficiencyRow';
 import StatBreakdownTooltip from './StatBreakdownTooltip';
 import SubclassSection from './SubclassSection';
 import AlignmentRadar from './AlignmentRadar';
+import XPBar from './XPBar';
 import {
   characterHasSpellcasting,
   getClassFeatureSections,
@@ -196,6 +197,10 @@ function QuickStatsBar({ character }) {
 function StatsTab({ character, profBonus }) {
   return (
     <div>
+      {/* Level progression — auto-updates as XP is awarded after encounters */}
+      <div className="mb-4 rounded-xl p-3" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.12)' }}>
+        <XPBar character={character} />
+      </div>
       <div className="grid grid-cols-3 gap-2.5 mb-3">
         {STATS.map(stat => {
           const val = character[stat] || 10;
