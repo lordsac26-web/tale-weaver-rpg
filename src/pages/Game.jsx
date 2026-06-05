@@ -22,6 +22,7 @@ import CompanionPanel from '@/components/game/CompanionPanel';
 import RestModal from '@/components/game/RestModal';
 import GameToolbar from '@/components/game/GameToolbar';
 import CampaignJournal from '@/components/game/CampaignJournal';
+import { stopAllNarration } from '@/components/game/narrationControl';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -109,6 +110,18 @@ export default function Game() {
   }, [sessionId]);
 
   useEffect(() => { loadState(); }, [sessionId]);
+
+  // Stop narration the moment the player leaves the Game screen — covers the
+  // back button, in-app navigation, and closing/refreshing the browser tab.
+  // This is a safety net on top of StoryPanel's own cleanup so audio never
+  // keeps playing after the campaign window closes.
+  useEffect(() => {
+    window.addEventListener('beforeunload', stopAllNarration);
+    return () => {
+      stopAllNarration();
+      window.removeEventListener('beforeunload', stopAllNarration);
+    };
+  }, []);
 
   // Listen for HUD quick-rest button event (Suggestion #7)
   useEffect(() => {

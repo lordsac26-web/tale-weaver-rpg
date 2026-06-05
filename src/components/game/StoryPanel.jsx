@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Loader2, Scroll, Feather, Volume2, VolumeX, Pause, Play, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SkillCheckResult from './SkillCheckResult';
+import { stopAllNarration } from './narrationControl';
 import { base44 } from '@/api/base44Client';
  
 const RISK_STYLES = {
@@ -48,8 +49,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     return () => {
       cancelledRef.current = true;
       currentUtterance.current = null;
-      window.speechSynthesis.cancel();
-      setTimeout(() => window.speechSynthesis.cancel(), 0);
+      stopAllNarration();
     };
   }, []);
 
