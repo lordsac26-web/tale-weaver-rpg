@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Loader2, Scroll, Feather, Volume2, VolumeX, Pause, Play, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SkillCheckResult from './SkillCheckResult';
+import MicButton from './MicButton';
 import { stopAllNarration } from './narrationControl';
 import { base44 } from '@/api/base44Client';
  
@@ -575,6 +576,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                 style={{ fontFamily: 'EB Garamond, serif', fontSize: '1rem' }}
               />
             </div>
+            <MicButton value={customInput} onTranscript={setCustomInput} disabled={loading} />
             <button onClick={onCustomSubmit} disabled={!customInput.trim()}
               className="px-5 py-2.5 rounded-xl text-sm btn-fantasy disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ fontSize: '0.85rem', letterSpacing: '0.05em' }}>
