@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 
 import { Link } from 'react-router-dom';
-import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked, Loader2 } from 'lucide-react';
+import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked, Loader2, Swords } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import CharacterSheet from '@/components/game/CharacterSheet';
@@ -517,7 +517,32 @@ function SessionCard({ session, characters }) {
   const canResume = char && char.hp_current > 0;
   const LinkOrDiv = canResume ? Link : 'div';
   const linkProps = canResume ? { to: `/Game?session_id=${session.id}` } : {};
-  
+
+  // For in-combat sessions, pull the live combat round/turn from the persisted
+  // CombatLog so we can tell the player exactly where they'll resume. The Game
+  // page already restores this exact state on load via loadState().
+  const [combatInfo, setCombatInfo] = useState(null);
+  useEffect(() => {
+    if (!session.in_combat || !session.combat_state?.combat_id || !canResume) {
+      setCombatInfo(null);
+      return;
+    }
+    let cancelled = false;
+    base44.entities.CombatLog
+      .filter({ id: session.combat_state.combat_id })
+      .then(logs => {
+        const log = logs[0];
+        if (cancelled || !log?.is_active) return;
+        const current = (log.combatants || [])[log.current_turn_index];
+        setCombatInfo({
+          round: log.round || 1,
+          turnName: current?.name || null,
+          isPlayerTurn: current?.type === 'player',
+        });
+      });
+    return () => { cancelled = true; };
+  }, [session.in_combat, session.combat_state?.combat_id, canResume]);
+
   const handleDeleteSession = async (e) => {
     e.stopPropagation();
     if (confirm(`Delete campaign "${session.title || 'Unnamed Campaign'}" permanently? This cannot be undone.`)) {
@@ -565,6 +590,26 @@ function SessionCard({ session, characters }) {
               <p className="text-xs font-body" style={{ color: 'rgba(185,160,225,0.8)' }}>
                 {[session.season, session.time_of_day].filter(Boolean).join(' · ')}
               </p>
+            )}
+
+            {/* Resume Combat — surfaced only for active fights, shows the exact
+                saved round + whose turn it is, then drops you back into it. */}
+            {canResume && session.in_combat && combatInfo && (
+              <Link to={`/Game?session_id=${session.id}`} onClick={e => e.stopPropagation()} className="block pt-1">
+                <button
+                  className="w-full py-2 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-2 combat-active"
+                  style={{ background: 'rgba(80,5,5,0.6)', border: '1px solid rgba(200,60,40,0.45)', color: '#fca5a5' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(110,8,8,0.75)'; e.currentTarget.style.borderColor = 'rgba(240,80,50,0.65)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(80,5,5,0.6)'; e.currentTarget.style.borderColor = 'rgba(200,60,40,0.45)'; }}>
+                  <Swords className="w-3.5 h-3.5" />
+                  Resume Combat — Round {combatInfo.round}
+                  {combatInfo.turnName && (
+                    <span style={{ color: 'rgba(252,165,165,0.7)' }}>
+                      · {combatInfo.isPlayerTurn ? 'Your turn' : `${combatInfo.turnName}'s turn`}
+                    </span>
+                  )}
+                </button>
+              </Link>
             )}
           </div>
         </motion.div>
