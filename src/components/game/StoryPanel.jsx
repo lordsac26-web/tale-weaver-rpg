@@ -68,12 +68,17 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     }
   }, [narrative, narrationEnabled, loading]);
  
+  // Each preset lists higher-quality neural voices FIRST (Google / Microsoft
+  // "Natural" / "Online" voices available in modern browsers), then graceful
+  // fallbacks. This avoids the ancient robotic OS voices (David, Zira, Fred)
+  // that degrade to Microsoft Sam. Distinct male/female + rate/pitch per
+  // character keeps each voice recognisably unique.
   const VOICE_PRESETS = {
-    eloquent: { name: 'Eloquent Scholar', filter: ['Daniel', 'Google UK', 'British'], rate: 0.92, pitch: 1.0, desc: 'Refined and scholarly' },
-    heroic: { name: 'Heroic Narrator', filter: ['Alex', 'Microsoft David'], rate: 0.88, pitch: 0.95, desc: 'Bold and commanding' },
-    mysterious: { name: 'Mysterious Sage', filter: ['Samantha', 'Google US'], rate: 0.85, pitch: 0.9, desc: 'Deep and enigmatic' },
-    energetic: { name: 'Energetic Bard', filter: ['Karen', 'Zira'], rate: 1.05, pitch: 1.1, desc: 'Lively and dramatic' },
-    ancient: { name: 'Ancient Elder', filter: ['Fred', 'Rishi'], rate: 0.80, pitch: 0.85, desc: 'Slow and wise' },
+    eloquent: { name: 'Eloquent Scholar', filter: ['Daniel', 'Google UK English Male', 'British'], rate: 0.92, pitch: 1.0, desc: 'Refined and scholarly' },
+    heroic: { name: 'Heroic Narrator', filter: ['Microsoft Guy Online', 'Google UK English Male', 'Microsoft Christopher', 'Daniel'], rate: 0.90, pitch: 0.92, desc: 'Bold and commanding' },
+    mysterious: { name: 'Mysterious Sage', filter: ['Microsoft Eric Online', 'Google US English', 'Microsoft Roger', 'Samantha'], rate: 0.86, pitch: 0.88, desc: 'Deep and enigmatic' },
+    energetic: { name: 'Energetic Bard', filter: ['Microsoft Aria Online', 'Google US English', 'Microsoft Jenny', 'Samantha'], rate: 1.06, pitch: 1.12, desc: 'Lively and dramatic' },
+    ancient: { name: 'Ancient Elder', filter: ['Microsoft Davis Online', 'Google UK English Male', 'Microsoft Tony', 'Daniel'], rate: 0.82, pitch: 0.85, desc: 'Slow and wise' },
   };
  
   const narrateText = async (text) => {
@@ -121,12 +126,17 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
         voices = window.speechSynthesis.getVoices();
       }
  
-      // Select voice based on preset
+      // Select voice based on preset, trying each named voice in priority order.
       const preset = VOICE_PRESETS[selectedVoice] || VOICE_PRESETS.eloquent;
       let voice = null;
       for (const filter of preset.filter) {
         voice = voices.find(v => v.name.includes(filter));
         if (voice) break;
+      }
+      // Fallback: prefer any modern neural voice (Natural/Online/Google) over
+      // the legacy robotic OS voices that sound like Microsoft Sam.
+      if (!voice) {
+        voice = voices.find(v => v.lang.startsWith('en') && /Natural|Online|Google/i.test(v.name));
       }
       if (!voice) voice = voices.find(v => v.lang.startsWith('en')) || voices[0];
  
