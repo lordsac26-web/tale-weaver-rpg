@@ -248,15 +248,23 @@ export default function EquipmentManager({ character, onUpdateCharacter }) {
       return;
     }
 
-    // Two-handed weapon + shield mutual exclusion (PHB p.147)
+    // Two-handed weapon: needs both hands (PHB p.147).
+    // Unequip whatever is in the main hand and off hand and return those items to inventory.
     const isTwoHanded = (item.properties || []).map(p => p.toLowerCase()).includes('two-handed');
-    if (slot === 'mainhand' && isTwoHanded && equipped.offhand?.category === 'Shield') {
-      // Auto-unequip shield when equipping two-handed weapon
-      const noShield = { ...equipped };
-      delete noShield.offhand;
-      const newEquipped = { ...noShield, [slot]: item };
-      const recalc = recalculateStats(character, newEquipped, inventory);
-      await onUpdateCharacter({ ...recalc, equipped: recalc.equipped || newEquipped });
+    if (slot === 'mainhand' && isTwoHanded && (equipped.offhand || equipped.mainhand)) {
+      let newInventory = [...inventory];
+      const returnToInventory = (it) => {
+        if (it && it.name !== item.name) newInventory = [...newInventory, it];
+      };
+      returnToInventory(equipped.offhand);
+      returnToInventory(equipped.mainhand);
+
+      const freedHands = { ...equipped };
+      delete freedHands.offhand;
+      delete freedHands.weapon;
+      const newEquipped = { ...freedHands, mainhand: item };
+      const recalc = recalculateStats(character, newEquipped, newInventory);
+      await onUpdateCharacter({ ...recalc, equipped: recalc.equipped || newEquipped, inventory: newInventory });
       setShowEquipModal(null);
       return;
     }
