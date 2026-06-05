@@ -21,8 +21,9 @@ import CombatActionBar from './CombatActionBar';
 import CombatPlayerStatus from './CombatPlayerStatus';
 import CombatStatusDashboard from './CombatStatusDashboard';
 import SmiteSlotPicker from './SmiteSlotPicker';
+import CombatActWindow from './CombatActWindow';
 
-export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent, onCharacterUpdate }) {
+export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent, onCharacterUpdate, onCombatAct, actEvaluating }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [action, setAction] = useState('attack');
   const [selectedSpell, setSelectedSpell] = useState(null);
@@ -501,6 +502,15 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                     </select>
                   )}
                 </>
+              )}
+
+              {/* Free-text Act window — DM-adjudicated improvised actions */}
+              {onCombatAct && (
+                <CombatActWindow
+                  onSubmit={onCombatAct}
+                  loading={actEvaluating}
+                  disabled={loading || actionsRemaining === 0}
+                />
               )}
 
               {/* Inline dice roller toggle */}

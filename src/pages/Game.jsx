@@ -15,6 +15,7 @@ import DiceRoller from '@/components/game/DiceRoller';
 import SceneVisualizerModal from '@/components/game/SceneVisualizerModal';
 import CharacterPortraitGenerator from '@/components/game/CharacterPortraitGenerator';
 import ActionProposalModal from '@/components/game/ActionProposalModal';
+import CombatActProposalModal from '@/components/game/CombatActProposalModal';
 import DeathModal from '@/components/game/DeathModal';
 import DeathSavesModal from '@/components/game/DeathSavesModal';
 import LootModal from '@/components/game/LootModal.jsx';
@@ -46,6 +47,8 @@ export default function Game() {
   const [showPortraitGen, setShowPortraitGen] = useState(false);
   const [pendingProposal, setPendingProposal] = useState(null);
   const [evaluatingAction, setEvaluatingAction] = useState(false);
+  const [combatProposal, setCombatProposal] = useState(null); // DM ruling on a free-text combat action
+  const [actEvaluating, setActEvaluating] = useState(false);
   const [lastCombatEvent, setLastCombatEvent] = useState(null);
   const [showLootModal, setShowLootModal] = useState(false);
   const [defeatedEnemies, setDefeatedEnemies] = useState([]);
@@ -345,6 +348,98 @@ export default function Game() {
     } finally {
       setStoryLoading(false);
     }
+  };
+
+  // ===== Free-text "Act" during combat — DM adjudicates first =====
+  // Build a compact scene summary the DM can reason over.
+  const buildCombatContext = () => {
+    const enemies = (combat?.combatants || []).filter(c => c.type === 'enemy');
+    const enemyLines = enemies.map(e => {
+      const hp = e.hp_current ?? e.hp ?? 0;
+      const pct = e.hp_max ? Math.round((hp / e.hp_max) * 100) : 100;
+      return `${e.name} (${e.is_conscious ? `${pct}% HP` : 'defeated'})`;
+    }).join(', ');
+    const player = (combat?.combatants || []).find(c => c.type === 'player');
+    const playerHp = player ? `${player.hp_current ?? character?.hp_current}/${player.hp_max ?? character?.hp_max} HP` : '';
+    return `Round ${combat?.round || 1}. ${character?.name} (${playerHp}) vs ${enemyLines || 'enemies'}.`;
+  };
+
+  const handleCombatAct = async (text) => {
+    setActEvaluating(true);
+    try {
+      const result = await base44.functions.invoke('evaluatePlayerAction', {
+        action: text,
+        character,
+        in_combat: true,
+        combat_context: buildCombatContext(),
+        session_context: narrative.filter(e => e.type === 'narration').slice(-1)[0]?.text?.slice(0, 250) || '',
+      });
+      setCombatProposal({ ...result.data, action: text });
+    } catch (err) {
+      console.error('Failed to evaluate combat action:', err);
+      setNarrative(prev => [...prev, { type: 'roll_result', text: 'The DM could not consider that action. Try again.', success: false }]);
+    } finally {
+      setActEvaluating(false);
+    }
+  };
+
+  // Resolve a DM-approved free-text combat action: roll any required check, narrate,
+  // and end combat if a de-escalation attempt succeeds.
+  const executeCombatAction = async (proposal) => {
+    setCombatProposal(null);
+    const { action, requires_check, skill, dc, outcome_type, ends_combat_on_success } = proposal;
+    const combatId = combat?.id || session?.combat_state?.combat_id;
+
+    setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
+
+    // continue_combat with no check — just remind the player to use combat actions
+    if (outcome_type === 'continue_combat' && !requires_check) {
+      setNarrative(prev => [...prev, { type: 'roll_result', text: '⚔️ Use your Attack or Spell action to carry this out.', success: true }]);
+      return;
+    }
+
+    let success = true;
+    if (requires_check && skill && dc) {
+      const equipAdv = getEquipmentAdvantage(character?.equipped, skill);
+      const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
+      const modifier = computeSkillModifier(skill);
+      const final = raw + modifier;
+      success = final >= dc;
+      const feedback = getSkillFeedback(skill, success, final, dc, raw);
+      setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success, feedback, character_name: character?.name }]);
+    }
+
+    // De-escalation success → end combat and return to story
+    if (outcome_type === 'de_escalate' && ends_combat_on_success && success) {
+      setCombatLoading(true);
+      try {
+        if (combatId) await base44.entities.CombatLog.update(combatId, { is_active: false, result: 'resolved' });
+        await base44.entities.GameSession.update(sessionId, { in_combat: false });
+        setCombat(null);
+        const storyResult = await base44.functions.invoke('generateStory', {
+          session_id: sessionId, action: 'choice',
+          custom_input: `${action} — the player successfully de-escalated the fight with a ${skill} check. Combat ends peacefully; narrate the resolution.`,
+        });
+        if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
+        setChoices(storyResult.data?.choices || []);
+      } catch (err) {
+        console.error('De-escalation failed to resolve:', err);
+      } finally {
+        await loadState();
+        setCombatLoading(false);
+      }
+      return;
+    }
+
+    // Otherwise: narrate the outcome inside combat (no turn consumed, combat continues)
+    const resultWord = requires_check ? (success ? 'succeeds' : 'fails') : 'acts';
+    setNarrative(prev => [...prev, {
+      type: 'roll_result',
+      text: outcome_type === 'de_escalate'
+        ? (success ? 'Your words land, but the enemies remain wary — the tension holds.' : 'Your attempt to talk them down falls flat. The fight goes on.')
+        : `Your improvised action ${resultWord}. The battle continues.`,
+      success,
+    }]);
   };
 
   const startCombat = async (enemies) => {
@@ -926,7 +1021,9 @@ export default function Game() {
                   onFlee={handleFlee}
                   loading={combatLoading}
                   lastCombatEvent={lastCombatEvent}
-                  onCharacterUpdate={setCharacter} />
+                  onCharacterUpdate={setCharacter}
+                  onCombatAct={handleCombatAct}
+                  actEvaluating={actEvaluating} />
               </div>
             </div>
           </div>
@@ -1117,9 +1214,19 @@ export default function Game() {
         )}
       </AnimatePresence>
 
-      {/* Evaluating Action Spinner */}
+      {/* Combat Act — DM Adjudication Modal */}
       <AnimatePresence>
-        {evaluatingAction && (
+        {combatProposal && (
+          <CombatActProposalModal
+            proposal={combatProposal}
+            onConfirm={() => executeCombatAction(combatProposal)}
+            onCancel={() => setCombatProposal(null)} />
+        )}
+      </AnimatePresence>
+
+      {/* Evaluating Action Spinner (covers both exploration and combat "DM is thinking") */}
+      <AnimatePresence>
+        {(evaluatingAction || actEvaluating) && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full"
             style={{ background: 'rgba(10,6,3,0.92)', border: '1px solid rgba(201,169,110,0.3)' }}>
