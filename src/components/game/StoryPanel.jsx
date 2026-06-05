@@ -40,12 +40,16 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [narrative, loading]);
 
-  // Cleanup speech synthesis on unmount to prevent orphaned audio
+  // Cleanup speech synthesis on unmount to prevent orphaned audio.
+  // Mark as cancelled FIRST so any in-flight chunk loop stops queueing,
+  // then cancel twice (some browsers need a deferred second cancel to fully
+  // flush queued utterances after the page/component tears down).
   useEffect(() => {
     return () => {
-      window.speechSynthesis.cancel();
-      currentUtterance.current = null;
       cancelledRef.current = true;
+      currentUtterance.current = null;
+      window.speechSynthesis.cancel();
+      setTimeout(() => window.speechSynthesis.cancel(), 0);
     };
   }, []);
 
@@ -174,6 +178,9 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
             resolve(); // continue to next chunk
           };
 
+          // Final guard: if narration was cancelled (e.g. component unmounted)
+          // between iterations, do not start speaking this chunk.
+          if (cancelledRef.current) { clearInterval(resumeInterval); resolve(); return; }
           window.speechSynthesis.speak(utterance);
         });
       }
