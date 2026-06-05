@@ -19,7 +19,7 @@ export default function Home() {
   useEffect(() => {
     Promise.all([
       base44.entities.Character.list('-updated_date', 10),
-      base44.entities.GameSession.list('-updated_date', 10)
+      base44.entities.GameSession.list('-updated_date', 100)
     ]).then(([chars, sess]) => {
       setCharacters(chars.filter(c => c.is_active));
       setSessions(sess.filter(s => s.is_active));
@@ -316,9 +316,11 @@ function SectionHeader({ icon, title, color }) {
 // ─── Character Card ────────────────────────────────────────────────────────────
 function CharacterCard({ character, sessions, onViewSheet }) {
   const navigate = useNavigate();
-  // Only show an active session if the character is alive — dead characters have no valid session to resume
+  // Only show an active session if the character is alive — dead characters have no valid session to resume.
+  // sessions is already sorted by -updated_date, so the first match is the most recent campaign.
+  // Match only ACTIVE sessions so Resume always routes to a live campaign (not a fresh New Game).
   const isDead = character.hp_current === 0;
-  const session = !isDead ? sessions.find(s => s.character_id === character.id) : null;
+  const session = !isDead ? sessions.find(s => s.character_id === character.id && s.is_active !== false) : null;
   const hpPct = character.hp_max ? Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100)) : 100;
   const hpBarStyle = hpPct > 60 ? { background: 'linear-gradient(90deg, #16a34a, #22c55e)' }
     : hpPct > 30 ? { background: 'linear-gradient(90deg, #b45309, #e8732a)' }
