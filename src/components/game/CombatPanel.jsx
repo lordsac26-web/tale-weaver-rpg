@@ -20,6 +20,7 @@ import { getActionsPerTurn } from './combatActionEconomy';
 import CombatActionBar from './CombatActionBar';
 import CombatPlayerStatus from './CombatPlayerStatus';
 import CombatStatusDashboard from './CombatStatusDashboard';
+import SmiteSlotPicker from './SmiteSlotPicker';
 
 export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent, onCharacterUpdate }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
@@ -36,6 +37,8 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   // Sorcerer Metamagic toggles + optional second target for Twinned Spell
   const [metamagic, setMetamagic] = useState({ quickened: false, twinned: false, heightened: false });
   const [twinTargetId, setTwinTargetId] = useState(null);
+  // Paladin Divine Smite: chosen spell slot level for the next weapon attack (null = no smite)
+  const [smiteSlotLevel, setSmiteSlotLevel] = useState(null);
 
   if (!combat) return null;
 
@@ -119,7 +122,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         type: 'melee',
         properties: []
       };
-      onPlayerAttack(selectedTarget, 'attack', weapon, combatModifiers);
+      onPlayerAttack(selectedTarget, 'attack', weapon, { ...combatModifiers, smite_slot_level: smiteSlotLevel || undefined });
     } else {
       onPlayerAttack(selectedTarget, action, null, combatModifiers);
     }
@@ -421,6 +424,11 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                     ))}
                     <option value="unarmed">👊 Unarmed Strike — 1d4</option>
                   </select>
+
+                  {/* Paladin Divine Smite slot picker */}
+                  <div className="mt-2">
+                    <SmiteSlotPicker character={character} value={smiteSlotLevel} onChange={setSmiteSlotLevel} />
+                  </div>
                 </div>
               )}
 
