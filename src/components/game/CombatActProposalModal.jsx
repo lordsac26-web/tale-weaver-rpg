@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Dices, X, Swords, MessageCircle, Handshake, Eye } from 'lucide-react';
+import { Dices, X, Swords, MessageCircle, Handshake, Eye, Sword, Coins } from 'lucide-react';
 
 const RISK_COLORS = {
   low:     { bg: 'rgba(10,50,20,0.6)',  border: 'rgba(40,160,80,0.4)',   color: '#86efac' },
@@ -11,6 +11,7 @@ const RISK_COLORS = {
 
 // Visual identity per outcome the DM may rule
 const OUTCOME = {
+  attack:         { icon: Sword,         label: 'Strike!',              color: '#fca5a5', tint: 'rgba(70,10,10,0.6)',  border: 'rgba(220,60,60,0.5)' },
   skill_check:    { icon: Dices,         label: 'Skill Check Required', color: '#f0c040', tint: 'rgba(80,50,10,0.6)',  border: 'rgba(201,169,110,0.4)' },
   continue_combat:{ icon: Swords,        label: 'Press the Attack',     color: '#fca5a5', tint: 'rgba(70,10,10,0.6)',  border: 'rgba(220,60,60,0.4)' },
   de_escalate:    { icon: Handshake,     label: 'Attempt to De-escalate', color: '#93c5fd', tint: 'rgba(10,30,60,0.6)', border: 'rgba(80,140,220,0.4)' },
@@ -23,12 +24,17 @@ const OUTCOME = {
  * reasoning, and any required roll. Confirm resolves the action; Cancel dismisses.
  */
 export default function CombatActProposalModal({ proposal, onConfirm, onCancel }) {
-  const { action, outcome_type, requires_check, skill, dc, reasoning, risk_level, ends_combat_on_success } = proposal;
+  const { action, outcome_type, requires_check, skill, dc, reasoning, risk_level, ends_combat_on_success, target_name, reward } = proposal;
   const outcome = OUTCOME[outcome_type] || OUTCOME.narrative;
   const OutcomeIcon = outcome.icon;
   const riskColors = RISK_COLORS[risk_level] || RISK_COLORS.low;
+  const isAttack = outcome_type === 'attack';
 
-  const confirmLabel = requires_check && skill
+  const hasReward = reward && ((reward.gold || 0) + (reward.silver || 0) + (reward.copper || 0) + (reward.hp_heal || 0) > 0 || (reward.items?.length || 0) > 0);
+
+  const confirmLabel = isAttack
+    ? (requires_check && skill ? `${skill} → Strike!` : 'Strike!')
+    : requires_check && skill
     ? `Roll ${skill}!`
     : outcome_type === 'continue_combat'
     ? 'Got it'
@@ -98,6 +104,42 @@ export default function CombatActProposalModal({ proposal, onConfirm, onCancel }
             </div>
           )}
 
+          {/* Attack target panel */}
+          {isAttack && (
+            <div className="p-4 rounded-xl flex items-center gap-3"
+              style={{ background: 'rgba(70,10,10,0.5)', border: '1px solid rgba(220,60,60,0.4)' }}>
+              <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ background: 'rgba(90,15,15,0.8)', border: '1px solid rgba(220,60,60,0.3)' }}>
+                <Sword className="w-5 h-5" style={{ color: '#fca5a5' }} />
+              </div>
+              <div>
+                <div className="font-fantasy text-sm font-bold" style={{ color: '#fca5a5' }}>
+                  {requires_check && skill ? `${skill} DC ${dc}, then attack` : 'Attack roll'}
+                  {target_name ? ` → ${target_name}` : ''}
+                </div>
+                <div className="text-xs mt-0.5" style={{ color: 'rgba(252,165,165,0.55)', fontFamily: 'EB Garamond, serif' }}>
+                  {requires_check && skill ? 'Land the maneuver to earn the strike.' : 'Roll to hit and deal damage.'}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reward preview — narrated loot/healing that will hit real stats */}
+          {hasReward && (
+            <div className="p-3 rounded-xl flex items-center gap-2 flex-wrap"
+              style={{ background: 'rgba(50,40,5,0.5)', border: '1px solid rgba(201,169,110,0.35)' }}>
+              <Coins className="w-4 h-4 flex-shrink-0" style={{ color: '#f0c040' }} />
+              <span className="text-xs font-fantasy" style={{ color: '#f0c040' }}>Reward:</span>
+              {(reward.gold || 0) > 0 && <span className="text-xs" style={{ color: 'rgba(232,213,183,0.85)' }}>+{reward.gold} gp</span>}
+              {(reward.silver || 0) > 0 && <span className="text-xs" style={{ color: 'rgba(232,213,183,0.85)' }}>+{reward.silver} sp</span>}
+              {(reward.copper || 0) > 0 && <span className="text-xs" style={{ color: 'rgba(232,213,183,0.85)' }}>+{reward.copper} cp</span>}
+              {(reward.hp_heal || 0) > 0 && <span className="text-xs" style={{ color: '#86efac' }}>❤️ +{reward.hp_heal} HP</span>}
+              {(reward.items || []).map((it, i) => (
+                <span key={i} className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(80,50,10,0.6)', color: 'rgba(232,213,183,0.9)' }}>{it.name}</span>
+              ))}
+            </div>
+          )}
+
           {/* Continue combat hint */}
           {outcome_type === 'continue_combat' && !requires_check && (
             <div className="px-3 py-2 rounded-xl"
@@ -107,7 +149,7 @@ export default function CombatActProposalModal({ proposal, onConfirm, onCancel }
           )}
 
           {/* Narrative / no check */}
-          {!requires_check && outcome_type !== 'continue_combat' && (
+          {!requires_check && outcome_type !== 'continue_combat' && !isAttack && (
             <div className="px-3 py-2 rounded-xl"
               style={{ background: 'rgba(10,50,20,0.4)', border: '1px solid rgba(40,160,80,0.3)' }}>
               <p className="text-xs font-fantasy" style={{ color: '#86efac' }}>✓ No roll needed — this resolves automatically.</p>

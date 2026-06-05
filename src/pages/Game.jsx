@@ -367,11 +367,15 @@ export default function Game() {
   const handleCombatAct = async (text) => {
     setActEvaluating(true);
     try {
+      const livingEnemies = (combat?.combatants || [])
+        .filter(c => c.type === 'enemy' && (c.is_conscious ?? true))
+        .map(e => e.name);
       const result = await base44.functions.invoke('evaluatePlayerAction', {
         action: text,
         character,
         in_combat: true,
         combat_context: buildCombatContext(),
+        combat_enemies: livingEnemies,
         session_context: narrative.filter(e => e.type === 'narration').slice(-1)[0]?.text?.slice(0, 250) || '',
       });
       setCombatProposal({ ...result.data, action: text });
@@ -383,11 +387,39 @@ export default function Game() {
     }
   };
 
-  // Resolve a DM-approved free-text combat action: roll any required check, narrate,
-  // and end combat if a de-escalation attempt succeeds.
+  // Apply a DM-granted reward (coins / healing / items) to the real Character record
+  // so narrated rewards become actual game mechanics, not just flavor text.
+  const applyCombatReward = async (reward) => {
+    if (!reward) return;
+    const gold = reward.gold || 0, silver = reward.silver || 0, copper = reward.copper || 0;
+    const heal = reward.hp_heal || 0;
+    const newItems = Array.isArray(reward.items) ? reward.items : [];
+    if (!gold && !silver && !copper && !heal && newItems.length === 0) return;
+
+    const updates = {};
+    if (gold)   updates.gold   = (character?.gold   || 0) + gold;
+    if (silver) updates.silver = (character?.silver || 0) + silver;
+    if (copper) updates.copper = (character?.copper || 0) + copper;
+    if (heal)   updates.hp_current = Math.min(character?.hp_max || 0, (character?.hp_current || 0) + heal);
+    if (newItems.length) updates.inventory = [...(character?.inventory || []), ...newItems];
+
+    await base44.entities.Character.update(character.id, updates);
+    setCharacter(prev => prev ? { ...prev, ...updates } : prev);
+
+    const parts = [];
+    if (gold)   parts.push(`+${gold} gp`);
+    if (silver) parts.push(`+${silver} sp`);
+    if (copper) parts.push(`+${copper} cp`);
+    if (heal)   parts.push(`❤️ +${heal} HP`);
+    if (newItems.length) parts.push(`${newItems.length} item${newItems.length > 1 ? 's' : ''}`);
+    if (parts.length) setNarrative(prev => [...prev, { type: 'xp_gain', text: `💰 Gained: ${parts.join(' · ')}` }]);
+  };
+
+  // Resolve a DM-approved free-text combat action: roll any required check, chain into
+  // a real attack roll when it's an attack, apply rewards, and end combat on de-escalation.
   const executeCombatAction = async (proposal) => {
     setCombatProposal(null);
-    const { action, requires_check, skill, dc, outcome_type, ends_combat_on_success } = proposal;
+    const { action, requires_check, skill, dc, outcome_type, ends_combat_on_success, target_name, reward } = proposal;
     const combatId = combat?.id || session?.combat_state?.combat_id;
 
     setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
@@ -407,6 +439,30 @@ export default function Game() {
       success = final >= dc;
       const feedback = getSkillFeedback(skill, success, final, dc, raw);
       setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success, feedback, character_name: character?.name }]);
+    }
+
+    // ATTACK outcome — the action is a strike. If a setup check was required it must
+    // succeed first; then fire a REAL attack roll through the combat engine.
+    if (outcome_type === 'attack') {
+      if (requires_check && !success) {
+        setNarrative(prev => [...prev, { type: 'roll_result', text: `Your ${skill} maneuver fails — you can't line up the strike. The action is wasted.`, success: false }]);
+        await applyCombatReward(reward);
+        return;
+      }
+      // Find the target the DM named (fallback: first conscious enemy)
+      const enemies = (combat?.combatants || []).filter(c => c.type === 'enemy' && (c.is_conscious ?? true));
+      const target = enemies.find(e => e.name?.toLowerCase() === (target_name || '').toLowerCase()) || enemies[0];
+      if (!target) {
+        setNarrative(prev => [...prev, { type: 'roll_result', text: 'There is no valid target to strike.', success: false }]);
+        return;
+      }
+      if (requires_check) {
+        setNarrative(prev => [...prev, { type: 'roll_result', text: `✓ ${skill} succeeds — you set up the strike on ${target.name}!`, success: true }]);
+      }
+      // Reuse the standard attack pipeline so damage, action economy, and enemy turns all apply
+      await handlePlayerAttack(target.id, 'attack', character?.equipped?.weapon || null);
+      await applyCombatReward(reward);
+      return;
     }
 
     // De-escalation success → end combat and return to story
@@ -440,6 +496,9 @@ export default function Game() {
         : `Your improvised action ${resultWord}. The battle continues.`,
       success,
     }]);
+
+    // Apply any DM-granted reward (loot grabbed mid-fight, potion quaffed, etc.) — only on success when a check was involved
+    if (!requires_check || success) await applyCombatReward(reward);
   };
 
   const startCombat = async (enemies) => {
