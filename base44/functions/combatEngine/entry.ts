@@ -226,6 +226,52 @@ Deno.serve(async (req) => {
     return { nextIndex, nextRound };
   };
 
+  // ─── CENTRALIZED ATTACK ROLL (PHB p.173) ────────────────────────────────────
+  // Collect ALL advantage and disadvantage sources first, apply the cancellation
+  // rule ONCE (any number of each cancels to a flat roll), then roll exactly once.
+  // This replaces the old pattern of rolling early then re-rolling as conditions
+  // were discovered, which caused double-rolling / stale rolls in stacked scenarios
+  // (e.g. Reckless + prone target + blinded). Returns the resolved d20 plus flags.
+  //   advSources / disSources: arrays of truthy booleans (each true = one source).
+  //   forceCrit: condition-driven auto-crit (e.g. paralyzed/unconscious melee hit).
+  const resolveAttackRoll = ({ advSources = [], disSources = [], forceCrit = false } = {}) => {
+    const hasAdv = advSources.some(Boolean);
+    const hasDis = disSources.some(Boolean);
+    // PHB p.173: if both advantage and disadvantage are present, they cancel —
+    // regardless of how many of each — and you roll a single straight d20.
+    const netAdvantage = hasAdv && !hasDis;
+    const netDisadvantage = hasDis && !hasAdv;
+    const r1 = rollD20();
+    const r2 = (netAdvantage || netDisadvantage) ? rollD20() : r1;
+    const roll = netAdvantage ? Math.max(r1, r2) : netDisadvantage ? Math.min(r1, r2) : r1;
+    return {
+      roll,
+      rolls: [r1, r2],
+      advantage: netAdvantage,
+      disadvantage: netDisadvantage,
+      isCritical: forceCrit || roll === 20,
+      isMiss: roll === 1,
+    };
+  };
+
+  // ─── CONCENTRATION SAVE (PHB p.203) ──────────────────────────────────────────
+  // When a creature concentrating on a spell takes damage, it must make a CON save
+  // (DC = max(10, half the damage)) or lose concentration. Shared by enemy_turn and
+  // player-on-self/ally damage. Returns { broken, save, dc } and applies feat/class
+  // bonuses (War Caster advantage, Resilient CON, Paladin Aura of Protection).
+  const rollConcentrationSave = (charFull, damage) => {
+    const dc = Math.max(10, Math.floor(damage / 2));
+    const hasWarCaster = (charFull?.feats || []).includes('War Caster') ||
+      (charFull?._feat_flags || []).includes('war_caster');
+    const conProf = charFull?.saving_throws?.constitution ? (charFull?.proficiency_bonus || 2) : 0;
+    const auraBonus = (charFull?.class === 'Paladin' && (charFull?.level || 1) >= 6)
+      ? Math.max(1, statMod(charFull?.charisma || 10)) : 0;
+    const cr1 = rollD20();
+    const cr2 = hasWarCaster ? rollD20() : cr1;
+    const save = Math.max(cr1, cr2) + statMod(charFull?.constitution || 10) + conProf + auraBonus;
+    return { broken: save < dc, save, dc };
+  };
+
   // Award victory XP exactly ONCE per combat. Re-reads the CombatLog and checks the
   // xp_awarded flag to guard against duplicate/stale writes (race condition fix).
   const awardVictoryXP = async (cid, combatantsArr, cid_char) => {
@@ -490,31 +536,24 @@ Deno.serve(async (req) => {
     const target = combatants.find(c => c.id === target_id);
     if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });
 
-    // Handle advantage/disadvantage
-    let attackRoll1 = rollD20();
-    let attackRoll2 = modifiers.advantage || modifiers.disadvantage ? rollD20() : attackRoll1;
-    let attackRoll = attackRoll1;
-    if (modifiers.advantage) attackRoll = Math.max(attackRoll1, attackRoll2);
-    if (modifiers.disadvantage) attackRoll = Math.min(attackRoll1, attackRoll2);
+    // Centralized attack roll: gather all advantage/disadvantage SOURCES here, then
+    // roll exactly once at the end (see resolveAttackRoll in SHARED HELPERS). The
+    // initial modifiers.advantage/disadvantage seed the source lists; condition and
+    // feat checks below push additional sources instead of re-rolling mid-flight.
+    const advSources = [!!modifiers.advantage];
+    const disSources = [!!modifiers.disadvantage];
+    let forceCrit = false; // condition-driven auto-crit (paralyzed/unconscious melee)
+    let useLuckyPoint = false; // Lucky feat: reroll the d20 after the centralized roll
 
     let attackMod = 0;
     let damageDice = '1d6';
     let damageBonus = 0;
     let attackType = 'melee';
-    let isCritical = attackRoll === 20;
-    let isMiss = attackRoll === 1;
     let extraDamageDice = []; // For smite, sneak attack, etc
     let sneakAttackApplied = false; // tracks if Sneak Attack was used this attack (once-per-turn guard)
 
-    // Apply disadvantage once: re-rolls and takes the lower die (PHB p.173). No-op if already at disadvantage.
-    const applyDisadvantage = () => {
-      if (modifiers.disadvantage) return;
-      modifiers.disadvantage = true;
-      attackRoll2 = rollD20();
-      attackRoll = Math.min(attackRoll1, attackRoll2);
-      isCritical = attackRoll === 20;
-      isMiss = attackRoll === 1;
-    };
+    // Register a disadvantage source (deferred — resolved in the single final roll).
+    const applyDisadvantage = () => { disSources.push(true); };
 
     if (spell) {
       // Barbarian Rage (PHB p.48): cannot cast or concentrate on spells while raging.
@@ -891,9 +930,10 @@ Deno.serve(async (req) => {
         const rageDamage = level < 9 ? 2 : level < 16 ? 3 : 4;
         damageBonus += rageDamage;
       }
-      // Reckless Attack (PHB p.48): advantage on melee STR attacks this turn
-      if (modifiers.reckless_attack && character.class === 'Barbarian' && !isRanged && !modifiers.disadvantage) {
-        modifiers.advantage = true; attackRoll2 = rollD20(); attackRoll = Math.max(attackRoll1, attackRoll2); isCritical = attackRoll === 20; isMiss = attackRoll === 1;
+      // Reckless Attack (PHB p.48): advantage on melee STR attacks this turn.
+      // Register as an advantage source — resolved in the single final roll.
+      if (modifiers.reckless_attack && character.class === 'Barbarian' && !isRanged) {
+        advSources.push(true);
       }
 
       // Rogue Sneak Attack (PHB p.96) — server-authoritative validation:
@@ -913,18 +953,10 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Lucky feat (PHB p.167): spend a luck point to reroll one attack/check/save d20 and take either result.
-      // Here: if modifiers.use_lucky_point is set and character has points remaining, reroll the attack die.
+      // Lucky feat (PHB p.167): spend a luck point to reroll one attack d20 and take
+      // either result. Flag it here; applied AFTER the centralized roll resolves below.
       if (modifiers.use_lucky_point && hasFeat('Lucky') && (character.luck_points_remaining || 0) > 0) {
-        const luckyRoll = rollD20();
-        // Player may choose either roll — for automation, take the higher one (favorable to player)
-        const chosenRoll = Math.max(attackRoll, luckyRoll);
-        if (chosenRoll !== attackRoll) attackRoll = chosenRoll;
-        isCritical = attackRoll === 20;
-        isMiss = attackRoll === 1;
-        await base44.entities.Character.update(character_id, {
-          luck_points_remaining: Math.max(0, (character.luck_points_remaining || 0) - 1),
-        });
+        useLuckyPoint = true;
       }
 
       // Fighter Action Surge — handled by action tracking in world_state; no extra variable needed here
@@ -962,68 +994,57 @@ Deno.serve(async (req) => {
     if (modifiers.three_quarters_cover) targetACBonus += 5;
 
     // === TARGET CONDITION MODIFIERS (PHB p.290-292) ===
+    // Each condition registers an advantage/disadvantage SOURCE (and forceCrit where
+    // applicable). The cancellation rule is applied once by resolveAttackRoll below —
+    // no mid-flight re-rolling.
     const targetConditions = (target.conditions || []).map(c => c.name || c);
 
-    // PARALYZED: attacks have advantage; hits from within 5ft are auto-crits (PHB p.291)
+    // PARALYZED: attacks have advantage; melee hits within 5ft are auto-crits (PHB p.291)
     if (targetConditions.includes('paralyzed')) {
-      modifiers.advantage = true;
-      if (attackType === 'melee') isCritical = true; // within 5ft assumed for melee
+      advSources.push(true);
+      if (attackType === 'melee') forceCrit = true;
     }
-
     // STUNNED: attacks have advantage (PHB p.292)
-    if (targetConditions.includes('stunned')) {
-      modifiers.advantage = true;
-    }
-
-    // UNCONSCIOUS: attacks have advantage; hits from within 5ft are auto-crits (PHB p.292)
+    if (targetConditions.includes('stunned')) advSources.push(true);
+    // UNCONSCIOUS: attacks have advantage; melee hits within 5ft are auto-crits (PHB p.292)
     if (targetConditions.includes('unconscious')) {
-      modifiers.advantage = true;
-      if (attackType === 'melee') isCritical = true;
+      advSources.push(true);
+      if (attackType === 'melee') forceCrit = true;
     }
-
     // PRONE: melee = advantage, ranged = disadvantage (PHB p.292)
     if (targetConditions.includes('prone')) {
-      if (attackType === 'melee') {
-        if (!modifiers.disadvantage) modifiers.advantage = true;
-      } else {
-        modifiers.advantage = false;
-        modifiers.disadvantage = true;
-      }
+      if (attackType === 'melee') advSources.push(true);
+      else disSources.push(true);
     }
-
     // RESTRAINED: attacks against have advantage (PHB p.292)
-    if (targetConditions.includes('restrained') && !modifiers.disadvantage) {
-      modifiers.advantage = true;
-    }
-
-    // INVISIBLE: attacks against have disadvantage (PHB p.291)
-    if (targetConditions.includes('invisible')) {
-      modifiers.advantage = false;
-      modifiers.disadvantage = true;
-    }
-
+    if (targetConditions.includes('restrained')) advSources.push(true);
+    // INVISIBLE (target): attacks against have disadvantage (PHB p.291)
+    if (targetConditions.includes('invisible')) disSources.push(true);
     // BLINDED (target): attacks against have advantage (PHB p.290)
-    if (targetConditions.includes('blinded') && !modifiers.disadvantage) {
-      modifiers.advantage = true;
-    }
+    if (targetConditions.includes('blinded')) advSources.push(true);
 
-    // Re-resolve the attack roll if advantage/disadvantage changed after initial roll
-    if (modifiers.advantage && !modifiers.disadvantage) {
-      attackRoll2 = modifiers.advantage && attackRoll2 === attackRoll1 ? rollD20() : attackRoll2;
-      attackRoll = Math.max(attackRoll1, attackRoll2);
-    } else if (modifiers.disadvantage && !modifiers.advantage) {
-      attackRoll2 = modifiers.disadvantage && attackRoll2 === attackRoll1 ? rollD20() : attackRoll2;
-      attackRoll = Math.min(attackRoll1, attackRoll2);
+    // ── SINGLE CENTRALIZED ROLL: all sources gathered, cancel rule applied once ──
+    let attackResult = resolveAttackRoll({ advSources, disSources, forceCrit });
+    // Lucky feat (PHB p.167): reroll the d20 once and keep the better result.
+    if (useLuckyPoint) {
+      const luckyRoll = rollD20();
+      if (luckyRoll > attackResult.roll) {
+        attackResult = { ...attackResult, roll: luckyRoll, isCritical: forceCrit || luckyRoll === 20, isMiss: luckyRoll === 1 };
+      }
+      await base44.entities.Character.update(character_id, {
+        luck_points_remaining: Math.max(0, (character.luck_points_remaining || 0) - 1),
+      });
     }
-    // Advantage + disadvantage cancel each other (PHB p.173)
-    isCritical = !isMiss && (attackRoll === 20 || (targetConditions.includes('paralyzed') && attackType === 'melee') || (targetConditions.includes('unconscious') && attackType === 'melee'));
-    isMiss = attackRoll === 1;
+    let attackRoll = attackResult.roll;
+    let isCritical = attackResult.isCritical;
+    let isMiss = attackResult.isMiss;
 
     const totalAttack = attackRoll + attackMod;
     let hit = !isMiss && (isCritical || totalAttack >= (target.ac + targetACBonus));
 
     let damage = 0;
     let damageRolls = [];
+    let concentrationBrokenSelf = null; // set if this attack broke the player's own concentration
     const isSpellAttack = !!spell;
     const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, spell_name: spell?.name || null };
 
@@ -1075,14 +1096,19 @@ Deno.serve(async (req) => {
         };
         const paladinMaxSlots = PALADIN_MAX_SLOTS[Math.min(20, character.level || 1)] || [0,0,0,0,0];
         const slots = character.spell_slots || {};
+        const slotAvailable = (lvl) => {
+          const maxAtLevel = paladinMaxSlots[lvl - 1] || 0;
+          return maxAtLevel > 0 && (slots[`level_${lvl}`] || 0) < maxAtLevel;
+        };
         let smiteLevel = 0;
-        for (let i = 1; i <= 5; i++) {
-          const key = `level_${i}`;
-          const used = slots[key] || 0;
-          const maxAtLevel = paladinMaxSlots[i - 1] || 0;
-          if (maxAtLevel > 0 && used < maxAtLevel) {
-            smiteLevel = i;
-            break;
+        // Player (or AI narrator) may request a specific slot via modifiers.smite_slot_level.
+        // Honor it only when that slot is actually available; otherwise fall back to lowest.
+        const requested = parseInt(modifiers.smite_slot_level);
+        if (requested >= 1 && requested <= 5 && slotAvailable(requested)) {
+          smiteLevel = requested;
+        } else {
+          for (let i = 1; i <= 5; i++) {
+            if (slotAvailable(i)) { smiteLevel = i; break; }
           }
         }
         if (smiteLevel > 0) {
@@ -1132,6 +1158,22 @@ Deno.serve(async (req) => {
       target.hp_current = Math.max(0, target.hp_current - damage);
       if (target.hp_current === 0) target.is_conscious = false;
 
+      // === SELF/ALLY CONCENTRATION (PHB p.203) ===
+      // If this attack damaged the creature currently concentrating on a spell
+      // (e.g. the caster catching themselves or a concentrating ally in an AoE),
+      // that creature must make a CON save or lose concentration. We can only roll
+      // it for a PLAYER combatant (we have their full sheet); the active caster is
+      // tracked by name in world_state.concentration_caster.
+      const concSpell = combatLog.world_state?.concentration_spell;
+      const concCaster = combatLog.world_state?.concentration_caster;
+      if (concSpell && damage > 0 && target.type === 'player' && target.name === concCaster) {
+        const concChar = target.id === character_id ? character : await base44.entities.Character.get(target.id);
+        const conc = rollConcentrationSave(concChar, damage);
+        if (conc.broken) {
+          concentrationBrokenSelf = `${concCaster}'s concentration on ${concSpell} is broken! (CON save: ${conc.save} vs DC ${conc.dc})`;
+        }
+      }
+
       logEntry.hit = true;
       logEntry.critical = isCritical;
       logEntry.attack_roll = totalAttack;
@@ -1166,6 +1208,15 @@ Deno.serve(async (req) => {
     if (spell?.requires_concentration) {
       newWorldState.concentration_spell = spell.name;
       newWorldState.concentration_caster = character.name;
+    }
+
+    // Self/ally concentration break (computed during damage application above).
+    // Clears the tracked concentration and annotates the log entry.
+    if (concentrationBrokenSelf) {
+      newWorldState.concentration_spell = null;
+      newWorldState.concentration_caster = null;
+      logEntry.text += ` ⚠️ ${concentrationBrokenSelf}`;
+      logEntry.concentration_broken = true;
     }
 
     const result = await finalizeAndPersistCombat(combat_id, session_id, updatedCombatants,
@@ -1544,22 +1595,11 @@ Deno.serve(async (req) => {
     const newWS = resetTurnWorldState(combatLog, { player_dodging: false });
     const concentrationSpellCheck = combatLog.world_state?.concentration_spell;
     if (concentrationSpellCheck && finalDamage > 0) {
-      const dc = Math.max(10, Math.floor(finalDamage / 2));
-      // War Caster: advantage on concentration saves (PHB p.170)
-      const hasWarCaster = playerHasFeat('War Caster');
-      // Resilient (CON): add proficiency bonus to CON saves (PHB p.168)
-      const hasResilientCon = !!(charFull?.saving_throws?.constitution);
-      const conProf = hasResilientCon ? (charFull?.proficiency_bonus || 2) : 0;
-      const conRoll1 = rollD20();
-      const conRoll2 = hasWarCaster ? rollD20() : conRoll1;
-      // Paladin Aura of Protection (PHB p.85): add CHA modifier (min +1) to own saves at L6+
-      const auraBonus = (charFull?.class === 'Paladin' && (charFull?.level || 1) >= 6)
-        ? Math.max(1, statMod(charFull?.charisma || 10)) : 0;
-      const conSave2 = Math.max(conRoll1, conRoll2) + statMod(charFull?.constitution || 10) + conProf + auraBonus;
-      if (conSave2 < dc) {
+      const conc = rollConcentrationSave(charFull, finalDamage);
+      if (conc.broken) {
         newWS.concentration_spell = null;
         newWS.concentration_caster = null;
-        logText += ` ⚠️ Concentration on ${concentrationSpellCheck} broken! (CON save: ${conSave2} vs DC ${dc})`;
+        logText += ` ⚠️ Concentration on ${concentrationSpellCheck} broken! (CON save: ${conc.save} vs DC ${conc.dc})`;
       }
     }
 
