@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 
 import { Link } from 'react-router-dom';
-import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked } from 'lucide-react';
+import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import CharacterSheet from '@/components/game/CharacterSheet';
@@ -19,7 +19,7 @@ export default function Home() {
   useEffect(() => {
     Promise.all([
       base44.entities.Character.list('-updated_date', 10),
-      base44.entities.GameSession.list('-updated_date', 100)
+      base44.entities.GameSession.list('-updated_date', 20)
     ]).then(([chars, sess]) => {
       setCharacters(chars.filter(c => c.is_active));
       setSessions(sess.filter(s => s.is_active));
@@ -245,7 +245,7 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-5">
                 {characters.map((char, i) => (
                   <motion.div key={char.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.4 }}>
-                    <CharacterCard character={char} sessions={sessions} onViewSheet={() => setSelectedCharacter(char)} />
+                    <CharacterCard character={char} onViewSheet={() => setSelectedCharacter(char)} />
                   </motion.div>
                 ))}
               </div>
@@ -314,13 +314,27 @@ function SectionHeader({ icon, title, color }) {
 }
 
 // ─── Character Card ────────────────────────────────────────────────────────────
-function CharacterCard({ character, sessions, onViewSheet }) {
+function CharacterCard({ character, onViewSheet }) {
   const navigate = useNavigate();
-  // Only show an active session if the character is alive — dead characters have no valid session to resume.
-  // sessions is already sorted by -updated_date, so the first match is the most recent campaign.
-  // Match only ACTIVE sessions so Resume always routes to a live campaign (not a fresh New Game).
+  // Only resume a session if the character is alive — dead characters have no valid session to resume.
   const isDead = character.hp_current === 0;
-  const session = !isDead ? sessions.find(s => s.character_id === character.id && s.is_active !== false) : null;
+
+  // Query THIS character's most recent ACTIVE session directly from the DB.
+  // This scales reliably no matter how many total users/sessions exist — we never
+  // rely on the character's session happening to be inside a fetched list window.
+  const [session, setSession] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(!isDead);
+
+  useEffect(() => {
+    if (isDead) { setSession(null); setSessionLoading(false); return; }
+    let cancelled = false;
+    base44.entities.GameSession
+      .filter({ character_id: character.id, is_active: true }, '-updated_date', 1)
+      .then(found => {
+        if (!cancelled) { setSession(found[0] || null); setSessionLoading(false); }
+      });
+    return () => { cancelled = true; };
+  }, [character.id, isDead]);
   const hpPct = character.hp_max ? Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100)) : 100;
   const hpBarStyle = hpPct > 60 ? { background: 'linear-gradient(90deg, #16a34a, #22c55e)' }
     : hpPct > 30 ? { background: 'linear-gradient(90deg, #b45309, #e8732a)' }
@@ -465,7 +479,13 @@ function CharacterCard({ character, sessions, onViewSheet }) {
             </>
           )}
           {!isDead && (
-            session ? (
+            sessionLoading ? (
+              <button disabled
+                className="flex-1 w-full py-1.5 rounded-lg text-xs font-fantasy flex items-center justify-center gap-1.5 opacity-60 cursor-wait"
+                style={{ background: 'rgba(20,12,5,0.6)', border: '1px solid rgba(184,115,51,0.2)', color: 'rgba(225,165,105,0.7)' }}>
+                <Loader2 className="w-3 h-3 animate-spin" /> Loading
+              </button>
+            ) : session ? (
               <Link to={`/Game?session_id=${session.id}`} className="flex-1">
                 <button className="w-full py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
                   style={{ background: 'rgba(8,38,15,0.65)', border: '1px solid rgba(40,160,75,0.35)', color: '#90f4b0' }}

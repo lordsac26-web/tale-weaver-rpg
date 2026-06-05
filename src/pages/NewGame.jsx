@@ -48,6 +48,15 @@ export default function NewGame() {
     if (!selectedChar) return;
     setStarting(true);
     const char = characters.find(c => c.id === selectedChar);
+
+    // Data integrity: a character may have at most ONE active campaign at a time.
+    // Archive any existing active sessions for this hero before starting a fresh one,
+    // so "the active session" is always unique and Resume can never be ambiguous.
+    const existingActive = await base44.entities.GameSession.filter({ character_id: selectedChar, is_active: true });
+    for (const s of existingActive) {
+      await base44.entities.GameSession.update(s.id, { is_active: false, in_combat: false });
+    }
+
     const openingSeed = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const session = await base44.entities.GameSession.create({
       character_id: selectedChar,
