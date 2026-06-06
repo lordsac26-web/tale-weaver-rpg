@@ -1354,13 +1354,21 @@ export default function Game() {
             character={character}
             onClose={() => setShowRestModal(false)}
             onRest={async (restType, hitDiceToSpend) => {
-              if (!character?.id) {
-                setNarrative(prev => [...prev, { type: 'narration', text: '⚠️ Unable to rest — no character is linked to this session.' }]);
+              // Verify the in-memory character still exists in the DB. If it was
+              // deleted/recreated, the stale id would 404 — so re-sync state first.
+              let restCharId = character?.id;
+              if (restCharId) {
+                const exists = await base44.entities.Character.filter({ id: restCharId });
+                if (!exists[0]) restCharId = null;
+              }
+              if (!restCharId) {
+                await loadState(); // self-heals: relinks session to the user's current character
+                setNarrative(prev => [...prev, { type: 'narration', text: '⚠️ Your character record changed — reloaded the session. Please try resting again.' }]);
                 setShowRestModal(false);
                 return;
               }
               const result = await base44.functions.invoke('handleRest', {
-                character_id: character.id,
+                character_id: restCharId,
                 rest_type: restType,
                 hit_dice_to_spend: hitDiceToSpend,
               });
