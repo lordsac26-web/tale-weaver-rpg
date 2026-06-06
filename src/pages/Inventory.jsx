@@ -34,6 +34,13 @@ export default function Inventory() {
   }, []);
 
   const loadCharacter = async () => {
+    // Honor a character_id from the URL (set when navigating from the Character Sheet),
+    // otherwise fall back to the user's first active character.
+    const charId = new URLSearchParams(window.location.search).get('character_id');
+    if (charId) {
+      const byId = await base44.entities.Character.filter({ id: charId });
+      if (byId[0]) { setCharacter(byId[0]); setLoading(false); return; }
+    }
     const user = await base44.auth.me();
     const chars = await base44.entities.Character.filter({ created_by: user.email, is_active: true });
     if (chars[0]) setCharacter(chars[0]);

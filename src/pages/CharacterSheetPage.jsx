@@ -166,19 +166,26 @@ export default function CharacterSheetPage() {
           {sessionId ? 'Back to Game' : 'Home'}
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-center">
           <Scroll className="w-4 h-4" style={{ color: '#c9a96e' }} />
           <span className="font-fantasy font-bold text-sm" style={{ color: '#f0c040' }}>Character Sheet</span>
           <button onClick={() => navigate(createPageUrl('Progression') + `?character_id=${character?.id}`)}
-            className="ml-2 px-2.5 py-1 rounded-lg text-xs font-fantasy transition-all"
+            className="ml-1 px-2.5 py-1 rounded-lg text-xs font-fantasy transition-all"
             style={{ background: 'rgba(60,40,10,0.7)', border: '1px solid rgba(240,192,64,0.3)', color: 'rgba(240,192,64,0.7)' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(240,192,64,0.6)'; e.currentTarget.style.color = '#f0c040'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(240,192,64,0.3)'; e.currentTarget.style.color = 'rgba(240,192,64,0.7)'; }}>
             ⭐ Progression
           </button>
+          <button onClick={() => navigate(createPageUrl('Inventory') + `?character_id=${character?.id}`)}
+            className="px-2.5 py-1 rounded-lg text-xs font-fantasy transition-all"
+            style={{ background: 'rgba(45,30,10,0.7)', border: '1px solid rgba(184,115,51,0.3)', color: 'rgba(212,149,90,0.75)' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(212,149,90,0.6)'; e.currentTarget.style.color = '#e8b86d'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(184,115,51,0.3)'; e.currentTarget.style.color = 'rgba(212,149,90,0.75)'; }}>
+            🎒 Inventory
+          </button>
           {isCaster && (
             <button onClick={() => navigate(createPageUrl('SpellManagement') + `?character_id=${character?.id}`)}
-              className="ml-2 px-2.5 py-1 rounded-lg text-xs font-fantasy transition-all"
+              className="px-2.5 py-1 rounded-lg text-xs font-fantasy transition-all"
               style={{ background: 'rgba(38,18,70,0.7)', border: '1px solid rgba(140,80,220,0.25)', color: 'rgba(192,132,252,0.6)' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,100,240,0.5)'; e.currentTarget.style.color = '#d8b4fe'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(140,80,220,0.25)'; e.currentTarget.style.color = 'rgba(192,132,252,0.6)'; }}>
