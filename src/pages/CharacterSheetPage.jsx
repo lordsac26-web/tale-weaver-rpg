@@ -169,6 +169,13 @@ export default function CharacterSheetPage() {
         <div className="flex items-center gap-2">
           <Scroll className="w-4 h-4" style={{ color: '#c9a96e' }} />
           <span className="font-fantasy font-bold text-sm" style={{ color: '#f0c040' }}>Character Sheet</span>
+          <button onClick={() => navigate(createPageUrl('Progression') + `?character_id=${character?.id}`)}
+            className="ml-2 px-2.5 py-1 rounded-lg text-xs font-fantasy transition-all"
+            style={{ background: 'rgba(60,40,10,0.7)', border: '1px solid rgba(240,192,64,0.3)', color: 'rgba(240,192,64,0.7)' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(240,192,64,0.6)'; e.currentTarget.style.color = '#f0c040'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(240,192,64,0.3)'; e.currentTarget.style.color = 'rgba(240,192,64,0.7)'; }}>
+            ⭐ Progression
+          </button>
           {isCaster && (
             <button onClick={() => navigate(createPageUrl('SpellManagement') + `?character_id=${character?.id}`)}
               className="ml-2 px-2.5 py-1 rounded-lg text-xs font-fantasy transition-all"
