@@ -67,8 +67,20 @@ export default function Game() {
     if (!sess) { navigate('/Home'); return; }
     setSession(sess);
 
-    const chars = await base44.entities.Character.filter({ id: sess.character_id });
+    let chars = await base44.entities.Character.filter({ id: sess.character_id });
     let loadedChar = chars[0] || null;
+
+    // Self-heal orphaned sessions: if the session points to a character that no
+    // longer exists (e.g. it was deleted/recreated), fall back to the user's most
+    // recent character and repair the session link so future calls work.
+    if (!loadedChar) {
+      const myChars = await base44.entities.Character.list('-created_date', 1);
+      if (myChars[0]) {
+        loadedChar = myChars[0];
+        chars = [loadedChar];
+        await base44.entities.GameSession.update(sessionId, { character_id: loadedChar.id });
+      }
+    }
 
     // Recalculate stats from equipment on every load to fix any stale/double-counted values
     if (loadedChar?.equipped && Object.keys(loadedChar.equipped).length > 0) {
