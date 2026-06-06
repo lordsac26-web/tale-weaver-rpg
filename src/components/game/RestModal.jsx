@@ -19,8 +19,14 @@ export default function RestModal({ character, onClose, onRest }) {
 
   const handleRest = async () => {
     setResting(true);
-    // Clamp to actual remaining before sending to backend
-    await onRest(restType, Math.min(hitDiceToSpend, maxHitDice));
+    // Keep the campfire animation on screen for at least 3s so the rest feels
+    // immersive and doesn't flash by — run the backend rest and the dwell timer
+    // in parallel, then resolve once both are done.
+    const minDwell = new Promise(resolve => setTimeout(resolve, 3000));
+    await Promise.all([
+      onRest(restType, Math.min(hitDiceToSpend, maxHitDice)),
+      minDwell,
+    ]);
     setResting(false);
   };
 

@@ -1373,13 +1373,23 @@ export default function Game() {
               }
 
               setCharacter(result.data.character);
-              const restText = result.data.narrative 
-                ? `🌙 ${result.data.narrative} ${result.data.restorations.join(', ')}.`
-                : `🌙 You take a ${restType} rest. ${result.data.restorations.join(', ')}.`;
-              
+
+              // Build a flavorful rest narration. Long rests come with a backend narrative;
+              // short rests get a brief campfire-flavored intro generated here.
+              const shortRestFlavor = [
+                'You catch your breath beside a low fire, tending wounds and steadying your nerves.',
+                'A quiet hour passes. You sharpen your gear, eat a little, and let the ache fade.',
+                'You lean against the stone and rest your eyes for a while, regaining your composure.',
+                'The brief respite does you good — your breathing slows and your strength returns.',
+              ];
+              const intro = restType === 'long'
+                ? (result.data.narrative || 'You sleep through the night and wake restored.')
+                : shortRestFlavor[Math.floor(Math.random() * shortRestFlavor.length)];
+              const icon = restType === 'long' ? '🌙' : '☕';
+
               setNarrative(prev => [...prev, {
                 type: 'narration',
-                text: restText
+                text: `${icon} ${intro} ${result.data.restorations.join(', ')}.`
               }]);
               setShowRestModal(false);
               await loadState();
