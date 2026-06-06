@@ -24,6 +24,9 @@ import RestModal from '@/components/game/RestModal';
 import GameToolbar from '@/components/game/GameToolbar';
 import CampaignJournal from '@/components/game/CampaignJournal';
 import { stopAllNarration } from '@/components/game/narrationControl';
+import LevelUpToast from '@/components/game/LevelUpToast';
+import LevelUpModal from '@/components/game/LevelUpModal';
+import { canLevelUp } from '@/components/game/levelUpUtils';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -59,6 +62,8 @@ export default function Game() {
   const [showRestModal, setShowRestModal] = useState(false);
   const [mainViewTab, setMainViewTab] = useState('story');
   const [combatViewTab, setCombatViewTab] = useState('combat'); // 'story' | 'combat' | 'journal' — for mobile
+  const [showLevelUpToast, setShowLevelUpToast] = useState(false);
+  const [showLevelUpModal, setShowLevelUpModal] = useState(false);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate('/Home'); return; }
@@ -144,6 +149,26 @@ export default function Game() {
     window.addEventListener('open-rest-modal', handler);
     return () => window.removeEventListener('open-rest-modal', handler);
   }, []);
+
+  // Level-up detector: whenever the character's XP crosses the next threshold,
+  // surface the level-up notification banner (unless the wizard is already open).
+  useEffect(() => {
+    if (character && canLevelUp(character) && !showLevelUpModal) {
+      setShowLevelUpToast(true);
+    } else {
+      setShowLevelUpToast(false);
+    }
+  }, [character?.xp, character?.level, character?.multiclass, showLevelUpModal]);
+
+  // Apply level-up choices from the wizard to the character record.
+  const handleLevelUp = async (updates) => {
+    if (!character?.id) return;
+    await base44.entities.Character.update(character.id, updates);
+    setCharacter(prev => prev ? { ...prev, ...updates } : prev);
+    setShowLevelUpModal(false);
+    setShowLevelUpToast(false);
+    setNarrative(prev => [...prev, { type: 'xp_gain', text: `⭐ ${character.name} reached Level ${updates.level || character.level}!` }]);
+  };
 
   // Reload combat when a server-authoritative ability (e.g. Action Surge) changes combat state
   useEffect(() => {
@@ -1343,6 +1368,28 @@ export default function Game() {
             onMiracle={handleMiracle}
             onDeath={handleDeath}
             onClose={() => setShowDeathModal(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Level-Up Notification Toast — appears when XP threshold is crossed */}
+      <AnimatePresence>
+        {showLevelUpToast && !showLevelUpModal && character && (
+          <LevelUpToast
+            character={character}
+            onLevelUp={() => { setShowLevelUpToast(false); setShowLevelUpModal(true); }}
+            onDismiss={() => setShowLevelUpToast(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Level-Up Wizard — HP roll/average, ASI/feat, subclass, new spells */}
+      <AnimatePresence>
+        {showLevelUpModal && character && (
+          <LevelUpModal
+            character={character}
+            onLevelUp={handleLevelUp}
+            onClose={() => setShowLevelUpModal(false)}
           />
         )}
       </AnimatePresence>
