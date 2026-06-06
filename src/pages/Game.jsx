@@ -1342,6 +1342,11 @@ export default function Game() {
             character={character}
             onClose={() => setShowRestModal(false)}
             onRest={async (restType, hitDiceToSpend) => {
+              if (!character?.id) {
+                setNarrative(prev => [...prev, { type: 'narration', text: '⚠️ Unable to rest — no character is linked to this session.' }]);
+                setShowRestModal(false);
+                return;
+              }
               const result = await base44.functions.invoke('handleRest', {
                 character_id: character.id,
                 rest_type: restType,
