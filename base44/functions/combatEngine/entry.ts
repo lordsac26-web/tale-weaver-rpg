@@ -1392,6 +1392,19 @@ Deno.serve(async (req) => {
       return Response.json({ no_target: true });
     }
 
+    // SYNC PLAYER HP FROM LIVE CHARACTER RECORD (fixes Second Wind / potion heals being
+    // wiped). The combatant snapshot can go stale when HP changes outside the engine
+    // (Second Wind, healing potions, etc.). Re-read the authoritative Character HP so
+    // enemy damage is subtracted from the player's ACTUAL current HP, not the snapshot.
+    {
+      const livePlayer = await base44.entities.Character.get(player.id);
+      if (livePlayer) {
+        player.hp_current = Math.min(livePlayer.hp_max ?? player.hp_max, livePlayer.hp_current ?? player.hp_current);
+        player.hp_max = livePlayer.hp_max ?? player.hp_max;
+        player.is_conscious = player.hp_current > 0;
+      }
+    }
+
     // Player is at 0 HP (downed): an attack that hits causes a death save failure (PHB p.197).
     // A melee hit from within 5 ft is an automatic critical → 2 failures.
     if (!player.is_conscious || player.hp_current === 0) {
