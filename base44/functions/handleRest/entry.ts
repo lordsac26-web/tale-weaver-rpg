@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Spell slot progression by class
 const SPELL_SLOTS_BY_CLASS = {
@@ -82,6 +82,7 @@ Deno.serve(async (req) => {
 
   const updates = {};
   const restorations = [];
+  let restNarrative; // declared in outer scope so it's available in the final response for any rest type
 
   // Hit die size by class (PHB)
   const HIT_DIE = { Fighter: 10, Rogue: 8, Wizard: 6, Cleric: 8, Ranger: 10, Paladin: 10, Barbarian: 12, Bard: 8, Druid: 8, Monk: 8, Sorcerer: 6, Warlock: 8, Artificer: 8 };
@@ -163,7 +164,7 @@ Deno.serve(async (req) => {
       'You make camp under the stars. The quiet of the wilderness soothes your weary soul.',
       'Your rest is deep and dreamless. When you wake, you feel completely restored.',
     ];
-    const restNarrative = narratives[Math.floor(Math.random() * narratives.length)];
+    restNarrative = narratives[Math.floor(Math.random() * narratives.length)];
     // LONG REST (8 hours)
     updates.hp_current = character.hp_max;
     restorations.push('Full HP restored');
