@@ -5,15 +5,14 @@ import { Link } from 'react-router-dom';
 import { Sword, Plus, Play, BookOpen, Skull, Sparkles, ChevronDown, User, Scroll, Library, Heart, Shield, Star, Wand2, TrendingUp, BookMarked, Loader2, Swords } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import CharacterSheet from '@/components/game/CharacterSheet';
 import BackgroundEffects from '@/components/home/BackgroundEffects';
 
 export default function Home() {
+  const navigate = useNavigate();
   const [characters, setCharacters] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCharMenu, setShowCharMenu] = useState(false);
-  const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [fxEnabled, setFxEnabled] = useState(() => localStorage.getItem('homeFx') !== 'off');
 
   useEffect(() => {
@@ -75,7 +74,7 @@ export default function Home() {
                     boxShadow: '0 8px 32px rgba(0,0,0,0.8), 0 0 20px rgba(184,115,51,0.1)' }}>
                   {characters.map((char, i) => (
                     <button key={char.id}
-                      onClick={() => { setSelectedCharacter(char); setShowCharMenu(false); }}
+                      onClick={() => { navigate(`/CharacterSheetPage?character_id=${char.id}`); setShowCharMenu(false); }}
                       className="w-full flex items-center gap-3 px-4 py-3 text-left transition-all"
                       style={{ borderBottom: i < characters.length-1 ? '1px solid rgba(184,115,51,0.1)' : 'none' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'rgba(60,30,10,0.6)'}
@@ -245,7 +244,7 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-5">
                 {characters.map((char, i) => (
                   <motion.div key={char.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.4 }}>
-                    <CharacterCard character={char} onViewSheet={() => setSelectedCharacter(char)} />
+                    <CharacterCard character={char} onViewSheet={() => navigate(`/CharacterSheetPage?character_id=${char.id}`)} />
                   </motion.div>
                 ))}
               </div>
@@ -266,19 +265,6 @@ export default function Home() {
                 ))}
               </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Character Sheet Modal */}
-        <AnimatePresence>
-          {selectedCharacter && (
-            <CharacterSheet
-              character={selectedCharacter}
-              onClose={() => setSelectedCharacter(null)}
-              onCharacterUpdate={(updated) => {
-                setCharacters(prev => prev.map(c => c.id === updated.id ? updated : c));
-                setSelectedCharacter(updated);
-              }} />
           )}
         </AnimatePresence>
 
@@ -452,21 +438,13 @@ function CharacterCard({ character, onViewSheet }) {
             </>
           ) : (
             <>
-              <button onClick={onViewSheet}
+              <button onClick={() => navigate(`/CharacterSheetPage?character_id=${character.id}`)}
                 className="flex-1 py-1.5 rounded-lg text-xs font-fantasy transition-all flex items-center justify-center gap-1.5"
                 style={{ background: 'rgba(60,30,8,0.6)', border: '1px solid rgba(184,115,51,0.3)', color: 'var(--brass-gold)',
                   textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(92,51,24,0.7)'; e.currentTarget.style.borderColor = 'rgba(212,149,90,0.55)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(60,30,8,0.6)'; e.currentTarget.style.borderColor = 'rgba(184,115,51,0.3)'; }}>
-                <User className="w-3 h-3" /> View Sheet
-              </button>
-              <button onClick={() => navigate(`/CharacterSheetPage?character_id=${character.id}`)}
-                className="py-1.5 px-2.5 rounded-lg text-xs transition-all"
-                title="Full Character Sheet"
-                style={{ background: 'rgba(38,10,70,0.5)', border: '1px solid rgba(130,70,210,0.25)', color: 'rgba(190,155,255,0.7)' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(160,110,255,0.5)'; e.currentTarget.style.color = '#dfc8ff'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(130,70,210,0.25)'; e.currentTarget.style.color = 'rgba(190,155,255,0.7)'; }}>
-                <Scroll className="w-3 h-3" />
+                <Scroll className="w-3 h-3" /> View Sheet
               </button>
               <button onClick={handleDelete}
                 className="py-1.5 px-2.5 rounded-lg text-xs transition-all"
