@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, User, TrendingUp, Package, Sparkles, Heart, Shield, Zap, Trash2 } from 'lucide-react';
+import { ChevronLeft, User, TrendingUp, Package, Sparkles, Heart, Shield, Zap, Trash2, Star } from 'lucide-react';
 import { PROFICIENCY_BY_LEVEL, calcStatMod, calcModDisplay, SKILL_STAT_MAP } from '@/components/game/gameData';
 import { getSpellSlotsForLevel, getSpellcastingAbility } from '@/components/game/spellData';
 import EncumbranceBar from '@/components/inventory/EncumbranceBar';
@@ -57,6 +57,14 @@ export default function CharacterSheetFull() {
             Level {character.level} {character.race} {character.class}
           </p>
         </div>
+        <button onClick={() => navigate('/Progression')}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-fantasy text-xs flex-shrink-0 transition-all"
+          style={{ background: 'rgba(60,40,10,0.7)', border: '1px solid rgba(240,192,64,0.4)', color: '#f0c040' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(80,52,14,0.85)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(60,40,10,0.7)'; }}>
+          <Star className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Progression</span>
+        </button>
       </div>
 
       {/* Quick Stats Bar */}
