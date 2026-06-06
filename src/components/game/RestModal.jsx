@@ -22,12 +22,20 @@ export default function RestModal({ character, onClose, onRest }) {
     // Keep the campfire animation on screen for at least 3s so the rest feels
     // immersive and doesn't flash by — run the backend rest and the dwell timer
     // in parallel, then resolve once both are done.
+    // Wrapped in try/finally so that even if onRest throws, the spinner clears
+    // and the modal never gets stuck on the campfire animation.
     const minDwell = new Promise(resolve => setTimeout(resolve, 3000));
-    await Promise.all([
-      onRest(restType, Math.min(hitDiceToSpend, maxHitDice)),
-      minDwell,
-    ]);
-    setResting(false);
+    try {
+      await Promise.all([
+        onRest(restType, Math.min(hitDiceToSpend, maxHitDice)),
+        minDwell,
+      ]);
+    } catch (err) {
+      console.error('Rest failed:', err);
+      await minDwell;
+    } finally {
+      setResting(false);
+    }
   };
 
   // Calculate what gets restored

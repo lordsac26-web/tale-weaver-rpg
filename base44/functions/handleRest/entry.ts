@@ -65,8 +65,16 @@ Deno.serve(async (req) => {
 
   const { character_id, rest_type, hit_dice_to_spend, had_food_water = true, location_safe = false } = await req.json();
 
-  const chars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
-  const character = chars[0];
+  // Fetch with a USER-SCOPED .get() (same pattern as combatEngine). The player owns
+  // their character, so RLS lets this through, and a successful fetch proves ownership.
+  // (Previously used asServiceRole + filter({ id }), which returned no rows and caused
+  // spurious "Character not found" 404s — the root cause of rests appearing to hang.)
+  let character;
+  try {
+    character = await base44.entities.Character.get(character_id);
+  } catch {
+    character = null;
+  }
   if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
 
   const charClass = character.class;
@@ -242,13 +250,13 @@ Deno.serve(async (req) => {
     restorations.push('All abilities recharged');
   }
 
-  await base44.asServiceRole.entities.Character.update(character_id, updates);
+  await base44.entities.Character.update(character_id, updates);
 
-  const updatedChars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
+  const updatedChar = await base44.entities.Character.get(character_id);
   const healing = updates.hp_current != null ? updates.hp_current - (character.hp_current || 0) : 0;
   
   return Response.json({
-    character: updatedChars[0],
+    character: updatedChar,
     healing,
     rest_type,
     restorations,

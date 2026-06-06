@@ -1401,23 +1401,21 @@ export default function Game() {
             character={character}
             onClose={() => setShowRestModal(false)}
             onRest={async (restType, hitDiceToSpend) => {
-              // Verify the in-memory character still exists in the DB. If it was
-              // deleted/recreated, the stale id would 404 — so re-sync state first.
-              let restCharId = character?.id;
-              if (restCharId) {
-                const exists = await base44.entities.Character.filter({ id: restCharId });
-                if (!exists[0]) restCharId = null;
-              }
+              const restCharId = character?.id;
               if (!restCharId) {
-                await loadState(); // self-heals: relinks session to the user's current character
+                await loadState();
                 setNarrative(prev => [...prev, { type: 'narration', text: '⚠️ Your character record changed — reloaded the session. Please try resting again.' }]);
                 setShowRestModal(false);
                 return;
               }
+              // Mark whether this location is safe so the backend can skip the
+              // random-encounter interruption roll while resting in town/inn.
+              const locationSafe = /town|inn|tavern|village|city|camp|home|sanctuary|temple/i.test(session?.current_location || '');
               const result = await base44.functions.invoke('handleRest', {
                 character_id: restCharId,
                 rest_type: restType,
                 hit_dice_to_spend: hitDiceToSpend,
+                location_safe: locationSafe,
               });
 
               // Check for interrupted rest
@@ -1459,9 +1457,20 @@ export default function Game() {
                 : shortRestFlavor[Math.floor(Math.random() * shortRestFlavor.length)];
               const icon = restType === 'long' ? '🌙' : '☕';
 
+              // Always surface the actual HP restored up front, then list the
+              // detailed restorations (spell slots, hit dice, abilities, etc.).
+              const updatedChar = result.data.character || {};
+              const healed = result.data.healing || 0;
+              const hpLine = healed > 0
+                ? `❤️ Restored ${healed} HP (now ${updatedChar.hp_current}/${updatedChar.hp_max}).`
+                : (restType === 'long' ? `❤️ Already at full health (${updatedChar.hp_current}/${updatedChar.hp_max}).` : '');
+              const detailLine = (result.data.restorations || []).length > 0
+                ? ` ${result.data.restorations.join(', ')}.`
+                : '';
+
               setNarrative(prev => [...prev, {
                 type: 'narration',
-                text: `${icon} ${intro} ${result.data.restorations.join(', ')}.`
+                text: `${icon} ${intro} ${hpLine}${detailLine}`.trim()
               }]);
               setShowRestModal(false);
               await loadState();
