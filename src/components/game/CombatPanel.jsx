@@ -347,6 +347,15 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                 onToggleModifier={(id) => setCombatModifiers(prev => ({ ...prev, [id]: !prev[id] }))}
                 onMessage={(msg) => setAbilityMessages(prev => [...prev.slice(-2), { id: Date.now(), text: msg }])}
                 onAbilityUsed={async (id, data) => {
+                  // Second Wind: ability already wrote HP + used-flag to DB. Sync the
+                  // local character so the HP bar updates and the button shows "Used".
+                  if (id === 'second_wind') {
+                    onCharacterUpdate?.((prev) => prev ? {
+                      ...prev,
+                      hp_current: data?.newHp ?? prev.hp_current,
+                      short_rest_abilities: { ...(prev.short_rest_abilities || {}), second_wind: true },
+                    } : prev);
+                  }
                   // Action Surge: grant extra action this turn — server-authoritative.
                   // The backend validates Fighter L2+, enforces once/short-rest, and
                   // refunds one action in world_state so actionsRemaining increases.
