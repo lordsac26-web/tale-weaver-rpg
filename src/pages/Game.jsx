@@ -1442,7 +1442,10 @@ export default function Game() {
                 return;
               }
 
-              setCharacter(result.data.character);
+              // Apply the restored character FIRST so the HUD's HP bar updates while the
+              // campfire animation is still on screen — the dwell timer in RestModal keeps
+              // the animation up for ~3s, letting it transition seamlessly into the new HP.
+              setCharacter(prev => prev ? { ...prev, ...result.data.character } : result.data.character);
 
               // Build a flavorful rest narration. Long rests come with a backend narrative;
               // short rests get a brief campfire-flavored intro generated here.
