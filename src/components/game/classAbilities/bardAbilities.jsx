@@ -1,8 +1,11 @@
 import React from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Shield } from 'lucide-react';
 import { calcStatMod } from '../gameData';
+import { getFightingStyleDesc } from './abilityHelpers';
+import { buildBardSubclassAbilities } from './bardSubclasses';
 
-// Build Bard abilities: Bardic Inspiration. (Spending handled via spendBardic.)
+// Build Bard abilities: Bardic Inspiration + College subclass features.
+// (Inspiration spending handled via spendBardic.)
 export function buildBardAbilities(ctx) {
   const { character, level, spendBardic } = ctx;
   const abilities = [];
@@ -27,6 +30,26 @@ export function buildBardAbilities(ctx) {
     available: inspireLeft > 0,
     onUse: () => spendBardic(),
   });
+
+  // College subclass features (Valor, Swords, Whispers, Glamour, Eloquence, Spirits, …)
+  abilities.push(...buildBardSubclassAbilities(ctx));
+
+  // Fighting Style reminder for College of Swords (passive info pill)
+  if (character.fighting_style) {
+    abilities.push({
+      id: 'fighting_style',
+      name: 'Fighting Style',
+      icon: <Shield className="w-4 h-4" />,
+      color: '#93c5fd',
+      borderColor: 'rgba(100,160,255,0.3)',
+      bgColor: 'rgba(8,20,50,0.5)',
+      type: 'passive',
+      shortDesc: character.fighting_style,
+      description: getFightingStyleDesc(character.fighting_style),
+      used: false,
+      available: true,
+    });
+  }
 
   return abilities;
 }

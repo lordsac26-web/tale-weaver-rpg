@@ -213,6 +213,21 @@ export function getRequiredChoices(character) {
     });
   }
 
+  // ─── Bard: College of Swords — Fighting Style (level 3) ───
+  // Blades choose between Dueling and Two-Weapon Fighting (PHB p.55 / XGtE).
+  if (cls === 'Bard' && subclass.includes('sword') && level >= 3) {
+    choices.push({
+      id: 'fighting_style',
+      label: 'Fighting Style (College of Swords)',
+      description: 'As a Blade, choose a fighting style. You can\'t take the same Fighting Style more than once.',
+      type: 'single',
+      options: [
+        { id: 'dueling', name: 'Dueling', desc: '+2 damage when wielding a melee weapon in one hand and no other weapons.' },
+        { id: 'two_weapon', name: 'Two-Weapon Fighting', desc: 'Add your ability modifier to the damage of the second attack with two-weapon fighting.' },
+      ],
+    });
+  }
+
   // ─── Barbarian: Totem Spirit (Path of the Totem Warrior, level 3) ───
   if (cls === 'Barbarian' && subclass.includes('totem') && level >= 3) {
     choices.push({
