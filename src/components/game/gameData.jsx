@@ -191,11 +191,12 @@ export const RACES = {
   },
   Warforged: {
     traits: [
-      'Constructed Resilience (advantage on saves vs poison, resistance to poison damage, immune to disease, no need to eat/drink/breathe, immune to magic sleep)',
-      'Sentry\'s Rest (6 hrs inactive but conscious instead of sleeping)',
-      'Integrated Protection (AC = 11 + DEX mod when unarmored; can don armor and it integrates into body)',
-      'Specialized Design (proficiency in one skill + one tool of choice)',
-      'Composite Plating (natural armor integrates with worn armor, +1 AC bonus)',
+      'Constructed Resilience (advantage on saves vs being poisoned; resistance to poison damage; immune to disease; do not need to eat, drink, or breathe; immune to being put to magical sleep)',
+      'Sentry\'s Rest (when you take a long rest, spend 6 hours in an inactive but conscious motionless state — you remain aware of your surroundings and gain the normal benefits of a long rest without sleeping)',
+      'Integrated Protection (your body has built-in defensive layers. Unarmored AC = 11 + DEX modifier. You can don only armor you are proficient with; it merges into your body over 1 hour and cannot be removed against your will)',
+      'Specialized Design (gain one skill proficiency and one tool proficiency of your choice, reflecting your original purpose)',
+      'Composite Plating (your natural plating counts as worn armor; while not wearing other armor you gain a +1 bonus to AC, stacking with Integrated Protection)',
+      'Tireless Construct (you cannot gain levels of exhaustion from lack of sleep, and forced-march/marching fatigue affects you at half rate)',
     ],
     stat_bonuses: { constitution: 2 },
     stat_choices: 1,
@@ -204,18 +205,22 @@ export const RACES = {
     natural_armor_bonus: 1,
     speed: 30, size: 'Medium',
     languages: ['Common', 'one extra language'],
-    description: 'Living constructs forged for war and imbued with sentience. Warforged blend the durability of metal and wood with the adaptability of flesh. They do not sleep, cannot be poisoned, and are immune to disease — making them relentless warriors and tireless adventurers.',
+    description: 'Living constructs forged for war and imbued with sentience. Warforged blend the durability of metal, stone, and wood with the adaptability of flesh and a spark of true consciousness. They do not sleep, cannot be poisoned, and are immune to disease — making them relentless warriors and tireless adventurers who carry the purpose of their creation into every battle.',
     subraces: [
-      { name: 'Envoy', stat_bonuses: {}, traits: ['Integrated Tool (one tool built into body, proficiency with it, can use it as part of an action)', 'Specialized Design (one skill + one tool proficiency)'], description: 'Envoys were built for specific functions beyond combat, with a tool integrated directly into their frame.' },
-      { name: 'Juggernaut', stat_bonuses: {}, traits: ['Iron Fists (unarmed strikes deal 1d4 bludgeoning damage)', 'Powerful Build (count as Large for carry/push/lift)', 'Constructed Resilience (all base Warforged traits apply)'], description: 'The largest and most heavily armored of the Warforged, Juggernauts were built as frontline siege weapons.' },
-      { name: 'Skirmisher', stat_bonuses: { dexterity: 1 }, traits: ['Light Step (speed increases by 5 ft when not wearing heavy armor)', 'Integrated Weapon (can integrate one light weapon into body)'], description: 'Lightweight Warforged built for speed and stealth operations, favored by scouts and rangers.' },
+      { name: 'Envoy', stat_bonuses: { intelligence: 1 }, traits: ['Integrated Tool (one set of artisan\'s or thieves\' tools is built into your body; you have proficiency with it and can use it without holding it)', 'Specialized Protocols (gain proficiency in one additional skill of your choice)', 'Quick-Calc Mind (advantage on Intelligence (Investigation) checks to recall technical or constructed-object lore)'], description: 'Envoys were built for diplomacy, craft, and specialized labor rather than the front line. A tool is integrated directly into their frame, and their refined cognition makes them superb problem-solvers and negotiators.' },
+      { name: 'Juggernaut', stat_bonuses: { strength: 1 }, traits: ['Iron Fists (your unarmed strikes deal 1d6 bludgeoning damage)', 'Powerful Build (count as one size larger for carrying capacity and for pushing, dragging, or lifting)', 'Siege Frame (advantage on saving throws against being knocked prone or moved against your will)'], description: 'The largest and most heavily armored of the Warforged, Juggernauts were forged as living siege engines. They smash through fortifications and hold the line where lesser soldiers break.' },
+      { name: 'Skirmisher', stat_bonuses: { dexterity: 1 }, traits: ['Light Step (your speed increases by 5 ft while you are not wearing heavy armor)', 'Integrated Weapon (one light or finesse weapon folds into your body; you can draw or stow it instantly and never be disarmed of it)', 'Evasive Servos (when you take the Dash action, opportunity attacks against you have disadvantage this turn)'], description: 'Lightweight Warforged built for reconnaissance and rapid strikes. Skirmishers move with uncanny quiet and speed, favored by scouts, rangers, and infiltrators.' },
+      { name: 'Bulwark', stat_bonuses: { constitution: 1 }, traits: ['Living Shield (as a reaction when a creature within 5 ft is hit by an attack, you can impose -2 to that attack\'s damage by interposing your plated frame; usable proficiency-bonus times per long rest)', 'Reinforced Chassis (your Composite Plating AC bonus increases to +2 while you are not wearing other armor)', 'Anchored Stance (you have advantage on Strength (Athletics) checks to resist being shoved or grappled)'], description: 'Defensive constructs designed to guard high-value targets. Bulwarks plant themselves between danger and their allies, their reinforced plating turning aside blows meant for others.' },
+      { name: 'Reflector', stat_bonuses: { wisdom: 1 }, traits: ['Mirror Plating (you have resistance to radiant damage and advantage on saving throws against being blinded)', 'Spell Deflection (when you succeed on a saving throw against a spell that targets only you, you take no damage instead of half; usable once per short rest)', 'Calibrated Senses (you gain proficiency in Perception and ignore the effects of bright glare or sudden light)'], description: 'Arcane-warding constructs plated in mirror-bright alloy, built to escort mages and survive magical bombardment. Reflectors turn hostile magic aside and shine like beacons in the dark.' },
     ],
     warforged_feats: [
-      { name: 'Armor of the Colossus', desc: 'Your Integrated Protection increases to +2 AC. Attacker takes 1d6+STR bludgeoning on melee hit.', prerequisite: 'Warforged' },
-      { name: 'Enhanced Arcane Focus', desc: 'Use your body as arcane focus. +1 to spell attack rolls and spell save DC.', prerequisite: 'Warforged, spellcasting class' },
-      { name: 'Integrated Defense Protocol', desc: 'Reaction: gain resistance to one attack\'s damage type until start of your next turn. 1/short rest.', prerequisite: 'Warforged' },
-      { name: 'Warforged Resilience', desc: 'CON +1 (max 20). On successful death save, regain 1 HP instead of stabilizing.', prerequisite: 'Warforged' },
-      { name: 'Self-Repair Protocol', desc: 'Bonus action: spend a Hit Die to heal (die + CON mod). Proficiency bonus uses per long rest.', prerequisite: 'Warforged' },
+      { name: 'Armor of the Colossus', desc: 'Your Integrated Protection AC bonus increases to +2. The first creature that hits you with a melee attack on each of its turns takes 1d6 + your STR modifier bludgeoning damage from your retaliating plates.', prerequisite: 'Warforged' },
+      { name: 'Enhanced Arcane Focus', desc: 'You can use your body as a spellcasting focus. You gain +1 to spell attack rolls, your spell save DC increases by 1, and your spells ignore the verbal/material components of any focus you would normally need to hold.', prerequisite: 'Warforged, spellcasting feature' },
+      { name: 'Integrated Defense Protocol', desc: 'As a reaction when you take damage, you gain resistance to that damage type until the start of your next turn. You can use this a number of times equal to your proficiency bonus, regaining all uses on a short or long rest.', prerequisite: 'Warforged' },
+      { name: 'Warforged Resilience', desc: 'Increase your Constitution by 1 (max 20). You have advantage on death saving throws, and on a successful death save you regain 1 hit point instead of merely stabilizing.', prerequisite: 'Warforged' },
+      { name: 'Self-Repair Protocol', desc: 'As a bonus action you can spend one Hit Die to heal yourself, regaining HP equal to the die roll + your CON modifier. You can do this a number of times equal to your proficiency bonus per long rest.', prerequisite: 'Warforged' },
+      { name: 'Overclocked Servos', desc: 'Increase your Dexterity or Constitution by 1 (max 20). Once per short rest you can take the Dash or Disengage action as a bonus action.', prerequisite: 'Warforged' },
+      { name: 'Adamantine Core', desc: 'Increase your Constitution by 1 (max 20). You are immune to critical hits while you are not wearing armor other than your Composite Plating, as attacks glance off your hardened core.', prerequisite: 'Warforged' },
     ],
   },
 
@@ -387,12 +392,16 @@ export const CLASSES = {
     skills: ['Athletics', 'Acrobatics', 'Animal Handling', 'History', 'Insight', 'Intimidation', 'Perception', 'Survival'],
     skill_count: 2,
     subclasses: [
-      { name: 'Champion', desc: 'Improved Critical (crit on 19-20), Remarkable Athlete, Additional Fighting Style.', features: { 3: ['Improved Critical'], 7: ['Remarkable Athlete'], 10: ['Additional Fighting Style'] } },
-      { name: 'Battle Master', desc: 'Maneuvers using Superiority Dice (d8s). Tactical flexibility in combat.', features: { 3: ['Combat Superiority (4d8)', 'Student of War'], 7: ['Know Your Enemy'], 10: ['Improved Combat Superiority (d10)'] } },
-      { name: 'Eldritch Knight', desc: 'Spellcasting (INT, Abjuration & Evocation), Weapon Bond, War Magic.', features: { 3: ['Spellcasting', 'Weapon Bond'], 7: ['War Magic'], 10: ['Eldritch Strike'] } },
-      { name: 'Cavalier', desc: 'Mount-focused. Born to the Saddle, Unwavering Mark, Warding Maneuver.', features: { 3: ['Born to the Saddle', 'Unwavering Mark'], 7: ['Warding Maneuver'] } },
-      { name: 'Samurai', desc: 'Fighting Spirit (temp HP + advantage), Elegant Courtier (CHA proficiency).', features: { 3: ['Fighting Spirit', 'Bonus Proficiency'], 7: ['Elegant Courtier'] } },
-      { name: 'Arcane Archer', desc: 'Arcane Shot options, Arcane Shot (2/short rest), Curving Shot.', features: { 3: ['Arcane Shot (2 options)'], 7: ['Curving Shot', 'Magic Arrow'] } },
+      { name: 'Champion', desc: 'The straightforward path of raw physical excellence. Improved Critical lets you score critical hits on a roll of 19-20 (18-20 at 15th level), Remarkable Athlete adds half your proficiency to physical checks and improves your running jumps, and an Additional Fighting Style broadens your battlefield versatility — capped by Survivor, which regenerates HP each turn in the thick of combat.', features: { 3: ['Improved Critical (crit on 19-20)'], 7: ['Remarkable Athlete (+½ prof to STR/DEX/CON checks, better jumps)'], 10: ['Additional Fighting Style'], 15: ['Superior Critical (crit on 18-20)'], 18: ['Survivor (regain 5+CON HP each turn while below half HP)'] } },
+      { name: 'Battle Master', desc: 'The tactician\'s archetype, built around Superiority Dice (start with 4d8) that fuel Maneuvers — Trip Attack, Disarm, Riposte, Commander\'s Strike, Precision Attack and more. Student of War grants an artisan\'s tool proficiency, Know Your Enemy reads a foe\'s strengths, and your dice grow to d10s then d12s as you master the art of war.', features: { 3: ['Combat Superiority (4d8, 3 maneuvers)', 'Student of War'], 7: ['Know Your Enemy', 'Superiority Dice (5d8)'], 10: ['Improved Combat Superiority (d10)', 'Extra Maneuvers'], 15: ['Relentless (regain 1 die when you roll initiative with none)'], 18: ['Improved Combat Superiority (d12)'] } },
+      { name: 'Eldritch Knight', desc: 'A martial spellblade blending steel and arcane magic. You learn Wizard spells (focused on Abjuration & Evocation), forge a Weapon Bond so your blade can never be disarmed and returns to your hand, and gain War Magic to cast a cantrip and attack in the same turn — culminating in Eldritch Strike (your hits weaken enemy saves) and a second bonded weapon attack.', features: { 3: ['Spellcasting (INT, Abjuration & Evocation)', 'Weapon Bond'], 7: ['War Magic (cantrip + weapon attack as bonus action)'], 10: ['Eldritch Strike (your hits give enemies disadvantage on your next spell save)'], 15: ['Arcane Charge (teleport 30 ft when you Action Surge)'], 18: ['Improved War Magic (cast a 1st-level spell + attack)'] } },
+      { name: 'Cavalier', desc: 'A guardian of the saddle and protector of allies. Born to the Saddle keeps you mounted and mobile, Unwavering Mark punishes enemies who ignore you and dare to strike your friends, Warding Maneuver lets you shield an ally as a reaction, and later features make you nearly impossible to knock down or move against your will.', features: { 3: ['Born to the Saddle', 'Unwavering Mark (mark foes; punish them for attacking others)', 'Bonus Proficiency'], 7: ['Warding Maneuver (reaction: add 1d8 to ally AC + reduce damage)'], 10: ['Hold the Line (enemies provoke when they move near you; their speed drops to 0 on a hit)'], 15: ['Ferocious Charger (knock prone after a 10+ ft charge)'], 18: ['Vigilant Defender (a reaction opportunity attack against every other creature\'s turn)'] } },
+      { name: 'Samurai', desc: 'A disciplined warrior of indomitable focus. Fighting Spirit grants advantage on attacks and temporary HP as a bonus action, Elegant Courtier adds Wisdom to a Charisma save and grants a social proficiency, Rapid Strike trades advantage for an extra attack, and Strength Before Death lets you defy a killing blow with one final flurry of action.', features: { 3: ['Fighting Spirit (3/long rest: advantage on attacks + temp HP)', 'Bonus Proficiency'], 7: ['Elegant Courtier (add WIS to a CHA save; proficiency in Persuasion/Wisdom)'], 10: ['Tireless Spirit (regain a Fighting Spirit use on initiative)'], 15: ['Rapid Strike (trade advantage for one extra attack)'], 18: ['Strength Before Death (reaction at 0 HP: take a full turn before falling)'] } },
+      { name: 'Arcane Archer', desc: 'A ranger-mage of the bow who infuses arrows with magic. Choose Arcane Shot options — Banishing, Bursting, Grasping, Piercing, Seeking and more — fired 2/short rest, gain Arcane Archer Lore (a skill or Druidcraft/Prestidigitation cantrip), Curving Shot to redirect a missed magic arrow, and Magic Arrow making every arrow magical and able to seek targets behind cover.', features: { 3: ['Arcane Archer Lore', 'Arcane Shot (2 options, 2/short rest)'], 7: ['Curving Shot (reroll a missed magic-arrow at another target)', 'Magic Arrow (all arrows count as magical)'], 10: ['Extra Arcane Shot option', 'Ever-Ready Shot (regain a use on initiative)'], 15: ['Additional Arcane Shot option'], 18: ['Improved Shots (+2d6 to all Arcane Shot damage)'] } },
+      { name: 'Psi Warrior', desc: 'A fighter awakened to latent psionic power, channeling the mind as a weapon. You gain Psionic Energy Dice that fuel Protective Field (reduce damage to yourself or an ally), Psionic Strike (bonus force damage on a hit), and Telekinetic Movement (move objects and creatures). Higher levels grant a psionic step, telekinetic flight, and the power to deflect attacks with your mind.', features: { 3: ['Psionic Power (Energy Dice)', 'Protective Field', 'Psionic Strike', 'Telekinetic Movement'], 7: ['Telekinetic Adept (Psi-Powered Leap + Telekinetic Thrust)'], 10: ['Guarded Mind (resistance to psychic damage; end charm/fright by spending a die)'], 15: ['Bulwark of Force (grant yourself/allies half cover as a bonus action)'], 18: ['Telekinetic Master (cast Telekinesis at will; bonus attack while concentrating)'] } },
+      { name: 'Rune Knight', desc: 'A fighter who masters giant runes to enhance body and gear. Inscribe magical Runes (Cloud, Fire, Frost, Stone, Storm, Hill) onto equipment for passive and activated boons, grow to Large size with Giant\'s Might for bonus damage and advantage on Strength, hurl enemies with Runic Shield and Great Stature, and ultimately master every rune at once.', features: { 3: ['Bonus Proficiencies (smith\'s tools, Giant language)', 'Rune Carver (2 runes)', "Giant's Might (grow Large, +1d6 damage 1/turn, advantage on STR)"], 7: ['Runic Shield (reaction: force an attacker to reroll a hit)', 'Additional Rune'], 10: ['Great Stature (permanent height + Giant\'s Might damage is 1d8)'], 15: ['Master of Runes (invoke each rune twice per rest)'], 18: ['Runic Juggernaut (Giant\'s Might makes you Huge, +1d10 damage, +5 ft reach)'] } },
+      { name: 'Echo Knight', desc: 'A warrior who summons a spectral duplicate from a war-torn dimension. Manifest Echo creates a ghostly double you can attack through, swap places with, and strike around corners. Unleash Incarnation grants an extra attack through your echo, while later levels let you teleport, shield yourself, and even briefly conjure two echoes at once.', features: { 3: ['Manifest Echo (summon a spectral double; attack + move through it)', 'Unleash Incarnation (extra attack through the echo)'], 7: ['Echo Avatar (see/hear through your echo up to 1,000 ft)'], 10: ['Shadow Martyr (echo intercepts an attack on an ally)'], 15: ['Reclaim Potential (gain temp HP when your echo is destroyed)'], 18: ['Legion of One (manifest two echoes; regain Unleash uses on initiative)'] } },
+      { name: 'Purple Dragon Knight (Banneret)', desc: 'An inspiring battlefield commander who empowers allies. Rallying Cry shares your Second Wind healing with nearby companions, Royal Envoy grants expertise in Persuasion, Inspiring Surge lets allies act when you Action Surge, and Bulwark extends Indomitable to a friend — a leader who makes the whole party stronger.', features: { 3: ['Rallying Cry (Second Wind also heals 3 allies for your level)', 'Bonus Proficiency'], 7: ['Royal Envoy (expertise in Persuasion; extra social proficiency)'], 10: ['Inspiring Surge (Action Surge grants an ally an extra attack)'], 15: ['Bulwark (share Indomitable rerolls with an ally)'], 18: ['Improved Inspiring Surge (aid two allies)'] } },
     ],
     description: 'Master of martial combat, skilled with a variety of weapons and armor.',
     features: {
@@ -872,26 +881,36 @@ export function getRacialAbilities(race) {
   
   const abilities = [];
   
-  // Warforged-specific abilities
+  // Warforged-specific abilities — surface all base traits, the chosen variant, and Warforged feats
   if (race === 'Warforged') {
     abilities.push({
       name: 'Constructed Resilience',
-      desc: 'Advantage on saves vs poison, resistance to poison damage, immune to disease, no need to eat/drink/breathe, immune to magic sleep.',
+      desc: 'Advantage on saves vs being poisoned; resistance to poison damage; immune to disease; no need to eat, drink, or breathe; immune to magical sleep.',
       type: 'passive'
     });
     abilities.push({
       name: "Sentry's Rest",
-      desc: 'Instead of sleeping, you enter an inactive state for 6 hours. You remain conscious and aware of your surroundings.',
+      desc: 'Long rest in a 6-hour inactive but conscious state — you remain aware of your surroundings and gain the full benefits of a long rest without sleeping.',
       type: 'passive'
     });
     abilities.push({
       name: 'Integrated Protection',
-      desc: 'AC = 11 + DEX modifier when unarmored. Armor integrates into your body (+1 AC bonus from Composite Plating). You cannot be magically forced to remove armor.',
+      desc: 'Unarmored AC = 11 + DEX modifier. Armor merges into your body over 1 hour and cannot be removed against your will.',
+      type: 'passive'
+    });
+    abilities.push({
+      name: 'Composite Plating',
+      desc: 'Your natural plating counts as worn armor; while not wearing other armor you gain a +1 bonus to AC (stacks with Integrated Protection).',
       type: 'passive'
     });
     abilities.push({
       name: 'Specialized Design',
-      desc: 'You have proficiency in one skill and one tool of your choice (chosen at character creation).',
+      desc: 'Proficiency in one skill and one tool of your choice, reflecting your original purpose.',
+      type: 'passive'
+    });
+    abilities.push({
+      name: 'Tireless Construct',
+      desc: 'You cannot gain exhaustion from lack of sleep, and forced-march fatigue affects you at half rate.',
       type: 'passive'
     });
     return abilities;
