@@ -65,15 +65,30 @@ Deno.serve(async (req) => {
 
   const { character_id, rest_type, hit_dice_to_spend, had_food_water = true, location_safe = false } = await req.json();
 
-  // Fetch with a USER-SCOPED .get() (same pattern as combatEngine). The player owns
-  // their character, so RLS lets this through, and a successful fetch proves ownership.
-  // (Previously used asServiceRole + filter({ id }), which returned no rows and caused
-  // spurious "Character not found" 404s — the root cause of rests appearing to hang.)
-  let character;
+  // Fetch the character. Try the USER-SCOPED .get() first (RLS proves ownership).
+  // If that returns nothing — which can happen for legitimately-owned characters when
+  // RLS evaluation is fragile — fall back to a SERVICE-ROLE read plus an explicit
+  // ownership check. This guarantees the real owner can always rest while still
+  // blocking other users. (Root cause of "rest only plays the animation" was the
+  // user-scoped fetch silently returning null and 404ing.)
+  let character = null;
   try {
     character = await base44.entities.Character.get(character_id);
   } catch {
     character = null;
+  }
+  if (!character) {
+    try {
+      const svcChar = await base44.asServiceRole.entities.Character.get(character_id);
+      // Allow only the owner (by email or user id) to rest this character.
+      if (svcChar && (svcChar.created_by === user.email || svcChar.created_by_id === user.id)) {
+        character = svcChar;
+      } else if (svcChar) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } catch {
+      character = null;
+    }
   }
   if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
 
