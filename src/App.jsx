@@ -22,7 +22,6 @@ import NewGame from './pages/NewGame';
 import SpellManagement from './pages/SpellManagement';
 import WorldMap from './pages/WorldMap';
 import InventoryPage from '@/pages/InventoryPage';
-import CharacterSheetFull from '@/pages/CharacterSheetFull';
 import Progression from '@/pages/Progression';
 import NPCManager from '@/pages/NPCManager';
 import RaceReport from '@/pages/RaceReport';
@@ -75,7 +74,6 @@ const AuthenticatedApp = () => {
       <Route path="/Progression" element={<LayoutWrapper currentPageName="Progression"><Progression /></LayoutWrapper>} />
       <Route path="/NPCManager" element={<LayoutWrapper currentPageName="NPCManager"><NPCManager /></LayoutWrapper>} />
       <Route path="/InventoryPage" element={<LayoutWrapper currentPageName="InventoryPage"><InventoryPage /></LayoutWrapper>} />
-      <Route path="/CharacterSheetFull" element={<LayoutWrapper currentPageName="CharacterSheetFull"><CharacterSheetFull /></LayoutWrapper>} />
       <Route path="/RaceReport" element={<LayoutWrapper currentPageName="RaceReport"><RaceReport /></LayoutWrapper>} />
       <Route path="/Inventory" element={
         <LayoutWrapper currentPageName="Inventory">
@@ -105,11 +103,6 @@ const AuthenticatedApp = () => {
       <Route path="/InventoryPage" element={
         <LayoutWrapper currentPageName="InventoryPage">
           <InventoryPage />
-        </LayoutWrapper>
-      } />
-      <Route path="/CharacterSheetFull" element={
-        <LayoutWrapper currentPageName="CharacterSheetFull">
-          <CharacterSheetFull />
         </LayoutWrapper>
       } />
       <Route path="/RaceReport" element={
