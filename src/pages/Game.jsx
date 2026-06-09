@@ -27,6 +27,8 @@ import { stopAllNarration } from '@/components/game/narrationControl';
 import LevelUpToast from '@/components/game/LevelUpToast';
 import LevelUpModal from '@/components/game/LevelUpModal';
 import { canLevelUp } from '@/components/game/levelUpUtils';
+import SkillCheckRollModal from '@/components/game/SkillCheckRollModal';
+import { getManualRollEnabled } from '@/components/game/rollPreferences';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -64,6 +66,9 @@ export default function Game() {
   const [combatViewTab, setCombatViewTab] = useState('combat'); // 'story' | 'combat' | 'journal' — for mobile
   const [showLevelUpToast, setShowLevelUpToast] = useState(false);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
+  // Manual dice-roll prompt: when set, a pre-configured roll modal is shown and
+  // the staged callback runs once the player rolls (or skips on cancel = auto).
+  const [pendingRoll, setPendingRoll] = useState(null);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate('/Home'); return; }
@@ -252,40 +257,21 @@ export default function Game() {
     }
   };
 
-  const handleChoice = async (choiceIndex) => {
-    const choice = choices[choiceIndex];
-    setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
-    setChoices([]);
+  // Records the skill-check result entry in the narrative, then continues the
+  // story by sending the outcome to the DM. Shared by both auto-roll and manual.
+  const continueChoiceWithRoll = async (choice, choiceIndex, rollData) => {
+    const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, final, success } = rollData;
+    const feedback = getSkillFeedback(choice.skill_check, success, final, choice.dc, raw);
+    setNarrative(prev => [...prev, {
+      type: 'skill_check',
+      skill: choice.skill_check, dc: choice.dc, raw, allRolls, hadAdvantage, hadDisadvantage,
+      advantageSources, modifier, final, success, feedback, character_name: character?.name,
+    }]);
+    await runChoiceStory(choice, choiceIndex, success);
+  };
 
-    let skillSuccess = undefined;
-
-    if (choice.skill_check && choice.dc) {
-      setStoryLoading(true);
-      // Check equipped items for advantage/disadvantage on this skill
-      const equipAdv = getEquipmentAdvantage(character?.equipped, choice.skill_check);
-      const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
-      const modifier = computeSkillModifier(choice.skill_check);
-      const final = raw + modifier;
-      const success = final >= choice.dc;
-      skillSuccess = success;
-      const feedback = getSkillFeedback(choice.skill_check, success, final, choice.dc, raw);
-      setNarrative(prev => [...prev, {
-        type: 'skill_check',
-        skill: choice.skill_check,
-        dc: choice.dc,
-        raw,
-        allRolls,
-        hadAdvantage,
-        hadDisadvantage,
-        advantageSources: equipAdv.sources,
-        modifier,
-        final,
-        success,
-        feedback,
-        character_name: character?.name,
-      }]);
-    }
-
+  // Sends the chosen action (and any resolved skill check) to the story engine.
+  const runChoiceStory = async (choice, choiceIndex, skillSuccess) => {
     setStoryLoading(true);
     try {
       const result = await base44.functions.invoke('generateStory', {
@@ -321,6 +307,43 @@ export default function Game() {
     }
   };
 
+  const handleChoice = async (choiceIndex) => {
+    const choice = choices[choiceIndex];
+    setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
+    setChoices([]);
+
+    // No skill check — go straight to the story.
+    if (!choice.skill_check || !choice.dc) {
+      await runChoiceStory(choice, choiceIndex, undefined);
+      return;
+    }
+
+    const equipAdv = getEquipmentAdvantage(character?.equipped, choice.skill_check);
+    const modifier = computeSkillModifier(choice.skill_check);
+
+    // Manual mode: open the dice roller pre-configured for this check. The story
+    // continues once the player rolls (onResolve). Cancel falls back to auto-roll.
+    if (getManualRollEnabled()) {
+      setPendingRoll({
+        skill: choice.skill_check, dc: choice.dc, modifier,
+        advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, advantageSources: equipAdv.sources,
+        onResolve: (rollData) => { setPendingRoll(null); continueChoiceWithRoll(choice, choiceIndex, { ...rollData, advantageSources: equipAdv.sources }); },
+        onCancel: () => {
+          setPendingRoll(null);
+          const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
+          const final = raw + modifier;
+          continueChoiceWithRoll(choice, choiceIndex, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: final >= choice.dc });
+        },
+      });
+      return;
+    }
+
+    // Auto mode: roll immediately.
+    const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
+    const final = raw + modifier;
+    await continueChoiceWithRoll(choice, choiceIndex, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: final >= choice.dc });
+  };
+
   // Intercept custom input — send to DM for adjudication first
   const handleCustomInput = async () => {
     if (!customInput.trim()) return;
@@ -343,25 +366,8 @@ export default function Game() {
     }
   };
 
-  const executeProposedAction = async (proposal) => {
-    setPendingProposal(null);
-    const { action, requires_check, skill, dc } = proposal;
-
-    setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
-    setChoices([]);
-
-    let checkResult = '';
-    if (requires_check && skill && dc) {
-      const equipAdv = getEquipmentAdvantage(character?.equipped, skill);
-      const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
-      const modifier = computeSkillModifier(skill);
-      const final = raw + modifier;
-      const success = final >= dc;
-      const feedback = getSkillFeedback(skill, success, final, dc, raw);
-      setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success, feedback, character_name: character?.name }]);
-      checkResult = ` [Skill Check: ${skill} DC${dc} — ${success ? 'SUCCESS' : 'FAILURE'} (rolled ${final}${hadAdvantage ? ', with advantage' : ''}${hadDisadvantage ? ', with disadvantage' : ''})]`;
-    }
-
+  // Continues a custom action's story after its (optional) skill check resolves.
+  const runProposalStory = async (action, checkResult) => {
     setStoryLoading(true);
     try {
       const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: action + checkResult });
@@ -385,6 +391,53 @@ export default function Game() {
     } finally {
       setStoryLoading(false);
     }
+  };
+
+  // Records a custom action's skill-check entry, then continues the story.
+  const continueProposalWithRoll = async (action, skill, dc, rollData) => {
+    const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, final, success } = rollData;
+    const feedback = getSkillFeedback(skill, success, final, dc, raw);
+    setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, final, success, feedback, character_name: character?.name }]);
+    const checkResult = ` [Skill Check: ${skill} DC${dc} — ${success ? 'SUCCESS' : 'FAILURE'} (rolled ${final}${hadAdvantage ? ', with advantage' : ''}${hadDisadvantage ? ', with disadvantage' : ''})]`;
+    await runProposalStory(action, checkResult);
+  };
+
+  const executeProposedAction = async (proposal) => {
+    setPendingProposal(null);
+    const { action, requires_check, skill, dc } = proposal;
+
+    setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
+    setChoices([]);
+
+    // No check required — straight to the story.
+    if (!requires_check || !skill || !dc) {
+      await runProposalStory(action, '');
+      return;
+    }
+
+    const equipAdv = getEquipmentAdvantage(character?.equipped, skill);
+    const modifier = computeSkillModifier(skill);
+
+    // Manual mode: prompt the player to roll the configured dice.
+    if (getManualRollEnabled()) {
+      setPendingRoll({
+        skill, dc, modifier,
+        advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, advantageSources: equipAdv.sources,
+        onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, skill, dc, { ...rollData, advantageSources: equipAdv.sources }); },
+        onCancel: () => {
+          setPendingRoll(null);
+          const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
+          const final = raw + modifier;
+          continueProposalWithRoll(action, skill, dc, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: final >= dc });
+        },
+      });
+      return;
+    }
+
+    // Auto mode.
+    const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
+    const final = raw + modifier;
+    await continueProposalWithRoll(action, skill, dc, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: final >= dc });
   };
 
   // ===== Free-text "Act" during combat — DM adjudicates first =====
@@ -1390,6 +1443,22 @@ export default function Game() {
             character={character}
             onLevelUp={handleLevelUp}
             onClose={() => setShowLevelUpModal(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Manual Skill-Check Roll Modal */}
+      <AnimatePresence>
+        {pendingRoll && (
+          <SkillCheckRollModal
+            skill={pendingRoll.skill}
+            modifier={pendingRoll.modifier}
+            dc={pendingRoll.dc}
+            advantage={pendingRoll.advantage}
+            disadvantage={pendingRoll.disadvantage}
+            advantageSources={pendingRoll.advantageSources}
+            onResolve={pendingRoll.onResolve}
+            onCancel={pendingRoll.onCancel}
           />
         )}
       </AnimatePresence>

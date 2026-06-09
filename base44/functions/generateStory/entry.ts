@@ -122,7 +122,9 @@ ${adultToneInstruction}
 4. How do I make this opening feel fresh and different from previous sessions?
 5. What sensory details and tone will pull the player in?
 
-Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension and exactly 4 meaningful choices (include skill checks + DCs on 2-3 of them). Set location_update. No combat in the opening scene.`;
+Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension. Provide exactly 4 meaningful choices in the structured "choices" field ONLY (include skill checks + DCs on 2-3 of them). Set location_update. No combat in the opening scene.
+
+CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" text itself. The narrative must be pure prose — never include lines like "1. ...", "2. ...", "What do you do?", or any enumerated options. The choices belong solely in the structured choices array.`;
 
       responseSchema = {
         type: 'object',
@@ -162,7 +164,9 @@ ${adultToneInstruction}
 5. Should combat be triggered? Only when dramatically justified.
 6. How do environment (season, time, weather) and current conditions influence the scene?
 
-Write 2-3 vivid, immersive paragraphs. Then provide exactly 4 new choices. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely.`;
+Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely.
+
+CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" text itself. The narrative must be pure prose — never include lines like "1. ...", "2. ...", "What do you do?", or any enumerated options. The choices belong solely in the structured choices array.`;
 
       responseSchema = {
         type: 'object',

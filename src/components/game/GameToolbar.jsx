@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
-import { Dices, Swords, Map, ShoppingBag, Eye, Paintbrush, Scroll, BookMarked, MoreHorizontal, Moon } from 'lucide-react';
+import { Dices, Swords, Map, ShoppingBag, Eye, Paintbrush, Scroll, BookMarked, MoreHorizontal, Moon, Hand, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getManualRollEnabled, setManualRollEnabled } from './rollPreferences';
 
 /**
  * Mobile-friendly game toolbar.
@@ -19,6 +20,14 @@ export default function GameToolbar({
   const [showMore, setShowMore] = useState(false);
   const moreBtnRef = useRef(null);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+  // Auto-roll vs manual dice toggle (persisted in localStorage)
+  const [manualRolls, setManualRolls] = useState(getManualRollEnabled());
+
+  const toggleManualRolls = () => {
+    const next = !manualRolls;
+    setManualRolls(next);
+    setManualRollEnabled(next);
+  };
 
   useEffect(() => {
     if (showMore && moreBtnRef.current) {
@@ -96,6 +105,19 @@ export default function GameToolbar({
                 background: 'rgba(12,6,2,0.98)', border: '1px solid rgba(184,115,51,0.35)',
                 minWidth: '200px', boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
               }}>
+              {/* Roll mode toggle — auto-roll vs manual dice */}
+              <button onClick={toggleManualRolls}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-fantasy transition-all"
+                style={{ borderBottom: '1px solid rgba(184,115,51,0.18)', color: manualRolls ? '#86efac' : '#f0c040', background: 'rgba(40,25,8,0.4)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(60,30,10,0.6)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(40,25,8,0.4)'}>
+                {manualRolls ? <Hand className="w-4 h-4 flex-shrink-0" /> : <Zap className="w-4 h-4 flex-shrink-0" />}
+                <span className="flex-1">Rolls: {manualRolls ? 'Manual Dice' : 'Auto-Roll'}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded-full"
+                  style={{ background: manualRolls ? 'rgba(20,60,30,0.8)' : 'rgba(60,40,8,0.8)', border: `1px solid ${manualRolls ? 'rgba(60,180,90,0.4)' : 'rgba(201,169,110,0.3)'}` }}>
+                  {manualRolls ? 'ON' : 'OFF'}
+                </span>
+              </button>
               {overflowActions.map((action, i) => (
                 <button key={i} onClick={() => { action.onClick(); setShowMore(false); }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-fantasy transition-all"
