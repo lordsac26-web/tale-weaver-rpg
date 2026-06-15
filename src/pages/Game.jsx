@@ -120,9 +120,16 @@ export default function Game() {
       if (lastEntry?.choices?.length > 0) setChoices(lastEntry.choices);
     }
 
+    // Combat panel is shown only when the session is in combat AND a live combat log
+    // exists. This block is authoritative in BOTH directions: it loads an active
+    // combat, and clears stale combat state when the fight is over — preventing the
+    // UI from getting stuck on the combat panel after victory/defeat/flee.
     if (sess.in_combat && sess.combat_state?.combat_id) {
       const logs = await base44.entities.CombatLog.filter({ id: sess.combat_state.combat_id });
       if (logs[0]?.is_active) setCombat(logs[0]);
+      else setCombat(null);
+    } else {
+      setCombat(null);
     }
     
     // If character is at 0 HP on load, show death saves modal immediately
@@ -690,11 +697,23 @@ export default function Game() {
         setShowLootModal(true);
         setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! The battle is won. Your enemies lie defeated.' }]);
         await saveCombatHistory(combatId, 'victory', victoriousEnemies, freshCombat?.round);
-        const storyResult = await base44.functions.invoke('generateStory', {
-          session_id: sessionId, action: 'choice', custom_input: 'The combat has ended in victory.'
-        });
-        if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
-        setChoices(storyResult.data?.choices || []);
+        // Authoritatively exit combat BEFORE the (fallible) story call, and clear it
+        // locally so the UI leaves the combat panel even if generateStory fails.
+        await base44.entities.GameSession.update(sessionId, { in_combat: false });
+        setCombat(null);
+        setSession(prev => prev ? { ...prev, in_combat: false } : prev);
+        try {
+          const storyResult = await base44.functions.invoke('generateStory', {
+            session_id: sessionId, action: 'choice', custom_input: 'The combat has ended in victory. Narrate the aftermath and present the next choices.'
+          });
+          if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
+          setChoices(storyResult.data?.choices || []);
+        } catch (err) {
+          console.error('Post-victory story generation failed:', err);
+          // Give the player a way forward even if the DM call failed.
+          setNarrative(prev => [...prev, { type: 'narration', text: 'The dust settles. (The storyteller paused — describe what you do next using the action box below.)' }]);
+          setChoices([]);
+        }
       } else if (data.result === 'defeat') {
         const freshLogs = await base44.entities.CombatLog.filter({ id: combatId });
         const freshCombat = freshLogs[0];
@@ -736,8 +755,22 @@ export default function Game() {
       const victoriousEnemies = (freshCombat?.combatants || []).filter(c => c.type === 'enemy');
       setDefeatedEnemies(victoriousEnemies);
       setShowLootModal(true);
+      setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! The battle is won.' }]);
       await saveCombatHistory(combatId, 'victory', victoriousEnemies, freshCombat?.round);
+      // Authoritatively leave combat (don't rely on a later story call to do it).
+      await base44.entities.GameSession.update(sessionId, { in_combat: false });
       setCombat(null);
+      setSession(prev => prev ? { ...prev, in_combat: false } : prev);
+      try {
+        const storyResult = await base44.functions.invoke('generateStory', {
+          session_id: sessionId, action: 'choice', custom_input: 'The combat has ended in victory. Narrate the aftermath and present the next choices.'
+        });
+        if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
+        setChoices(storyResult.data?.choices || []);
+      } catch (err) {
+        console.error('Post-victory story generation failed:', err);
+        setNarrative(prev => [...prev, { type: 'narration', text: 'The dust settles. (Describe what you do next using the action box below.)' }]);
+      }
     }
     await loadState();
     setCombatLoading(false);

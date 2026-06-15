@@ -216,6 +216,16 @@ Write a gripping 1-2 paragraph combat narrative.`;
     });
 
     // ====================== POST-PROCESSING ======================
+    // Authoritatively reconcile the combat flag regardless of whether the LLM
+    // returned narrative text: a 'choice' action that does NOT trigger combat must
+    // clear in_combat so the client never gets stuck on the combat panel. A
+    // combat_trigger sets it true. This runs even when result.narrative is empty.
+    if (action === 'choice') {
+      await base44.entities.GameSession.update(session_id, {
+        in_combat: !!result.combat_trigger,
+      });
+    }
+
     if (result.narrative) {
       const updatedLog = [
         ...(session.story_log || []),
