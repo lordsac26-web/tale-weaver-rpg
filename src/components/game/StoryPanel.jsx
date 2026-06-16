@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import SkillCheckResult from './SkillCheckResult';
 import MicButton from './MicButton';
 import { stopAllNarration } from './narrationControl';
+import { stripEmbeddedChoices } from './stripEmbeddedChoices';
 import { base44 } from '@/api/base44Client';
  
 const RISK_STYLES = {
@@ -407,7 +408,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                       textShadow: '0 1px 3px rgba(0,0,0,0.7)',
                       lineHeight: '1.9'
                     }}>
-                    {entry.text}
+                    {stripEmbeddedChoices(entry.text)}
                   </p>
                 </div>
               )}
