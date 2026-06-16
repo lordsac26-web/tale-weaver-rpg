@@ -5,8 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
-  RACES, CLASSES, BACKGROUNDS, ALIGNMENTS,
-  calcStatMod, roll4d6DropLowest,
+  RACES, CLASSES, BACKGROUNDS,
+  calcStatMod,
   PROFICIENCY_BY_LEVEL
 } from '@/components/game/gameData';
 import { FEATS } from '@/components/game/featData';
@@ -29,6 +29,7 @@ import StepEquipmentSpells from '@/components/creation/StepEquipmentSpells';
 import StepFeats from '@/components/creation/StepFeats';
 import StepClassChoices from '@/components/creation/StepClassChoices';
 import StepReview from '@/components/creation/StepReview';
+import { getRequiredChoices } from '@/components/creation/classChoicesData';
  
 const STEPS = [
   { id: 'identity', label: 'Identity', icon: '👤' },
@@ -66,17 +67,7 @@ export default function CharacterCreation() {
   });
  
   const set = (key, val) => setCharacter(prev => ({ ...prev, [key]: val }));
- 
-  const rollAllStats = () => {
-    const updates = {};
-    STATS.forEach(stat => { updates[stat] = roll4d6DropLowest(); });
-    setCharacter(prev => ({ ...prev, ...updates }));
-  };
- 
-  const pointBuyStats = () => {
-    setCharacter(prev => ({ ...prev, strength: 8, dexterity: 8, constitution: 8, intelligence: 8, wisdom: 8, charisma: 8 }));
-  };
- 
+
   const applyRacialBonuses = (char) => {
     const race = RACES[char.race];
     if (!race) return char;
@@ -254,16 +245,34 @@ export default function CharacterCreation() {
     return updated;
   };
 
+  const [backstoryError, setBackstoryError] = useState(null);
+
   const handleGenerateBackstory = async () => {
     setGeneratingBackstory(true);
-    const result = await base44.functions.invoke('generateBackstory', {
-      name: character.name || 'The Hero',
-      race: character.race, class: character.class, age: character.age,
-      background: character.background, level: character.level,
-      prompt: backstoryPrompt
-    });
-    if (result.data?.backstory) set('backstory', result.data.backstory);
-    setGeneratingBackstory(false);
+    setBackstoryError(null);
+    try {
+      const result = await base44.functions.invoke('generateBackstory', {
+        name: character.name || 'The Hero',
+        race: character.race, class: character.class, age: character.age,
+        background: character.background, level: character.level,
+        prompt: backstoryPrompt,
+        // Pass the full build so the backstory reflects the actual character
+        skills: Object.keys(character.skills || {}).filter(s => character.skills[s]),
+        feats: character.feats || [],
+        ability_scores: {
+          strength: character.strength, dexterity: character.dexterity,
+          constitution: character.constitution, intelligence: character.intelligence,
+          wisdom: character.wisdom, charisma: character.charisma,
+        },
+      });
+      if (result.data?.backstory) set('backstory', result.data.backstory);
+      else setBackstoryError('The storyteller paused. Please try generating again.');
+    } catch (err) {
+      console.error('Backstory generation failed:', err);
+      setBackstoryError('Backstory generation failed. Please try again in a moment.');
+    } finally {
+      setGeneratingBackstory(false);
+    }
   };
  
   const handleSave = async () => {
@@ -364,7 +373,25 @@ export default function CharacterCreation() {
       }
       case 3: return true; // subclass (optional / level-gated)
       case 4: return true; // skills
-      case 5: return true; // class choices (optional selections)
+      case 5: {
+        // Every required class/race choice must be fully selected before continuing.
+        // Single choices need a value; multi choices need exactly `max` selections.
+        const required = getRequiredChoices(character);
+        const cc = character.class_choices || {};
+        return required.every(choice => {
+          const val = cc[choice.id];
+          if (choice.type === 'multi') {
+            const arr = Array.isArray(val) ? val : [];
+            // Expertise depends on proficient skills existing — allow as many as available up to max.
+            if (choice.dynamic === 'proficient_skills') {
+              const profCount = Object.values(character.skills || {}).filter(v => v === 'proficient' || v === true).length;
+              return arr.length >= Math.min(choice.max || 1, profCount);
+            }
+            return arr.length >= (choice.max || 1);
+          }
+          return !!val;
+        });
+      }
       case 6: return !!character.background;
       case 7: return true; // portrait is optional
       case 8: return !!character.backstory;
@@ -419,7 +446,7 @@ export default function CharacterCreation() {
         <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 md:p-8 min-h-[420px]">
           {step === 0 && <StepGenderRace character={character} set={set} />}
           {step === 1 && <StepClassInfo character={character} set={set} />}
-          {step === 2 && <StepAbilityScores character={character} set={set} rollAll={rollAllStats} pointBuy={pointBuyStats} />}
+          {step === 2 && <StepAbilityScores character={character} set={set} />}
           {step === 3 && <StepSubclass character={character} set={set} />}
           {step === 4 && <StepSkillsFeatures character={character} set={set} />}
           {step === 5 && <StepClassChoices character={character} set={set} />}
@@ -428,7 +455,7 @@ export default function CharacterCreation() {
           {step === 8 && (
             <StepBackstory character={character} set={set}
               backstoryPrompt={backstoryPrompt} setBackstoryPrompt={setBackstoryPrompt}
-              onGenerate={handleGenerateBackstory} generating={generatingBackstory} />
+              onGenerate={handleGenerateBackstory} generating={generatingBackstory} error={backstoryError} />
           )}
           {step === 9 && <StepEquipmentSpells character={character} set={set} />}
           {step === 10 && <StepFeats character={character} set={set} />}

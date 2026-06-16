@@ -1,14 +1,15 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 Deno.serve(async (req) => {
-  const base44 = createClientFromRequest(req);
-  const user = await base44.auth.me();
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { name, race, class: charClass, background, level, prompt: userPrompt, skills, feats, ability_scores } = await req.json();
+    const { name, race, class: charClass, background, level, prompt: userPrompt, skills, feats, ability_scores } = await req.json();
 
-  const result = await base44.integrations.Core.InvokeLLM({
-    prompt: `Generate an immersive character backstory for a D&D 5E character.
+    const result = await base44.integrations.Core.InvokeLLM({
+      prompt: `Generate an immersive character backstory for a D&D 5E character.
 Character Details:
 - Name: ${name}
 - Race: ${race}
@@ -29,17 +30,21 @@ Write a 3-4 paragraph backstory that:
 - Weaves in their key skills and feats as part of their story
 
 Write in third person, past tense. Make it vivid and emotionally resonant.`,
-    response_json_schema: {
-      type: 'object',
-      properties: {
-        backstory: { type: 'string' },
-        personality_trait: { type: 'string' },
-        ideal: { type: 'string' },
-        bond: { type: 'string' },
-        flaw: { type: 'string' }
+      response_json_schema: {
+        type: 'object',
+        properties: {
+          backstory: { type: 'string' },
+          personality_trait: { type: 'string' },
+          ideal: { type: 'string' },
+          bond: { type: 'string' },
+          flaw: { type: 'string' }
+        }
       }
-    }
-  });
+    });
 
-  return Response.json(result);
+    return Response.json(result);
+  } catch (error) {
+    console.error('Backstory generation error:', error);
+    return Response.json({ error: error.message || 'Backstory generation failed' }, { status: 500 });
+  }
 });

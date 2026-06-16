@@ -3,7 +3,7 @@ import { Wand2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
-export default function StepBackstory({ character, set, backstoryPrompt, setBackstoryPrompt, onGenerate, generating }) {
+export default function StepBackstory({ character, set, backstoryPrompt, setBackstoryPrompt, onGenerate, generating, error }) {
   return (
     <div className="space-y-6">
       <div>
@@ -23,6 +23,11 @@ export default function StepBackstory({ character, set, backstoryPrompt, setBack
             {generating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wand2 className="w-4 h-4 mr-2" />}
             {generating ? 'Weaving your tale...' : 'Generate Backstory'}
           </Button>
+          {error && (
+            <div className="rounded-lg border border-red-700/40 bg-red-950/30 px-3 py-2 text-red-200 text-sm">
+              {error}
+            </div>
+          )}
           <p className="text-slate-600 text-xs">Based on: {character.name || 'Hero'} · {character.race} {character.class} · {character.background}</p>
         </div>
         <div>
