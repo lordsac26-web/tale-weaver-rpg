@@ -503,17 +503,20 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
       </div>
  
       {/* Choices + Input — always rendered so player can type freely even while loading */}
-      <div className="flex-shrink-0 p-4"
+      <div className="flex-shrink-0 p-4 relative"
           style={{
-            background: 'rgba(8,5,2,0.85)',
-            backdropFilter: 'blur(12px)',
-            borderTop: '1px solid rgba(180,140,90,0.2)',
-            boxShadow: 'inset 0 1px 0 rgba(201,169,110,0.08)'
+            background: 'rgba(6,4,1,0.92)',
+            backdropFilter: 'blur(14px)',
+            borderTop: '1px solid rgba(180,140,90,0.28)',
+            boxShadow: 'inset 0 1px 0 rgba(201,169,110,0.1), 0 -10px 30px rgba(0,0,0,0.55)'
           }}>
+        {/* Decorative brass divider that visually seals off the narration above */}
+        <div className="brass-rule absolute top-0 left-0 right-0" />
         <div className="max-w-4xl mx-auto w-full space-y-2.5">
           {!loading && choices.length > 0 && (
-            <>
-              <div className="flex items-center gap-2 mb-2" style={{ color: 'rgba(225,190,140,0.9)' }}>
+            <div className="rounded-xl p-3 space-y-2.5"
+              style={{ background: 'rgba(14,9,3,0.6)', border: '1px solid rgba(180,140,90,0.14)' }}>
+              <div className="flex items-center gap-2 mb-1" style={{ color: 'rgba(225,190,140,0.9)' }}>
                 <Scroll className="w-3 h-3" />
                 <span className="font-fantasy text-xs tracking-widest uppercase">What do you do?</span>
               </div>
@@ -561,7 +564,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                   );
                 })}
               </AnimatePresence>
-            </>
+            </div>
           )}
  
           {/* Custom input */}
