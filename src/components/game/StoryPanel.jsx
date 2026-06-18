@@ -514,12 +514,13 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
         <div className="brass-rule absolute top-0 left-0 right-0" />
         <div className="max-w-4xl mx-auto w-full space-y-2.5">
           {!loading && choices.length > 0 && (
-            <div className="rounded-xl p-3 space-y-2.5"
+            <div className="rounded-xl p-2.5 space-y-1.5"
               style={{ background: 'rgba(14,9,3,0.6)', border: '1px solid rgba(180,140,90,0.14)' }}>
-              <div className="flex items-center gap-2 mb-1" style={{ color: 'rgba(225,190,140,0.9)' }}>
+              <div className="flex items-center gap-2" style={{ color: 'rgba(225,190,140,0.9)' }}>
                 <Scroll className="w-3 h-3" />
                 <span className="font-fantasy text-xs tracking-widest uppercase">What do you do?</span>
               </div>
+              <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: '28vh' }}>
               <AnimatePresence>
                 {choices.map((choice, i) => {
                   const riskStyle = RISK_STYLES[choice.risk_level] || RISK_STYLES['low'];
@@ -529,32 +530,32 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.07, duration: 0.3 }}
                       onClick={() => onChoice(i)}
-                      className="w-full text-left p-4 rounded-xl transition-all duration-200 group"
+                      className="w-full text-left px-3 py-2 rounded-lg transition-all duration-200 group"
                       style={{
                         background: riskStyle.bg,
                         border: `1px solid ${riskStyle.border}`,
                       }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = riskStyle.hover; e.currentTarget.style.boxShadow = `0 0 12px ${riskStyle.border}`; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = riskStyle.border; e.currentTarget.style.boxShadow = 'none'; }}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 flex-1">
-                          <span className="font-fantasy font-bold text-sm flex-shrink-0 mt-0.5"
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 flex-1">
+                          <span className="font-fantasy font-bold text-xs flex-shrink-0 mt-0.5"
                             style={{ color: 'rgba(235,200,150,0.95)' }}>{i + 1}.</span>
-                          <span className="text-sm leading-relaxed"
-                            style={{ color: 'rgba(240,224,200,0.98)', fontFamily: 'EB Garamond, serif', fontSize: '1rem' }}>
+                          <span className="leading-snug"
+                            style={{ color: 'rgba(240,224,200,0.98)', fontFamily: 'EB Garamond, serif', fontSize: '0.85rem' }}>
                             {choice.text}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
                           {choice.skill_check && choice.dc && (
-                            <span className="px-2 py-1 rounded-full text-xs font-fantasy"
-                              style={{ background: riskStyle.badge.bg, color: riskStyle.badge.color, border: `1px solid ${riskStyle.badge.border}` }}>
+                            <span className="px-1.5 py-0.5 rounded-full font-fantasy"
+                              style={{ background: riskStyle.badge.bg, color: riskStyle.badge.color, border: `1px solid ${riskStyle.badge.border}`, fontSize: '0.6rem' }}>
                               {choice.skill_check} DC{choice.dc}
                             </span>
                           )}
                           {choice.risk_level && (
-                            <span className="px-2 py-1 rounded-full text-xs font-fantasy"
-                              style={{ background: riskStyle.badge.bg, color: riskStyle.badge.color, border: `1px solid ${riskStyle.badge.border}` }}>
+                            <span className="px-1.5 py-0.5 rounded-full font-fantasy"
+                              style={{ background: riskStyle.badge.bg, color: riskStyle.badge.color, border: `1px solid ${riskStyle.badge.border}`, fontSize: '0.6rem' }}>
                               {choice.risk_level}
                             </span>
                           )}
@@ -564,6 +565,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                   );
                 })}
               </AnimatePresence>
+              </div>
             </div>
           )}
  
