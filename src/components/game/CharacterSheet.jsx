@@ -9,6 +9,7 @@ import { SkillTooltip, FeatureTooltip, ConditionTooltip } from './GameTooltip';
 import SkillProficiencyRow from './SkillProficiencyRow';
 import StatBreakdownTooltip from './StatBreakdownTooltip';
 import SubclassSection from './SubclassSection';
+import RuneKnightPanel from './RuneKnightPanel';
 import AlignmentRadar from './AlignmentRadar';
 import XPBar from './XPBar';
 import {
@@ -158,7 +159,7 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
               {tab === 'inventory' && <InventoryTab character={character} onUpdate={handleUpdateCharacter} onIdentify={null} />}
               {tab === 'spells' && <SpellbookTab character={character} onUpdateCharacter={handleUpdateCharacter} />}
               {tab === 'conditions' && <ConditionsTab character={character} onUpdate={handleUpdateCharacter} />}
-              {tab === 'features' && <FeaturesTab character={character} />}
+              {tab === 'features' && <FeaturesTab character={character} onUpdate={handleUpdateCharacter} />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -527,7 +528,7 @@ function ConditionsTab({ character, onUpdate }) {
 }
  
 // ─── Features Tab ─────────────────────────────────────────────────────────────
-function FeaturesTab({ character }) {
+function FeaturesTab({ character, onUpdate }) {
   const [expanded, setExpanded] = useState({});
   const featureSections = getClassFeatureSections(character);
   const classFeatures = featureSections.flatMap(section => section.features);
@@ -560,6 +561,9 @@ function FeaturesTab({ character }) {
 
       {/* Subclass (e.g. Path of the Totem Warrior) */}
       <SubclassSection character={character} Section={Section} />
+
+      {/* Rune Knight — active rune control panel (toggles temporary combat effects) */}
+      <RuneKnightPanel character={character} onUpdate={onUpdate} />
 
       {/* Character Features */}
       <Section title="Character Features" icon="⚡">
