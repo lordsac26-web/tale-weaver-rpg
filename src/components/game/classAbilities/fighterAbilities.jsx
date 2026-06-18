@@ -2,7 +2,7 @@ import React from 'react';
 import { Zap, Wind, Shield } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { getFightingStyleDesc } from './abilityHelpers';
-import { buildBattleMasterAbilities } from './fighterSubclasses';
+import { buildBattleMasterAbilities, buildRuneKnightAbilities } from './fighterSubclasses';
 
 // Build Fighter abilities: Second Wind, Action Surge, Fighting Style, Indomitable.
 export function buildFighterAbilities(ctx) {
@@ -68,6 +68,7 @@ export function buildFighterAbilities(ctx) {
 
   // Compose subclass abilities
   abilities.push(...buildBattleMasterAbilities(ctx));
+  abilities.push(...buildRuneKnightAbilities(ctx));
 
   // Fighting Style reminder (passive — shown as info pill)
   if (character.fighting_style) {
