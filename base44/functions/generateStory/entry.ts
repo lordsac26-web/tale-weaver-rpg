@@ -79,7 +79,15 @@ Deno.serve(async (req) => {
 
     const worldSummary = `Location: ${session.current_location || 'Unknown'} | Season: ${session.season} | Time: ${session.time_of_day} | Weather: ${session.weather || 'clear'} | Quests: ${(session.active_quests || []).map(q => q.title).join(', ') || 'None'} | Reputation: ${session.reputation || 0}${session.adult_mode ? ' | Adult mode: ON' : ''}`;
 
-    const recentLog = (session.story_log || []).slice(-4).map(e => e.text).join('\n');
+    // Widen the memory window and explicitly surface what the PLAYER did each turn,
+    // not just the DM's narration — so deliberate, consequential acts (e.g. swallowing
+    // an amulet) stay in context instead of scrolling out after a few turns.
+    const recentLog = (session.story_log || []).slice(-8).map(e => {
+      const playerLine = (typeof e.player_choice === 'string' && e.player_choice.trim())
+        ? `PLAYER: ${e.player_choice.trim()}\n`
+        : '';
+      return `${playerLine}${e.text}`;
+    }).join('\n\n');
 
     const journalNotes = await base44.entities.PlayerNote.filter({ session_id }, '-updated_date', 20);
     const journalSummary = journalNotes.length
@@ -240,9 +248,23 @@ Write a gripping 1-2 paragraph combat narrative.`;
 
       const updateData = { story_log: updatedLog };
 
-      // Campaign Memory Refresh
-      if (updatedLog.length % 10 === 0 || action === 'start') {
-        updateData.campaign_memory = (result.narrative || "").slice(0, 280) + "... (see story_log for full history)";
+      // Campaign Memory Refresh — keep a persistent running log of key events so
+      // deliberate player actions are never forgotten. A player's custom action is
+      // almost always significant intent, so we always record it here.
+      const existingMemory = (session.campaign_memory && session.campaign_memory !== "This is still early in the campaign. Major events and relationships will be tracked here.")
+        ? session.campaign_memory
+        : '';
+      let memoryLines = existingMemory ? existingMemory.split('\n').filter(Boolean) : [];
+
+      if (action === 'choice' && typeof custom_input === 'string' && custom_input.trim()) {
+        memoryLines.push(`• Player chose to: ${custom_input.trim().slice(0, 160)}`);
+      } else if (updatedLog.length % 10 === 0 || action === 'start') {
+        memoryLines.push(`• ${(result.narrative || "").slice(0, 200)}`);
+      }
+
+      if (memoryLines.length) {
+        // Keep the most recent 25 key events to bound prompt size.
+        updateData.campaign_memory = memoryLines.slice(-25).join('\n');
       }
 
       if (result.location_update) updateData.current_location = result.location_update;
