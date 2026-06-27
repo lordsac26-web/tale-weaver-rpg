@@ -135,6 +135,7 @@ export default function ImageForge() {
   const [matureContent, setMatureContent] = useState(false);
   const [enhancingPrompt, setEnhancingPrompt] = useState(false);
   const [generating, setGenerating]   = useState(false);
+  const [retrying, setRetrying]       = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [error, setError]             = useState(null);
 
@@ -178,65 +179,89 @@ export default function ImageForge() {
     }
   };
 
+  // Slightly adjusts a prompt for a retry attempt: strips the heaviest stylistic
+  // qualifiers and adds a softer, simpler framing. This makes a second attempt more
+  // likely to succeed when the original was rejected or failed.
+  const adjustPromptForRetry = (rawPrompt) => {
+    const simplified = rawPrompt
+      .replace(/\b(gore|gory|blood|bloody|brutal|graphic|disturbing|grotesque)\b/gi, 'dramatic')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return `${simplified}, clean composition, safe-for-work fantasy illustration, tasteful framing`;
+  };
+
+  // Calls the forge function and returns the image URL, or null on a soft failure.
+  const callForge = async (finalPrompt, referenceUrl) => {
+    const result = await base44.functions.invoke('forgeDndImage', {
+      ...(referenceUrl ? { reference_image_url: referenceUrl } : {}),
+      prompt: finalPrompt,
+      quality,
+      mature_content: matureContent,
+      use_ai_enhance: useAiEnhance,
+      category,
+    });
+    return result.data?.image_url || null;
+  };
+
   const generateImage = async () => {
     setGenerating(true);
+    setRetrying(false);
     setError(null);
     setGeneratedImage(null);
 
     try {
+      let referenceUrl = null;
+      let basePrompt;
+
       if (mode === 'describe') {
         if (!prompt.trim()) {
           setError('Please provide a description');
           setGenerating(false);
           return;
         }
-
-        const finalPrompt = buildFinalPrompt(prompt);
-
-        const result = await base44.functions.invoke('forgeDndImage', {
-          prompt: finalPrompt,
-          quality,
-          mature_content: matureContent,
-          use_ai_enhance: useAiEnhance,
-          category,
-        });
-
-        if (result.data?.image_url) {
-          setGeneratedImage(result.data.image_url);
-        } else {
-          setError('Failed to generate image');
-        }
+        basePrompt = prompt;
       } else {
         if (!uploadedImage) {
           setError('Please upload an image first');
           setGenerating(false);
           return;
         }
-
         const uploadResult = await base44.integrations.Core.UploadFile({ file: uploadedImage });
+        referenceUrl = uploadResult.file_url;
+        basePrompt = prompt.trim() || 'Transform this into a D&D fantasy art style';
+      }
 
-        const basePrompt = prompt.trim() || 'Transform this into a D&D fantasy art style';
-        const finalPrompt = buildFinalPrompt(basePrompt);
+      const finalPrompt = buildFinalPrompt(basePrompt);
 
-        const result = await base44.functions.invoke('forgeDndImage', {
-          reference_image_url: uploadResult.file_url,
-          prompt: finalPrompt,
-          quality,
-          mature_content: matureContent,
-          use_ai_enhance: useAiEnhance,
-          category,
-        });
+      // First attempt — and if it fails, automatically retry once with an
+      // adjusted prompt before giving up.
+      let imageUrl = null;
+      try {
+        imageUrl = await callForge(finalPrompt, referenceUrl);
+      } catch (firstErr) {
+        imageUrl = null;
+      }
 
-        if (result.data?.image_url) {
-          setGeneratedImage(result.data.image_url);
-        } else {
-          setError('Failed to transform image');
+      if (!imageUrl) {
+        setRetrying(true);
+        try {
+          imageUrl = await callForge(buildFinalPrompt(adjustPromptForRetry(basePrompt)), referenceUrl);
+        } catch (retryErr) {
+          imageUrl = null;
         }
+        setRetrying(false);
+      }
+
+      if (imageUrl) {
+        setGeneratedImage(imageUrl);
+      } else {
+        setError('The forge couldn\'t complete this scene, even after adjusting the prompt. Try rephrasing your description or simplifying the details.');
       }
     } catch (err) {
       setError(err.message || 'Generation failed');
     } finally {
       setGenerating(false);
+      setRetrying(false);
     }
   };
 
@@ -475,7 +500,7 @@ export default function ImageForge() {
             disabled={generating || (mode === 'describe' && !prompt.trim()) || (mode === 'upload' && !uploadedImage)}
             className="w-full py-3 rounded-xl font-fantasy font-bold text-base btn-fantasy disabled:opacity-50 flex items-center justify-center gap-2">
             {generating ? (
-              <><Loader2 className="w-5 h-5 animate-spin" />Forging Image...</>
+              <><Loader2 className="w-5 h-5 animate-spin" />{retrying ? 'Adjusting & retrying...' : 'Forging Image...'}</>
             ) : (
               <><Wand2 className="w-5 h-5" />Forge Image</>
             )}
