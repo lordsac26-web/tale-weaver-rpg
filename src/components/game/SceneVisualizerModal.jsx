@@ -10,28 +10,59 @@ export default function SceneVisualizerModal({ narrative, session, character, on
 
   useEffect(() => { generateScene(); }, []);
 
+  // Soften wording that image safety filters tend to reject (gore/violence),
+  // so post-combat scenes still render as art instead of failing every retry.
+  const sanitizeNarration = (text) => {
+    const replacements = [
+      [/\bblood(y|ied|ier)?\b/gi, 'crimson'],
+      [/\bgore\b/gi, 'aftermath'],
+      [/\bcorpses?\b/gi, 'fallen figures'],
+      [/\bdead bod(y|ies)\b/gi, 'fallen figures'],
+      [/\bkill(ed|ing|s)?\b/gi, 'defeated'],
+      [/\bslaughter(ed|ing)?\b/gi, 'overcome'],
+      [/\bstab(bed|bing|s)?\b/gi, 'struck'],
+      [/\bsever(ed|ing)?\b/gi, 'cut'],
+      [/\bguts?\b/gi, 'remains'],
+      [/\bwound(ed|s)?\b/gi, 'weary'],
+      [/\bmaim(ed|ing)?\b/gi, 'wounded'],
+      [/\bmutilat(ed|ion)\b/gi, 'marked'],
+      [/\bdismember(ed|ing)?\b/gi, 'felled'],
+    ];
+    return replacements.reduce((acc, [re, rep]) => acc.replace(re, rep), text || '');
+  };
+
+  const buildPrompt = (sceneText) => `Epic high fantasy digital oil painting, cinematic composition, dramatic lighting.
+D&D adventure scene: ${sceneText}
+Location: ${session?.current_location || 'fantasy realm'}. Time: ${session?.time_of_day || 'day'}. Season: ${session?.season || 'Spring'}.
+Hero: ${character?.name}, a ${character?.race} ${character?.class}.
+Style: detailed, atmospheric, award-winning fantasy concept art, rich colors, painterly. Tasteful, non-graphic. No text or UI elements.`;
+
   const generateScene = async () => {
     setLoading(true);
     setError(null);
 
-    const recentNarration = narrative
-      .filter(e => e.type === 'narration')
-      .slice(-3)
-      .map(e => e.text)
-      .join(' ')
-      .slice(0, 600);
-
-    const prompt = `Epic high fantasy digital oil painting, cinematic composition, dramatic lighting.
-D&D adventure scene: ${recentNarration}
-Location: ${session?.current_location || 'fantasy realm'}. Time: ${session?.time_of_day || 'day'}. Season: ${session?.season || 'Spring'}.
-Hero: ${character?.name}, a ${character?.race} ${character?.class}.
-Style: detailed, atmospheric, award-winning fantasy concept art, rich colors, painterly. No text or UI elements.`;
+    const recentNarration = sanitizeNarration(
+      narrative
+        .filter(e => e.type === 'narration')
+        .slice(-3)
+        .map(e => e.text)
+        .join(' ')
+        .slice(0, 600)
+    );
 
     try {
-      const result = await base44.integrations.Core.GenerateImage({ prompt });
+      const result = await base44.integrations.Core.GenerateImage({ prompt: buildPrompt(recentNarration) });
       setImageUrl(result.url);
     } catch (e) {
-      setError('The vision was lost in the mists... try again.');
+      // Fallback: drop the scene description entirely and render the location only,
+      // so a single filtered word can't block every attempt.
+      try {
+        const fallbackScene = `An atmospheric view of ${session?.current_location || 'a fantasy realm'}, with ${character?.name} the ${character?.race} ${character?.class} standing resolute.`;
+        const result = await base44.integrations.Core.GenerateImage({ prompt: buildPrompt(fallbackScene) });
+        setImageUrl(result.url);
+      } catch (e2) {
+        setError('The vision was lost in the mists... try again.');
+      }
     }
     setLoading(false);
   };
