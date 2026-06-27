@@ -96,6 +96,14 @@ Deno.serve(async (req) => {
 
     const campaignMemory = session.campaign_memory || "This is still early in the campaign. Major events and relationships will be tracked here.";
 
+    // PERMANENT KEY EVENTS — critical, story-defining player actions that must never
+    // be forgotten (e.g. swallowing the amulet). These are surfaced on EVERY turn so
+    // the story engine keeps referencing them, no matter how long ago they happened.
+    const keyEvents = Array.isArray(session.key_events) ? session.key_events : [];
+    const keyEventsSummary = keyEvents.length
+      ? keyEvents.map(ev => `• ${ev.summary}`).join('\n')
+      : 'None recorded yet.';
+
     const adultToneInstruction = session.adult_mode 
       ? `This is an NC-17 / Mature Dark Fantasy campaign. Write like a gritty, intense R-rated or NC-17 story (Game of Thrones, The Witcher, Berserk). Be visceral with violence, gore, betrayal, trauma, profanity, and moral darkness when appropriate. NEVER describe sexual acts, arousal, or explicit views of genitalia. Focus on emotional weight and consequence.`
       : `Maintain a serious, immersive, mature fantasy tone.`;
@@ -113,6 +121,8 @@ You are a masterful, reactive Dungeon Master running a living, cinematic campaig
 
 CHARACTER: ${charSummary}
 WORLD STATE: ${worldSummary}
+PERMANENT KEY EVENTS (these are established, irreversible facts — always honor and reference them when relevant; never contradict or forget them):
+${keyEventsSummary}
 CAMPAIGN MEMORY: ${campaignMemory}
 JOURNAL NOTES: ${journalSummary}
 RECENT EVENTS: ${recentLog}
@@ -174,6 +184,8 @@ ${adultToneInstruction}
 
 Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely.
 
+KEY EVENT TRACKING: If this turn produces a CRITICAL, story-defining, irreversible development — something that must shape every future scene (e.g. the player swallows/consumes a magic item, kills or spares a major NPC, makes a binding pact, gains/loses a unique power, destroys an artifact, makes a permanent vow or transformation) — set the "key_event" field to a concise one-sentence summary of that fact written in past tense (e.g. "Blade swallowed the unknown power-exuding amulet, which now resides inside him."). Only set "key_event" for genuinely permanent, plot-defining moments — leave it empty for routine actions.
+
 CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" text itself. The narrative must be pure prose — never include lines like "1. ...", "2. ...", "What do you do?", or any enumerated options. The choices belong solely in the structured choices array.`;
 
       responseSchema = {
@@ -192,6 +204,7 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
           quest_update: { type: 'object', properties: { new_quest:{type:'string'}, completed_quest:{type:'string'} } },
           new_condition: { type: 'string' },
           plot_flag: { type: 'string' },
+          key_event: { type: 'string' },
           alignment_shift: { type: 'object', properties: { good_evil:{type:'number'}, law_chaos:{type:'number'}, sanity:{type:'number'}, severity:{type:'string', enum:['none','minor','meaningful','critical']}, reason:{type:'string'} } }
         }
       };
@@ -265,6 +278,23 @@ Write a gripping 1-2 paragraph combat narrative.`;
       if (memoryLines.length) {
         // Keep the most recent 25 key events to bound prompt size.
         updateData.campaign_memory = memoryLines.slice(-25).join('\n');
+      }
+
+      // PERMANENT KEY EVENTS — when the AI flags a critical, irreversible moment,
+      // append it to the permanent log. This is never pruned, so the story engine
+      // references it on every future turn. Deduped on summary to avoid repeats.
+      if (typeof result.key_event === 'string' && result.key_event.trim()) {
+        const existingEvents = Array.isArray(session.key_events) ? session.key_events : [];
+        const summary = result.key_event.trim();
+        const alreadyLogged = existingEvents.some(ev =>
+          (ev.summary || '').toLowerCase() === summary.toLowerCase()
+        );
+        if (!alreadyLogged) {
+          updateData.key_events = [
+            ...existingEvents,
+            { summary, timestamp: new Date().toISOString(), turn: updatedLog.length }
+          ];
+        }
       }
 
       if (result.location_update) updateData.current_location = result.location_update;

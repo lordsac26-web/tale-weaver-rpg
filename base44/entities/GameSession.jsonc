@@ -87,6 +87,17 @@
         "type": "object"
       }
     },
+    "key_events": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Permanent log of critical, story-defining player actions and consequences (e.g. swallowing an amulet, killing a key NPC, making a pact). These are never pruned and are referenced by the story engine on every turn to keep continuity. Each entry: {summary: string, timestamp: string, turn: number}."
+    },
+    "campaign_memory": {
+      "type": "string",
+      "description": "Rolling summary of recent campaign developments and relationships, bounded in size."
+    },
     "npc_relations": {
       "type": "object"
     },
