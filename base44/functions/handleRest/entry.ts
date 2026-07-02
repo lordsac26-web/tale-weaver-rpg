@@ -72,6 +72,10 @@ Deno.serve(async (req) => {
   // blocking other users. (Root cause of "rest only plays the animation" was the
   // user-scoped fetch silently returning null and 404ing.)
   let character = null;
+  // H4 fix: remember which client successfully read the character — the SAME client
+  // must perform the update and re-read below, or fallback users get a rest whose
+  // writes silently fail under the same RLS quirk that broke their read.
+  let dbClient = base44;
   try {
     character = await base44.entities.Character.get(character_id);
   } catch {
@@ -83,6 +87,7 @@ Deno.serve(async (req) => {
       // Allow only the owner (by email or user id) to rest this character.
       if (svcChar && (svcChar.created_by === user.email || svcChar.created_by_id === user.id)) {
         character = svcChar;
+        dbClient = base44.asServiceRole; // ownership verified above — write with the client that can see the record
       } else if (svcChar) {
         return Response.json({ error: 'Forbidden' }, { status: 403 });
       }
@@ -265,9 +270,9 @@ Deno.serve(async (req) => {
     restorations.push('All abilities recharged');
   }
 
-  await base44.entities.Character.update(character_id, updates);
+  await dbClient.entities.Character.update(character_id, updates);
 
-  const updatedChar = await base44.entities.Character.get(character_id);
+  const updatedChar = await dbClient.entities.Character.get(character_id);
   const healing = updates.hp_current != null ? updates.hp_current - (character.hp_current || 0) : 0;
   
   return Response.json({

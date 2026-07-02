@@ -592,32 +592,60 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Use slot on cast — server validates availability before spending (Security fix #5)
+      // H1/H5 fix — slot validation uses the same level-indexed tables as handleRest,
+      // and ALL validation (slots + metamagic sorcery points) happens BEFORE any
+      // deduction is persisted. Deductions are batched into a single update at the end.
+      let slotDeduction = null; // { slotsKey, currentUsed }
+      let spDeduction = null;   // { spMax, newCurrent }
       if (spell.slot_level && spell.slot_level > 0) {
         const slotsKey = `level_${spell.slot_level}`;
         const currentUsed = (character.spell_slots || {})[slotsKey] || 0;
-        // Compute max slots for this level from the handleRest SPELL_SLOTS_BY_CLASS table.
-        // We inline a simplified full-caster/half-caster check here.
-        const FULL_CASTER_MAX = [4,3,3,3,3,2,2,1,1];
-        const HALF_CASTER_CLASSES = ['Paladin', 'Ranger', 'Artificer'];
-        const NON_CASTERS = ['Fighter', 'Barbarian', 'Rogue', 'Monk'];
-        const THIRD_CASTER_SUBCLASSES = ['eldritch knight', 'arcane trickster'];
-        const isHalfCaster = HALF_CASTER_CLASSES.includes(character.class);
-        const isThirdCaster = NON_CASTERS.includes(character.class) &&
-          THIRD_CASTER_SUBCLASSES.some(s => (character.subclass || '').toLowerCase().includes(s));
-        // Use a generous cap of 4 for validation — this prevents spending slots that were never granted
-        // while avoiding storing the full slot table here (handleRest owns that).
-        const slotLevelIdx = spell.slot_level - 1;
-        const maxForLevel = isThirdCaster ? 4 : (FULL_CASTER_MAX[slotLevelIdx] || 4);
+        // Per-class slot maximums by character level (index 0 = level 1) — matches handleRest.
+        const FULL = [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]];
+        const HALF = [[0],[2],[3],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]];
+        const ARTIFICER = [[2],[2],[3],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]];
+        const WARLOCK_PACT = [1,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,4,4,4,4]; // pact slot COUNT by level
+        const SLOT_TABLES = { Wizard: FULL, Sorcerer: FULL, Bard: FULL, Cleric: FULL, Druid: FULL, Paladin: HALF, Ranger: HALF, Artificer: ARTIFICER };
+        const charLevel = Math.min(20, character.level || 1);
+        const slotIdx = spell.slot_level - 1;
+        const subLower = (character.subclass || '').toLowerCase();
+        const isThirdCaster = subLower.includes('eldritch knight') || subLower.includes('arcane trickster');
+        const isMulticlassed = Array.isArray(character.multiclass) && character.multiclass.length > 0;
+        // Combined caster level for multiclass (PHB p.164): full = level,
+        // half = level/2 (Paladin/Ranger/Artificer), third = level/3 (EK/AT).
+        // Same semantics as handleRest's computeCasterLevel.
+        const casterContribution = (cls, sub, lvls) => {
+          if (['Wizard','Sorcerer','Bard','Cleric','Druid'].includes(cls)) return lvls;
+          if (['Paladin','Ranger','Artificer'].includes(cls)) return Math.floor(lvls / 2);
+          const s = (sub || '').toLowerCase();
+          if (s.includes('eldritch knight') || s.includes('arcane trickster')) return Math.floor(lvls / 3);
+          return 0;
+        };
+        let maxForLevel = 0;
+        if (character.class === 'Warlock' && !isMulticlassed) {
+          // Pact Magic (PHB p.107): N slots, all at the pact slot level.
+          const pactLevel = Math.min(5, Math.ceil(charLevel / 2));
+          maxForLevel = spell.slot_level <= pactLevel ? (WARLOCK_PACT[charLevel - 1] || 0) : 0;
+        } else if (isMulticlassed) {
+          let casterLevel = casterContribution(character.class, character.subclass, character.level || 1);
+          for (const mc of (character.multiclass || [])) {
+            if (mc?.class === 'Warlock') continue; // Pact Magic excluded from the shared pool (PHB p.164)
+            casterLevel += casterContribution(mc?.class, mc?.subclass, mc?.levels || 0);
+          }
+          maxForLevel = casterLevel > 0 ? ((FULL[Math.min(20, casterLevel) - 1] || [])[slotIdx] || 0) : 0;
+        } else if (isThirdCaster) {
+          const casterLevel = Math.floor(charLevel / 3);
+          maxForLevel = casterLevel > 0 ? ((FULL[casterLevel - 1] || [])[slotIdx] || 0) : 0;
+        } else {
+          maxForLevel = (((SLOT_TABLES[character.class] || [])[charLevel - 1]) || [])[slotIdx] || 0;
+        }
         if (currentUsed >= maxForLevel) {
           return Response.json({ error: `No ${spell.slot_level === 1 ? '1st' : spell.slot_level + 'th'}-level spell slots remaining.`, invalid: true }, { status: 400 });
         }
-        await base44.entities.Character.update(character_id, {
-          spell_slots: { ...(character.spell_slots || {}), [slotsKey]: currentUsed + 1 }
-        });
+        slotDeduction = { slotsKey, currentUsed };
       }
 
-      // === SORCERER METAMAGIC: spend sorcery points (PHB p.101-102) ===
+      // === SORCERER METAMAGIC: validate sorcery points (PHB p.101-102) ===
       // Quickened = 2 SP, Heightened = 3 SP, Twinned = spell level (min 1).
       const meta = modifiers.metamagic || {};
       if ((character.class || '').toLowerCase() === 'sorcerer' && (meta.quickened || meta.twinned || meta.heightened)) {
@@ -632,10 +660,15 @@ Deno.serve(async (req) => {
         if (spCost > spAvail) {
           return Response.json({ error: `Not enough sorcery points (need ${spCost}, have ${spAvail}).`, invalid: true }, { status: 400 });
         }
-        await base44.entities.Character.update(character_id, {
-          sorcery_points_max: spMax,
-          sorcery_points_current: spAvail - spCost,
-        });
+        spDeduction = { spMax, newCurrent: spAvail - spCost };
+      }
+
+      // ALL validation passed — persist slot + sorcery point deductions together.
+      if (slotDeduction || spDeduction) {
+        const deductUpdates = {};
+        if (slotDeduction) deductUpdates.spell_slots = { ...(character.spell_slots || {}), [slotDeduction.slotsKey]: slotDeduction.currentUsed + 1 };
+        if (spDeduction) { deductUpdates.sorcery_points_max = spDeduction.spMax; deductUpdates.sorcery_points_current = spDeduction.newCurrent; }
+        await base44.entities.Character.update(character_id, deductUpdates);
       }
 
       // === UTILITY / BUFF spells ===
@@ -856,6 +889,12 @@ Deno.serve(async (req) => {
       // consume a matching ammo item from inventory. Block the attack if none left.
       const weaponProps = (weapon.properties || []).map(p => p.toLowerCase());
       const usesAmmo = weaponProps.includes('ammunition');
+      // Loading (PHB p.147): validated BEFORE ammunition is consumed — a blocked
+      // shot must never eat a bolt/arrow (H5 fix: validation before persistence).
+      const hasLoading = weaponProps.includes('loading');
+      if (isRanged && hasLoading && combatLog.world_state?.loading_weapon_fired) {
+        return Response.json({ error: `${weapon.name} has the Loading property — it can only be fired once per turn.`, invalid: true }, { status: 400 });
+      }
       if (isRanged && usesAmmo) {
         const AMMO_FOR = {
           'longbow': 'arrow', 'shortbow': 'arrow',
@@ -873,12 +912,6 @@ Deno.serve(async (req) => {
         // Decrement one unit of ammunition
         const newInv = inv.map((it, i) => i === ammoIdx ? { ...it, quantity: Math.max(0, (it.quantity ?? 1) - 1) } : it);
         await base44.entities.Character.update(character_id, { inventory: newInv });
-      }
-      // Loading (PHB p.147): a weapon with the Loading property fires only ONCE per
-      // turn, regardless of Extra Attack, bonus actions, or other action sources.
-      const hasLoading = weaponProps.includes('loading');
-      if (isRanged && hasLoading && combatLog.world_state?.loading_weapon_fired) {
-        return Response.json({ error: `${weapon.name} has the Loading property — it can only be fired once per turn.`, invalid: true }, { status: 400 });
       }
       const isFinesse = (weapon.properties || []).includes('finesse');
       const strMod = statMod(character.strength);
@@ -1049,7 +1082,13 @@ Deno.serve(async (req) => {
     const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, spell_name: spell?.name || null };
 
     if (hit) {
-      const dMatch = damageDice.match(/^(\d+)d(\d+)$/);
+      // H5 fix: guard non-NdM dice strings (e.g. "1d8+1", "2d6 fire") — extract the
+      // NdM core, else fall back to 1d6 (matches the offhand handler's guard). Never throw.
+      let dMatch = damageDice.match(/(\d+)d(\d+)/);
+      if (!dMatch) {
+        console.warn(`player_attack: unparseable damage dice "${damageDice}" — falling back to 1d6`);
+        dMatch = [null, '1', '6'];
+      }
       let numDice = isCritical ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1]);
       const sides = parseInt(dMatch[2]);
 

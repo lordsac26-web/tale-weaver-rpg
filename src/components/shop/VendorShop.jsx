@@ -32,11 +32,17 @@ export default function VendorShop({ vendor, character, onClose, onTransaction }
   };
 
   const handleSell = async (item) => {
-    const sellPrice = Math.floor((item.base_price || item.price || 10) * 0.5);
-    
+    // H3 fix: sell ONE unit at a time — decrement quantity and only remove the
+    // inventory row when it reaches 0. (Previously the entire stack was deleted
+    // for a single unit's payout.)
+    const unitPrice = Math.floor((item.base_price || item.price || 10) * 0.5);
+
     setProcessing(true);
-    const newGold = playerGold + sellPrice;
-    const newInventory = playerInventory.filter(i => i !== item);
+    const qty = item.quantity ?? 1;
+    const newGold = playerGold + unitPrice;
+    const newInventory = qty > 1
+      ? playerInventory.map(i => i === item ? { ...i, quantity: qty - 1 } : i)
+      : playerInventory.filter(i => i !== item);
 
     await base44.entities.Character.update(character.id, {
       gold: newGold,

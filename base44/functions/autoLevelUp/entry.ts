@@ -102,6 +102,16 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No character_id provided' }, { status: 400 });
     }
 
+    // C2 fix: direct frontend calls must be authenticated and own the character.
+    // Automation payloads (body.event) run without a user session — they keep
+    // service role, unchanged, so the XP-change automation still works.
+    const isAutomation = !!body.event;
+    let authedUser = null;
+    if (!isAutomation) {
+      authedUser = await base44.auth.me();
+      if (!authedUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // When called from an entity automation, check if XP actually changed
     // to avoid unnecessary processing on non-XP updates
     if (body.data && body.old_data) {
@@ -115,6 +125,13 @@ Deno.serve(async (req) => {
     // Use service role to read character (automation context has no user session)
     const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
+
+    // C2 fix: for direct calls, verify the caller OWNS this character before any
+    // service-role write. (Character RLS keys on created_by; created_by_id also checked.)
+    if (!isAutomation) {
+      const ownsCharacter = character.created_by_id === authedUser.id || character.created_by === authedUser.email;
+      if (!ownsCharacter) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    }
  
     // Multiclass: gating, proficiency bonus, and XP use TOTAL character level
     // (primary + all secondary class levels) per 5e rules. Per-class levels
@@ -191,9 +208,11 @@ Deno.serve(async (req) => {
       newSpellSlots[key]  = Math.min(prevUsed, maxAtNewLevel);
     });
  
-    // ── AC and initiative recalculation ─────────────────────────────────────
+    // ── AC recalculation ─────────────────────────────────────────────────────
+    // H2 fix: do NOT write initiative here. character.initiative is a MISC bonus
+    // added ON TOP of the dex mod at combat start (see combatEngine start_combat) —
+    // writing the dex mod into it double-counted DEX on every initiative roll.
     const newAC         = recalcArmorClass(character);
-    const newInitiative = calcStatMod(character.dexterity || 10);
  
     // ── Class features for gained levels ────────────────────────────────────
     const newFeatures = [];
@@ -399,7 +418,6 @@ Deno.serve(async (req) => {
       hp_max:            newMaxHP,
       hp_current:        character.hp_current + hpIncrease,
       proficiency_bonus: newProfBonus,
-      initiative:        newInitiative,
     };
  
     // Write the gained level(s) into the correct class slot.
