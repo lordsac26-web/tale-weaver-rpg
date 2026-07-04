@@ -301,7 +301,7 @@ Deno.serve(async (req) => {
       const adv = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
       ni = adv.nextIndex; nr = adv.nextRound;
       ws = { ...ws, actions_used_this_turn: 0, bonus_action_used: false,
-             sneak_attack_used: false, loading_weapon_fired: false };
+             sneak_attack_used: false, loading_weapon_fired: false, colossus_slayer_used: false };
     }
     return { nextIndex: ni, nextRound: nr, actionsRemaining: Math.max(0, ar), worldState: ws };
   };
@@ -317,6 +317,7 @@ Deno.serve(async (req) => {
     reaction_used: false,
     sneak_attack_used: false,
     loading_weapon_fired: false,
+    colossus_slayer_used: false,
     ...extra,
   });
 
@@ -551,6 +552,7 @@ Deno.serve(async (req) => {
     let attackType = 'melee';
     let extraDamageDice = []; // For smite, sneak attack, etc
     let sneakAttackApplied = false; // tracks if Sneak Attack was used this attack (once-per-turn guard)
+    let colossusApplied = false; // Hunter Ranger Colossus Slayer (once-per-turn guard)
 
     // Register a disadvantage source (deferred — resolved in the single final roll).
     const applyDisadvantage = () => { disSources.push(true); };
@@ -691,6 +693,11 @@ Deno.serve(async (req) => {
       if (spell.attack_type === 'healing' && spell.heal_dice) {
         let healAmt = rollDiceStr(spell.heal_dice || '1d8');
         healAmt += spellStatMod;
+        // Life Domain Cleric — Disciple of Life (PHB p.60): healing spells
+        // restore an extra 2 + the spell's slot level. Automatic.
+        if ((character.class || '') === 'Cleric' && (character.subclass || '').toLowerCase().includes('life')) {
+          healAmt += 2 + (spell.slot_level || 1);
+        }
         const player2 = combatants.find(c => c.type === 'player');
         if (player2) {
           player2.hp_current = Math.min(player2.hp_max, player2.hp_current + healAmt);
@@ -844,6 +851,9 @@ Deno.serve(async (req) => {
       if (spell.name === 'Eldritch Blast') {
         // targetACBonus defined here so it is in scope for the beam loop
         const ebTargetACBonus = (modifiers.half_cover ? 2 : 0) + (modifiers.three_quarters_cover ? 5 : 0);
+        // Agonizing Blast (PHB p.110): if known, add CHA modifier to each beam's damage.
+        const agonizingBonus = (character.features || []).some(f => String(typeof f === 'string' ? f : f?.name || '').toLowerCase().includes('agonizing blast'))
+          ? Math.max(0, statMod(character.charisma || 10)) : 0;
         const beams = character.level >= 17 ? 4 : character.level >= 11 ? 3 : character.level >= 5 ? 2 : 1;
         let totalBeamDmg = 0; let anyBeamHit = false; let beamCrit = false;
         const beamLogs = [];
@@ -858,8 +868,9 @@ Deno.serve(async (req) => {
             anyBeamHit = true;
             const numD = bCrit ? 2 : 1;
             let d = 0; for (let i = 0; i < numD; i++) d += rollDice(10);
+            d += agonizingBonus;
             totalBeamDmg += d;
-            beamLogs.push(`Beam ${b+1}: ${bCrit?'CRIT! ':''}${d} force (${br}+${bMod}=${br+bMod} vs AC ${target.ac})`);
+            beamLogs.push(`Beam ${b+1}: ${bCrit?'CRIT! ':''}${d} force${agonizingBonus ? ' (Agonizing)' : ''} (${br}+${bMod}=${br+bMod} vs AC ${target.ac})`);
           } else {
             beamLogs.push(`Beam ${b+1}: miss (${br}+${bMod}=${br+bMod} vs AC ${target.ac})`);
           }
@@ -962,6 +973,14 @@ Deno.serve(async (req) => {
         const level = character.level || 1;
         const rageDamage = level < 9 ? 2 : level < 16 ? 3 : 4;
         damageBonus += rageDamage;
+      }
+
+      // Hunter Ranger — Colossus Slayer (PHB p.93): once per turn, +1d8 damage
+      // when the target is already below its hit point maximum. Automatic.
+      if ((character.class || '') === 'Ranger' && (character.subclass || '').toLowerCase().includes('hunter')
+          && target.hp_current < target.hp_max && !combatLog.world_state?.colossus_slayer_used) {
+        extraDamageDice.push({ dice: '1d8', type: 'colossus', label: 'Colossus Slayer' });
+        colossusApplied = true;
       }
       // Reckless Attack (PHB p.48): advantage on melee STR attacks this turn.
       // Register as an advantage source — resolved in the single final roll.
@@ -1084,6 +1103,13 @@ Deno.serve(async (req) => {
     let attackRoll = attackResult.roll;
     let isCritical = attackResult.isCritical;
     let isMiss = attackResult.isMiss;
+
+    // Champion Fighter — Improved Critical (PHB p.72): weapon attacks crit on
+    // 19-20 (Superior Critical: 18-20 at level 15). Applied automatically.
+    if (!spell && (character.class || '') === 'Fighter' && (character.subclass || '').toLowerCase().includes('champion')) {
+      const critFloor = (character.level || 1) >= 15 ? 18 : 19;
+      if (!isMiss && attackRoll >= critFloor) isCritical = true;
+    }
 
     const totalAttack = attackRoll + attackMod;
     let hit = !isMiss && (isCritical || totalAttack >= (target.ac + targetACBonus));
@@ -1275,6 +1301,8 @@ Deno.serve(async (req) => {
       resolveActionAndAdvance(combatLog, updatedCombatants, character, { isQuickened: isQuickenedMain });
     // Mark Sneak Attack consumed for this turn so it can't trigger again until next turn
     if (sneakAttackApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.sneak_attack_used = true;
+    // Mark Colossus Slayer consumed for this turn (once-per-turn, PHB p.93)
+    if (colossusApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.colossus_slayer_used = true;
     // Mark a Loading weapon as fired so it can't fire again this turn (PHB p.147)
     if (weapon && (weapon.properties || []).map(p => p.toLowerCase()).includes('loading') && weapon.type === 'ranged' && newWorldState.actions_used_this_turn !== 0) {
       newWorldState.loading_weapon_fired = true;

@@ -4,7 +4,7 @@ import { Zap, ChevronDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { PROFICIENCY_BY_LEVEL } from './gameData';
 import AbilityRow from './AbilityRow';
-import { CLASS_ABILITY_BUILDERS, buildFeatAbilities } from './classAbilities';
+import { CLASS_ABILITY_BUILDERS, buildFeatAbilities, buildGenericSubclassAbilities } from './classAbilities';
 
 /**
  * ClassAbilitiesPanel — shows prominently all class-specific combat abilities
@@ -69,6 +69,7 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
   const classBuilder = CLASS_ABILITY_BUILDERS[charClass];
   const abilities = [
     ...(classBuilder ? classBuilder(ctx) : []),
+    ...buildGenericSubclassAbilities(ctx),
     ...buildFeatAbilities(ctx),
   ];
 
