@@ -1006,6 +1006,19 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── RUNE KNIGHT: invoked rune effects (Tasha's p.44-45) ─────────────────
+    // Runes are written into active_modifiers by the Rune Knight panel with an
+    // `effect` flag. Rune save DC = 8 + proficiency bonus + CON modifier.
+    const runeEffects = new Set(activeMods.map(m => m.effect).filter(Boolean));
+    const runeDC = 8 + (character.proficiency_bonus || 2) + statMod(character.constitution || 10);
+    let stormRuneBonus = 0;
+    let fireRuneText = '';
+    if (runeEffects.has('storm_prophecy')) {
+      // Storm Rune: +1d6 guidance on the attack roll while invoked.
+      stormRuneBonus = rollDice(6);
+      attackMod += stormRuneBonus;
+    }
+
     // Condition checks — apply RAW condition mechanics (PHB p.290-292)
     const conditions = (character.conditions || []).map(c => c.name || c);
 
@@ -1191,6 +1204,30 @@ Deno.serve(async (req) => {
         damage = tgtMod.applied === 'immunity' ? 0 : tgtMod.amount;
       }
 
+      // Fire Rune (invoked): on a weapon hit, +2d6 fire damage and the target
+      // must make a STR save vs the rune DC or be SHACKLED (restrained). The
+      // invocation is consumed by this trigger.
+      if (runeEffects.has('fire_shackle') && weapon) {
+        const fireRaw = rollDice(6) + rollDice(6);
+        const fireMod = applyDamageModifiers(fireRaw, 'fire', target);
+        damage += fireMod.amount;
+        const fSave = rollD20() + statMod(target.strength || 10);
+        let shackleNote;
+        if (fSave < runeDC) {
+          const existingConds = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
+          if (!existingConds.includes('restrained')) {
+            target.conditions = [...(target.conditions || []), { name: 'restrained', source: 'Fire Rune', save_dc: runeDC, save_ability: 'strength', caster: character.name }];
+          }
+          shackleNote = ` and is SHACKLED — restrained! (STR save ${fSave} vs DC ${runeDC})`;
+        } else {
+          shackleNote = ` but resists the fiery shackles. (STR save ${fSave} vs DC ${runeDC})`;
+        }
+        fireRuneText = ` 🔥 FIRE RUNE: ${target.name} takes +${fireMod.amount} fire damage${shackleNote}`;
+        await base44.entities.Character.update(character_id, {
+          active_modifiers: activeMods.filter(m => m.effect !== 'fire_shackle'),
+        });
+      }
+
       // Concentration check: if caster is concentrating and takes damage, DC = max(10, half damage) CON save
       // (Enemy triggering concentration check is handled in enemy_turn)
 
@@ -1219,7 +1256,7 @@ Deno.serve(async (req) => {
       logEntry.damage = damage;
       logEntry.damage_rolls = damageRolls;
       const actionLabel = spell ? `casts ${spell.name} at` : (isCritical ? 'CRITICALLY strikes' : 'hits');
-      logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
+      logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${stormRuneBonus ? ` ⛈️ Storm Rune guided the strike (+${stormRuneBonus} to hit).` : ''}${fireRuneText}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
     } else {
       logEntry.hit = false;
       logEntry.attack_roll = totalAttack;
@@ -1435,14 +1472,18 @@ Deno.serve(async (req) => {
     // wiped). The combatant snapshot can go stale when HP changes outside the engine
     // (Second Wind, healing potions, etc.). Re-read the authoritative Character HP so
     // enemy damage is subtracted from the player's ACTUAL current HP, not the snapshot.
+    let liveChar = null;
     {
       const livePlayer = await base44.entities.Character.get(player.id);
       if (livePlayer) {
+        liveChar = livePlayer;
         player.hp_current = Math.min(livePlayer.hp_max ?? player.hp_max, livePlayer.hp_current ?? player.hp_current);
         player.hp_max = livePlayer.hp_max ?? player.hp_max;
         player.is_conscious = player.hp_current > 0;
       }
     }
+    // Rune Knight: invoked runes on the DEFENDER (attacker-side runes live in player_attack).
+    const playerRunes = new Set((liveChar?.active_modifiers || []).map(m => m.effect).filter(Boolean));
 
     // Player is at 0 HP (downed): an attack that hits causes a death save failure (PHB p.197).
     // A melee hit from within 5 ft is an automatic critical → 2 failures.
@@ -1499,12 +1540,38 @@ Deno.serve(async (req) => {
     // Dodge action (PHB p.192): attacks against a dodging player roll with disadvantage.
     const playerDodging = !!combatLog.world_state?.player_dodging;
 
+    // ── RUNE KNIGHT (defender) reactions — one reaction per turn ────────────
+    // Stone Rune: the attacker must make a WIS save vs the rune DC or be charmed
+    // and unable to attack. Cloud Rune: redirect the first hit to another creature.
+    // Each is a single-use invocation, consumed when it triggers.
+    const runesConsumed = [];
+    let reactionAvailable = !combatLog.world_state?.reaction_used;
+    let stoneText = '';
+    const defRuneDC = 8 + (liveChar?.proficiency_bonus || 2) + statMod(liveChar?.constitution || 10);
+    if (playerRunes.has('stone_charm') && reactionAvailable) {
+      reactionAvailable = false;
+      runesConsumed.push('stone_charm');
+      const wisSave = rollD20() + statMod(currentCombatant.wisdom || 10);
+      if (wisSave < defRuneDC) {
+        numAttacks = 0;
+        const existingConds = (currentCombatant.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
+        if (!existingConds.includes('charmed')) {
+          currentCombatant.conditions = [...(currentCombatant.conditions || []), { name: 'charmed', source: 'Stone Rune', save_dc: defRuneDC, save_ability: 'wisdom', caster: player.name }];
+        }
+        stoneText = `🗿 STONE RUNE! ${currentCombatant.name} fails a WIS save (${wisSave} vs DC ${defRuneDC}) and is CHARMED — it cannot bring itself to attack! `;
+      } else {
+        stoneText = `🗿 Stone Rune: ${currentCombatant.name} resists the charm. (WIS save ${wisSave} vs DC ${defRuneDC}) `;
+      }
+    }
+    let cloudRedirectAvailable = playerRunes.has('redirect_attack') && reactionAvailable;
+
     let totalDamage = 0;
     let anyHit = false;
     let isCritical = false;
     const attackLogs = [];
 
     for (let atk = 0; atk < numAttacks; atk++) {
+      if (!currentCombatant.is_conscious) break; // felled mid-turn (Cloud Rune self-redirect)
       const roll1 = rollD20();
       const attackRoll = playerDodging ? Math.min(roll1, rollD20()) : roll1;
       const totalAttack = attackRoll + attackBonus;
@@ -1524,6 +1591,17 @@ Deno.serve(async (req) => {
           for (let i = 0; i < numDice; i++) dmg += rollDice(sides);
           dmg += (currentCombatant.damage_bonus || 0) + bonusDamage;
           dmg = Math.max(1, dmg);
+          // Cloud Rune (reaction): redirect the first attack that hits to another
+          // creature — another enemy if present, otherwise the attacker itself.
+          if (cloudRedirectAvailable) {
+            cloudRedirectAvailable = false;
+            runesConsumed.push('redirect_attack');
+            const redirectTarget = combatants.find(c => c.type === 'enemy' && c.is_conscious && c.id !== currentCombatant.id) || currentCombatant;
+            redirectTarget.hp_current = Math.max(0, redirectTarget.hp_current - dmg);
+            if (redirectTarget.hp_current === 0) redirectTarget.is_conscious = false;
+            attackLogs.push(`☁️ CLOUD RUNE! ${player.name} redirects the blow — ${redirectTarget.name} takes ${dmg} damage instead!${redirectTarget.hp_current === 0 ? ` ${redirectTarget.name} falls!` : ''}`);
+            continue;
+          }
           totalDamage += dmg;
           attackLogs.push(`${isCrit ? '💥 CRITICAL! ' : ''}${currentCombatant.name} hits for ${dmg} dmg (${attackRoll}+${attackBonus}=${totalAttack} vs AC ${targetAC})`);
         }
@@ -1571,8 +1649,9 @@ Deno.serve(async (req) => {
     // General Resistance/Vulnerability/Immunity from character fields (PHB p.197).
     // Resistance doesn't stack (a damage type can only be halved once), so skip
     // resistance if Rage already halved this same physical damage.
+    // Hill Rune (invoked): resistance to poison damage while active.
     const dmgMod = applyDamageModifiers(finalDamage, enemyDamageType, {
-      resistances: charFull?.resistances,
+      resistances: [...(charFull?.resistances || []), ...(playerRunes.has('hill_resilience') ? ['poison'] : [])],
       vulnerabilities: charFull?.vulnerabilities,
       immunities: charFull?.immunities,
     });
@@ -1628,13 +1707,16 @@ Deno.serve(async (req) => {
     // Build log entry
     let logText = '';
     if (conditionCleared) logText += `${currentCombatant.name} breaks free of ${conditionCleared}! `;
-    if (strategyDesc) logText += `[${currentCombatant.name} ${strategyDesc}] `;
+    if (stoneText) logText += stoneText;
+    if (strategyDesc && numAttacks > 0) logText += `[${currentCombatant.name} ${strategyDesc}] `;
     if (anyHit) {
-      logText += attackLogs.join('; ') + `. ${player.name} takes ${totalDamage} total damage! (${player.hp_current}/${player.hp_max} HP)`;
+      logText += attackLogs.join('; ') + (totalDamage > 0 ? `. ${player.name} takes ${totalDamage} total damage! (${player.hp_current}/${player.hp_max} HP)` : `. ${player.name} takes no damage!`);
       if (instantDeath) logText += ` 💀 The blow is so massive that ${player.name} dies instantly!`;
       else if (!player.is_conscious) logText += ` ${player.name} falls!`;
+    } else if (numAttacks === 0) {
+      logText += `${currentCombatant.name} takes no hostile action this turn.`;
     } else {
-      logText = `${strategyDesc ? `[${currentCombatant.name} ${strategyDesc}] ` : ''}${currentCombatant.name} attacks but misses ${player.name}! (${attackLogs.join('; ')})`;
+      logText += `${currentCombatant.name} attacks but misses ${player.name}! (${attackLogs.join('; ')})`;
     }
 
     // Build updated combatants with player HP changes BEFORE advancing turn
@@ -1667,13 +1749,28 @@ Deno.serve(async (req) => {
       text: logText
     };
 
+    // Persist consumed rune invocations (Cloud/Stone are single-use reactions).
+    if (runesConsumed.length > 0 && liveChar) {
+      await base44.entities.Character.update(player.id, {
+        active_modifiers: (liveChar.active_modifiers || []).filter(m => !runesConsumed.includes(m.effect)),
+      });
+    }
+
+    // A Cloud Rune redirect can fell an enemy on its own turn — check for victory.
+    const allEnemiesDown = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
+
     await base44.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants,
       log_entries: [...(combatLog.log_entries || []), logEntry],
       current_turn_index: nextIndex,
       round,
       world_state: newWS,
+      ...(allEnemiesDown ? { is_active: false, result: 'victory' } : {}),
     });
+    if (allEnemiesDown) {
+      await base44.entities.GameSession.update(session_id, { in_combat: false });
+      await awardVictoryXP(combat_id, updatedCombatants, player.id);
+    }
 
     const playerAtZero = !player.is_conscious;
     if (playerAtZero && player.hp_current === 0) {
@@ -1681,7 +1778,7 @@ Deno.serve(async (req) => {
       // Only mark as defeat if death saves are failed (handled elsewhere)
     }
 
-    return Response.json({ log_entry: logEntry, player_hp: player.hp_current, player_at_zero_hp: playerAtZero, next_turn_index: nextIndex, round, ai_strategy: strategy });
+    return Response.json({ log_entry: logEntry, player_hp: player.hp_current, player_at_zero_hp: playerAtZero, next_turn_index: nextIndex, round, ai_strategy: strategy, result: allEnemiesDown ? 'victory' : 'ongoing', combat_ended: allEnemiesDown });
   }
 
   // ─── ACTION SURGE (Fighter, PHB p.72) ───────────────────────────────────────
@@ -1803,7 +1900,10 @@ Deno.serve(async (req) => {
     const profBonus = character.proficiency_bonus || 2;
     // Attacker: Strength (Athletics). Add proficiency if proficient in Athletics.
     const athleticsProf = character.skills?.athletics ? profBonus : 0;
-    const attackerCheck = rollD20() + statMod(character.strength) + athleticsProf;
+    // Frost Rune (invoked): advantage on Strength (Athletics) checks.
+    const frostActive = (character.active_modifiers || []).some(m => m.effect === 'frost_advantage');
+    const gRoll1 = rollD20();
+    const attackerCheck = (frostActive ? Math.max(gRoll1, rollD20()) : gRoll1) + statMod(character.strength) + athleticsProf;
 
     // Defender: best of Athletics (STR) or Acrobatics (DEX). Monster stats are on the combatant.
     const defStr = target.strength || (target.str ? parseInt(target.str) : 10);

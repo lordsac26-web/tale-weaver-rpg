@@ -73,13 +73,27 @@ export default function RuneKnightPanel({ character, onUpdate }) {
   const level = character.level || 1;
   const modifiers = character.active_modifiers || [];
 
+  // Invocation pool — shared with the "Invoke Rune" combat ability counter.
+  // Runes known: 2 at L3, 3 at L7, 4 at L10, 5 at L15; each invokable 1/short rest (2 at L15).
+  const knownRunes = level >= 15 ? 5 : level >= 10 ? 4 : level >= 7 ? 3 : 2;
+  const invokesPerRune = level >= 15 ? 2 : 1;
+  const runeMax = knownRunes * invokesPerRune;
+  const sra = character.short_rest_abilities || {};
+  const runeUsed = sra.rune_invocations_used || 0;
+  const runeLeft = Math.max(0, runeMax - runeUsed);
+
   const isActive = (rune) => modifiers.some(m => m.source === rune.modifier.source);
 
   const toggleRune = (rune) => {
     if (isActive(rune)) {
+      // Deactivating does not refund the spent invocation.
       onUpdate({ active_modifiers: modifiers.filter(m => m.source !== rune.modifier.source) });
     } else {
-      onUpdate({ active_modifiers: [...modifiers, { ...rune.modifier }] });
+      if (runeLeft <= 0) return; // no invocations left — recover on a short rest
+      onUpdate({
+        active_modifiers: [...modifiers, { ...rune.modifier }],
+        short_rest_abilities: { ...sra, rune_invocations_used: runeUsed + 1 },
+      });
     }
   };
 
@@ -95,17 +109,18 @@ export default function RuneKnightPanel({ character, onUpdate }) {
         </div>
         <span className="text-xs px-1.5 py-0.5 rounded font-fantasy"
           style={{ background: 'rgba(20,55,38,0.7)', border: '1px solid rgba(80,200,120,0.25)', color: 'rgba(140,230,170,0.7)', fontSize: '0.58rem' }}>
-          Lv.{level}
+          {runeLeft}/{runeMax} invocations · Lv.{level}
         </span>
       </div>
 
       <div className="p-3" style={{ background: 'rgba(8,14,10,0.5)' }}>
         <p className="text-xs mb-2.5 leading-relaxed" style={{ color: 'rgba(160,200,170,0.55)', fontFamily: 'EB Garamond, serif' }}>
-          Toggle a rune to invoke its giant magic — active runes apply their temporary effect directly into combat.
+          Toggle a rune to invoke its giant magic — each activation spends one invocation (recovers on a short rest). Active runes apply automatically in combat: Storm adds +1d6 to your attacks, Fire shackles on your next hit, Cloud redirects an enemy hit, Stone charms an attacker, Hill resists poison.
         </p>
         <div className="space-y-1.5">
           {RUNE_KNIGHT_RUNES.map((rune) => {
             const active = isActive(rune);
+            const locked = !active && runeLeft <= 0;
             const Icon = rune.icon;
             return (
               <button key={rune.id}
@@ -117,6 +132,8 @@ export default function RuneKnightPanel({ character, onUpdate }) {
                 } : {
                   background: 'rgba(12,18,12,0.4)',
                   border: '1px solid rgba(80,140,100,0.18)',
+                  opacity: locked ? 0.45 : 1,
+                  cursor: locked ? 'not-allowed' : 'pointer',
                 }}>
                 <div className="flex-shrink-0" style={{ color: active ? rune.color : 'rgba(120,160,130,0.4)' }}>
                   <Icon className="w-4 h-4" />
