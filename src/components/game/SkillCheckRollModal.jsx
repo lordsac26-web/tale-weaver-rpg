@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Dices, X } from 'lucide-react';
-import { rollD20WithAdvantage } from './equipmentAdvantage';
+import { rollD20WithAdvantage, resolveCheckSuccess } from './equipmentAdvantage';
 
 /**
  * SkillCheckRollModal — manual dice-roll prompt for a skill check.
@@ -38,7 +38,8 @@ export default function SkillCheckRollModal({
     setTimeout(() => {
       const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(advantage, disadvantage);
       const final = raw + modifier;
-      const success = final >= dc;
+      // Nat 20 always succeeds, nat 1 always fails
+      const success = resolveCheckSuccess(raw, final, dc);
       const data = { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, final, success };
       setResult(data);
       setRolling(false);

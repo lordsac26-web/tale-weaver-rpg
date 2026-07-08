@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, Loader2, ChevronLeft, Swords } from 'lucide-react';
 import { SKILL_STAT_MAP, calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
 import { recalculateStats } from '@/components/game/EquipmentManager';
-import { getEquipmentAdvantage, rollD20WithAdvantage } from '@/components/game/equipmentAdvantage';
+import { getEquipmentAdvantage, rollD20WithAdvantage, resolveCheckSuccess } from '@/components/game/equipmentAdvantage';
 import { motion, AnimatePresence } from 'framer-motion';
 import HUD from '@/components/game/HUD';
 import StoryPanel from '@/components/game/StoryPanel';
@@ -339,7 +339,7 @@ export default function Game() {
           setPendingRoll(null);
           const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
           const final = raw + modifier;
-          continueChoiceWithRoll(choice, choiceIndex, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: final >= choice.dc });
+          continueChoiceWithRoll(choice, choiceIndex, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, choice.dc) });
         },
       });
       return;
@@ -348,7 +348,7 @@ export default function Game() {
     // Auto mode: roll immediately.
     const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
     const final = raw + modifier;
-    await continueChoiceWithRoll(choice, choiceIndex, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: final >= choice.dc });
+    await continueChoiceWithRoll(choice, choiceIndex, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, choice.dc) });
   };
 
   // Intercept custom input — send to DM for adjudication first
@@ -435,7 +435,7 @@ export default function Game() {
           setPendingRoll(null);
           const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
           const final = raw + modifier;
-          continueProposalWithRoll(action, skill, dc, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: final >= dc });
+          continueProposalWithRoll(action, skill, dc, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
         },
       });
       return;
@@ -444,7 +444,7 @@ export default function Game() {
     // Auto mode.
     const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
     const final = raw + modifier;
-    await continueProposalWithRoll(action, skill, dc, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: final >= dc });
+    await continueProposalWithRoll(action, skill, dc, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
   };
 
   // ===== Free-text "Act" during combat — DM adjudicates first =====
@@ -533,7 +533,8 @@ export default function Game() {
       const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
       const modifier = computeSkillModifier(skill);
       const final = raw + modifier;
-      success = final >= dc;
+      // Nat 20 always succeeds, nat 1 always fails
+      success = resolveCheckSuccess(raw, final, dc);
       const feedback = getSkillFeedback(skill, success, final, dc, raw);
       setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success, feedback, character_name: character?.name }]);
     }

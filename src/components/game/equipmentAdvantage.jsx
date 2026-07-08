@@ -88,6 +88,20 @@ export function getEquipmentAdvantage(equipped, skillName) {
  * Roll a d20 with advantage or disadvantage.
  * Returns { roll: number, allRolls: number[], hadAdvantage: bool, hadDisadvantage: bool }
  */
+/**
+ * Resolve check success with natural 20/1 rules:
+ * a natural 20 always succeeds, a natural 1 always fails,
+ * otherwise compare the final total against the DC.
+ * @param {number} raw - the natural d20 roll (before modifiers)
+ * @param {number} final - roll + modifiers
+ * @param {number} dc - difficulty class
+ */
+export function resolveCheckSuccess(raw, final, dc) {
+  if (raw === 20) return true;
+  if (raw === 1) return false;
+  return final >= dc;
+}
+
 export function rollD20WithAdvantage(advantage, disadvantage) {
   const roll1 = Math.floor(Math.random() * 20) + 1;
 
