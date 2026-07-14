@@ -342,6 +342,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                 character={character}
                 combat={combat}
                 worldState={world_state}
+                selectedTargetId={selectedTarget}
                 onCharacterUpdate={onCharacterUpdate}
                 activeModifiers={combatModifiers}
                 onToggleModifier={(id) => setCombatModifiers(prev => ({ ...prev, [id]: !prev[id] }))}

@@ -16,7 +16,7 @@ import { CLASS_ABILITY_BUILDERS, buildFeatAbilities, buildGenericSubclassAbiliti
  * to the matching class builder via CLASS_ABILITY_BUILDERS, appends feat passives,
  * and renders the result.
  */
-export default function ClassAbilitiesPanel({ character, combat, worldState, onAbilityUsed, onMessage, onCharacterUpdate, activeModifiers, onToggleModifier }) {
+export default function ClassAbilitiesPanel({ character, combat, worldState, onAbilityUsed, onMessage, onCharacterUpdate, activeModifiers, onToggleModifier, selectedTargetId }) {
   const [collapsed, setCollapsed] = useState(false);
 
   // Server-authoritative resource spend — backend validates class/level/pool and deducts.
@@ -54,11 +54,14 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
     character,
     level,
     profBonus,
+    combat,
+    selectedTargetId,
     shortRestAbilities: character.short_rest_abilities || {},
     longRestAbilities: character.long_rest_abilities || {},
     bonusActionUsed: worldState?.bonus_action_used || false,
     onMessage,
     onAbilityUsed,
+    onCharacterUpdate,
     spendKi,
     spendBardic,
     // Toggle state (Rage, Reckless Attack, etc.) shared with the attack-resolution modifiers

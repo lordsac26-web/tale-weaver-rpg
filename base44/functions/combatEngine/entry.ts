@@ -421,6 +421,17 @@ Deno.serve(async (req) => {
       const strReq = equippedArmor.str_requirement || 13;
       if ((character.strength || 10) < strReq) playerSpeed = Math.max(0, playerSpeed - 10);
     }
+    // Monk Unarmored Movement (PHB p.78): +10/15/20/25/30 at L2/6/10/14/18 (unarmored only)
+    if ((character.class || '') === 'Monk' && !equippedArmor) {
+      const monkLevel = character.level || 1;
+      const umBonus = monkLevel >= 18 ? 30 : monkLevel >= 14 ? 25 : monkLevel >= 10 ? 20 : monkLevel >= 6 ? 15 : monkLevel >= 2 ? 10 : 0;
+      playerSpeed += umBonus;
+    }
+    // Barbarian Fast Movement (PHB p.48): +10 ft at L5 (not wearing heavy armor)
+    if ((character.class || '') === 'Barbarian' && (character.level || 1) >= 5) {
+      const armorType = (equippedArmor?.armor_type || '').toLowerCase();
+      if (armorType !== 'heavy') playerSpeed += 10;
+    }
 
     combatants.push({
       id: character.id,
@@ -896,6 +907,15 @@ Deno.serve(async (req) => {
       // damageBonus stays 0 for spell attacks (no ability mod added to spell damage by default).
     } else if (weapon) {
       const isRanged = weapon.type === 'ranged';
+      // Monk Martial Arts (PHB p.76): unarmed strikes scale die by level and can use DEX
+      if ((character.class || '') === 'Monk' && weapon.name === 'Unarmed Strike') {
+        const monkLevel = character.level || 1;
+        const maDie = monkLevel >= 17 ? 10 : monkLevel >= 11 ? 8 : monkLevel >= 5 ? 6 : 4;
+        weapon.damage_dice = `1d${maDie}`;
+        if (!(weapon.properties || []).includes('finesse')) {
+          weapon.properties = [...(weapon.properties || []), 'finesse'];
+        }
+      }
       // Ammunition (PHB p.146): ranged weapons with the Ammunition property must
       // consume a matching ammo item from inventory. Block the attack if none left.
       const weaponProps = (weapon.properties || []).map(p => p.toLowerCase());
@@ -1307,6 +1327,11 @@ Deno.serve(async (req) => {
     if (weapon && (weapon.properties || []).map(p => p.toLowerCase()).includes('loading') && weapon.type === 'ranged' && newWorldState.actions_used_this_turn !== 0) {
       newWorldState.loading_weapon_fired = true;
     }
+    // Reckless Attack drawback (PHB p.48): barbarian gains advantage on STR attacks,
+    // but enemies have advantage against them until the barbarian's next turn.
+    if (modifiers.reckless_attack && !spell && (character.class || '') === 'Barbarian') {
+      newWorldState.player_reckless = true;
+    }
 
     // Track concentration spells
     if (spell?.requires_concentration) {
@@ -1567,6 +1592,9 @@ Deno.serve(async (req) => {
 
     // Dodge action (PHB p.192): attacks against a dodging player roll with disadvantage.
     const playerDodging = !!combatLog.world_state?.player_dodging;
+    // Reckless Attack drawback (PHB p.48): enemies have advantage vs the barbarian
+    // until the start of the barbarian's next turn.
+    const playerReckless = !!combatLog.world_state?.player_reckless;
 
     // ── RUNE KNIGHT (defender) reactions — one reaction per turn ────────────
     // Stone Rune: the attacker must make a WIS save vs the rune DC or be charmed
@@ -1601,7 +1629,10 @@ Deno.serve(async (req) => {
     for (let atk = 0; atk < numAttacks; atk++) {
       if (!currentCombatant.is_conscious) break; // felled mid-turn (Cloud Rune self-redirect)
       const roll1 = rollD20();
-      const attackRoll = playerDodging ? Math.min(roll1, rollD20()) : roll1;
+      // Advantage (reckless barbarian) and disadvantage (dodging) cancel per PHB p.173
+      const hasAdv = playerReckless && !playerDodging;
+      const hasDis = playerDodging && !playerReckless;
+      const attackRoll = hasAdv ? Math.max(roll1, rollD20()) : hasDis ? Math.min(roll1, rollD20()) : roll1;
       const totalAttack = attackRoll + attackBonus;
       const isCrit = attackRoll === 20;
       const isFumble = attackRoll === 1;
@@ -1755,6 +1786,8 @@ Deno.serve(async (req) => {
     // Carry over world_state, clear concentration if broken.
     // player_dodging expires once enemies have acted (it only lasts until the player's next turn).
     const newWS = resetTurnWorldState(combatLog, { player_dodging: false });
+    // Clear Reckless Attack drawback when the barbarian's next turn begins
+    if (updatedCombatants[nextIndex]?.type === 'player') newWS.player_reckless = false;
     const concentrationSpellCheck = combatLog.world_state?.concentration_spell;
     if (concentrationSpellCheck && finalDamage > 0) {
       const conc = rollConcentrationSave(charFull, finalDamage);
@@ -1991,6 +2024,201 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, log_entry: logEntry, next_turn_index: nextIndex, round: nextRound });
   }
 
+  // ─── FLURRY OF BLOWS (Monk L2, PHB p.78) ───────────────────────────────────
+  // Bonus action: spend 1 Ki to make 2 unarmed strikes after taking the Attack action.
+  // Uses Martial Arts die (scales with level) and DEX for attack/damage.
+  if (action === 'flurry_of_blows') {
+    const { target_id } = payload || {};
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+
+    const level = character.level || 1;
+    if ((character.class || '').toLowerCase() !== 'monk' || level < 2) {
+      return Response.json({ error: 'Flurry of Blows requires Monk level 2+.', invalid: true }, { status: 400 });
+    }
+    const kiRemaining = character.ki_points_remaining ?? 0;
+    if (kiRemaining <= 0) {
+      return Response.json({ error: 'No Ki points remaining.', invalid: true }, { status: 400 });
+    }
+    if (combatLog.world_state?.bonus_action_used) {
+      return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
+    }
+
+    const combatants = [...combatLog.combatants];
+    const target = combatants.find(c => c.id === target_id);
+    if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });
+
+    // Martial Arts die + DEX-based attack (PHB p.76)
+    const maDie = level >= 17 ? 10 : level >= 11 ? 8 : level >= 5 ? 6 : 4;
+    const dexMod = statMod(character.dexterity || 10);
+    const profBonus = character.proficiency_bonus || 2;
+    const attackMod = dexMod + profBonus;
+
+    let totalDamage = 0;
+    let anyHit = false;
+    const strikeLogs = [];
+
+    for (let s = 0; s < 2; s++) {
+      if (!target.is_conscious) break;
+      const roll1 = rollD20();
+      const isCrit = roll1 === 20;
+      const isFumble = roll1 === 1;
+      const totalAttack = roll1 + attackMod;
+      const hit = !isFumble && (isCrit || totalAttack >= target.ac);
+      if (hit) {
+        anyHit = true;
+        const numDice = isCrit ? 2 : 1;
+        let dmg = 0;
+        for (let i = 0; i < numDice; i++) dmg += rollDice(maDie);
+        dmg += dexMod;
+        dmg = Math.max(1, dmg);
+        const dmgMod = applyDamageModifiers(dmg, 'bludgeoning', {
+          resistances: target.resistances, vulnerabilities: target.vulnerabilities, immunities: target.immunities,
+        });
+        dmg = dmgMod.applied === 'immunity' ? 0 : dmgMod.amount;
+        totalDamage += dmg;
+        target.hp_current = Math.max(0, target.hp_current - dmg);
+        if (target.hp_current === 0) target.is_conscious = false;
+        strikeLogs.push(`Strike ${s + 1}: ${isCrit ? 'CRIT! ' : ''}${dmg} dmg (${roll1}+${attackMod}=${totalAttack} vs AC ${target.ac})`);
+      } else {
+        strikeLogs.push(`Strike ${s + 1}: miss (${roll1}+${attackMod}=${totalAttack} vs AC ${target.ac})`);
+      }
+    }
+
+    // Spend 1 Ki
+    await base44.entities.Character.update(character_id, {
+      ki_points_remaining: Math.max(0, kiRemaining - 1),
+    });
+
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'flurry_of_blows', target: target.name,
+      hit: anyHit, damage: totalDamage,
+      text: `${character.name} uses Flurry of Blows! ${strikeLogs.join(' | ')}${totalDamage > 0 ? ` — ${totalDamage} total bludgeoning damage.` : ''}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`,
+    };
+
+    const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
+    const { nextIndex: fIndex, nextRound: fRound, worldState: fWS } =
+      resolveActionAndAdvance(combatLog, updatedCombatants, character, { isBonusAction: true });
+
+    const result = await finalizeAndPersistCombat(combat_id, session_id, updatedCombatants,
+      [...(combatLog.log_entries || []), logEntry], fIndex, fRound, fWS);
+
+    return Response.json({
+      hit: anyHit, damage: totalDamage, log_entry: logEntry, result,
+      combat_ended: result !== 'ongoing', ki_remaining: Math.max(0, kiRemaining - 1),
+      next_turn_index: fIndex,
+    });
+  }
+
+  // ─── PATIENT DEFENSE (Monk L2, PHB p.78) ───────────────────────────────────
+  // Bonus action: spend 1 Ki to gain the effects of the Dodge action. Does NOT end the turn.
+  if (action === 'patient_defense') {
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+
+    const level = character.level || 1;
+    if ((character.class || '').toLowerCase() !== 'monk' || level < 2) {
+      return Response.json({ error: 'Patient Defense requires Monk level 2+.', invalid: true }, { status: 400 });
+    }
+    const kiRemaining = character.ki_points_remaining ?? 0;
+    if (kiRemaining <= 0) {
+      return Response.json({ error: 'No Ki points remaining.', invalid: true }, { status: 400 });
+    }
+    if (combatLog.world_state?.bonus_action_used) {
+      return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
+    }
+
+    await base44.entities.Character.update(character_id, {
+      ki_points_remaining: Math.max(0, kiRemaining - 1),
+    });
+
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'patient_defense',
+      text: `🛡️ ${character.name} uses Patient Defense — gains the effects of Dodge (attacks against them have disadvantage). (${Math.max(0, kiRemaining - 1)} Ki remaining)`,
+    };
+
+    // Set player_dodging + consume bonus action — do NOT advance the turn
+    await base44.entities.CombatLog.update(combat_id, {
+      log_entries: [...(combatLog.log_entries || []), logEntry],
+      world_state: { ...(combatLog.world_state || {}), player_dodging: true, bonus_action_used: true },
+    });
+
+    return Response.json({ success: true, log_entry: logEntry, ki_remaining: Math.max(0, kiRemaining - 1) });
+  }
+
+  // ─── STUNNING STRIKE (Monk L5, PHB p.79) ───────────────────────────────────
+  // After hitting with a melee weapon attack, spend 1 Ki to force a CON save.
+  // On failure, the target is stunned until the end of your next turn.
+  // Does NOT consume an action — it's a rider on a melee hit.
+  if (action === 'stunning_strike') {
+    const { target_id } = payload || {};
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+
+    const level = character.level || 1;
+    if ((character.class || '').toLowerCase() !== 'monk' || level < 5) {
+      return Response.json({ error: 'Stunning Strike requires Monk level 5+.', invalid: true }, { status: 400 });
+    }
+    const kiRemaining = character.ki_points_remaining ?? 0;
+    if (kiRemaining <= 0) {
+      return Response.json({ error: 'No Ki points remaining.', invalid: true }, { status: 400 });
+    }
+
+    const combatants = [...combatLog.combatants];
+    const target = combatants.find(c => c.id === target_id);
+    if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });
+    if (!target.is_conscious) {
+      return Response.json({ error: 'Target is already downed.', invalid: true }, { status: 400 });
+    }
+
+    // Ki save DC = 8 + proficiency + WIS (PHB p.79)
+    const wisMod = statMod(character.wisdom || 10);
+    const profBonus = character.proficiency_bonus || 2;
+    const kiDC = 8 + wisMod + profBonus;
+
+    // Target CON save
+    const targetCon = target.constitution || 10;
+    const saveRoll = rollD20() + statMod(targetCon);
+    const saveFailed = saveRoll < kiDC;
+
+    // Spend 1 Ki regardless of outcome
+    await base44.entities.Character.update(character_id, {
+      ki_points_remaining: Math.max(0, kiRemaining - 1),
+    });
+
+    let logText;
+    if (saveFailed) {
+      // Apply stunned condition until end of monk's next turn
+      const existing = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
+      if (!existing.includes('stunned')) {
+        target.conditions = [...(target.conditions || []), { name: 'stunned', source: 'Stunning Strike', save_dc: kiDC, save_ability: 'constitution', caster: character.name }];
+      }
+      logText = `💥 ${character.name} uses Stunning Strike! ${target.name} fails a CON save (${saveRoll} vs DC ${kiDC}) and is STUNNED until the end of ${character.name}'s next turn!`;
+    } else {
+      logText = `${character.name} uses Stunning Strike! ${target.name} resists (CON save ${saveRoll} vs DC ${kiDC}).`;
+    }
+
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'stunning_strike', target: target.name,
+      hit: saveFailed, text: logText,
+    };
+
+    const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
+
+    // Stunning Strike does NOT consume an action or bonus action
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants: updatedCombatants,
+      log_entries: [...(combatLog.log_entries || []), logEntry],
+    });
+
+    return Response.json({
+      success: saveFailed, log_entry: logEntry, ki_remaining: Math.max(0, kiRemaining - 1),
+    });
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // ACTION: next_turn — simply advance the initiative tracker (used when the
   // player ends their turn early or to step a non-acting combatant).
@@ -1999,10 +2227,13 @@ Deno.serve(async (req) => {
     const combatLog = await base44.entities.CombatLog.get(combat_id);
     const combatants = combatLog.combatants;
     const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
+    const nextWS = resetTurnWorldState(combatLog);
+    // Clear Reckless Attack drawback when the barbarian's turn begins
+    if (combatants[nextIndex]?.type === 'player') nextWS.player_reckless = false;
     await base44.entities.CombatLog.update(combat_id, {
       current_turn_index: nextIndex,
       round: nextRound,
-      world_state: resetTurnWorldState(combatLog)
+      world_state: nextWS
     });
     return Response.json({ next_turn_index: nextIndex, round: nextRound, current_combatant: combatants[nextIndex] });
   }
