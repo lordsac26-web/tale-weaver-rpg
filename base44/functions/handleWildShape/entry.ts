@@ -346,5 +346,120 @@ Deno.serve(async (req) => {
     return Response.json({ beast_felled: false, beast_hp_remaining: beastRemaining, druid_hp: originalDruidHP });
   }
 
-  return Response.json({ error: 'action must be transform | revert | check_uses | beast_damage', invalid: true }, { status: 400 });
+  // ── elemental_wild_shape (Circle of the Moon, L10, PHB p.69) ─────────────
+  // At level 10, Moon Druids can use TWO Wild Shape uses to transform into an
+  // elemental (Air, Earth, Fire, Water). Elementals use the standard elemental
+  // stat blocks from the Monster Manual.
+  if (action === 'elemental_wild_shape') {
+    if (!isCircleOfMoon) {
+      return Response.json({ error: 'Elemental Wild Shape requires Circle of the Moon.', invalid: true }, { status: 400 });
+    }
+    if (level < 10) {
+      return Response.json({ error: 'Elemental Wild Shape requires Druid level 10.', invalid: true }, { status: 400 });
+    }
+    if (sra.wild_shape_active) {
+      return Response.json({ error: 'Already in Wild Shape. Revert first.', invalid: true }, { status: 400 });
+    }
+    if (usedCount + 2 > maxUses) {
+      return Response.json({ error: `Need 2 Wild Shape uses (have ${maxUses - usedCount}).`, invalid: true }, { status: 400 });
+    }
+
+    const elementalType = (body.elemental_type || 'fire').toLowerCase();
+    const ELEMENTALS = {
+      air: { name: 'Air Elemental', hp: 90, ac: 15, speed: 0, fly_speed: 90, str: 14, dex: 20, con: 14, wis: 10, int: 6, cha: 6, damage_dice: '2d6', damage_bonus: 5, damage_type: 'bludgeoning', resistances: ['lightning', 'thunder'], immunities: ['poison'] },
+      earth: { name: 'Earth Elemental', hp: 126, ac: 17, speed: 30, str: 20, dex: 8, con: 20, wis: 10, int: 4, cha: 5, damage_dice: '2d8', damage_bonus: 5, damage_type: 'bludgeoning', resistances: ['bludgeoning', 'piercing', 'slashing'], immunities: ['poison'] },
+      fire: { name: 'Fire Elemental', hp: 102, ac: 13, speed: 50, str: 10, dex: 17, con: 16, wis: 10, int: 6, cha: 6, damage_dice: '2d6', damage_bonus: 3, damage_type: 'fire', resistances: [], immunities: ['fire', 'poison'] },
+      water: { name: 'Water Elemental', hp: 114, ac: 14, speed: 30, swim_speed: 90, str: 18, dex: 14, con: 18, wis: 10, int: 6, cha: 6, damage_dice: '2d8', damage_bonus: 4, damage_type: 'bludgeoning', resistances: ['acid'], immunities: ['poison'] },
+    };
+    const elemental = ELEMENTALS[elementalType] || ELEMENTALS.fire;
+
+    const originalSnapshot = {
+      hp_current: character.hp_current, hp_max: character.hp_max,
+      armor_class: character.armor_class, speed: character.speed,
+      strength: character.strength, dexterity: character.dexterity,
+      constitution: character.constitution,
+    };
+
+    await base44.entities.Character.update(character_id, {
+      short_rest_abilities: {
+        ...sra, wild_shape_used: usedCount + 2, wild_shape_active: true,
+        wild_shape_beast: elemental, wild_shape_beast_hp: elemental.hp,
+        wild_shape_original: originalSnapshot, wild_shape_is_elemental: true,
+      },
+    });
+
+    if (combat_id) {
+      const cl = await base44.entities.CombatLog.get(combat_id);
+      if (cl) {
+        const updatedCombatants = cl.combatants.map(c => {
+          if (c.id !== character_id) return c;
+          return { ...c, name: `${character.name} (${elemental.name})`, hp_current: elemental.hp, hp_max: elemental.hp,
+            ac: elemental.ac, speed: elemental.speed, strength: elemental.str, dexterity: elemental.dex,
+            constitution: elemental.con, resistances: elemental.resistances, immunities: elemental.immunities,
+            damage_dice: elemental.damage_dice, attack_bonus: 7, damage_bonus: elemental.damage_bonus,
+            damage_type: elemental.damage_type, is_wild_shaped: true, wild_shape_beast_name: elemental.name };
+        });
+        await base44.entities.CombatLog.update(combat_id, {
+          combatants: updatedCombatants,
+          log_entries: [...(cl.log_entries || []), { round: cl.round, actor: character.name, action: 'elemental_wild_shape', text: `🌀 ${character.name} uses Elemental Wild Shape, becoming a ${elemental.name}! (HP: ${elemental.hp}, AC: ${elemental.ac})` }],
+        });
+      }
+    }
+
+    return Response.json({ success: true, action: 'elemental_wild_shape', beast_name: elemental.name, beast_hp: elemental.hp, uses_remaining: maxUses - (usedCount + 2),
+      message: `${character.name} transforms into a ${elemental.name}!` });
+  }
+
+  // ── slot_heal (Circle of the Moon, PHB p.69) ───────────────────────────────
+  // While in beast form, a Moon Druid can expend spell slots to heal the beast form
+  // as a bonus action. Each slot level heals 1d8 HP.
+  if (action === 'slot_heal') {
+    if (!sra.wild_shape_active) {
+      return Response.json({ error: 'Not in Wild Shape.', invalid: true }, { status: 400 });
+    }
+    const slotLevel = parseInt(body.slot_level) || 1;
+    if (slotLevel < 1 || slotLevel > 9) {
+      return Response.json({ error: 'Invalid slot level.', invalid: true }, { status: 400 });
+    }
+    // Check if slot is available
+    const slotsUsed = (character.spell_slots || {})[`level_${slotLevel}`] || 0;
+    // Use the same FULL slot table to check max
+    const FULL = [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]];
+    const maxSlots = (FULL[Math.min(20, level) - 1] || [])[slotLevel - 1] || 0;
+    if (maxSlots === 0 || slotsUsed >= maxSlots) {
+      return Response.json({ error: `No ${slotLevel}th-level slots available.`, invalid: true }, { status: 400 });
+    }
+
+    // Roll healing: 1d8 per slot level
+    let healAmt = 0;
+    for (let i = 0; i < slotLevel; i++) healAmt += Math.floor(Math.random() * 8) + 1;
+    const currentBeastHP = sra.wild_shape_beast_hp || 0;
+    const beastMaxHP = sra.wild_shape_beast?.hp_max || sra.wild_shape_beast?.hp || 10;
+    const newBeastHP = Math.min(beastMaxHP, currentBeastHP + healAmt);
+
+    await base44.entities.Character.update(character_id, {
+      spell_slots: { ...(character.spell_slots || {}), [`level_${slotLevel}`]: slotsUsed + 1 },
+      short_rest_abilities: { ...sra, wild_shape_beast_hp: newBeastHP },
+    });
+
+    // Update combatant if in combat
+    if (combat_id) {
+      const cl = await base44.entities.CombatLog.get(combat_id);
+      if (cl) {
+        const updatedCombatants = cl.combatants.map(c => {
+          if (c.id !== character_id) return c;
+          return { ...c, hp_current: newBeastHP };
+        });
+        await base44.entities.CombatLog.update(combat_id, {
+          combatants: updatedCombatants,
+          log_entries: [...(cl.log_entries || []), { round: cl.round, actor: character.name, action: 'slot_heal', text: `💚 ${character.name} expends a ${slotLevel}th-level slot to heal their beast form for ${healAmt} HP! (${newBeastHP}/${beastMaxHP})` }],
+        });
+      }
+    }
+
+    return Response.json({ success: true, action: 'slot_heal', heal_amount: healAmt, beast_hp: newBeastHP,
+      message: `Healed beast form for ${healAmt} HP using a ${slotLevel}th-level slot.` });
+  }
+
+  return Response.json({ error: 'action must be transform | revert | check_uses | beast_damage | elemental_wild_shape | slot_heal', invalid: true }, { status: 400 });
 });

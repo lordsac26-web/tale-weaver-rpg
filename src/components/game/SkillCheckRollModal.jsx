@@ -27,6 +27,7 @@ export default function SkillCheckRollModal({
   advantage = false,
   disadvantage = false,
   advantageSources = [],
+  reliableTalent = false,
   onResolve,
   onCancel,
 }) {
@@ -36,7 +37,7 @@ export default function SkillCheckRollModal({
   const doRoll = () => {
     setRolling(true);
     setTimeout(() => {
-      const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(advantage, disadvantage);
+      const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(advantage, disadvantage, reliableTalent ? 10 : 0);
       const final = raw + modifier;
       // Nat 20 always succeeds, nat 1 always fails
       const success = resolveCheckSuccess(raw, final, dc);

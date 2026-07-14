@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { character_id, rest_type, hit_dice_to_spend, had_food_water = true, location_safe = false } = await req.json();
+  const { character_id, rest_type, hit_dice_to_spend, had_food_water = true, location_safe = false, action, slot_levels } = await req.json();
 
   // Fetch the character. Try the USER-SCOPED .get() first (RLS proves ownership).
   // If that returns nothing — which can happen for legitimately-owned characters when
@@ -96,6 +96,45 @@ Deno.serve(async (req) => {
     }
   }
   if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
+
+  // ── ARCANE RECOVERY (Wizard, PHB p.115) ──────────────────────────────────
+  // Once per day during a short rest, recover spell slots whose combined level
+  // is ≤ ceil(wizard level / 2), none above 5th level.
+  if (action === 'arcane_recovery') {
+    if ((character.class || '') !== 'Wizard') {
+      return Response.json({ error: 'Arcane Recovery is a Wizard feature.', invalid: true }, { status: 400 });
+    }
+    if (character.arcane_recovery_used) {
+      return Response.json({ error: 'Arcane Recovery already used today. Long rest to regain.', invalid: true }, { status: 400 });
+    }
+    const wizardLevel = character.level || 1;
+    const maxTotalLevel = Math.ceil(wizardLevel / 2);
+    const requestedSlots = Array.isArray(slot_levels) ? slot_levels : [];
+    let totalLevelRequested = 0;
+    for (const sl of requestedSlots) {
+      if (sl < 1 || sl > 5) return Response.json({ error: 'Cannot recover slots above 5th level.', invalid: true }, { status: 400 });
+      totalLevelRequested += sl;
+    }
+    if (totalLevelRequested > maxTotalLevel) {
+      return Response.json({ error: `Total slot level ${totalLevelRequested} exceeds your limit of ${maxTotalLevel}.`, invalid: true }, { status: 400 });
+    }
+
+    const currentSlots = character.spell_slots || {};
+    const newSlots = { ...currentSlots };
+    const recovered = [];
+    for (const sl of requestedSlots) {
+      const key = `level_${sl}`;
+      const used = newSlots[key] || 0;
+      if (used > 0) { newSlots[key] = used - 1; recovered.push(`${sl}th-level`); }
+    }
+
+    await dbClient.entities.Character.update(character_id, {
+      spell_slots: newSlots, arcane_recovery_used: true,
+    });
+
+    return Response.json({ success: true, action: 'arcane_recovery', recovered_slots: recovered, spell_slots: newSlots,
+      message: `Arcane Recovery: recovered ${recovered.length} slot(s): ${recovered.join(', ')}.` });
+  }
 
   const charClass = character.class;
   const charLevel = character.level || 1;

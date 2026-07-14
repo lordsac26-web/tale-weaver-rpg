@@ -102,8 +102,8 @@ export function resolveCheckSuccess(raw, final, dc) {
   return final >= dc;
 }
 
-export function rollD20WithAdvantage(advantage, disadvantage) {
-  const roll1 = Math.floor(Math.random() * 20) + 1;
+export function rollD20WithAdvantage(advantage, disadvantage, minRoll = 0) {
+  const roll1 = Math.max(minRoll, Math.floor(Math.random() * 20) + 1);
 
   // Advantage and disadvantage cancel each other out (5e rule)
   if (advantage && disadvantage) {
@@ -111,12 +111,12 @@ export function rollD20WithAdvantage(advantage, disadvantage) {
   }
 
   if (advantage) {
-    const roll2 = Math.floor(Math.random() * 20) + 1;
+    const roll2 = Math.max(minRoll, Math.floor(Math.random() * 20) + 1);
     return { roll: Math.max(roll1, roll2), allRolls: [roll1, roll2], hadAdvantage: true, hadDisadvantage: false };
   }
 
   if (disadvantage) {
-    const roll2 = Math.floor(Math.random() * 20) + 1;
+    const roll2 = Math.max(minRoll, Math.floor(Math.random() * 20) + 1);
     return { roll: Math.min(roll1, roll2), allRolls: [roll1, roll2], hadAdvantage: false, hadDisadvantage: true };
   }
 

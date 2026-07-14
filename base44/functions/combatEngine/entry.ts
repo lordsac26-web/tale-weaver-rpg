@@ -1,24 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 /**
- * Combat Engine - handles initiative, turns, damage, conditions.
- * All math done server-side referencing DB state.
- *
- * ┌─────────────────────────────────────────────────────────────────────────┐
- * │ TABLE OF CONTENTS — search the banner text to jump to a section          │
- * ├─────────────────────────────────────────────────────────────────────────┤
- * │  SECTION: SHARED HELPERS        dice, damage mods, conditions, advanceTurn│
- * │  ACTION: start_combat           roll initiative, build the CombatLog      │
- * │  HELPER: getActionsPerTurn      Extra Attack / action economy             │
- * │  ACTION: player_attack          weapon + spell attacks (largest handler)  │
- * │  ACTION: offhand_attack         two-weapon fighting bonus-action strike   │
- * │  ACTION: enemy_turn             enemy AI, damage mitigation, death saves  │
- * │  ACTION: action_surge           Fighter extra action                      │
- * │  ACTION: legendary_action       Monster Manual legendary attack           │
- * │  ACTION: grapple                opposed Athletics check → Grappled        │
- * │  ACTION: dodge                  disadvantage on incoming attacks          │
- * │  ACTION: next_turn              advance initiative tracker                │
- * └─────────────────────────────────────────────────────────────────────────┘
+ * Combat Engine — initiative, turns, damage, conditions. Server-side math.
  */
 Deno.serve(async (req) => {
   const base44 = createClientFromRequest(req);
@@ -106,22 +89,7 @@ Deno.serve(async (req) => {
   };
 
   // ─── DATA-DRIVEN MONSTER AI ─────────────────────────────────────────────────
-  // Each enemy has an `archetype` (stored at start_combat). The archetype maps to a
-  // tactical preset: a prioritized list of tactics, each with a `when` predicate and
-  // the combat effects it applies (extra attacks, accuracy/damage tweaks, descriptor).
-  // To add or tune a monster's behavior, edit AI_ARCHETYPES — no control-flow changes.
-  //
-  // Tactic effect fields:
-  //   numAttacks   — total attacks this turn (default 1)
-  //   attackBonus  — flat bonus/penalty to the attack roll
-  //   bonusDamage  — flat bonus damage per hit
-  //   desc         — flavor text shown in the log ("[Name <desc>]")
-  // Tactic gating fields (all optional; a tactic fires when ALL provided predicates pass):
-  //   selfHpBelow / selfHpAbove — fraction of the enemy's own max HP
-  //   playerHpBelow             — fraction of the player's max HP
-  //   roundLte                  — only on/before this round
-  //   chance                    — probabilistic gate (0..1)
-  // Tactics are evaluated in order; the FIRST match wins, else `default` is used.
+  // Archetype → prioritized tactic list. Edit AI_ARCHETYPES to tune monster behavior.
   const AI_ARCHETYPES = {
     // Big dumb melee: hits hard, gets reckless when wounded.
     brute: {
@@ -227,14 +195,7 @@ Deno.serve(async (req) => {
   };
 
   // ─── CENTRALIZED ATTACK ROLL (PHB p.173) ────────────────────────────────────
-  // Collect ALL advantage and disadvantage sources first, apply the cancellation
-  // rule ONCE (any number of each cancels to a flat roll), then roll exactly once.
-  // This replaces the old pattern of rolling early then re-rolling as conditions
-  // were discovered, which caused double-rolling / stale rolls in stacked scenarios
-  // (e.g. Reckless + prone target + blinded). Returns the resolved d20 plus flags.
-  //   advSources / disSources: arrays of truthy booleans (each true = one source).
-  //   forceCrit: condition-driven auto-crit (e.g. paralyzed/unconscious melee hit).
-  const resolveAttackRoll = ({ advSources = [], disSources = [], forceCrit = false } = {}) => {
+  const resolveAttackRoll = ({ advSources = [], disSources = [], forceCrit = false, rerollOnes = false } = {}) => {
     const hasAdv = advSources.some(Boolean);
     const hasDis = disSources.some(Boolean);
     // PHB p.173: if both advantage and disadvantage are present, they cancel —
@@ -243,7 +204,9 @@ Deno.serve(async (req) => {
     const netDisadvantage = hasDis && !hasAdv;
     const r1 = rollD20();
     const r2 = (netAdvantage || netDisadvantage) ? rollD20() : r1;
-    const roll = netAdvantage ? Math.max(r1, r2) : netDisadvantage ? Math.min(r1, r2) : r1;
+    let roll = netAdvantage ? Math.max(r1, r2) : netDisadvantage ? Math.min(r1, r2) : r1;
+    // Halfling Lucky (PHB p.28): reroll natural 1s
+    if (rerollOnes && roll === 1) roll = rollD20();
     return {
       roll,
       rolls: [r1, r2],
@@ -255,10 +218,6 @@ Deno.serve(async (req) => {
   };
 
   // ─── CONCENTRATION SAVE (PHB p.203) ──────────────────────────────────────────
-  // When a creature concentrating on a spell takes damage, it must make a CON save
-  // (DC = max(10, half the damage)) or lose concentration. Shared by enemy_turn and
-  // player-on-self/ally damage. Returns { broken, save, dc } and applies feat/class
-  // bonuses (War Caster advantage, Resilient CON, Paladin Aura of Protection).
   const rollConcentrationSave = (charFull, damage) => {
     const dc = Math.max(10, Math.floor(damage / 2));
     const hasWarCaster = (charFull?.feats || []).includes('War Caster') ||
@@ -272,8 +231,6 @@ Deno.serve(async (req) => {
     return { broken: save < dc, save, dc };
   };
 
-  // Award victory XP exactly ONCE per combat. Re-reads the CombatLog and checks the
-  // xp_awarded flag to guard against duplicate/stale writes (race condition fix).
   const awardVictoryXP = async (cid, combatantsArr, cid_char) => {
     const freshLog = await base44.entities.CombatLog.get(cid);
     if (freshLog.xp_awarded) return;
@@ -283,9 +240,6 @@ Deno.serve(async (req) => {
     await base44.entities.CombatLog.update(cid, { xp_awarded: true });
   };
 
-  // HELPER: resolveActionAndAdvance — action economy. Increments the per-turn action
-  // counter, computes remaining actions, and advances initiative when the turn is spent.
-  // Quickened spells / bonus actions do NOT consume a full action.
   const resolveActionAndAdvance = (combatLog, combatants, character, opts = {}) => {
     const { isQuickened = false, isBonusAction = false } = opts;
     const apt = getActionsPerTurn(character);
@@ -306,10 +260,6 @@ Deno.serve(async (req) => {
     return { nextIndex: ni, nextRound: nr, actionsRemaining: Math.max(0, ar), worldState: ws };
   };
 
-  // HELPER: resetTurnWorldState — produce a fresh world_state with all per-turn flags
-  // cleared (action/bonus/reaction budgets, sneak-attack, loading weapon). Pass `extra`
-  // to set turn-specific flags (e.g. { player_dodging: true }). Used by turn-ending
-  // actions: dodge, next_turn, enemy_turn, and death_save.
   const resetTurnWorldState = (combatLog, extra = {}) => ({
     ...(combatLog.world_state || {}),
     actions_used_this_turn: 0,
@@ -321,8 +271,6 @@ Deno.serve(async (req) => {
     ...extra,
   });
 
-  // HELPER: finalizeAndPersistCombat — determine victory/defeat/ongoing, persist the
-  // CombatLog, clear the session combat flag on end, and award victory XP exactly once.
   const finalizeAndPersistCombat = async (cid, sid, updatedCombatants, updatedLog,
     nextIndex, nextRound, worldState, extraFields = {}) => {
     const allDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
@@ -445,8 +393,39 @@ Deno.serve(async (req) => {
       ac: character.armor_class,
       speed: playerSpeed,
       conditions: character.conditions || [],
+      // Rogue defensive passives (surfaced for condition/save checks in the engine)
+      has_evasion: (character.class === 'Rogue' && (character.level || 1) >= 7),
+      has_uncanny_dodge: (character.class === 'Rogue' && (character.level || 1) >= 5),
       is_conscious: true
     });
+
+    // Beast Master Ranger: add summoned companions to initiative (PHB p.93)
+    try {
+      const companions = await base44.entities.Companion.filter({ character_id: character.id, is_summoned: true });
+      for (const comp of (companions || [])) {
+        if (!comp.is_active) continue;
+        const compInitRoll = rollD20();
+        const compDexMod = statMod(comp.dexterity || 10);
+        combatants.push({
+          id: comp.id,
+          name: comp.name,
+          type: 'companion',
+          initiative_roll: compInitRoll,
+          initiative_mod: compDexMod,
+          initiative_total: compInitRoll + compDexMod,
+          hp_current: comp.hp_current || 1,
+          hp_max: comp.hp_max || 1,
+          ac: comp.armor_class || 10,
+          speed: comp.speed || 30,
+          conditions: [],
+          is_conscious: true,
+          attacks: comp.attacks || [],
+          attack_bonus: comp.proficiency_bonus || character.proficiency_bonus || 2,
+          owner_id: character.id,
+          portrait_emoji: comp.portrait_emoji || '🐾',
+        });
+      }
+    } catch { /* Companion entity may not exist */ }
 
     // Enemy initiatives
     for (const enemy of enemies) {
@@ -759,7 +738,11 @@ Deno.serve(async (req) => {
 
         const dmg2 = rollDiceStr(damageDice);
         // On save failure: minimum 1 damage. On success: half damage (can be 0 for weak saves)
-        const finalDmg = effectiveSaveFailed ? Math.max(1, dmg2) : Math.max(0, Math.floor(dmg2 / 2));
+        let finalDmg = effectiveSaveFailed ? Math.max(1, dmg2) : Math.max(0, Math.floor(dmg2 / 2));
+        // Evasion (Rogue L7, PHB p.96): DEX saves → no damage on success, half on failure
+        if (spell.save_type === 'dexterity' && target.has_evasion) {
+          finalDmg = effectiveSaveFailed ? Math.max(0, Math.floor(dmg2 / 2)) : 0;
+        }
         if (finalDmg > 0) {
           target.hp_current = Math.max(0, target.hp_current - finalDmg);
           if (target.hp_current === 0) target.is_conscious = false;
@@ -881,7 +864,10 @@ Deno.serve(async (req) => {
             let d = 0; for (let i = 0; i < numD; i++) d += rollDice(10);
             d += agonizingBonus;
             totalBeamDmg += d;
-            beamLogs.push(`Beam ${b+1}: ${bCrit?'CRIT! ':''}${d} force${agonizingBonus ? ' (Agonizing)' : ''} (${br}+${bMod}=${br+bMod} vs AC ${target.ac})`);
+            // Repelling Blast (PHB p.110): hit pushes target 10 feet
+            const hasRepellingBlast = (character.features || []).some(f => String(typeof f === 'string' ? f : f?.name || '').toLowerCase().includes('repelling blast'));
+            const pushText = hasRepellingBlast ? ' [pushed 10ft]' : '';
+            beamLogs.push(`Beam ${b+1}: ${bCrit?'CRIT! ':''}${d} force${agonizingBonus ? ' (Agonizing)' : ''}${pushText} (${br}+${bMod}=${br+bMod} vs AC ${target.ac})`);
           } else {
             beamLogs.push(`Beam ${b+1}: miss (${br}+${bMod}=${br+bMod} vs AC ${target.ac})`);
           }
@@ -954,6 +940,20 @@ Deno.serve(async (req) => {
       damageBonus = abilityMod + (weapon.damage_bonus || 0);
       damageDice = weapon.damage_dice || '1d8';
       attackType = isRanged ? 'ranged' : 'melee';
+
+      // Warlock invocations (PHB p.110-111)
+      if ((character.class || '') === 'Warlock') {
+        const warlockFeatures = (character.features || []).map(f => String(typeof f === 'string' ? f : f?.name || '').toLowerCase());
+        // Improved Pact Weapon: +1 to attack and damage with pact weapon
+        if (warlockFeatures.includes('improved pact weapon')) {
+          attackMod += 1;
+          damageBonus += 1;
+        }
+        // Lifedrinker (L12): add CHA mod to pact weapon damage
+        if ((character.level || 1) >= 12 && warlockFeatures.includes('lifedrinker')) {
+          damageBonus += Math.max(0, statMod(character.charisma || 10));
+        }
+      }
 
       // Apply Fighting Style bonuses
       const fightingStyle = character.fighting_style?.toLowerCase();
@@ -1109,7 +1109,8 @@ Deno.serve(async (req) => {
     if (targetConditions.includes('blinded')) advSources.push(true);
 
     // ── SINGLE CENTRALIZED ROLL: all sources gathered, cancel rule applied once ──
-    let attackResult = resolveAttackRoll({ advSources, disSources, forceCrit });
+    const isHalfling = (character.race || '') === 'Halfling';
+    let attackResult = resolveAttackRoll({ advSources, disSources, forceCrit, rerollOnes: isHalfling });
     // Lucky feat (PHB p.167): reroll the d20 once and keep the better result.
     if (useLuckyPoint) {
       const luckyRoll = rollD20();
@@ -1157,6 +1158,10 @@ Deno.serve(async (req) => {
         if (level >= 9) numDice += 1;
         if (level >= 13) numDice += 1;
         if (level >= 17) numDice += 1;
+      }
+      // Half-Orc Savage Attacks (PHB p.41): roll one additional weapon damage die on crits
+      if (isCritical && (character.race || '') === 'Half-Orc' && !spell) {
+        numDice += 1;
       }
 
       for (let i = 0; i < numDice; i++) {
@@ -1670,6 +1675,7 @@ Deno.serve(async (req) => {
     }
 
     // === DAMAGE MITIGATION (applied in priority order) ===
+    let usedReaction = false;
     const playerConditions = (player.conditions || []).map(c => c.name || c);
     const isRaging = playerConditions.includes('raging');
     const enemyDamageType = (currentCombatant.damage_type || 'bludgeoning').toLowerCase();
@@ -1709,10 +1715,19 @@ Deno.serve(async (req) => {
     // Resistance doesn't stack (a damage type can only be halved once), so skip
     // resistance if Rage already halved this same physical damage.
     // Hill Rune (invoked): resistance to poison damage while active.
+    // Racial damage traits (applied even if not on the character's arrays)
+    const racialRes = [];
+    const racialImm = [];
+    if ((charFull?.race || '') === 'Yuan-ti Pureblood') { racialImm.push('poison'); }
+    if ((charFull?.race || '') === 'Dragonborn') {
+      const anc = (charFull?.class_choices?.dragon_ancestry || 'red').toLowerCase();
+      const DR = { black:'acid', copper:'acid', blue:'lightning', bronze:'lightning', brass:'fire', gold:'fire', red:'fire', green:'poison', silver:'cold', white:'cold' };
+      if (DR[anc]) racialRes.push(DR[anc]);
+    }
     const dmgMod = applyDamageModifiers(finalDamage, enemyDamageType, {
-      resistances: [...(charFull?.resistances || []), ...(playerRunes.has('hill_resilience') ? ['poison'] : [])],
+      resistances: [...(charFull?.resistances || []), ...racialRes, ...(playerRunes.has('hill_resilience') ? ['poison'] : [])],
       vulnerabilities: charFull?.vulnerabilities,
-      immunities: charFull?.immunities,
+      immunities: [...(charFull?.immunities || []), ...racialImm],
     });
     if (dmgMod.applied === 'immunity') {
       attackLogs.push(`[Immune to ${enemyDamageType}: ${finalDamage} → 0]`);
@@ -1723,6 +1738,28 @@ Deno.serve(async (req) => {
     } else if (dmgMod.applied === 'vulnerability') {
       attackLogs.push(`[Vulnerable to ${enemyDamageType}: ${finalDamage} → ${dmgMod.amount}]`);
       finalDamage = dmgMod.amount;
+    }
+
+    // === REACTION-BASED DAMAGE MITIGATION ===
+    // Goliath Stone's Endurance (reaction): 1d12 + CON reduction, once per short rest (PHB p.X)
+    // Rogue Uncanny Dodge (reaction): halve damage from one attacker, L5+ (PHB p.96)
+    // Both consume the player's one reaction per round.
+    const playerReactionUsed = !!combatLog.world_state?.player_reaction_used;
+    if (finalDamage > 0 && !playerReactionUsed) {
+      // Stone's Endurance takes priority (bigger reduction on average)
+      if ((charFull?.race === 'Goliath') && !(charFull?.short_rest_abilities?.stones_endurance_used)) {
+        const stoneRed = rollDice(12) + statMod(charFull.constitution || 10);
+        finalDamage = Math.max(0, finalDamage - stoneRed);
+        attackLogs.push(`[Stone's Endurance: -${stoneRed} → ${finalDamage}]`);
+        await base44.entities.Character.update(player.id, {
+          short_rest_abilities: { ...(charFull.short_rest_abilities || {}), stones_endurance_used: true },
+        });
+        usedReaction = true;
+      } else if (charFull?.class === 'Rogue' && (charFull?.level || 1) >= 5) {
+        finalDamage = Math.floor(finalDamage / 2);
+        attackLogs.push(`[Uncanny Dodge: halved → ${finalDamage}]`);
+        usedReaction = true;
+      }
     }
 
     // Apply total damage to player — temp HP absorbs first (PHB p.198)
@@ -1751,10 +1788,21 @@ Deno.serve(async (req) => {
             instantDeath = true;
             await base44.entities.Character.update(player.id, {
               hp_current: 0,
-              death_saves_failure: 3, // mark as dead
+              death_saves_failure: 3,
               death_saves_success: 0,
             });
           }
+        }
+        // Half-Orc Relentless Endurance (PHB p.41): drop to 1 HP instead of 0, once per long rest
+        if (player.hp_current === 0 && !instantDeath && (charFull?.race === 'Half-Orc')
+            && !(charFull?.long_rest_abilities?.relentless_endurance_used)) {
+          player.hp_current = 1;
+          player.is_conscious = true;
+          await base44.entities.Character.update(player.id, {
+            hp_current: 1,
+            long_rest_abilities: { ...(charFull.long_rest_abilities || {}), relentless_endurance_used: true },
+          });
+          attackLogs.push(`[Relentless Endurance: dropped to 1 HP instead of 0!]`);
         }
         if (!instantDeath) {
           await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
@@ -1785,9 +1833,11 @@ Deno.serve(async (req) => {
 
     // Carry over world_state, clear concentration if broken.
     // player_dodging expires once enemies have acted (it only lasts until the player's next turn).
-    const newWS = resetTurnWorldState(combatLog, { player_dodging: false });
-    // Clear Reckless Attack drawback when the barbarian's next turn begins
-    if (updatedCombatants[nextIndex]?.type === 'player') newWS.player_reckless = false;
+    const newWS = resetTurnWorldState(combatLog, { player_dodging: false, player_reaction_used: usedReaction || !!combatLog.world_state?.player_reaction_used });
+    if (updatedCombatants[nextIndex]?.type === 'player') {
+      newWS.player_reckless = false;
+      newWS.player_reaction_used = false;
+    }
     const concentrationSpellCheck = combatLog.world_state?.concentration_spell;
     if (concentrationSpellCheck && finalDamage > 0) {
       const conc = rollConcentrationSave(charFull, finalDamage);
@@ -2229,7 +2279,10 @@ Deno.serve(async (req) => {
     const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
     const nextWS = resetTurnWorldState(combatLog);
     // Clear Reckless Attack drawback when the barbarian's turn begins
-    if (combatants[nextIndex]?.type === 'player') nextWS.player_reckless = false;
+    if (combatants[nextIndex]?.type === 'player') {
+      nextWS.player_reckless = false;
+      nextWS.player_reaction_used = false;
+    }
     await base44.entities.CombatLog.update(combat_id, {
       current_turn_index: nextIndex,
       round: nextRound,
