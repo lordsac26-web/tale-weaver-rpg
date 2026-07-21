@@ -24,6 +24,18 @@ const DOMAIN_SPELLS = {
     conquest: { 3: ['Armor of Agathys','Command'], 5: ['Hold Person','Misty Step'], 9: ['Bestow Curse','Fear'], 13: ['Dominate Beast','Stoneskin'], 17: ['Cloudkill','Dominate Person'] },
     redemption: { 3: ['Sanctuary','Sleep'], 5: ['Calm Emotions','Hold Person'], 9: ['Counterspell','Hypnotic Pattern'], 13: ["Otiluke's Resilient Sphere",'Stoneskin'], 17: ['Banishment','Geas'] },
   },
+  // Warlock patron EXPANDED spell lists (PHB/Xanathar's/Tasha's) — H-S2 fix.
+  // RAW these expand the options a warlock can learn from; for solo-play usability
+  // we grant them as known spells (mirrors how domain/oath spells are handled).
+  // Keys are character levels at which each spell tier becomes castable (pact slot level).
+  Warlock: {
+    archfey: { 1: ['Faerie Fire', 'Sleep'], 3: ['Calm Emotions', 'Phantasmal Force'], 5: ['Blink', 'Plant Growth'], 7: ['Dominate Beast', 'Greater Invisibility'], 9: ['Dominate Person', 'Seeming'] },
+    fiend: { 1: ['Burning Hands', 'Command'], 3: ['Blindness/Deafness', 'Scorching Ray'], 5: ['Fireball', 'Stinking Cloud'], 7: ['Fire Shield', 'Wall of Fire'], 9: ['Flame Strike', 'Hallow'] },
+    'great old one': { 1: ['Dissonant Whispers', "Tasha's Hideous Laughter"], 3: ['Detect Thoughts', 'Phantasmal Force'], 5: ['Clairvoyance', 'Sending'], 7: ['Dominate Beast', "Evard's Black Tentacles"], 9: ['Dominate Person', 'Telekinesis'] },
+    celestial: { 1: ['Cure Wounds', 'Guiding Bolt'], 3: ['Flaming Sphere', 'Lesser Restoration'], 5: ['Daylight', 'Revivify'], 7: ['Guardian of Faith', 'Wall of Fire'], 9: ['Flame Strike', 'Greater Restoration'] },
+    hexblade: { 1: ['Shield', 'Wrathful Smite'], 3: ['Blur', 'Branding Smite'], 5: ['Blink', 'Elemental Weapon'], 7: ['Phantasmal Killer', 'Staggering Smite'], 9: ['Banishing Smite', 'Cone of Cold'] },
+    undead: { 1: ['Bane', 'False Life'], 3: ['Blindness/Deafness', 'Phantasmal Force'], 5: ['Phantom Steed', 'Speak with Dead'], 7: ['Death Ward', 'Greater Invisibility'], 9: ['Antilife Shell', 'Cloudkill'] },
+  },
   // Warlock Mystic Arcanum: granted at levels 11/13/15/17. Player chooses one spell
   // per level. These are NOT auto-prepared — the player selects them. Tracked in
   // long_rest_abilities.mystic_arcanum as { spell_name: false }.

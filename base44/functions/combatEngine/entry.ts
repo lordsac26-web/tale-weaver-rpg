@@ -1439,22 +1439,24 @@ Deno.serve(async (req) => {
     const abilityMod = isFinesse ? Math.max(strMod, dexMod) : strMod;
     const profBonus = character.proficiency_bonus || 2;
 
-    let attackRoll1 = rollD20();
-    let attackRoll2 = (modifiers.advantage || modifiers.disadvantage) ? rollD20() : attackRoll1;
-    let attackRoll = modifiers.advantage ? Math.max(attackRoll1, attackRoll2)
-      : modifiers.disadvantage ? Math.min(attackRoll1, attackRoll2) : attackRoll1;
-
-    // Exhaustion 3+ : disadvantage on attacks
-    if ((character.exhaustion_level || 0) >= 3 && !modifiers.disadvantage) {
-      attackRoll2 = rollD20();
-      attackRoll = Math.min(attackRoll1, attackRoll2);
+    // H-X1 fix: off-hand swings go through the SAME centralized resolver as
+    // main-hand attacks — advantage/disadvantage cancellation, exhaustion,
+    // target-condition advantage, auto-crits, and Halfling Lucky all apply.
+    const offAdvSources = [!!modifiers.advantage];
+    const offDisSources = [!!modifiers.disadvantage, (character.exhaustion_level || 0) >= 3];
+    const offTargetConds = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
+    if (['paralyzed', 'stunned', 'unconscious', 'restrained', 'prone', 'blinded'].some(cn => offTargetConds.includes(cn))) {
+      offAdvSources.push(true); // off-hand is always a melee attack (prone = advantage)
     }
-
-    // Halfling Lucky (PHB p.28): reroll natural 1s (off-hand attacks too)
-    if ((character.race || '') === 'Halfling' && attackRoll === 1) attackRoll = rollD20();
-
-    const isCritical = attackRoll === 20;
-    const isMiss = attackRoll === 1;
+    const offRollResult = resolveAttackRoll({
+      advSources: offAdvSources,
+      disSources: offDisSources,
+      forceCrit: offTargetConds.includes('paralyzed') || offTargetConds.includes('unconscious'),
+      rerollOnes: (character.race || '') === 'Halfling',
+    });
+    const attackRoll = offRollResult.roll;
+    const isCritical = offRollResult.isCritical;
+    const isMiss = offRollResult.isMiss;
     const attackMod = abilityMod + profBonus + (offhand.attack_bonus || 0);
     const totalAttack = attackRoll + attackMod;
     const hit = !isMiss && (isCritical || totalAttack >= target.ac);

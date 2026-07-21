@@ -54,6 +54,27 @@ function computeCasterLevel(character) {
   return casterLevel;
 }
 
+// Total Warlock levels across primary/multiclass — Pact Magic scales on these
+// and is tracked SEPARATELY from Spellcasting slots (PHB p.164).
+function getWarlockLevels(character) {
+  if (Array.isArray(character.multiclass) && character.multiclass.length > 0) {
+    return character.multiclass
+      .filter((m) => m?.class === 'Warlock')
+      .reduce((s, m) => s + (m.levels || 0), 0);
+  }
+  return (character.class === 'Warlock') ? (character.level || 1) : 0;
+}
+
+// Total Bard levels (Song of Rest scales on bard level).
+function getBardLevels(character) {
+  if (Array.isArray(character.multiclass) && character.multiclass.length > 0) {
+    return character.multiclass
+      .filter((m) => m?.class === 'Bard')
+      .reduce((s, m) => s + (m.levels || 0), 0);
+  }
+  return (character.class === 'Bard') ? (character.level || 1) : 0;
+}
+
 /**
  * Handle Short and Long Rests
  * Restores HP, spell slots, hit dice, and class abilities per D&D 5E rules
@@ -142,9 +163,23 @@ Deno.serve(async (req) => {
   const isMulticlassed = Array.isArray(character.multiclass) && character.multiclass.length > 0;
   // Multiclass casters use a COMBINED caster level against the multiclass slot table
   // (PHB p.164-165). Single-class characters keep their own class progression.
-  const maxSlots = isMulticlassed
-    ? (MULTICLASS_SLOTS[computeCasterLevel(character) - 1] || [])
-    : (SPELL_SLOTS_BY_CLASS[charClass]?.[charLevel - 1] || []);
+  // Slot maximums: multiclass uses the combined caster table; single-class uses the
+  // class table; single-class Eldritch Knight / Arcane Trickster (Fighter/Rogue have
+  // no class table) use the full-caster table at floor(level / 3) — H-C1 fix, so
+  // their slots actually recover on a long rest.
+  const subLowerRest = (character.subclass || '').toLowerCase();
+  const isThirdCasterRest = subLowerRest.includes('eldritch knight') || subLowerRest.includes('arcane trickster');
+  let maxSlots;
+  if (isMulticlassed) {
+    maxSlots = MULTICLASS_SLOTS[computeCasterLevel(character) - 1] || [];
+  } else if (SPELL_SLOTS_BY_CLASS[charClass]) {
+    maxSlots = SPELL_SLOTS_BY_CLASS[charClass][charLevel - 1] || [];
+  } else if (isThirdCasterRest) {
+    const thirdCasterLevel = Math.floor(charLevel / 3);
+    maxSlots = thirdCasterLevel > 0 ? (MULTICLASS_SLOTS[thirdCasterLevel - 1] || []) : [];
+  } else {
+    maxSlots = [];
+  }
   const shortRestAbilities = character.short_rest_abilities || {};
 
   const updates = {};
@@ -174,6 +209,15 @@ Deno.serve(async (req) => {
     for (let i = 0; i < diceToSpend; i++) {
       healing += Math.max(1, Math.floor(Math.random() * hitDie) + 1 + conMod);
     }
+    // Bard Song of Rest (PHB p.54): spending hit dice on a short rest grants an
+    // extra 1d6 healing (d8 at bard 9, d10 at 13, d12 at 17). Once per rest — H-C3 fix.
+    const bardLevels = getBardLevels(character);
+    if (bardLevels >= 2) {
+      const songDie = bardLevels >= 17 ? 12 : bardLevels >= 13 ? 10 : bardLevels >= 9 ? 8 : 6;
+      const songHeal = Math.floor(Math.random() * songDie) + 1;
+      healing += songHeal;
+      restorations.push(`Song of Rest: +${songHeal} HP (d${songDie})`);
+    }
     restorations.push(`${diceToSpend}d${hitDie}${conMod >= 0 ? `+${conMod}` : conMod} per die — ${healing} HP restored`);
     const newHP = Math.min(character.hp_max, (character.hp_current || 0) + healing);
     updates.hp_current = newHP;
@@ -181,10 +225,22 @@ Deno.serve(async (req) => {
     updates.hit_dice_remaining = Math.max(0, currentHitDiceRemaining - diceToSpend);
     restorations.push(`Hit dice remaining: ${updates.hit_dice_remaining}/${charLevel}`);
 
-    // Warlock: restore all pact slots on short rest
-    if (charClass === 'Warlock') {
-      updates.spell_slots = {};
-      restorations.push('All pact slots recovered');
+    // Warlock Pact Magic (PHB p.107): pact slots recover on a short rest — H-C2 fix.
+    // Single-class Warlock: every slot is a pact slot → clear all used slots.
+    // Multiclass with Warlock levels: only credit back the pact-level slots; the
+    // shared Spellcasting pool is untouched (Pact Magic is separate, PHB p.164).
+    const warlockLevels = getWarlockLevels(character);
+    if (warlockLevels > 0) {
+      if (!isMulticlassed) {
+        updates.spell_slots = {};
+        restorations.push('All pact slots recovered');
+      } else {
+        const pactLevel = Math.min(5, Math.ceil(warlockLevels / 2));
+        const pactCount = warlockLevels >= 17 ? 4 : warlockLevels >= 11 ? 3 : warlockLevels >= 2 ? 2 : 1;
+        const pactKey = `level_${pactLevel}`;
+        updates.spell_slots = { ...currentSlots, [pactKey]: Math.max(0, (currentSlots[pactKey] || 0) - pactCount) };
+        restorations.push(`Pact Magic recovered (${pactCount} level-${pactLevel} slot${pactCount > 1 ? 's' : ''})`);
+      }
     }
 
     // NOTE: Wizard Arcane Recovery is once per LONG rest (PHB p.115) — NOT reset on a short rest.
