@@ -14,6 +14,7 @@ import {
   PROFICIENCY_BY_LEVEL,
 } from '@/components/game/gameData';
 import { computeFeatEffects } from '@/components/game/featEffects';
+import { applyRacialSpells } from '@/components/game/racialSpells';
 import {
   getMulticlassHitPoints,
   getMulticlassSpellSlots,
@@ -249,6 +250,8 @@ export async function finalizeCharacter(character) {
   finalChar = await buildSubclassFeatures(finalChar);
   finalChar = buildSpellSlots(finalChar);
   finalChar = buildRacialSkills(finalChar);
+  // Apply racial innate spellcasting (Drow, Tiefling, Forest Gnome, Genasi, etc.)
+  finalChar = { ...finalChar, ...applyRacialSpells(finalChar) };
 
   finalChar = applyMulticlassFeatures(finalChar);
 

@@ -37,6 +37,74 @@ const SPELL_SLOTS = {
  
 const NON_CASTERS = ['Fighter', 'Barbarian', 'Rogue', 'Monk'];
 
+// Multiclass spellcaster slot table, indexed by COMBINED caster level (PHB p.164-165).
+// Index 0 = caster level 1. Warlock Pact Magic is tracked separately and excluded.
+const MULTICLASS_SLOTS = [
+  [2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],
+  [4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],
+  [4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1],
+];
+
+// Racial innate spellcasting data (mirrors racialSpells.jsx — used on level-up to
+// unlock spells at the correct level gate).
+// Format: { subrace_or_race: { stat, spells: [{ name, level, type, uses }] } }
+const RACIAL_SPELLS_DATA = {
+  'Drow (Dark Elf)': { stat: 'charisma', spells: [
+    { name: 'Dancing Lights', level: 1, type: 'cantrip' }, { name: 'Faerie Fire', level: 3, type: 'spell' }, { name: 'Darkness', level: 5, type: 'spell' } ] },
+  'Asmodeus (Standard)': { stat: 'charisma', spells: [
+    { name: 'Thaumaturgy', level: 1, type: 'cantrip' }, { name: 'Hellish Rebuke', level: 3, type: 'spell' }, { name: 'Darkness', level: 5, type: 'spell' } ] },
+  Dispater: { stat: 'charisma', spells: [
+    { name: 'Thaumaturgy', level: 1, type: 'cantrip' }, { name: 'Disguise Self', level: 3, type: 'spell' }, { name: 'Detect Thoughts', level: 5, type: 'spell' } ] },
+  Fierna: { stat: 'charisma', spells: [
+    { name: 'Friends', level: 1, type: 'cantrip' }, { name: 'Charm Person', level: 3, type: 'spell' }, { name: 'Suggestion', level: 5, type: 'spell' } ] },
+  Glasya: { stat: 'charisma', spells: [
+    { name: 'Minor Illusion', level: 1, type: 'cantrip' }, { name: 'Disguise Self', level: 3, type: 'spell' }, { name: 'Invisibility', level: 5, type: 'spell' } ] },
+  Levistus: { stat: 'charisma', spells: [
+    { name: 'Ray of Frost', level: 1, type: 'cantrip' }, { name: 'Armor of Agathys', level: 3, type: 'spell' }, { name: 'Darkness', level: 5, type: 'spell' } ] },
+  Mammon: { stat: 'charisma', spells: [
+    { name: 'Mage Hand', level: 1, type: 'cantrip' }, { name: "Tenser's Floating Disk", level: 3, type: 'spell' }, { name: 'Arcane Lock', level: 5, type: 'spell' } ] },
+  Mephistopheles: { stat: 'charisma', spells: [
+    { name: 'Mage Hand', level: 1, type: 'cantrip' }, { name: 'Burning Hands', level: 3, type: 'spell' }, { name: 'Flame Blade', level: 5, type: 'spell' } ] },
+  Zariel: { stat: 'charisma', spells: [
+    { name: 'Thaumaturgy', level: 1, type: 'cantrip' }, { name: 'Searing Smite', level: 3, type: 'spell' }, { name: 'Branding Smite', level: 5, type: 'spell' } ] },
+  Baalzebul: { stat: 'charisma', spells: [
+    { name: 'Thaumaturgy', level: 1, type: 'cantrip' }, { name: 'Ray of Sickness', level: 3, type: 'spell' }, { name: 'Crown of Madness', level: 5, type: 'spell' } ] },
+  'Forest Gnome': { stat: 'intelligence', spells: [
+    { name: 'Minor Illusion', level: 1, type: 'cantrip' } ] },
+  'Air Genasi': { stat: 'constitution', spells: [
+    { name: 'Levitate', level: 1, type: 'spell' } ] },
+  'Earth Genasi': { stat: 'constitution', spells: [
+    { name: 'Pass Without Trace', level: 1, type: 'spell' } ] },
+  'Fire Genasi': { stat: 'constitution', spells: [
+    { name: 'Produce Flame', level: 1, type: 'cantrip' }, { name: 'Burning Hands', level: 3, type: 'spell' } ] },
+  'Water Genasi': { stat: 'constitution', spells: [
+    { name: 'Shape Water', level: 1, type: 'cantrip' }, { name: 'Create or Destroy Water', level: 1, type: 'spell' } ] },
+  'Yuan-ti Pureblood': { stat: 'charisma', spells: [
+    { name: 'Poison Spray', level: 1, type: 'cantrip' }, { name: 'Animal Friendship', level: 1, type: 'spell' }, { name: 'Suggestion', level: 3, type: 'spell' } ] },
+  Aarakocra: { stat: 'wisdom', spells: [
+    { name: 'Gust of Wind', level: 3, type: 'spell' } ] },
+};
+
+// Compute combined caster level for a (possibly multiclassed) character.
+// Same logic as handleRest's computeCasterLevel — full/half/third progression.
+function computeCombinedCasterLevel(char) {
+  const levels = {};
+  levels[char.class] = char.level || 1;
+  (char.multiclass || []).forEach(mc => {
+    if (mc?.class) levels[mc.class] = (levels[mc.class] || 0) + (mc.levels || 0);
+  });
+
+  let casterLevel = 0;
+  for (const [cls, lvls] of Object.entries(levels)) {
+    const sub = cls === char.class ? (char.subclass || '') : (char.multiclass || []).find(m => m.class === cls)?.subclass || '';
+    const s = (sub || '').toLowerCase();
+    if (['Wizard', 'Sorcerer', 'Bard', 'Cleric', 'Druid'].includes(cls)) casterLevel += lvls;
+    else if (['Paladin', 'Ranger', 'Artificer'].includes(cls)) casterLevel += Math.floor(lvls / 2);
+    else if (s.includes('eldritch knight') || s.includes('arcane trickster')) casterLevel += Math.floor(lvls / 3);
+  }
+  return casterLevel;
+}
+
 /** Total character level = primary level + all multiclass levels. */
 function getTotalLevel(character) {
   const primary = character.level || 1;
@@ -197,10 +265,41 @@ Deno.serve(async (req) => {
     const newProfBonus  = PROFICIENCY_BY_LEVEL[newTotalLevel - 1];
  
     // ── Spell slots ──────────────────────────────────────────────────────────
-    // Slots scale with the receiving class's own level (simple per-class model).
-    const newSpellSlots = buildSpellSlots(receivingClass, receivingAfter);
+    // Multiclass casters use a COMBINED caster level (PHB p.164-165) against the
+    // multiclass slot table. Single-class characters keep their own progression.
+    // Warlock Pact Magic is excluded from the combined pool (tracked separately).
+    const isMulticlassedAfter = (character.multiclass || []).length > 0 ||
+      (requestedClass && requestedClass !== character.class);
+
+    // Build class levels AFTER level-up for caster level computation
+    const classLevelsAfter = { ...getClassLevels(character) };
+    classLevelsAfter[receivingClass] = receivingAfter;
+
+    let newSlotTable;
+    if (isMulticlassedAfter) {
+      let combinedCasterLevel = 0;
+      for (const [cls, lvls] of Object.entries(classLevelsAfter)) {
+        const sub = cls === character.class ? (character.subclass || '') :
+          (character.multiclass || []).find(m => m.class === cls)?.subclass || '';
+        const s = (sub || '').toLowerCase();
+        if (['Wizard', 'Sorcerer', 'Bard', 'Cleric', 'Druid'].includes(cls)) combinedCasterLevel += lvls;
+        else if (['Paladin', 'Ranger', 'Artificer'].includes(cls)) combinedCasterLevel += Math.floor(lvls / 2);
+        else if (s.includes('eldritch knight') || s.includes('arcane trickster')) combinedCasterLevel += Math.floor(lvls / 3);
+      }
+      if (combinedCasterLevel > 0) {
+        newSlotTable = MULTICLASS_SLOTS[Math.min(20, combinedCasterLevel) - 1] || [];
+      } else {
+        // No caster levels in the combined pool — fall back to per-class (Warlock)
+        newSlotTable = (SPELL_SLOTS[receivingClass] && SPELL_SLOTS[receivingClass][receivingAfter]) || [];
+      }
+    } else {
+      newSlotTable = (SPELL_SLOTS[receivingClass] && SPELL_SLOTS[receivingClass][receivingAfter]) || [];
+    }
+
+    const newSpellSlots = {};
+    newSlotTable.forEach((max, i) => { if (max > 0) newSpellSlots[`level_${i + 1}`] = 0; });
+    // Preserve used-slot counts (capped at the new maximum)
     const existingUsed  = character.spell_slots || {};
-    const newSlotTable  = (SPELL_SLOTS[receivingClass] && SPELL_SLOTS[receivingClass][receivingAfter]) || [];
     Object.keys(newSpellSlots).forEach(key => {
       const lvlIdx        = parseInt(key.replace('level_', '')) - 1;
       const maxAtNewLevel = newSlotTable[lvlIdx] || 0;
@@ -501,7 +600,33 @@ Deno.serve(async (req) => {
     const existingFeatures = character.features || [];
     const mergedFeatures = [...new Set([...existingFeatures, ...newFeatures])];
     if (newFeatures.length > 0) updates.features = mergedFeatures;
- 
+
+    // ── Racial innate spellcasting (unlock spells at level gates) ────────────
+    // Drow, Tiefling, Forest Gnome, Genasi, Yuan-ti, Aarakocra gain innate
+    // spells at specific character levels. Unlock any that are newly available.
+    const racialKey = character.subrace || character.race;
+    const racialEntry = RACIAL_SPELLS_DATA[racialKey] || RACIAL_SPELLS_DATA[character.race];
+    if (racialEntry) {
+      const knownSet = new Set(character.spells_known || []);
+      const preparedSet = new Set(character.spells_prepared || []);
+      let addedRacial = false;
+      for (const spell of racialEntry.spells) {
+        if (spell.level <= newTotalLevel) {
+          if (!knownSet.has(spell.name)) { knownSet.add(spell.name); addedRacial = true; }
+          preparedSet.add(spell.name);
+        }
+      }
+      if (addedRacial) {
+        updates.spells_known = Array.from(knownSet);
+        updates.spells_prepared = Array.from(preparedSet);
+        const racialFeat = `Racial Spellcasting (${racialEntry.stat.toUpperCase()})`;
+        if (!mergedFeatures.includes(racialFeat)) {
+          mergedFeatures.push(racialFeat);
+          updates.features = mergedFeatures;
+        }
+      }
+    }
+
     await base44.asServiceRole.entities.Character.update(character_id, updates);
  
     return Response.json({
