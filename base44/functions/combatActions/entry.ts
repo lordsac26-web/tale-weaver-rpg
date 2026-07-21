@@ -464,5 +464,116 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, log_entry: logEntry, temp_hp: newTempHp, uses_remaining: prof - (used + 1), bonus_action_used: true });
   }
 
-  return Response.json({ error: 'Unknown action. Use: companion_turn | breath_weapon | second_wind | channel_divinity_turn_undead | channel_divinity_guided_strike | channel_divinity_preserve_life | hidden_step | daunting_roar | adrenaline_rush' }, { status: 400 });
+  // ─── FRENZY ATTACK (Berserker Barbarian L3, PHB p.49) ───────────────────────
+  // While raging in a Frenzy: make one melee weapon attack as a bonus action each
+  // turn. The first frenzy of a combat costs a level of exhaustion (applied up
+  // front — it represents the crash when the rage ends).
+  if (action === 'frenzy_attack') {
+    const { target_id, raging } = payload || {};
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    const level = character.level || 1;
+    if ((character.class || '') !== 'Barbarian' || !(character.subclass || '').toLowerCase().includes('berserker') || level < 3) {
+      return Response.json({ error: 'Frenzy requires a Berserker Barbarian, level 3+.', invalid: true }, { status: 400 });
+    }
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const isRaging = raging || (character.conditions || []).some(c => (typeof c === 'string' ? c : c?.name) === 'raging');
+    if (!isRaging) {
+      return Response.json({ error: 'Frenzy attacks are only possible while raging.', invalid: true }, { status: 400 });
+    }
+    if (combatLog.world_state?.bonus_action_used) {
+      return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
+    }
+
+    const combatants = [...(combatLog.combatants || [])];
+    const target = combatants.find(c => c.id === target_id && c.type === 'enemy' && c.is_conscious)
+      || combatants.find(c => c.type === 'enemy' && c.is_conscious);
+    if (!target) return Response.json({ error: 'No conscious target.', invalid: true }, { status: 400 });
+
+    const weapon = character.equipped?.weapon || character.equipped?.mainhand || {};
+    const strM = statMod(character.strength || 10);
+    const atkMod = strM + (character.proficiency_bonus || 2) + (weapon.attack_bonus || 0);
+    const roll = rollD20();
+    const isCrit = roll === 20;
+    const hit = roll !== 1 && (isCrit || roll + atkMod >= target.ac);
+
+    // First frenzy of this combat → +1 exhaustion (PHB p.49)
+    let exhaustionNote = '';
+    const charUpdates = {};
+    if (!combatLog.world_state?.frenzy_started) {
+      charUpdates.exhaustion_level = Math.min(6, (character.exhaustion_level || 0) + 1);
+      exhaustionNote = ` The frenzy will take its toll — exhaustion rises to level ${charUpdates.exhaustion_level}.`;
+    }
+
+    let damage = 0;
+    if (hit) {
+      const dMatch = (weapon.damage_dice || '1d4').match(/(\d+)d(\d+)/) || [null, '1', '4'];
+      const numDice = isCrit ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1]);
+      for (let i = 0; i < numDice; i++) damage += rollDice(parseInt(dMatch[2]));
+      const rageBonus = level < 9 ? 2 : level < 16 ? 3 : 4;
+      damage = Math.max(1, damage + strM + (weapon.damage_bonus || 0) + rageBonus);
+      const dmgMod = applyDamageModifiers(damage, weapon.damage_type || 'slashing', target);
+      damage = dmgMod.applied === 'immunity' ? 0 : dmgMod.amount;
+      target.hp_current = Math.max(0, target.hp_current - damage);
+      if (target.hp_current === 0) target.is_conscious = false;
+    }
+    if (Object.keys(charUpdates).length > 0) await base44.entities.Character.update(character_id, charUpdates);
+
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'frenzy_attack', target: target.name,
+      hit, critical: isCrit, damage,
+      text: hit
+        ? `🩸 FRENZY! ${character.name} lashes out with a bonus ${weapon.name || 'strike'}${isCrit ? ' (CRIT!)' : ''} for ${damage} damage! (${roll}+${atkMod} vs AC ${target.ac})${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}${exhaustionNote}`
+        : `🩸 FRENZY! ${character.name}'s wild bonus strike misses ${target.name}! (${roll}+${atkMod} vs AC ${target.ac})${exhaustionNote}`,
+    };
+
+    const updatedCombatants = combatants.map(c => c.id === target.id ? target : c);
+    const allDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants: updatedCombatants, log_entries: [...(combatLog.log_entries || []), logEntry],
+      world_state: { ...(combatLog.world_state || {}), bonus_action_used: true, frenzy_started: true },
+      ...(allDead ? { is_active: false, result: 'victory' } : {}),
+    });
+    if (allDead) await base44.entities.GameSession.update(session_id, { in_combat: false });
+    return Response.json({ success: true, hit, damage, log_entry: logEntry, result: allDead ? 'victory' : 'ongoing', combat_ended: allDead, bonus_action_used: true });
+  }
+
+  // ─── HEXBLADE'S CURSE (Hexblade Warlock L1, XGtE p.55) ──────────────────────
+  // Bonus action, 1/short rest: curse a target. The engine then grants +prof
+  // damage against it, crits on 19-20, and heals you when it dies.
+  if (action === 'hexblade_curse') {
+    const { target_id } = payload || {};
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    if ((character.class || '') !== 'Warlock' || !(character.subclass || '').toLowerCase().includes('hexblade')) {
+      return Response.json({ error: "Hexblade's Curse requires the Hexblade patron.", invalid: true }, { status: 400 });
+    }
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const sra = character.short_rest_abilities || {};
+    if (sra.hexblade_curse_used) {
+      return Response.json({ error: "Hexblade's Curse already used. Short rest to recover.", invalid: true }, { status: 400 });
+    }
+    if (combatLog.world_state?.bonus_action_used) {
+      return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
+    }
+    const combatants = [...(combatLog.combatants || [])];
+    const target = combatants.find(c => c.id === target_id && c.type === 'enemy' && c.is_conscious)
+      || combatants.find(c => c.type === 'enemy' && c.is_conscious);
+    if (!target) return Response.json({ error: 'No conscious target.', invalid: true }, { status: 400 });
+
+    target.hexblade_cursed_by = character_id;
+    await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, hexblade_curse_used: true } });
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'hexblade_curse', target: target.name,
+      text: `☠️ ${character.name} places Hexblade's Curse on ${target.name} — +${character.proficiency_bonus || 2} damage against it, crits on 19-20, and its death restores HP!`,
+    };
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants: combatants.map(c => c.id === target.id ? target : c),
+      log_entries: [...(combatLog.log_entries || []), logEntry],
+      world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },
+    });
+    return Response.json({ success: true, log_entry: logEntry, bonus_action_used: true });
+  }
+
+  return Response.json({ error: 'Unknown action. Use: companion_turn | breath_weapon | second_wind | channel_divinity_turn_undead | channel_divinity_guided_strike | channel_divinity_preserve_life | hidden_step | daunting_roar | adrenaline_rush | frenzy_attack | hexblade_curse' }, { status: 400 });
 });

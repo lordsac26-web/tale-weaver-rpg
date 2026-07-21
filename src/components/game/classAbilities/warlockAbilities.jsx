@@ -1,10 +1,53 @@
 import React from 'react';
 import { Zap, Swords, Eye, Wand2 } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 
 // Build Warlock abilities: Pact Magic, Mystic Arcanum, combat invocations.
 export function buildWarlockAbilities(ctx) {
-  const { character, level } = ctx;
+  const { character, level, combat, selectedTargetId, bonusActionUsed, shortRestAbilities = {}, onMessage } = ctx;
   const abilities = [];
+  const isHexblade = (character?.subclass || '').toLowerCase().includes('hexblade');
+  const inCombat = !!combat?.id;
+
+  // ── Hexblade: Hexblade's Curse + Hex Warrior (XGtE p.55) ──
+  if (isHexblade) {
+    const curseUsed = !!shortRestAbilities.hexblade_curse_used;
+    const profBonus = character?.proficiency_bonus || 2;
+    abilities.push({
+      id: 'hexblade_curse',
+      name: "Hexblade's Curse",
+      icon: <Eye className="w-4 h-4" />,
+      color: '#e879f9', borderColor: 'rgba(220,100,250,0.45)', bgColor: 'rgba(40,5,50,0.7)',
+      type: 'bonus_action',
+      description: `Bonus Action: curse a target — +${profBonus} damage against it, your attacks crit on 19-20, and when it dies you regain ${level + Math.max(0, Math.floor(((character?.charisma || 10) - 10) / 2))} HP. 1/short rest.`,
+      shortDesc: `Curse target (+${profBonus} dmg, crit 19-20)`,
+      restType: 'short',
+      used: curseUsed,
+      usedLabel: 'Used (short rest)',
+      available: inCombat && !curseUsed && !bonusActionUsed,
+      onUse: async () => {
+        try {
+          const res = await base44.functions.invoke('combatActions', {
+            action: 'hexblade_curse', combat_id: combat?.id, session_id: combat?.session_id,
+            character_id: character?.id, payload: { target_id: selectedTargetId },
+          });
+          if (res.data?.invalid) { onMessage?.(res.data.error); return; }
+          if (res.data?.log_entry) onMessage?.(res.data.log_entry.text);
+          window.dispatchEvent(new CustomEvent('reload-combat'));
+        } catch (err) { console.error('hexblade_curse failed:', err); }
+      },
+    });
+    abilities.push({
+      id: 'hex_warrior',
+      name: 'Hex Warrior',
+      icon: <Swords className="w-4 h-4" />,
+      color: '#d8b4fe', borderColor: 'rgba(190,140,255,0.3)', bgColor: 'rgba(28,10,50,0.55)',
+      type: 'passive',
+      description: 'Your weapon attacks automatically use Charisma when it beats Strength/Dexterity. (Engine: automated)',
+      shortDesc: 'Auto: CHA-based weapon attacks',
+      used: false, available: true,
+    });
+  }
 
   // Pact Magic (passive)
   abilities.push({

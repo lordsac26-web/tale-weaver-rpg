@@ -1,13 +1,16 @@
 import React from 'react';
-import { Flame, Swords } from 'lucide-react';
+import { Flame, Swords, Zap, Shield } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 
 // Build Barbarian abilities: Rage, Reckless Attack.
 // Both are toggles whose active state lives in combatModifiers (activeModifiers)
 // and is read by the attack-resolution logic. ctx.activeModifiers / ctx.onToggleModifier
 // are supplied by ClassAbilitiesPanel.
 export function buildBarbarianAbilities(ctx) {
-  const { level, longRestAbilities, activeModifiers = {}, onToggleModifier, onMessage } = ctx;
+  const { character, level, combat, selectedTargetId, bonusActionUsed, longRestAbilities, activeModifiers = {}, onToggleModifier, onMessage } = ctx;
   const abilities = [];
+  const subclass = (character?.subclass || '').toLowerCase();
+  const inCombat = !!combat?.id;
 
   const RAGE_USES = [2,2,3,3,3,4,4,4,4,4,4,5,5,5,5,6,6,6,6,Infinity];
   const maxRages = RAGE_USES[level - 1] ?? 2;
@@ -67,6 +70,61 @@ export function buildBarbarianAbilities(ctx) {
         : `Reckless Attack disabled.`);
     },
   });
+
+  // ── Berserker: Frenzy bonus-action attack (PHB p.49) + Mindless Rage ──
+  if (subclass.includes('berserker') && level >= 3) {
+    abilities.push({
+      id: 'frenzy_attack',
+      name: 'Frenzy Attack',
+      icon: <Zap className="w-4 h-4" />,
+      color: '#f87171',
+      borderColor: 'rgba(240,80,60,0.45)',
+      bgColor: 'rgba(50,5,5,0.7)',
+      type: 'bonus_action',
+      description: 'While raging in a Frenzy: make one melee weapon attack as a bonus action each turn. Your first frenzy each battle costs a level of exhaustion when the rage ends.',
+      shortDesc: rageActive ? 'Bonus melee attack' : 'Requires Rage',
+      used: bonusActionUsed,
+      usedLabel: 'Bonus action used',
+      available: inCombat && rageActive && !bonusActionUsed,
+      onUse: async () => {
+        try {
+          const res = await base44.functions.invoke('combatActions', {
+            action: 'frenzy_attack', combat_id: combat?.id, session_id: combat?.session_id,
+            character_id: character?.id, payload: { target_id: selectedTargetId, raging: true },
+          });
+          if (res.data?.invalid) { onMessage?.(res.data.error); return; }
+          if (res.data?.log_entry) onMessage?.(res.data.log_entry.text);
+          window.dispatchEvent(new CustomEvent('reload-combat'));
+        } catch (err) { console.error('frenzy_attack failed:', err); }
+      },
+    });
+    if (level >= 6) {
+      abilities.push({
+        id: 'mindless_rage',
+        name: 'Mindless Rage',
+        icon: <Shield className="w-4 h-4" />,
+        color: '#fca5a5', borderColor: 'rgba(220,60,40,0.3)', bgColor: 'rgba(35,5,5,0.5)',
+        type: 'passive',
+        description: "You can't be charmed or frightened while raging — the engine automatically shakes off those conditions at the start of your turn.",
+        shortDesc: 'Auto: immune charm/fear while raging',
+        used: false, available: true,
+      });
+    }
+  }
+
+  // ── Zealot: Divine Fury rider (XGtE p.11) ──
+  if (subclass.includes('zealot') && level >= 3) {
+    abilities.push({
+      id: 'divine_fury',
+      name: 'Divine Fury',
+      icon: <Flame className="w-4 h-4" />,
+      color: '#fde047', borderColor: 'rgba(250,220,40,0.35)', bgColor: 'rgba(38,32,3,0.55)',
+      type: 'passive',
+      description: `While raging, your first hit each turn automatically deals +1d6+${Math.floor(level / 2)} radiant/necrotic damage. (Engine: automated)`,
+      shortDesc: `Auto: +1d6+${Math.floor(level / 2)} on first hit`,
+      used: false, available: true,
+    });
+  }
 
   return abilities;
 }

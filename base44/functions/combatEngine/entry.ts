@@ -170,7 +170,8 @@ Deno.serve(async (req) => {
       ni = adv.nextIndex; nr = adv.nextRound;
       ws = { ...ws, actions_used_this_turn: 0, bonus_action_used: false,
              sneak_attack_used: false, loading_weapon_fired: false, colossus_slayer_used: false,
-             aasimar_rider_used: false, draconic_cry_active: false, divine_strike_used: false };
+             aasimar_rider_used: false, draconic_cry_active: false, divine_strike_used: false,
+             divine_fury_used: false };
     }
     return { nextIndex: ni, nextRound: nr, actionsRemaining: Math.max(0, ar), worldState: ws };
   };
@@ -186,6 +187,7 @@ Deno.serve(async (req) => {
     aasimar_rider_used: false,
     draconic_cry_active: false,
     divine_strike_used: false,
+    divine_fury_used: false,
     ...extra,
   });
 
@@ -503,16 +505,29 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Potent Spellcasting (Cleric 8+, Knowledge/Light/Arcana domains — PHB p.59):
-      // add the Cleric's WIS modifier to cantrip damage (H-C2 fix).
-      let potentBonus = 0;
-      if (isCantrip && (character.class || '') === 'Cleric' && (character.level || 1) >= 8) {
-        const psub = (character.subclass || '').toLowerCase();
-        if (['knowledge', 'light', 'arcana'].some(d => psub.includes(d))) {
-          potentBonus = Math.max(0, statMod(character.wisdom || 10));
+      // Class spell-damage riders — applied to both attack-roll and save spells.
+      let spellDamageRider = 0;
+      const casterSub = (character.subclass || '').toLowerCase();
+      // Potent Spellcasting (Cleric 8+, Knowledge/Light/Arcana — PHB p.59): +WIS to cantrips (H-C2 fix)
+      if (isCantrip && (character.class || '') === 'Cleric' && (character.level || 1) >= 8
+          && ['knowledge', 'light', 'arcana'].some(d => casterSub.includes(d))) {
+        spellDamageRider += Math.max(0, statMod(character.wisdom || 10));
+      }
+      // Elemental Affinity (Draconic Sorcerer 6+, PHB p.102): +CHA when the spell's
+      // damage type matches your draconic ancestry (M-S fix)
+      if ((character.class || '') === 'Sorcerer' && (character.level || 1) >= 6 && casterSub.includes('draconic')) {
+        const anc = (character.class_choices?.dragon_ancestry || '').toLowerCase();
+        const DRT = { black: 'acid', copper: 'acid', blue: 'lightning', bronze: 'lightning', brass: 'fire', gold: 'fire', red: 'fire', green: 'poison', silver: 'cold', white: 'cold' };
+        if (DRT[anc] && (spell.damage_type || '').toLowerCase() === DRT[anc]) {
+          spellDamageRider += Math.max(0, statMod(character.charisma || 10));
         }
       }
-      damageBonus += potentBonus;
+      // Empowered Evocation (Evocation Wizard 10+, PHB p.117): +INT to evocation spell damage (M-S fix)
+      if ((character.class || '') === 'Wizard' && (character.level || 1) >= 10 && casterSub.includes('evocation')
+          && (spell.school || '').toLowerCase() === 'evocation') {
+        spellDamageRider += Math.max(0, statMod(character.intelligence || 10));
+      }
+      damageBonus += spellDamageRider;
 
       // H1/H5 fix — slot validation uses the same level-indexed tables as handleRest,
       // and ALL validation (slots + metamagic sorcery points) happens BEFORE any
@@ -666,7 +681,7 @@ Deno.serve(async (req) => {
           usedLegendaryResistance = true;
         }
 
-        const dmg2 = rollDiceStr(damageDice) + potentBonus; // Potent Spellcasting applies to save cantrips (Sacred Flame)
+        const dmg2 = rollDiceStr(damageDice) + spellDamageRider; // riders apply to save spells too (Sacred Flame, Fireball)
         // On save failure: minimum 1 damage. On success: half damage (can be 0 for weak saves)
         let finalDmg = effectiveSaveFailed ? Math.max(1, dmg2) : Math.max(0, Math.floor(dmg2 / 2));
         // Evasion (Rogue L7, PHB p.96): DEX saves → no damage on success, half on failure
@@ -864,7 +879,11 @@ Deno.serve(async (req) => {
       const strMod = statMod(character.strength);
       const dexMod = statMod(character.dexterity);
       // Ranged weapons use DEX; finesse uses best of STR/DEX; melee uses STR
-      const abilityMod = isRanged ? dexMod : (isFinesse ? Math.max(strMod, dexMod) : strMod);
+      let abilityMod = isRanged ? dexMod : (isFinesse ? Math.max(strMod, dexMod) : strMod);
+      // Hex Warrior (Hexblade Warlock, XGtE p.55): weapon attacks can use CHA (H-S3 fix)
+      if ((character.class || '') === 'Warlock' && (character.subclass || '').toLowerCase().includes('hexblade')) {
+        abilityMod = Math.max(abilityMod, statMod(character.charisma || 10));
+      }
       const profBonus = character.proficiency_bonus || 2;
       attackMod = abilityMod + profBonus + (weapon.attack_bonus || 0);
       damageBonus = abilityMod + (weapon.damage_bonus || 0);
@@ -952,6 +971,11 @@ Deno.serve(async (req) => {
           extraDamageDice.push({ dice: (character.level || 1) >= 14 ? '2d8' : '1d8', type: 'divine_strike', label: 'Divine Strike' });
         }
       }
+      // Gloom Stalker Dread Ambusher (XGtE p.41): +1d8 on your first-turn attack, once per combat (M-S fix)
+      if ((character.class || '') === 'Ranger' && (character.subclass || '').toLowerCase().includes('gloom')
+          && combatLog.round === 1 && !combatLog.world_state?.dread_ambusher_used) {
+        extraDamageDice.push({ dice: '1d8', type: 'dread_ambusher', label: 'Dread Ambusher' });
+      }
       // Reckless Attack (PHB p.48): advantage on melee STR attacks this turn.
       // Register as an advantage source — resolved in the single final roll.
       if (modifiers.reckless_attack && character.class === 'Barbarian' && !isRanged) {
@@ -967,7 +991,10 @@ Deno.serve(async (req) => {
         const alreadyUsed = combatLog.world_state?.sneak_attack_used;
         const weaponProps = (weapon?.properties || []).map(p => p.toLowerCase());
         const isFinesseOrRanged = weaponProps.includes('finesse') || weapon?.type === 'ranged';
-        const hasSneakCondition = (modifiers.advantage && !modifiers.disadvantage) || modifiers.ally_adjacent;
+        // Rakish Audacity (Swashbuckler, XGtE p.47): Sneak Attack in a 1-on-1 duel
+        // without needing advantage or an adjacent ally (M-S fix)
+        const isSwashbuckler = (character.subclass || '').toLowerCase().includes('swashbuckler');
+        const hasSneakCondition = (modifiers.advantage && !modifiers.disadvantage) || modifiers.ally_adjacent || isSwashbuckler;
         if (!alreadyUsed && isFinesseOrRanged && hasSneakCondition) {
           const sneakDice = Math.ceil((character.level || 1) / 2);
           extraDamageDice.push({ dice: `${sneakDice}d6`, type: 'sneak', label: 'Sneak Attack' });
@@ -1076,6 +1103,12 @@ Deno.serve(async (req) => {
     if (targetConditions.includes('invisible')) disSources.push(true);
     // BLINDED (target): attacks against have advantage (PHB p.290)
     if (targetConditions.includes('blinded')) advSources.push(true);
+    // Assassin Rogue — Assassinate (PHB p.97): advantage vs creatures that haven't
+    // acted yet (round 1); hits against SURPRISED creatures are auto-crits (M-S fix)
+    if (!spell && (character.class || '') === 'Rogue' && (character.subclass || '').toLowerCase().includes('assassin')) {
+      if (combatLog.round === 1) advSources.push(true);
+      if (targetConditions.includes('surprised')) forceCrit = true;
+    }
 
     // ── SINGLE CENTRALIZED ROLL: all sources gathered, cancel rule applied once ──
     const isHalfling = (character.race || '') === 'Halfling';
@@ -1100,6 +1133,8 @@ Deno.serve(async (req) => {
       const critFloor = (character.level || 1) >= 15 ? 18 : 19;
       if (!isMiss && attackRoll >= critFloor) isCritical = true;
     }
+    // Hexblade's Curse (XGtE p.55): attacks against the cursed target crit on 19-20 (H-S3 fix)
+    if (target.hexblade_cursed_by === character_id && !isMiss && attackRoll >= 19) isCritical = true;
 
     const totalAttack = attackRoll + attackMod;
     let hit = !isMiss && (isCritical || totalAttack >= (target.ac + targetACBonus));
@@ -1208,6 +1243,19 @@ Deno.serve(async (req) => {
         damage += rollDice(8);
       }
 
+      // Zealot Barbarian — Divine Fury (XGtE p.11): first hit each turn while
+      // raging deals +1d6 + half barbarian level radiant/necrotic (H-S2 fix)
+      if (modifiers.rage && (character.class || '') === 'Barbarian' && (character.level || 1) >= 3
+          && (character.subclass || '').toLowerCase().includes('zealot') && !combatLog.world_state?.divine_fury_used) {
+        const fury = rollDice(6) + Math.floor((character.level || 1) / 2);
+        damage += fury;
+        logEntry.divine_fury = fury;
+      }
+      // Hexblade's Curse (XGtE p.55): +proficiency bonus damage vs the cursed target (H-S3 fix)
+      if (target.hexblade_cursed_by === character_id) {
+        damage += (character.proficiency_bonus || 2);
+      }
+
       // Aasimar transformation rider (Volo's p.105): while transformed, once per
       // turn one attack deals +level radiant/necrotic damage.
       const aasimarForm = ['radiant_soul', 'radiant_consumption', 'necrotic_shroud'].find(f => conditions.includes(f));
@@ -1267,6 +1315,17 @@ Deno.serve(async (req) => {
       target.hp_current = Math.max(0, target.hp_current - damage);
       if (target.hp_current === 0) target.is_conscious = false;
 
+      // Hexblade's Curse: when the cursed target dies, the warlock regains
+      // HP = warlock level + CHA modifier (XGtE p.55) (H-S3 fix)
+      if (target.hp_current === 0 && target.hexblade_cursed_by === character_id) {
+        const curseHeal = (character.level || 1) + Math.max(0, statMod(character.charisma || 10));
+        const healedTo = Math.min(character.hp_max, (character.hp_current || 0) + curseHeal);
+        await base44.entities.Character.update(character_id, { hp_current: healedTo });
+        const pcHx = combatants.find(c => c.type === 'player');
+        if (pcHx) pcHx.hp_current = healedTo;
+        logEntry.curse_heal = curseHeal;
+      }
+
       // === SELF/ALLY CONCENTRATION (PHB p.203) ===
       // If this attack damaged the creature currently concentrating on a spell
       // (e.g. the caster catching themselves or a concentrating ally in an AoE),
@@ -1324,6 +1383,10 @@ Deno.serve(async (req) => {
     if (hit && extraDamageDice.some(e => e.type === 'surprise')) newWorldState.bugbear_surprise_used = true;
     // Divine Strike is once per turn (PHB p.59) — consumed when its bonus lands
     if (hit && extraDamageDice.some(e => e.type === 'divine_strike')) newWorldState.divine_strike_used = true;
+    // Divine Fury is once per turn; Dread Ambusher is once per combat (not reset per turn)
+    if (logEntry.divine_fury) newWorldState.divine_fury_used = true;
+    if (extraDamageDice.some(e => e.type === 'dread_ambusher')) newWorldState.dread_ambusher_used = true;
+    if (logEntry.curse_heal) logEntry.text += ` 🩸 Hexblade's Curse: ${character.name} drains ${logEntry.curse_heal} HP as the cursed foe falls!`;
     // Aasimar rider is once per turn; Fury of the Small is spent when it lands
     if (logEntry.aasimar_rider) newWorldState.aasimar_rider_used = true;
     if (logEntry.fury_of_the_small) newWorldState.fury_primed = false;
@@ -2207,10 +2270,14 @@ Deno.serve(async (req) => {
           const race = (ch.race || '').toLowerCase();
           const auraBonus = ((ch.class || '') === 'Paladin' && (ch.level || 1) >= 6) ? Math.max(1, statMod(ch.charisma || 10)) : 0;
           const devotionImmune = (ch.class || '') === 'Paladin' && (ch.subclass || '').toLowerCase().includes('devotion') && (ch.level || 1) >= 10;
+          // Mindless Rage (Berserker 6+, PHB p.49): can't be charmed or frightened while raging (H-S1 fix)
+          const mindlessRage = (ch.class || '') === 'Barbarian' && (ch.subclass || '').toLowerCase().includes('berserker') && (ch.level || 1) >= 6
+            && (pc.conditions || []).some(c => (typeof c === 'string' ? c : c?.name) === 'raging');
           const remaining = []; let cleared = null;
           for (const cond of pc.conditions) {
             const cN = (typeof cond === 'string' ? cond : cond?.name || '').toLowerCase();
             if (cN === 'charmed' && devotionImmune) { cleared = cN; continue; }
+            if ((cN === 'charmed' || cN === 'frightened') && mindlessRage) { cleared = cN; continue; }
             const saveAb = SAVEABLE_CONDITIONS[cN];
             if (saveAb && typeof cond === 'object' && cond.save_dc) {
               const hasAdv = (cN === 'frightened' && race === 'halfling') || (['intelligence','wisdom','charisma'].includes(saveAb) && race === 'gnome');
