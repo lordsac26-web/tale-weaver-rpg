@@ -977,6 +977,17 @@ Deno.serve(async (req) => {
       const isHeavyWeapon = weapon2H.includes('heavy');
       if (isSmallRace && isHeavyWeapon) applyDisadvantage();
 
+      // Bugbear Surprise Attack (Volo's p.119): +2d6 on the first hit of combat
+      // against a creature that hasn't acted yet (round 1, once per combat).
+      if ((character.race || '') === 'Bugbear' && combatLog.round === 1 && !combatLog.world_state?.bugbear_surprise_used) {
+        extraDamageDice.push({ dice: '2d6', type: 'surprise', label: 'Surprise Attack' });
+      }
+      // Kobold Pack Tactics (Volo's p.119): advantage on attacks when an ally
+      // (summoned companion) is fighting alongside you.
+      if ((character.race || '') === 'Kobold' && combatants.some(c => c.type === 'companion' && c.is_conscious)) {
+        advSources.push(true);
+      }
+
       // Great Weapon Master: -5/+10 on heavy two-handed weapons (PHB p.167)
       const isHeavyTwoHanded = weapon2H.includes('heavy') && weapon2H.includes('two-handed');
       if (modifiers.great_weapon_master && hasFeat('Great Weapon Master') && isHeavyTwoHanded && !isRanged) {
@@ -1071,6 +1082,14 @@ Deno.serve(async (req) => {
 
     // Condition checks — apply RAW condition mechanics (PHB p.290-292)
     const conditions = (character.conditions || []).map(c => c.name || c);
+
+    // INVISIBLE attacker (Firbolg Hidden Step, spells): advantage on the attack;
+    // invisibility ends the moment you attack (PHB p.291).
+    let attackerWasInvisible = false;
+    if (conditions.includes('invisible')) {
+      advSources.push(true);
+      attackerWasInvisible = true;
+    }
 
     // EXHAUSTION level 3+ : disadvantage on attack rolls (PHB p.291)
     if ((character.exhaustion_level || 0) >= 3) applyDisadvantage();
@@ -1326,6 +1345,14 @@ Deno.serve(async (req) => {
       logEntry.text = `${character.name} ${missLabel} ${target.name}! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})`;
     }
 
+    // Invisibility ends when you attack — strip it from the character + combatant.
+    if (attackerWasInvisible) {
+      const stripInvis = (arr) => (arr || []).filter(c => (typeof c === 'string' ? c : c?.name) !== 'invisible');
+      await base44.entities.Character.update(character_id, { conditions: stripInvis(character.conditions) });
+      const pcInv = combatants.find(c => c.type === 'player');
+      if (pcInv) pcInv.conditions = stripInvis(pcInv.conditions);
+    }
+
     const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
     const updatedLog = [...(combatLog.log_entries || []), logEntry];
 
@@ -1341,6 +1368,8 @@ Deno.serve(async (req) => {
     if (combatLog.world_state?.guided_strike_bonus) newWorldState.guided_strike_bonus = 0;
     // Mark Colossus Slayer consumed for this turn (once-per-turn, PHB p.93)
     if (colossusApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.colossus_slayer_used = true;
+    // Bugbear Surprise Attack consumed (once per combat) when its bonus damage lands
+    if (hit && extraDamageDice.some(e => e.type === 'surprise')) newWorldState.bugbear_surprise_used = true;
     // Mark a Loading weapon as fired so it can't fire again this turn (PHB p.147)
     if (weapon && (weapon.properties || []).map(p => p.toLowerCase()).includes('loading') && weapon.type === 'ranged' && newWorldState.actions_used_this_turn !== 0) {
       newWorldState.loading_weapon_fired = true;
@@ -1420,6 +1449,9 @@ Deno.serve(async (req) => {
       attackRoll2 = rollD20();
       attackRoll = Math.min(attackRoll1, attackRoll2);
     }
+
+    // Halfling Lucky (PHB p.28): reroll natural 1s (off-hand attacks too)
+    if ((character.race || '') === 'Halfling' && attackRoll === 1) attackRoll = rollD20();
 
     const isCritical = attackRoll === 20;
     const isMiss = attackRoll === 1;
@@ -1610,6 +1642,8 @@ Deno.serve(async (req) => {
 
     // Dodge action (PHB p.192): attacks against a dodging player roll with disadvantage.
     const playerDodging = !!combatLog.world_state?.player_dodging;
+    // Invisible player (Firbolg Hidden Step): attacks against have disadvantage (PHB p.291)
+    const playerInvisible = (player.conditions || []).map(c => (typeof c === 'string' ? c : c?.name)).includes('invisible');
     // Reckless Attack drawback (PHB p.48): enemies have advantage vs the barbarian
     // until the start of the barbarian's next turn.
     const playerReckless = !!combatLog.world_state?.player_reckless;
@@ -1648,8 +1682,8 @@ Deno.serve(async (req) => {
       if (!currentCombatant.is_conscious) break; // felled mid-turn (Cloud Rune self-redirect)
       const roll1 = rollD20();
       // Advantage (reckless barbarian) and disadvantage (dodging) cancel per PHB p.173
-      const hasAdv = playerReckless && !playerDodging;
-      const hasDis = playerDodging && !playerReckless;
+      const hasAdv = playerReckless && !(playerDodging || playerInvisible);
+      const hasDis = (playerDodging || playerInvisible) && !playerReckless;
       const attackRoll = hasAdv ? Math.max(roll1, rollD20()) : hasDis ? Math.min(roll1, rollD20()) : roll1;
       const totalAttack = attackRoll + attackBonus;
       const isCrit = attackRoll === 20;
@@ -2316,7 +2350,9 @@ Deno.serve(async (req) => {
             const saveAb = SAVEABLE_CONDITIONS[cN];
             if (saveAb && typeof cond === 'object' && cond.save_dc) {
               const hasAdv = (cN === 'frightened' && race === 'halfling') || (['intelligence','wisdom','charisma'].includes(saveAb) && race === 'gnome');
-              const r1 = rollD20(), r2 = hasAdv ? rollD20() : r1;
+              // Halfling Lucky (PHB p.28): reroll natural 1s on saving throws
+              const luckyD20 = () => { let r = rollD20(); if (race === 'halfling' && r === 1) r = rollD20(); return r; };
+              const r1 = luckyD20(), r2 = hasAdv ? luckyD20() : r1;
               if (Math.max(r1, r2) + statMod(ch[saveAb] || 10) + auraBonus >= cond.save_dc) { cleared = cN; continue; }
             }
             remaining.push(cond);
@@ -2351,7 +2387,9 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Character is not at 0 HP — no death save needed.', invalid: true }, { status: 400 });
     }
 
-    const roll = rollD20();
+    let roll = rollD20();
+    // Halfling Lucky (PHB p.28): death saves are saving throws — reroll natural 1s
+    if ((character.race || '') === 'Halfling' && roll === 1) roll = rollD20();
     let successDelta = 0;
     let failureDelta = 0;
     let logText = `💀 ${character.name} rolls a Death Saving Throw: ${roll}`;

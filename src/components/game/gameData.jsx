@@ -12,7 +12,7 @@ export const RACES = {
     ],
   },
   Elf: {
-    traits: ['Darkvision (60 ft)', 'Fey Ancestry', 'Trance', 'Keen Senses (Perception proficiency)', 'Trance (4hr rest)'],
+    traits: ['Darkvision (60 ft)', 'Fey Ancestry', 'Keen Senses (Perception proficiency)', 'Trance (4hr rest)'],
     stat_bonuses: { dexterity: 2 },
     skill_proficiencies: ['Perception'],
     speed: 30, size: 'Medium',
@@ -90,9 +90,9 @@ export const RACES = {
     languages: ['Common', 'Celestial'],
     description: 'Touched by divine power, aasimar carry a spark of the Upper Planes. They are blessed by celestial beings to protect the mortal world.',
     subraces: [
-      { name: 'Protector Aasimar', stat_bonuses: { wisdom: 1, charisma: 2 }, traits: ['Radiant Soul (grow wings, fly speed = walking, +radiant damage on attacks, 1 min/long rest)'] },
-      { name: 'Scourge Aasimar', stat_bonuses: { constitution: 1, charisma: 2 }, traits: ['Radiant Consumption (emit radiant light, deal radiant damage to nearby creatures + self, 1 min/long rest)'] },
-      { name: 'Fallen Aasimar', stat_bonuses: { strength: 1, charisma: 2 }, traits: ['Necrotic Shroud (frighten nearby creatures, +necrotic damage on attacks, 1 min/long rest)'] },
+      { name: 'Protector Aasimar', replaces_base: true, stat_bonuses: { wisdom: 1, charisma: 2 }, traits: ['Radiant Soul (grow wings, fly speed = walking, +radiant damage on attacks, 1 min/long rest)'] },
+      { name: 'Scourge Aasimar', replaces_base: true, stat_bonuses: { constitution: 1, charisma: 2 }, traits: ['Radiant Consumption (emit radiant light, deal radiant damage to nearby creatures + self, 1 min/long rest)'] },
+      { name: 'Fallen Aasimar', replaces_base: true, stat_bonuses: { strength: 1, charisma: 2 }, traits: ['Necrotic Shroud (frighten nearby creatures, +necrotic damage on attacks, 1 min/long rest)'] },
     ],
   },
   Genasi: {
@@ -164,7 +164,7 @@ export const RACES = {
     subraces: [],
   },
   'Yuan-ti Pureblood': {
-    traits: ['Darkvision (60 ft)', 'Innate Spellcasting (Poison Spray cantrip; Animal Friendship on snakes at will; Suggestion + Cause Fear 1/long rest)', 'Magic Resistance (advantage on saves vs spells/magical effects)', 'Poison Immunity'],
+    traits: ['Darkvision (60 ft)', 'Innate Spellcasting (Poison Spray cantrip; Animal Friendship on snakes at will; Suggestion 1/long rest)', 'Magic Resistance (advantage on saves vs spells/magical effects)', 'Poison Immunity'],
     stat_bonuses: { intelligence: 1, charisma: 2 },
     speed: 30, size: 'Medium',
     languages: ['Common', 'Abyssal', 'Draconic'],
@@ -227,7 +227,7 @@ export const RACES = {
   // ── NEW RACES ──────────────────────────────────────────────────────────────
 
   Aarakocra: {
-    traits: ['Flight (50 ft fly speed, cannot wear medium/heavy armor to fly)', 'Talons (1d4 slashing unarmed strike)', 'Darkvision (60 ft)', 'Wind Caller (Gust of Wind 1/long rest at level 3)'],
+    traits: ['Flight (50 ft fly speed, cannot wear medium/heavy armor to fly)', 'Talons (1d4 slashing unarmed strike)', 'Darkvision (60 ft)', 'Wind Caller (Gust of Wind 1/long rest, unlocks at level 3 — MotM variant trait)'],
     stat_bonuses: { dexterity: 2, wisdom: 1 },
     skill_proficiencies: ['Perception'],
     speed: 25, fly_speed: 50, size: 'Medium',
@@ -305,15 +305,15 @@ export const RACES = {
     languages: ['Common', 'Infernal'],
     description: 'Touched by infernal magic, tieflings wield dark power. Though distrusted, their strength and magic are undeniable.',
     subraces: [
-      { name: 'Asmodeus (Standard)', stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Hellish Rebuke (2nd level, 1/long rest)', 'Darkness (2nd level, 1/long rest)'], description: 'The classic tiefling lineage descended from the Lord of the Nine Hells.' },
-      { name: 'Dispater', stat_bonuses: { dexterity: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Disguise Self (1/long rest)', 'Detect Thoughts (1/long rest)'], description: 'Tieflings touched by the Iron Duke, masters of disguise and manipulation.' },
-      { name: 'Fierna', stat_bonuses: { wisdom: 1, charisma: 2 }, traits: ['Friends cantrip', 'Charm Person (1/long rest)', 'Suggestion (1/long rest)'], description: 'Tieflings of Fierna\'s line, supernaturally persuasive and beguiling.' },
-      { name: 'Glasya', stat_bonuses: { dexterity: 1, charisma: 2 }, traits: ['Minor Illusion cantrip', 'Disguise Self (1/long rest)', 'Invisibility (1/long rest)'], description: 'Tieflings of the Mistress of the Erinyes, skilled in illusion and escape.' },
-      { name: 'Levistus', stat_bonuses: { constitution: 1, charisma: 2 }, traits: ['Ray of Frost cantrip', 'Armor of Agathys (1/long rest)', 'Darkness (1/long rest)'], description: 'Tieflings of the Lord of Stygia, cold-blooded and calculating.' },
-      { name: 'Mammon', stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Mage Hand cantrip', 'Tenser\'s Floating Disk (1/long rest)', 'Arcane Lock (1/long rest)'], description: 'Tieflings of the Lord of Minauros, gifted with arcane theft and acquisition.' },
-      { name: 'Mephistopheles', stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Mage Hand cantrip', 'Burning Hands (1/long rest)', 'Flame Blade (1/long rest)'], description: 'Tieflings of the Lord of Cania, masters of arcane flame.' },
-      { name: 'Zariel', stat_bonuses: { strength: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Searing Smite (1/long rest)', 'Branding Smite (1/long rest)'], description: 'Tieflings of the fallen angel Zariel, built for righteous warfare.' },
-      { name: 'Baalzebul', stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Ray of Sickness (1/long rest)', 'Crown of Madness (1/long rest)'], description: 'Tieflings of the Lord of Flies, spreading corruption and madness.' },
+      { name: 'Asmodeus (Standard)', replaces_base: true, stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Hellish Rebuke (2nd level, 1/long rest)', 'Darkness (2nd level, 1/long rest)'], description: 'The classic tiefling lineage descended from the Lord of the Nine Hells.' },
+      { name: 'Dispater', replaces_base: true, stat_bonuses: { dexterity: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Disguise Self (1/long rest)', 'Detect Thoughts (1/long rest)'], description: 'Tieflings touched by the Iron Duke, masters of disguise and manipulation.' },
+      { name: 'Fierna', replaces_base: true, stat_bonuses: { wisdom: 1, charisma: 2 }, traits: ['Friends cantrip', 'Charm Person (1/long rest)', 'Suggestion (1/long rest)'], description: 'Tieflings of Fierna\'s line, supernaturally persuasive and beguiling.' },
+      { name: 'Glasya', replaces_base: true, stat_bonuses: { dexterity: 1, charisma: 2 }, traits: ['Minor Illusion cantrip', 'Disguise Self (1/long rest)', 'Invisibility (1/long rest)'], description: 'Tieflings of the Mistress of the Erinyes, skilled in illusion and escape.' },
+      { name: 'Levistus', replaces_base: true, stat_bonuses: { constitution: 1, charisma: 2 }, traits: ['Ray of Frost cantrip', 'Armor of Agathys (1/long rest)', 'Darkness (1/long rest)'], description: 'Tieflings of the Lord of Stygia, cold-blooded and calculating.' },
+      { name: 'Mammon', replaces_base: true, stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Mage Hand cantrip', 'Tenser\'s Floating Disk (1/long rest)', 'Arcane Lock (1/long rest)'], description: 'Tieflings of the Lord of Minauros, gifted with arcane theft and acquisition.' },
+      { name: 'Mephistopheles', replaces_base: true, stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Mage Hand cantrip', 'Burning Hands (1/long rest)', 'Flame Blade (1/long rest)'], description: 'Tieflings of the Lord of Cania, masters of arcane flame.' },
+      { name: 'Zariel', replaces_base: true, stat_bonuses: { strength: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Searing Smite (1/long rest)', 'Branding Smite (1/long rest)'], description: 'Tieflings of the fallen angel Zariel, built for righteous warfare.' },
+      { name: 'Baalzebul', replaces_base: true, stat_bonuses: { intelligence: 1, charisma: 2 }, traits: ['Thaumaturgy cantrip', 'Ray of Sickness (1/long rest)', 'Crown of Madness (1/long rest)'], description: 'Tieflings of the Lord of Flies, spreading corruption and madness.' },
     ],
   },
 

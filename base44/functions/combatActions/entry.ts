@@ -348,5 +348,123 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, log_entry: logEntry, heal_pool: healPool, uses_remaining: maxCD - (cdUsed + 1) });
   }
 
-  return Response.json({ error: 'Unknown action. Use: companion_turn | breath_weapon | second_wind | channel_divinity_turn_undead | channel_divinity_guided_strike | channel_divinity_preserve_life' }, { status: 400 });
+  // ─── HIDDEN STEP (Firbolg, Volo's p.107) ────────────────────────────────────
+  // Bonus action: turn invisible until the start of your next turn or until you
+  // attack/cast/force a save. 1/short rest. Engine gives attackers disadvantage
+  // and clears invisibility when the player attacks.
+  if (action === 'hidden_step') {
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    if ((character.race || '') !== 'Firbolg') {
+      return Response.json({ error: 'Hidden Step is a Firbolg racial trait.', invalid: true }, { status: 400 });
+    }
+    const sra = character.short_rest_abilities || {};
+    if (sra.hidden_step_used) {
+      return Response.json({ error: 'Hidden Step already used. Short rest to recover.', invalid: true }, { status: 400 });
+    }
+    if (combatLog.world_state?.bonus_action_used) {
+      return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
+    }
+    const invisCond = { name: 'invisible', source: 'Hidden Step' };
+    const charConds = (character.conditions || []).filter(c => (typeof c === 'string' ? c : c?.name) !== 'invisible');
+    await base44.entities.Character.update(character_id, {
+      conditions: [...charConds, invisCond],
+      short_rest_abilities: { ...sra, hidden_step_used: true },
+    });
+    const combatants = [...(combatLog.combatants || [])];
+    const playerComp = combatants.find(c => c.type === 'player');
+    if (playerComp) {
+      playerComp.conditions = [...(playerComp.conditions || []).filter(c => (typeof c === 'string' ? c : c?.name) !== 'invisible'), invisCond];
+    }
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'hidden_step',
+      text: `👻 ${character.name} uses Hidden Step and vanishes from sight! Attacks against them have disadvantage until they attack.`
+    };
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants, log_entries: [...(combatLog.log_entries || []), logEntry],
+      world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },
+    });
+    return Response.json({ success: true, log_entry: logEntry, bonus_action_used: true });
+  }
+
+  // ─── DAUNTING ROAR (Leonin, Mythic Odysseys p.27) ───────────────────────────
+  // Bonus action: enemies within 10ft make a WIS save (DC 8 + prof + CON) or are
+  // frightened until the end of your next turn. 1/short rest.
+  if (action === 'daunting_roar') {
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    if ((character.race || '') !== 'Leonin') {
+      return Response.json({ error: 'Daunting Roar is a Leonin racial trait.', invalid: true }, { status: 400 });
+    }
+    const sra = character.short_rest_abilities || {};
+    if (sra.daunting_roar_used) {
+      return Response.json({ error: 'Daunting Roar already used. Short rest to recover.', invalid: true }, { status: 400 });
+    }
+    if (combatLog.world_state?.bonus_action_used) {
+      return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
+    }
+    const roarDC = 8 + (character.proficiency_bonus || 2) + statMod(character.constitution || 10);
+    const combatants = [...(combatLog.combatants || [])];
+    const targets = combatants.filter(c => c.type === 'enemy' && c.is_conscious);
+    const hitLogs = [];
+    for (const target of targets) {
+      const saveRoll = rollD20() + statMod(target.wisdom || 10);
+      if (saveRoll >= roarDC) { hitLogs.push(`${target.name}: unshaken (${saveRoll} vs DC ${roarDC})`); continue; }
+      const existing = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
+      if (!existing.includes('frightened')) {
+        target.conditions = [...(target.conditions || []), { name: 'frightened', source: 'Daunting Roar', save_dc: roarDC, save_ability: 'wisdom', caster: character.name }];
+      }
+      hitLogs.push(`${target.name}: FRIGHTENED (${saveRoll} vs DC ${roarDC})`);
+    }
+    await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, daunting_roar_used: true } });
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'daunting_roar',
+      text: `🦁 ${character.name} lets out a Daunting Roar! ${hitLogs.join('; ')}`
+    };
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants, log_entries: [...(combatLog.log_entries || []), logEntry],
+      world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },
+    });
+    return Response.json({ success: true, log_entry: logEntry, bonus_action_used: true });
+  }
+
+  // ─── ADRENALINE RUSH (Orc, Eberron/MotM) ────────────────────────────────────
+  // Bonus action: Dash and gain temp HP = proficiency bonus. Usable proficiency
+  // bonus times per long rest.
+  if (action === 'adrenaline_rush') {
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    if ((character.race || '') !== 'Orc') {
+      return Response.json({ error: 'Adrenaline Rush is an Orc racial trait.', invalid: true }, { status: 400 });
+    }
+    const prof = character.proficiency_bonus || 2;
+    const lra = character.long_rest_abilities || {};
+    const used = lra.adrenaline_rush_used || 0;
+    if (used >= prof) {
+      return Response.json({ error: `Adrenaline Rush exhausted (${prof}/${prof}). Long rest to recover.`, invalid: true }, { status: 400 });
+    }
+    if (combatLog.world_state?.bonus_action_used) {
+      return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
+    }
+    // Temp HP doesn't stack — keep the higher value (PHB p.198)
+    const newTempHp = Math.max(character.temp_hp || 0, prof);
+    await base44.entities.Character.update(character_id, {
+      temp_hp: newTempHp,
+      long_rest_abilities: { ...lra, adrenaline_rush_used: used + 1 },
+    });
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'adrenaline_rush',
+      text: `💢 ${character.name} surges with Adrenaline Rush — Dashes and gains ${prof} temp HP! (${used + 1}/${prof} uses)`
+    };
+    await base44.entities.CombatLog.update(combat_id, {
+      log_entries: [...(combatLog.log_entries || []), logEntry],
+      world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },
+    });
+    return Response.json({ success: true, log_entry: logEntry, temp_hp: newTempHp, uses_remaining: prof - (used + 1), bonus_action_used: true });
+  }
+
+  return Response.json({ error: 'Unknown action. Use: companion_turn | breath_weapon | second_wind | channel_divinity_turn_undead | channel_divinity_guided_strike | channel_divinity_preserve_life | hidden_step | daunting_roar | adrenaline_rush' }, { status: 400 });
 });

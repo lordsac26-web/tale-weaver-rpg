@@ -14,6 +14,7 @@ import { buildArtificerAbilities } from './artificerAbilities';
 import { buildWarlockAbilities } from './warlockAbilities';
 import { buildFeatAbilities } from './featAbilities';
 import { buildGenericSubclassAbilities } from './subclassAbilities';
+import { buildRacialAbilities } from './racialAbilities';
 
 // Maps Character.class → builder. Each builder takes a shared ctx and returns an array.
 export const CLASS_ABILITY_BUILDERS = {
@@ -32,4 +33,4 @@ export const CLASS_ABILITY_BUILDERS = {
   Warlock: buildWarlockAbilities,
 };
 
-export { buildFeatAbilities, buildGenericSubclassAbilities };
+export { buildFeatAbilities, buildGenericSubclassAbilities, buildRacialAbilities };

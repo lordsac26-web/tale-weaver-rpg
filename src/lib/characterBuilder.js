@@ -34,9 +34,15 @@ export function applyRacialBonuses(char) {
   if (char.subrace && race.subraces?.length > 0) {
     const subrace = race.subraces.find(s => s.name === char.subrace);
     if (subrace?.stat_bonuses) {
-      Object.entries(subrace.stat_bonuses).forEach(([stat, val]) => {
-        bonuses[stat] = (bonuses[stat] || 0) + val;
-      });
+      // Aasimar/Tiefling lineages define the COMPLETE ASI set (not a delta on top
+      // of the base race) — replace instead of add to avoid double-stacking.
+      if (subrace.replaces_base) {
+        bonuses = { ...subrace.stat_bonuses };
+      } else {
+        Object.entries(subrace.stat_bonuses).forEach(([stat, val]) => {
+          bonuses[stat] = (bonuses[stat] || 0) + val;
+        });
+      }
     }
 
     // Handle stat_choices for subraces (e.g., Variant Human)

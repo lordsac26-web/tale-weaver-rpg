@@ -83,6 +83,18 @@ const RACIAL_SPELLS_DATA = {
     { name: 'Poison Spray', level: 1, type: 'cantrip' }, { name: 'Animal Friendship', level: 1, type: 'spell' }, { name: 'Suggestion', level: 3, type: 'spell' } ] },
   Aarakocra: { stat: 'wisdom', spells: [
     { name: 'Gust of Wind', level: 3, type: 'spell' } ] },
+  // Base Tiefling (no lineage) — Infernal Legacy (PHB p.43)
+  Tiefling: { stat: 'charisma', spells: [
+    { name: 'Thaumaturgy', level: 1, type: 'cantrip' }, { name: 'Hellish Rebuke', level: 3, type: 'spell' }, { name: 'Darkness', level: 5, type: 'spell' } ] },
+  // Triton — Control Air and Water (Volo's p.118)
+  Triton: { stat: 'charisma', spells: [
+    { name: 'Fog Cloud', level: 1, type: 'spell' }, { name: 'Gust of Wind', level: 3, type: 'spell' }, { name: 'Wall of Water', level: 5, type: 'spell' } ] },
+  // Aasimar — Light Bearer (Volo's p.105)
+  Aasimar: { stat: 'charisma', spells: [
+    { name: 'Light', level: 1, type: 'cantrip' } ] },
+  // Firbolg — Firbolg Magic (Volo's p.107)
+  Firbolg: { stat: 'wisdom', spells: [
+    { name: 'Detect Magic', level: 1, type: 'spell' }, { name: 'Disguise Self', level: 1, type: 'spell' } ] },
 };
 
 // Compute combined caster level for a (possibly multiclassed) character.

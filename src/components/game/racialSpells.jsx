@@ -152,6 +152,43 @@ export const RACIAL_SPELLS = {
       { name: 'Gust of Wind', level: 3, type: 'spell', uses: 'long_rest' },
     ],
   },
+
+  // ── Base Tiefling (no lineage chosen) — Infernal Legacy, PHB p.43 ── CHA ──
+  Tiefling: {
+    stat: 'charisma',
+    spells: [
+      { name: 'Thaumaturgy',    level: 1, type: 'cantrip', uses: 'at_will' },
+      { name: 'Hellish Rebuke', level: 3, type: 'spell',   uses: 'long_rest' },
+      { name: 'Darkness',       level: 5, type: 'spell',   uses: 'long_rest' },
+    ],
+  },
+
+  // ── Triton — Control Air and Water, Volo's p.118 ── CHA ──
+  Triton: {
+    stat: 'charisma',
+    spells: [
+      { name: 'Fog Cloud',     level: 1, type: 'spell', uses: 'long_rest' },
+      { name: 'Gust of Wind',  level: 3, type: 'spell', uses: 'long_rest' },
+      { name: 'Wall of Water', level: 5, type: 'spell', uses: 'long_rest' },
+    ],
+  },
+
+  // ── Aasimar — Light Bearer, Volo's p.105 ── CHA ──
+  Aasimar: {
+    stat: 'charisma',
+    spells: [
+      { name: 'Light', level: 1, type: 'cantrip', uses: 'at_will' },
+    ],
+  },
+
+  // ── Firbolg — Firbolg Magic, Volo's p.107 ── WIS ── 1/short rest each ──
+  Firbolg: {
+    stat: 'wisdom',
+    spells: [
+      { name: 'Detect Magic',  level: 1, type: 'spell', uses: 'short_rest' },
+      { name: 'Disguise Self', level: 1, type: 'spell', uses: 'short_rest' },
+    ],
+  },
 };
 
 /**

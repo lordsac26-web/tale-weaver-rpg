@@ -337,7 +337,7 @@ export default function Game() {
         onResolve: (rollData) => { setPendingRoll(null); continueChoiceWithRoll(choice, choiceIndex, { ...rollData, advantageSources: equipAdv.sources }); },
         onCancel: () => {
           setPendingRoll(null);
-          const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
+          const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
           const final = raw + modifier;
           continueChoiceWithRoll(choice, choiceIndex, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, choice.dc) });
         },
@@ -346,7 +346,7 @@ export default function Game() {
     }
 
     // Auto mode: roll immediately.
-    const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
+    const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
     const final = raw + modifier;
     await continueChoiceWithRoll(choice, choiceIndex, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, choice.dc) });
   };
@@ -433,7 +433,7 @@ export default function Game() {
         onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, skill, dc, { ...rollData, advantageSources: equipAdv.sources }); },
         onCancel: () => {
           setPendingRoll(null);
-          const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
+          const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
           const final = raw + modifier;
           continueProposalWithRoll(action, skill, dc, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
         },
@@ -442,7 +442,7 @@ export default function Game() {
     }
 
     // Auto mode.
-    const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
+    const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
     const final = raw + modifier;
     await continueProposalWithRoll(action, skill, dc, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
   };
@@ -530,7 +530,7 @@ export default function Game() {
     let success = true;
     if (requires_check && skill && dc) {
       const equipAdv = getEquipmentAdvantage(character?.equipped, skill);
-      const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage);
+      const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
       const modifier = computeSkillModifier(skill);
       const final = raw + modifier;
       // Nat 20 always succeeds, nat 1 always fails
@@ -1491,6 +1491,7 @@ export default function Game() {
             advantage={pendingRoll.advantage}
             disadvantage={pendingRoll.disadvantage}
             advantageSources={pendingRoll.advantageSources}
+            luckyReroll={character?.race === 'Halfling'}
             onResolve={pendingRoll.onResolve}
             onCancel={pendingRoll.onCancel}
           />

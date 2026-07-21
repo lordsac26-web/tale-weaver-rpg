@@ -102,8 +102,14 @@ export function resolveCheckSuccess(raw, final, dc) {
   return final >= dc;
 }
 
-export function rollD20WithAdvantage(advantage, disadvantage, minRoll = 0) {
-  const roll1 = Math.max(minRoll, Math.floor(Math.random() * 20) + 1);
+export function rollD20WithAdvantage(advantage, disadvantage, minRoll = 0, rerollOnes = false) {
+  // rerollOnes = Halfling Lucky (PHB p.28): reroll a natural 1 once, must use the new roll.
+  const d20 = () => {
+    let r = Math.floor(Math.random() * 20) + 1;
+    if (rerollOnes && r === 1) r = Math.floor(Math.random() * 20) + 1;
+    return Math.max(minRoll, r);
+  };
+  const roll1 = d20();
 
   // Advantage and disadvantage cancel each other out (5e rule)
   if (advantage && disadvantage) {
@@ -111,12 +117,12 @@ export function rollD20WithAdvantage(advantage, disadvantage, minRoll = 0) {
   }
 
   if (advantage) {
-    const roll2 = Math.max(minRoll, Math.floor(Math.random() * 20) + 1);
+    const roll2 = d20();
     return { roll: Math.max(roll1, roll2), allRolls: [roll1, roll2], hadAdvantage: true, hadDisadvantage: false };
   }
 
   if (disadvantage) {
-    const roll2 = Math.max(minRoll, Math.floor(Math.random() * 20) + 1);
+    const roll2 = d20();
     return { roll: Math.min(roll1, roll2), allRolls: [roll1, roll2], hadAdvantage: false, hadDisadvantage: true };
   }
 
