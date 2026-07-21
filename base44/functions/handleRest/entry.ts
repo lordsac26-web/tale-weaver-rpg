@@ -208,8 +208,11 @@ Deno.serve(async (req) => {
 
     // Reset short-rest ability tracking (Action Surge, Second Wind, Channel Divinity/Turn Undead,
     // Wild Shape, Artificer infusions, etc.) — these all recharge on a short rest (PHB class tables).
-    // EXCEPTION: arcane_recovery is once per LONG rest, so preserve it across short rests.
-    updates.short_rest_abilities = { arcane_recovery: !!shortRestAbilities.arcane_recovery };
+    // Preserve long_rest_abilities entirely (Relentless Endurance, Tides of Chaos, Indomitable, etc.)
+    // — those only reset on a long rest, never a short rest (PHB p.186).
+    const preservedLongRest = character.long_rest_abilities || {};
+    updates.short_rest_abilities = {};
+    updates.long_rest_abilities = preservedLongRest;
 
   } else if (rest_type === 'long') {
     // LONG REST (8 hours)

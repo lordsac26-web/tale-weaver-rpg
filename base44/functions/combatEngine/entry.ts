@@ -73,6 +73,7 @@ Deno.serve(async (req) => {
     restrained:  { speed_zero: true, incoming_attack_advantage: true },
     banished:    { no_actions: true, removed_from_combat: true },
     polymorphed: { no_actions: false },
+    turned:      { no_actions: true, removed_from_combat: true },
     prone:       {},
     invisible:   { incoming_attack_disadvantage: true },
   };
@@ -86,6 +87,7 @@ Deno.serve(async (req) => {
     frightened: 'wisdom',
     polymorphed: 'wisdom',
     stunned: 'constitution',
+    turned: 'wisdom',
   };
 
   // ─── DATA-DRIVEN MONSTER AI ─────────────────────────────────────────────────
@@ -1058,6 +1060,15 @@ Deno.serve(async (req) => {
       attackMod += stormRuneBonus;
     }
 
+    // Channel Divinity: Guided Strike (Cleric, PHB p.59) — +10 to next attack roll (consumed)
+    if (combatLog.world_state?.guided_strike_bonus) {
+      attackMod += combatLog.world_state.guided_strike_bonus;
+    }
+    // Paladin Aura of Hate (Oathbreaker L7, DMG p.97): +1d6 necrotic on melee weapon attacks
+    if (!spell && (character.class || '') === 'Paladin' && (character.subclass || '').toLowerCase().includes('oathbreaker') && (character.level || 1) >= 7) {
+      extraDamageDice.push({ dice: '1d6', type: 'aura_hate', label: 'Aura of Hate' });
+    }
+
     // Condition checks — apply RAW condition mechanics (PHB p.290-292)
     const conditions = (character.conditions || []).map(c => c.name || c);
 
@@ -1326,6 +1337,8 @@ Deno.serve(async (req) => {
       resolveActionAndAdvance(combatLog, updatedCombatants, character, { isQuickened: isQuickenedMain });
     // Mark Sneak Attack consumed for this turn so it can't trigger again until next turn
     if (sneakAttackApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.sneak_attack_used = true;
+    // Clear Channel Divinity: Guided Strike bonus (consumed by this attack)
+    if (combatLog.world_state?.guided_strike_bonus) newWorldState.guided_strike_bonus = 0;
     // Mark Colossus Slayer consumed for this turn (once-per-turn, PHB p.93)
     if (colossusApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.colossus_slayer_used = true;
     // Mark a Loading weapon as fired so it can't fire again this turn (PHB p.147)
@@ -1701,12 +1714,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Barbarian Rage Resistance (PHB p.48): halve B/P/S while raging
+    // Barbarian Rage Resistance (PHB p.48): halve B/P/S while raging.
+    // Bear Totem (Totem Warrior L3, PHB p.49): resistance to ALL damage except psychic.
     const isBarbarianRaging = isRaging && (charFull?.class === 'Barbarian' || charFull?.class === 'barbarian');
+    const isBearTotem = (charFull?.class_choices?.totem_spirit || '').toLowerCase() === 'bear';
     let alreadyResisted = false;
-    if (isBarbarianRaging && physicalTypes.includes(enemyDamageType)) {
+    const rageApplies = isBarbarianRaging && (isBearTotem ? enemyDamageType !== 'psychic' : physicalTypes.includes(enemyDamageType));
+    if (rageApplies) {
       const halved = Math.floor(finalDamage / 2);
-      attackLogs.push(`[Rage Resistance: ${finalDamage} → ${halved} ${enemyDamageType}]`);
+      attackLogs.push(`[Rage${isBearTotem ? ' (Bear Totem)' : ''} Resistance: ${finalDamage} → ${halved} ${enemyDamageType}]`);
       finalDamage = halved;
       alreadyResisted = true;
     }
@@ -2275,20 +2291,46 @@ Deno.serve(async (req) => {
   // ═══════════════════════════════════════════════════════════════════════════
   if (action === 'next_turn') {
     const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const combatants = combatLog.combatants;
+    const combatants = [...combatLog.combatants];
     const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
     const nextWS = resetTurnWorldState(combatLog);
-    // Clear Reckless Attack drawback when the barbarian's turn begins
+    let condLog = null;
+    // Player turn-start: resolve saveable conditions with racial advantages and Paladin auras.
+    // Halfling Brave (PHB p.28): advantage on frightened saves.
+    // Gnome Cunning (PHB p.37): advantage on INT/WIS/CHA saves vs magic.
+    // Aura of Protection (Paladin L6, PHB p.85): +CHA mod to all saves.
+    // Aura of Devotion (Paladin L10, PHB p.86): immune to charm.
     if (combatants[nextIndex]?.type === 'player') {
-      nextWS.player_reckless = false;
-      nextWS.player_reaction_used = false;
+      nextWS.player_reckless = false; nextWS.player_reaction_used = false;
+      const pc = combatants[nextIndex];
+      if ((pc.conditions || []).some(c => SAVEABLE_CONDITIONS[(typeof c === 'string' ? c : c?.name || '').toLowerCase()])) {
+        const ch = await base44.entities.Character.get(pc.id);
+        if (ch) {
+          const race = (ch.race || '').toLowerCase();
+          const auraBonus = ((ch.class || '') === 'Paladin' && (ch.level || 1) >= 6) ? Math.max(1, statMod(ch.charisma || 10)) : 0;
+          const devotionImmune = (ch.class || '') === 'Paladin' && (ch.subclass || '').toLowerCase().includes('devotion') && (ch.level || 1) >= 10;
+          const remaining = []; let cleared = null;
+          for (const cond of pc.conditions) {
+            const cN = (typeof cond === 'string' ? cond : cond?.name || '').toLowerCase();
+            if (cN === 'charmed' && devotionImmune) { cleared = cN; continue; }
+            const saveAb = SAVEABLE_CONDITIONS[cN];
+            if (saveAb && typeof cond === 'object' && cond.save_dc) {
+              const hasAdv = (cN === 'frightened' && race === 'halfling') || (['intelligence','wisdom','charisma'].includes(saveAb) && race === 'gnome');
+              const r1 = rollD20(), r2 = hasAdv ? rollD20() : r1;
+              if (Math.max(r1, r2) + statMod(ch[saveAb] || 10) + auraBonus >= cond.save_dc) { cleared = cN; continue; }
+            }
+            remaining.push(cond);
+          }
+          pc.conditions = remaining;
+          if (cleared) condLog = { round: nextRound, actor: pc.name, action: 'condition_save', text: `${pc.name} shakes off ${cleared}!` };
+        }
+      }
     }
     await base44.entities.CombatLog.update(combat_id, {
-      current_turn_index: nextIndex,
-      round: nextRound,
-      world_state: nextWS
+      current_turn_index: nextIndex, round: nextRound, world_state: nextWS,
+      ...(condLog ? { log_entries: [...(combatLog.log_entries || []), condLog], combatants } : {}),
     });
-    return Response.json({ next_turn_index: nextIndex, round: nextRound, current_combatant: combatants[nextIndex] });
+    return Response.json({ next_turn_index: nextIndex, round: nextRound, current_combatant: combatants[nextIndex], condition_cleared: condLog?.text || null });
   }
 
   // ─── DEATH SAVE (PHB p.197) ─────────────────────────────────────────────────

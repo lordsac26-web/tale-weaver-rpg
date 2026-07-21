@@ -6,10 +6,29 @@ import { buildBattleMasterAbilities, buildRuneKnightAbilities } from './fighterS
 
 // Build Fighter abilities: Second Wind, Action Surge, Fighting Style, Indomitable.
 export function buildFighterAbilities(ctx) {
-  const { character, level, shortRestAbilities, longRestAbilities, onMessage, onAbilityUsed } = ctx;
+  const { character, level, combat, bonusActionUsed, shortRestAbilities, longRestAbilities, onMessage, onAbilityUsed, onCharacterUpdate } = ctx;
   const abilities = [];
 
-  // Second Wind — bonus action, heals 1d10+level HP, 1/short rest
+  // Helper: invoke a combatActions backend action (server-authoritative)
+  const invokeCombatAction = async (action, payload = {}) => {
+    try {
+      const res = await base44.functions.invoke('combatActions', {
+        action, combat_id: combat?.id, session_id: combat?.session_id,
+        character_id: character?.id, payload,
+      });
+      const data = res.data;
+      if (data?.invalid) { onMessage?.(data.error || 'Action not available.'); return null; }
+      if (data?.log_entry) onMessage?.(data.log_entry.text);
+      if (data?.new_hp !== undefined || data?.heal_amount !== undefined) {
+        const updated = await base44.entities.Character.get(character?.id);
+        onCharacterUpdate?.(() => updated);
+      }
+      window.dispatchEvent(new CustomEvent('reload-combat'));
+      return data;
+    } catch (err) { console.error(`${action} failed:`, err); return null; }
+  };
+
+  // Second Wind — bonus action, heals 1d10+level HP, 1/short rest (PHB p.72)
   const secondWindUsed = !!shortRestAbilities.second_wind;
   abilities.push({
     id: 'second_wind',
@@ -20,21 +39,26 @@ export function buildFighterAbilities(ctx) {
     bgColor: 'rgba(8,45,18,0.7)',
     activeBg: 'rgba(15,70,30,0.85)',
     type: 'bonus_action',
-    description: `Bonus Action: Regain 1d10+${level} HP (avg ${Math.floor(level / 2) + 5 + level}). 1/short rest.`,
+    description: `Bonus Action: Regain 1d10+${level} HP. 1/short rest.`,
     shortDesc: `Heal 1d10+${level} HP`,
     restType: 'short',
     used: secondWindUsed,
     usedLabel: 'Used (short rest)',
-    available: level >= 1,
+    available: level >= 1 && !bonusActionUsed,
     onUse: async () => {
-      const healAmount = Math.floor(Math.random() * 10) + 1 + level;
-      const newHp = Math.min(character.hp_max, (character.hp_current || 0) + healAmount);
-      await base44.entities.Character.update(character.id, {
-        hp_current: newHp,
-        short_rest_abilities: { ...shortRestAbilities, second_wind: true }
-      });
-      onMessage?.(`💨 Second Wind! ${character.name} heals ${healAmount} HP (now ${newHp}/${character.hp_max}).`);
-      onAbilityUsed?.('second_wind', { heal: healAmount, newHp });
+      if (combat?.id) {
+        await invokeCombatAction('second_wind');
+      } else {
+        // Out of combat: simple client-side heal
+        const healAmount = Math.floor(Math.random() * 10) + 1 + level;
+        const newHp = Math.min(character.hp_max, (character.hp_current || 0) + healAmount);
+        await base44.entities.Character.update(character.id, {
+          hp_current: newHp,
+          short_rest_abilities: { ...shortRestAbilities, second_wind: true }
+        });
+        onMessage?.(`💨 Second Wind! ${character.name} heals ${healAmount} HP (now ${newHp}/${character.hp_max}).`);
+        onAbilityUsed?.('second_wind', { heal: healAmount, newHp });
+      }
     }
   });
 

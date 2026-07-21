@@ -179,5 +179,174 @@ Deno.serve(async (req) => {
       combat_ended: result !== 'ongoing', next_turn_index: nextIndex });
   }
 
-  return Response.json({ error: 'Unknown action. Use: companion_turn | breath_weapon' }, { status: 400 });
+  // ─── SECOND WIND (Fighter, PHB p.72) ────────────────────────────────────────
+  // Bonus action: regain 1d10 + fighter level HP. Once per short rest.
+  if (action === 'second_wind') {
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    if ((character.class || '').toLowerCase() !== 'fighter') {
+      return Response.json({ error: 'Second Wind requires Fighter class.', invalid: true }, { status: 400 });
+    }
+    const level = character.level || 1;
+    const sra = character.short_rest_abilities || {};
+    if (sra.second_wind_used) {
+      return Response.json({ error: 'Second Wind already used. Short rest to recover.', invalid: true }, { status: 400 });
+    }
+    if (combatLog.world_state?.bonus_action_used) {
+      return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
+    }
+    const healAmount = rollDice(10) + level;
+    const newHp = Math.min(character.hp_max || 1, (character.hp_current || 0) + healAmount);
+    await base44.entities.Character.update(character_id, {
+      hp_current: newHp,
+      short_rest_abilities: { ...sra, second_wind_used: true },
+    });
+    const combatants = [...(combatLog.combatants || [])];
+    const playerComp = combatants.find(c => c.type === 'player');
+    if (playerComp) { playerComp.hp_current = newHp; }
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'second_wind',
+      text: `💨 ${character.name} uses Second Wind and heals ${healAmount} HP! (now ${newHp}/${character.hp_max})`
+    };
+    const ws = { ...(combatLog.world_state || {}), bonus_action_used: true };
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants: playerComp ? combatants.map(c => c.type === 'player' ? playerComp : c) : combatLog.combatants,
+      log_entries: [...(combatLog.log_entries || []), logEntry], world_state: ws,
+    });
+    return Response.json({ success: true, heal_amount: healAmount, new_hp: newHp, log_entry: logEntry, bonus_action_used: true });
+  }
+
+  // ─── CHANNEL DIVINITY: TURN UNDEAD (Cleric L2, PHB p.59) ───────────────────
+  // Action: each undead within 30ft makes WIS save or is turned (flee) for 1 min.
+  // Undead with CR ≤ floor(cleric level / 2) are destroyed outright.
+  if (action === 'channel_divinity_turn_undead') {
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    const level = character.level || 1;
+    if ((character.class || '') !== 'Cleric' || level < 2) {
+      return Response.json({ error: 'Channel Divinity requires Cleric level 2+.', invalid: true }, { status: 400 });
+    }
+    const maxCD = level >= 18 ? 3 : level >= 6 ? 2 : 1;
+    const sra = character.short_rest_abilities || {};
+    const cdUsed = sra.channel_divinity_used || 0;
+    if (cdUsed >= maxCD) {
+      return Response.json({ error: `Channel Divinity exhausted (${maxCD}/${maxCD}). Short rest to recover.`, invalid: true }, { status: 400 });
+    }
+    const turnDC = 8 + statMod(character.wisdom || 10) + (character.proficiency_bonus || 2);
+    const destroyCR = Math.floor(level / 2);
+    const combatants = [...(combatLog.combatants || [])];
+    const targets = combatants.filter(c => c.type === 'enemy' && c.is_conscious);
+    const hitLogs = [];
+    let turned = 0;
+    for (const target of targets) {
+      const targetType = (target.type_tag || target.meta || target.creature_type || target.name || '').toLowerCase();
+      if (!/undead|zombie|skeleton|ghoul|wight|wraith|specter|ghost|vampire|lich|mummy|revenant|banshee/.test(targetType)) continue;
+      const saveRoll = rollD20() + statMod(target.wisdom || 10);
+      if (saveRoll >= turnDC) { hitLogs.push(`${target.name}: saved (${saveRoll} vs DC ${turnDC})`); continue; }
+      const cr = target.cr || 0;
+      if (cr > 0 && cr <= destroyCR) {
+        target.hp_current = 0; target.is_conscious = false;
+        hitLogs.push(`${target.name}: DESTROYED! (CR ${cr} ≤ ${destroyCR})`);
+      } else {
+        const existing = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
+        if (!existing.includes('turned')) {
+          target.conditions = [...(target.conditions || []), { name: 'turned', source: 'Turn Undead', save_dc: turnDC, save_ability: 'wisdom', caster: character.name }];
+        }
+        turned++;
+        hitLogs.push(`${target.name}: TURNED (will flee)`);
+      }
+    }
+    await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
+    const updatedCombatants = combatants.map(c => { const u = targets.find(t => t.id === c.id); return u || c; });
+    const allDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
+    const result = allDead ? 'victory' : 'ongoing';
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'channel_divinity_turn_undead',
+      text: `✨ ${character.name} channels divine energy to Turn Undead! ${hitLogs.length > 0 ? hitLogs.join('; ') : 'No undead in range.'}${turned > 0 ? ` ${turned} undead turned!` : ''}`
+    };
+    const ws = { ...(combatLog.world_state || {}), actions_used_this_turn: (combatLog.world_state?.actions_used_this_turn || 0) + 1 };
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants: updatedCombatants, log_entries: [...(combatLog.log_entries || []), logEntry],
+      world_state: ws, is_active: result === 'ongoing', result,
+    });
+    if (allDead) await base44.entities.GameSession.update(session_id, { in_combat: false });
+    return Response.json({ success: true, log_entry: logEntry, turned, result, combat_ended: result !== 'ongoing', uses_remaining: maxCD - (cdUsed + 1) });
+  }
+
+  // ─── CHANNEL DIVINITY: GUIDED STRIKE (Cleric L2, PHB p.59) ──────────────────
+  // Does NOT consume an action: gain +10 to your next attack roll this turn.
+  if (action === 'channel_divinity_guided_strike') {
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    const level = character.level || 1;
+    if ((character.class || '') !== 'Cleric' || level < 2) {
+      return Response.json({ error: 'Channel Divinity requires Cleric level 2+.', invalid: true }, { status: 400 });
+    }
+    const maxCD = level >= 18 ? 3 : level >= 6 ? 2 : 1;
+    const sra = character.short_rest_abilities || {};
+    const cdUsed = sra.channel_divinity_used || 0;
+    if (cdUsed >= maxCD) {
+      return Response.json({ error: 'Channel Divinity exhausted.', invalid: true }, { status: 400 });
+    }
+    await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'channel_divinity_guided_strike',
+      text: `✨ ${character.name} uses Channel Divinity: Guided Strike — +10 to next attack roll!`
+    };
+    await base44.entities.CombatLog.update(combat_id, {
+      log_entries: [...(combatLog.log_entries || []), logEntry],
+      world_state: { ...(combatLog.world_state || {}), guided_strike_bonus: 10 },
+    });
+    return Response.json({ success: true, log_entry: logEntry, uses_remaining: maxCD - (cdUsed + 1) });
+  }
+
+  // ─── CHANNEL DIVINITY: PRESERVE LIFE (Cleric L2, PHB p.60) ─────────────────
+  // Action: restore HP to creatures within 30ft. Pool = 5 × cleric level.
+  // No target heals above half their max HP.
+  if (action === 'channel_divinity_preserve_life') {
+    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const character = await base44.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    const level = character.level || 1;
+    if ((character.class || '') !== 'Cleric' || level < 2) {
+      return Response.json({ error: 'Channel Divinity requires Cleric level 2+.', invalid: true }, { status: 400 });
+    }
+    const maxCD = level >= 18 ? 3 : level >= 6 ? 2 : 1;
+    const sra = character.short_rest_abilities || {};
+    const cdUsed = sra.channel_divinity_used || 0;
+    if (cdUsed >= maxCD) {
+      return Response.json({ error: 'Channel Divinity exhausted.', invalid: true }, { status: 400 });
+    }
+    const healPool = 5 * level;
+    const combatants = [...(combatLog.combatants || [])];
+    const allies = combatants.filter(c => c.type !== 'enemy' && c.is_conscious && c.hp_current < c.hp_max);
+    let remaining = healPool;
+    const healLogs = [];
+    for (const ally of allies) {
+      if (remaining <= 0) break;
+      const halfMax = Math.floor(ally.hp_max / 2);
+      const maxHeal = Math.max(0, Math.min(remaining, halfMax - ally.hp_current, ally.hp_max - ally.hp_current));
+      if (maxHeal <= 0) continue;
+      ally.hp_current = Math.min(ally.hp_max, ally.hp_current + maxHeal);
+      remaining -= maxHeal;
+      healLogs.push(`${ally.name}: +${maxHeal} HP`);
+    }
+    const playerComp = combatants.find(c => c.type === 'player');
+    if (playerComp) await base44.entities.Character.update(character_id, { hp_current: playerComp.hp_current, short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
+    else await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'channel_divinity_preserve_life',
+      text: `✨ ${character.name} uses Channel Divinity: Preserve Life! Pool: ${healPool} HP. ${healLogs.length > 0 ? healLogs.join('; ') : 'No allies needed healing.'}`
+    };
+    const ws = { ...(combatLog.world_state || {}), actions_used_this_turn: (combatLog.world_state?.actions_used_this_turn || 0) + 1 };
+    await base44.entities.CombatLog.update(combat_id, {
+      combatants, log_entries: [...(combatLog.log_entries || []), logEntry], world_state: ws,
+    });
+    return Response.json({ success: true, log_entry: logEntry, heal_pool: healPool, uses_remaining: maxCD - (cdUsed + 1) });
+  }
+
+  return Response.json({ error: 'Unknown action. Use: companion_turn | breath_weapon | second_wind | channel_divinity_turn_undead | channel_divinity_guided_strike | channel_divinity_preserve_life' }, { status: 400 });
 });
