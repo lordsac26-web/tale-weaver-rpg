@@ -365,6 +365,13 @@ Deno.serve(async (req) => {
     updates.death_saves_failure = 0;
     updates.short_rest_abilities = {};
     updates.long_rest_abilities = {};
+    // Portent (Divination Wizard 2+, PHB p.116): foresee 2 d20 rolls (3 at L14) after a long rest
+    if (charClass === 'Wizard' && charLevel >= 2 && (character.subclass || '').toLowerCase().includes('divination')) {
+      const numPortents = charLevel >= 14 ? 3 : 2;
+      const portents = Array.from({ length: numPortents }, () => Math.floor(Math.random() * 20) + 1);
+      updates.long_rest_abilities = { portent_rolls: portents };
+      restorations.push(`Portent dice foreseen: ${portents.join(', ')}`);
+    }
     restorations.push('All abilities recharged');
   }
 

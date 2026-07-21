@@ -61,6 +61,7 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
     shortRestAbilities: character.short_rest_abilities || {},
     longRestAbilities: character.long_rest_abilities || {},
     bonusActionUsed: worldState?.bonus_action_used || false,
+    worldState: worldState || {},
     onMessage,
     onAbilityUsed,
     onCharacterUpdate,

@@ -1,11 +1,43 @@
 import React from 'react';
-import { Shield, Eye } from 'lucide-react';
+import { Shield, Eye, Sparkles } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 import { getFightingStyleDesc } from './abilityHelpers';
 
-// Build Ranger abilities: Hunter's Mark, Fighting Style.
+// Build Ranger abilities: Hunter's Mark, Fighting Style, Planar Warrior (Horizon Walker).
 export function buildRangerAbilities(ctx) {
-  const { character, level } = ctx;
+  const { character, level, combat, worldState = {}, selectedTargetId, bonusActionUsed, onMessage } = ctx;
   const abilities = [];
+
+  // ── Planar Warrior (Horizon Walker 3+, XGtE p.42) (M-S fix) ──
+  if ((character.subclass || '').toLowerCase().includes('horizon') && level >= 3) {
+    const armed = !!worldState.planar_warrior_target;
+    const dice = level >= 11 ? '2d8' : '1d8';
+    abilities.push({
+      id: 'planar_warrior',
+      name: 'Planar Warrior',
+      icon: <Sparkles className="w-4 h-4" />,
+      color: '#a5b4fc', borderColor: 'rgba(140,150,255,0.4)', bgColor: 'rgba(15,15,50,0.65)',
+      activeBg: 'rgba(30,30,90,0.85)',
+      type: 'bonus_action',
+      description: `Bonus Action: channel planar energy at a target — your next hit against it deals +${dice} force damage.`,
+      shortDesc: armed ? `ARMED — next hit +${dice} force` : `Next hit +${dice} force`,
+      used: bonusActionUsed && !armed,
+      usedLabel: 'Bonus action used',
+      available: !!combat?.id && !armed && !bonusActionUsed,
+      active: armed,
+      onUse: async () => {
+        try {
+          const res = await base44.functions.invoke('subclassActions', {
+            action: 'planar_warrior', combat_id: combat?.id, session_id: combat?.session_id,
+            character_id: character?.id, payload: { target_id: selectedTargetId },
+          });
+          if (res.data?.invalid) { onMessage?.(res.data.error); return; }
+          if (res.data?.log_entry) onMessage?.(res.data.log_entry.text);
+          window.dispatchEvent(new CustomEvent('reload-combat'));
+        } catch (err) { console.error('planar_warrior failed:', err); }
+      },
+    });
+  }
 
   // Hunter's Mark reminder
   if (level >= 1) {

@@ -17,9 +17,9 @@ export function buildClericAbilities(ctx) {
   const turnDC = 8 + profBonus + wisMod;
 
   // Helper: invoke a combatActions backend action
-  const invokeCombatAction = async (action, payload = {}) => {
+  const invokeCombatAction = async (action, payload = {}, fn = 'combatActions') => {
     try {
-      const res = await base44.functions.invoke('combatActions', {
+      const res = await base44.functions.invoke(fn, {
         action, combat_id: combat?.id, session_id: combat?.session_id,
         character_id: character?.id, payload,
       });
@@ -91,6 +91,60 @@ export function buildClericAbilities(ctx) {
     available: cdAvailable,
     onUse: async () => { await invokeCombatAction('channel_divinity_preserve_life'); },
   });
+
+  // ── Domain-specific Channel Divinity options (M-S fix) ──
+  const sub = (character.subclass || '').toLowerCase();
+
+  // Light: Radiance of the Dawn (PHB p.61)
+  if (sub.includes('light')) {
+    abilities.push({
+      id: 'cd_radiance_of_dawn',
+      name: 'CD: Radiance of the Dawn',
+      icon: <Sun className="w-4 h-4" />,
+      color: '#fde68a', borderColor: 'rgba(250,220,100,0.4)', bgColor: 'rgba(40,32,5,0.65)',
+      type: 'action',
+      description: `Action: Each enemy within 30ft makes a CON save DC ${turnDC} or takes 2d10+${level} radiant damage (half on save). ${cdLeft}/${maxCD} uses.`,
+      shortDesc: `AoE 2d10+${level} radiant (${cdLeft}/${maxCD})`,
+      restType: 'short',
+      used: cdExhausted, usedLabel: 'Channel Divinity exhausted',
+      available: cdAvailable,
+      onUse: async () => { await invokeCombatAction('channel_divinity_radiance_of_dawn', {}, 'subclassActions'); },
+    });
+  }
+
+  // Tempest: Destructive Wrath (PHB p.62)
+  if (sub.includes('tempest')) {
+    abilities.push({
+      id: 'cd_destructive_wrath',
+      name: 'CD: Destructive Wrath',
+      icon: <Crosshair className="w-4 h-4" />,
+      color: '#93c5fd', borderColor: 'rgba(100,160,255,0.4)', bgColor: 'rgba(8,20,50,0.65)',
+      type: 'free',
+      description: `Your next lightning or thunder spell deals MAXIMUM damage instead of rolling. ${cdLeft}/${maxCD} uses.`,
+      shortDesc: `Max lightning/thunder dmg (${cdLeft}/${maxCD})`,
+      restType: 'short',
+      used: cdExhausted, usedLabel: 'Channel Divinity exhausted',
+      available: cdAvailable,
+      onUse: async () => { await invokeCombatAction('channel_divinity_destructive_wrath', {}, 'subclassActions'); },
+    });
+  }
+
+  // Grave: Path to the Grave (XGtE p.20)
+  if (sub.includes('grave')) {
+    abilities.push({
+      id: 'cd_path_to_grave',
+      name: 'CD: Path to the Grave',
+      icon: <Shield className="w-4 h-4" />,
+      color: '#d8b4fe', borderColor: 'rgba(190,140,255,0.4)', bgColor: 'rgba(30,10,50,0.65)',
+      type: 'action',
+      description: `Action: Curse a target — the next attack that hits it deals DOUBLE damage. ${cdLeft}/${maxCD} uses.`,
+      shortDesc: `Next hit deals double dmg (${cdLeft}/${maxCD})`,
+      restType: 'short',
+      used: cdExhausted, usedLabel: 'Channel Divinity exhausted',
+      available: cdAvailable,
+      onUse: async () => { await invokeCombatAction('channel_divinity_path_to_grave', { target_id: ctx.selectedTargetId }, 'subclassActions'); },
+    });
+  }
 
   return abilities;
 }

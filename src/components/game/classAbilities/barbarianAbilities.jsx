@@ -112,6 +112,23 @@ export function buildBarbarianAbilities(ctx) {
     }
   }
 
+  // ── Totem Warrior: Eagle & Wolf totem benefits (PHB p.50) (M-S fix) ──
+  const totem = (character?.class_choices?.totem_spirit || '').toLowerCase();
+  if (subclass.includes('totem') && level >= 3 && (totem === 'eagle' || totem === 'wolf')) {
+    abilities.push({
+      id: `totem_${totem}`,
+      name: totem === 'wolf' ? 'Wolf Totem Spirit' : 'Eagle Totem Spirit',
+      icon: <Shield className="w-4 h-4" />,
+      color: '#a3e635', borderColor: 'rgba(140,220,60,0.3)', bgColor: 'rgba(20,35,5,0.55)',
+      type: 'passive',
+      description: totem === 'wolf'
+        ? 'While raging, your packmates (companions) gain advantage on melee attacks against your enemies. (Engine: automated)'
+        : 'While raging, opportunity attacks against you have disadvantage and you can Dash as a bonus action — you dart across the battlefield like a bird of prey.',
+      shortDesc: totem === 'wolf' ? 'Auto: companion advantage while raging' : 'Hard to pin down while raging',
+      used: false, available: true,
+    });
+  }
+
   // ── Zealot: Divine Fury rider (XGtE p.11) ──
   if (subclass.includes('zealot') && level >= 3) {
     abilities.push({

@@ -55,7 +55,19 @@ Deno.serve(async (req) => {
     const dmgDice = attack.damage_dice || '1d6';
     const dmgBonus = attack.damage_bonus || 0;
 
-    const roll = rollD20();
+    // Wolf Totem (PHB p.50): packmates gain advantage on melee attacks while the owner rages (M-S fix)
+    const wsC = combatLog.world_state || {};
+    let roll = rollD20();
+    let wolfAdv = false;
+    if (wsC.player_rage_active && companion.owner_id) {
+      const owner = await base44.entities.Character.get(companion.owner_id).catch(() => null);
+      if ((owner?.class_choices?.totem_spirit || '').toLowerCase() === 'wolf') {
+        roll = Math.max(roll, rollD20());
+        wolfAdv = true;
+      }
+    }
+    // Combat Inspiration (Valor Bard, PHB p.55): granted die boosts this attack's damage
+    const inspDie = wsC.companion_inspiration_die || 0;
     const isCrit = roll === 20;
     const isFumble = roll === 1;
     const totalAttack = roll + atkBonus;
@@ -67,6 +79,7 @@ Deno.serve(async (req) => {
       const numDice = dMatch ? (isCrit ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1])) : 1;
       const sides = dMatch ? parseInt(dMatch[2]) : 6;
       for (let i = 0; i < numDice; i++) damage += rollDice(sides);
+      if (inspDie > 0) damage += rollDice(inspDie); // Combat Inspiration damage die
       damage = Math.max(1, damage + dmgBonus);
       const dmgMod = applyDamageModifiers(damage, attack.damage_type || 'slashing', target);
       damage = dmgMod.applied === 'immunity' ? 0 : dmgMod.amount;
@@ -78,8 +91,8 @@ Deno.serve(async (req) => {
       round: combatLog.round, actor: companion.name, action: 'companion_attack', target: target.name,
       hit, critical: isCrit, damage,
       text: hit
-        ? `${companion.portrait_emoji || '🐾'} ${companion.name} ${attack.name || 'attacks'} ${target.name}${isCrit ? ' (CRIT!)' : ''} for ${damage} damage! (${roll}+${atkBonus}=${totalAttack} vs AC ${target.ac})${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`
-        : `${companion.portrait_emoji || '🐾'} ${companion.name} ${attack.name || 'attacks'} ${target.name} but misses! (${roll}+${atkBonus}=${totalAttack} vs AC ${target.ac})`
+        ? `${companion.portrait_emoji || '🐾'} ${companion.name} ${attack.name || 'attacks'} ${target.name}${isCrit ? ' (CRIT!)' : ''}${wolfAdv ? ' [Wolf Totem: advantage]' : ''}${inspDie ? ' [Inspired!]' : ''} for ${damage} damage! (${roll}+${atkBonus}=${totalAttack} vs AC ${target.ac})${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`
+        : `${companion.portrait_emoji || '🐾'} ${companion.name} ${attack.name || 'attacks'} ${target.name}${wolfAdv ? ' [Wolf Totem: advantage]' : ''} but misses! (${roll}+${atkBonus}=${totalAttack} vs AC ${target.ac})`
     };
 
     const updatedCombatants = combatants.map(c => c.id === target.id ? target : c);
@@ -89,7 +102,7 @@ Deno.serve(async (req) => {
     await base44.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants, log_entries: [...(combatLog.log_entries || []), logEntry],
       current_turn_index: nextIndex, round: nextRound, is_active: result === 'ongoing', result,
-      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false },
+      world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, companion_inspiration_die: null },
     });
     if (allDead) {
       await base44.entities.GameSession.update(session_id, { in_combat: false });

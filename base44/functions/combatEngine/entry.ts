@@ -528,6 +528,14 @@ Deno.serve(async (req) => {
         spellDamageRider += Math.max(0, statMod(character.intelligence || 10));
       }
       damageBonus += spellDamageRider;
+      // Arcane Ward (Abjuration Wizard 2+, PHB p.115): abjuration casts create/recharge the ward (M-S fix)
+      if ((character.class || '') === 'Wizard' && (character.level || 1) >= 2 && casterSub.includes('abjuration')
+          && (spell.school || '').toLowerCase() === 'abjuration' && (spell.slot_level || 0) >= 1) {
+        const lraW = character.long_rest_abilities || {};
+        const wardMax = 2 * (character.level || 1) + statMod(character.intelligence || 10);
+        const newWard = lraW.arcane_ward_created ? Math.min(wardMax, (lraW.arcane_ward_hp || 0) + 2 * spell.slot_level) : wardMax;
+        await base44.entities.Character.update(character_id, { long_rest_abilities: { ...lraW, arcane_ward_hp: newWard, arcane_ward_created: true } });
+      }
 
       // H1/H5 fix — slot validation uses the same level-indexed tables as handleRest,
       // and ALL validation (slots + metamagic sorcery points) happens BEFORE any
@@ -681,7 +689,10 @@ Deno.serve(async (req) => {
           usedLegendaryResistance = true;
         }
 
-        const dmg2 = rollDiceStr(damageDice) + spellDamageRider; // riders apply to save spells too (Sacred Flame, Fireball)
+        // Destructive Wrath (Tempest Cleric, PHB p.62): maximize armed lightning/thunder damage (M-S fix)
+        const wrathArmed = !!combatLog.world_state?.destructive_wrath && ['lightning', 'thunder'].includes((spell.damage_type || '').toLowerCase());
+        const maxDice = (ds) => { const mm = (ds || '').match(/^(\d+)d(\d+)$/); return mm ? parseInt(mm[1]) * parseInt(mm[2]) : 0; };
+        const dmg2 = (wrathArmed ? maxDice(damageDice) : rollDiceStr(damageDice)) + spellDamageRider; // riders apply to save spells too
         // On save failure: minimum 1 damage. On success: half damage (can be 0 for weak saves)
         let finalDmg = effectiveSaveFailed ? Math.max(1, dmg2) : Math.max(0, Math.floor(dmg2 / 2));
         // Evasion (Rogue L7, PHB p.96): DEX saves → no damage on success, half on failure
@@ -753,6 +764,7 @@ Deno.serve(async (req) => {
         const isQuickened = !!modifiers.metamagic?.quickened;
         const { nextIndex: ni, nextRound: nr, actionsRemaining: ar2, worldState: ws } =
           resolveActionAndAdvance(combatLog, updatedC, character, { isQuickened });
+        if (wrathArmed) { ws.destructive_wrath = false; saveEntry.text += ' ⚡ DESTRUCTIVE WRATH: damage maximized!'; }
         // Track concentration spell in world_state
         if (spell.requires_concentration) {
           ws.concentration_spell = spell.name;
@@ -976,6 +988,10 @@ Deno.serve(async (req) => {
           && combatLog.round === 1 && !combatLog.world_state?.dread_ambusher_used) {
         extraDamageDice.push({ dice: '1d8', type: 'dread_ambusher', label: 'Dread Ambusher' });
       }
+      // Horizon Walker — Planar Warrior (XGtE p.42): armed — +1d8 force (2d8 at L11) on this attack (M-S fix)
+      if (combatLog.world_state?.planar_warrior_target === target_id) {
+        extraDamageDice.push({ dice: (character.level || 1) >= 11 ? '2d8' : '1d8', type: 'planar_warrior', label: 'Planar Warrior' });
+      }
       // Reckless Attack (PHB p.48): advantage on melee STR attacks this turn.
       // Register as an advantage source — resolved in the single final roll.
       if (modifiers.reckless_attack && character.class === 'Barbarian' && !isRanged) {
@@ -1122,6 +1138,11 @@ Deno.serve(async (req) => {
       await base44.entities.Character.update(character_id, {
         luck_points_remaining: Math.max(0, (character.luck_points_remaining || 0) - 1),
       });
+    }
+    // Portent (Divination Wizard 2+, PHB p.116): an armed portent die replaces the d20 (M-S fix)
+    const portentValue = combatLog.world_state?.portent_value;
+    if (portentValue != null) {
+      attackResult = { ...attackResult, roll: portentValue, isCritical: forceCrit || portentValue === 20, isMiss: portentValue === 1 };
     }
     let attackRoll = attackResult.roll;
     let isCritical = attackResult.isCritical;
@@ -1284,6 +1305,12 @@ Deno.serve(async (req) => {
         logEntry.damage_modifier = tgtMod.applied;
         damage = tgtMod.applied === 'immunity' ? 0 : tgtMod.amount;
       }
+      // Path to the Grave (Grave Cleric, XGtE p.20): marked target is vulnerable to the next hit (M-S fix)
+      if (targetConditions.includes('path_to_grave')) {
+        damage *= 2;
+        target.conditions = (target.conditions || []).filter(c => (typeof c === 'string' ? c : c?.name) !== 'path_to_grave');
+        logEntry.path_to_grave = true;
+      }
 
       // Fire Rune (invoked): on a weapon hit, +2d6 fire damage and the target
       // must make a STR save vs the rune DC or be SHACKLED (restrained). The
@@ -1387,6 +1414,9 @@ Deno.serve(async (req) => {
     if (logEntry.divine_fury) newWorldState.divine_fury_used = true;
     if (extraDamageDice.some(e => e.type === 'dread_ambusher')) newWorldState.dread_ambusher_used = true;
     if (logEntry.curse_heal) logEntry.text += ` 🩸 Hexblade's Curse: ${character.name} drains ${logEntry.curse_heal} HP as the cursed foe falls!`;
+    if (portentValue != null) { newWorldState.portent_value = null; logEntry.text += ' 🔮 (Portent die used)'; }
+    if (hit && extraDamageDice.some(e => e.type === 'planar_warrior')) newWorldState.planar_warrior_target = null;
+    if (logEntry.path_to_grave) logEntry.text += ' ⚰️ Path to the Grave: damage DOUBLED!';
     // Aasimar rider is once per turn; Fury of the Small is spent when it lands
     if (logEntry.aasimar_rider) newWorldState.aasimar_rider_used = true;
     if (logEntry.fury_of_the_small) newWorldState.fury_primed = false;
@@ -1399,6 +1429,8 @@ Deno.serve(async (req) => {
     if (modifiers.reckless_attack && !spell && (character.class || '') === 'Barbarian') {
       newWorldState.player_reckless = true;
     }
+    // Wolf Totem support: surface rage state so companion attacks can gain advantage (M-S fix)
+    if (!spell) newWorldState.player_rage_active = !!modifiers.rage;
 
     // Track concentration spells
     if (spell?.requires_concentration) {
@@ -1694,6 +1726,12 @@ Deno.serve(async (req) => {
       }
     }
     let cloudRedirectAvailable = playerRunes.has('redirect_attack') && reactionAvailable;
+    // Cutting Words (Lore Bard 3+, PHB p.54): armed reaction — subtract an inspiration die from one enemy attack (M-S fix)
+    const cwLvl = liveChar?.level || 1;
+    const cwDie = cwLvl < 5 ? 6 : cwLvl < 10 ? 8 : cwLvl < 15 ? 10 : 12;
+    let cwReady = !!combatLog.world_state?.cutting_words_armed && reactionAvailable
+      && liveChar?.class === 'Bard' && (liveChar?.bardic_inspiration_remaining || 0) > 0;
+    let cwConsumed = false;
 
     let totalDamage = 0;
     let anyHit = false;
@@ -1707,10 +1745,17 @@ Deno.serve(async (req) => {
       const hasAdv = playerReckless && !(playerDodging || playerInvisible);
       const hasDis = (playerDodging || playerInvisible) && !playerReckless;
       const attackRoll = hasAdv ? Math.max(roll1, rollD20()) : hasDis ? Math.min(roll1, rollD20()) : roll1;
-      const totalAttack = attackRoll + attackBonus;
+      let totalAttack = attackRoll + attackBonus;
       const isCrit = attackRoll === 20;
       const isFumble = attackRoll === 1;
-      const hit = !isFumble && (isCrit || totalAttack >= targetAC);
+      let hit = !isFumble && (isCrit || totalAttack >= targetAC);
+      if (hit && !isCrit && cwReady) {
+        const cwRoll = rollDice(cwDie);
+        cwReady = false; cwConsumed = true;
+        totalAttack -= cwRoll;
+        hit = totalAttack >= targetAC;
+        attackLogs.push(`🎭 CUTTING WORDS! -${cwRoll} to the attack roll${hit ? '' : ' — it MISSES!'}`);
+      }
 
       if (isCrit) isCritical = true;
 
@@ -1843,6 +1888,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Arcane Ward (Abjuration Wizard 2+, PHB p.115): the ward absorbs damage before HP (M-S fix)
+    if (finalDamage > 0 && charFull?.class === 'Wizard' && (charFull?.subclass || '').toLowerCase().includes('abjuration')) {
+      const wardHp = charFull?.long_rest_abilities?.arcane_ward_hp || 0;
+      if (wardHp > 0) {
+        const absorbed = Math.min(wardHp, finalDamage);
+        finalDamage -= absorbed;
+        totalDamage = finalDamage;
+        await base44.entities.Character.update(player.id, { long_rest_abilities: { ...(charFull.long_rest_abilities || {}), arcane_ward_hp: wardHp - absorbed } });
+        attackLogs.push(`[🛡️ Arcane Ward absorbs ${absorbed} (${wardHp - absorbed} ward HP left)]`);
+      }
+    }
     // Apply total damage to player — temp HP absorbs first (PHB p.198)
     let instantDeath = false;
     if (finalDamage > 0) {
@@ -1915,6 +1971,11 @@ Deno.serve(async (req) => {
     // Carry over world_state, clear concentration if broken.
     // player_dodging expires once enemies have acted (it only lasts until the player's next turn).
     const newWS = resetTurnWorldState(combatLog, { player_dodging: false, player_reaction_used: usedReaction || !!combatLog.world_state?.player_reaction_used });
+    if (cwConsumed) {
+      newWS.cutting_words_armed = false;
+      newWS.player_reaction_used = true;
+      await base44.entities.Character.update(player.id, { bardic_inspiration_remaining: Math.max(0, (liveChar?.bardic_inspiration_remaining || 1) - 1) });
+    }
     if (updatedCombatants[nextIndex]?.type === 'player') {
       newWS.player_reckless = false;
       newWS.player_reaction_used = false;
@@ -2212,6 +2273,16 @@ Deno.serve(async (req) => {
         target.hp_current = Math.max(0, target.hp_current - dmg);
         if (target.hp_current === 0) target.is_conscious = false;
         strikeLogs.push(`Strike ${s + 1}: ${isCrit ? 'CRIT! ' : ''}${dmg} dmg (${roll1}+${attackMod}=${totalAttack} vs AC ${target.ac})`);
+        // Open Hand Technique (PHB p.79): each Flurry hit — DEX save vs Ki DC or knocked prone (M-S fix)
+        if ((character.subclass || '').toLowerCase().includes('open hand') && target.is_conscious) {
+          const kiDC = 8 + profBonus + statMod(character.wisdom || 10);
+          const ohSave = rollD20() + statMod(target.dexterity || 10);
+          if (ohSave < kiDC) {
+            const exC = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
+            if (!exC.includes('prone')) target.conditions = [...(target.conditions || []), { name: 'prone', source: 'Open Hand Technique' }];
+            strikeLogs.push(`— knocked PRONE! (DEX ${ohSave} vs DC ${kiDC})`);
+          }
+        }
       } else {
         strikeLogs.push(`Strike ${s + 1}: miss (${roll1}+${attackMod}=${totalAttack} vs AC ${target.ac})`);
       }
