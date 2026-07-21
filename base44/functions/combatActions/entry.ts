@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { statMod, rollD20, rollDice } from '../../shared/dice.ts';
 
 // Combat Actions — racial combat abilities and companion turns extracted from
 // the main combatEngine to keep file sizes manageable. Each action reads/writes
@@ -10,9 +11,6 @@ Deno.serve(async (req) => {
 
   const { action, combat_id, session_id, character_id, payload } = await req.json();
 
-  const statMod = (stat) => Math.floor(((stat || 10) - 10) / 2);
-  const rollD20 = () => Math.floor(Math.random() * 20) + 1;
-  const rollDice = (sides) => Math.floor(Math.random() * sides) + 1;
   const normList = (l) => Array.isArray(l) ? l.map(d => String(d || '').toLowerCase().trim()).filter(Boolean) : [];
   const applyDamageModifiers = (damage, damageType, target = {}) => {
     const type = String(damageType || '').toLowerCase().trim();
