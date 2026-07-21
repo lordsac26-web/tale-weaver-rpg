@@ -4,6 +4,7 @@ import { Zap, ChevronDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { PROFICIENCY_BY_LEVEL } from './gameData';
 import AbilityRow from './AbilityRow';
+import LayOnHandsModal from './LayOnHandsModal';
 import { CLASS_ABILITY_BUILDERS, buildFeatAbilities, buildGenericSubclassAbilities, buildRacialAbilities } from './classAbilities';
 
 /**
@@ -18,6 +19,7 @@ import { CLASS_ABILITY_BUILDERS, buildFeatAbilities, buildGenericSubclassAbiliti
  */
 export default function ClassAbilitiesPanel({ character, combat, worldState, onAbilityUsed, onMessage, onCharacterUpdate, activeModifiers, onToggleModifier, selectedTargetId }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [showLayOnHands, setShowLayOnHands] = useState(false);
 
   // Server-authoritative resource spend — backend validates class/level/pool and deducts.
   const spendResource = async (resource, extra = {}) => {
@@ -64,6 +66,7 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
     onCharacterUpdate,
     spendKi,
     spendBardic,
+    openLayOnHands: () => setShowLayOnHands(true),
     // Toggle state (Rage, Reckless Attack, etc.) shared with the attack-resolution modifiers
     activeModifiers: activeModifiers || {},
     onToggleModifier,
@@ -113,6 +116,16 @@ export default function ClassAbilitiesPanel({ character, combat, worldState, onA
           </motion.div>
         )}
       </AnimatePresence>
+
+      {showLayOnHands && (
+        <LayOnHandsModal
+          character={character}
+          onClose={() => setShowLayOnHands(false)}
+          onMessage={onMessage}
+          onCharacterUpdate={onCharacterUpdate}
+          onAbilityUsed={onAbilityUsed}
+        />
+      )}
     </div>
   );
 }

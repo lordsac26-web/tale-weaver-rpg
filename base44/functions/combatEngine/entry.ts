@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
       ni = adv.nextIndex; nr = adv.nextRound;
       ws = { ...ws, actions_used_this_turn: 0, bonus_action_used: false,
              sneak_attack_used: false, loading_weapon_fired: false, colossus_slayer_used: false,
-             aasimar_rider_used: false, draconic_cry_active: false };
+             aasimar_rider_used: false, draconic_cry_active: false, divine_strike_used: false };
     }
     return { nextIndex: ni, nextRound: nr, actionsRemaining: Math.max(0, ar), worldState: ws };
   };
@@ -185,6 +185,7 @@ Deno.serve(async (req) => {
     colossus_slayer_used: false,
     aasimar_rider_used: false,
     draconic_cry_active: false,
+    divine_strike_used: false,
     ...extra,
   });
 
@@ -502,6 +503,17 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Potent Spellcasting (Cleric 8+, Knowledge/Light/Arcana domains — PHB p.59):
+      // add the Cleric's WIS modifier to cantrip damage (H-C2 fix).
+      let potentBonus = 0;
+      if (isCantrip && (character.class || '') === 'Cleric' && (character.level || 1) >= 8) {
+        const psub = (character.subclass || '').toLowerCase();
+        if (['knowledge', 'light', 'arcana'].some(d => psub.includes(d))) {
+          potentBonus = Math.max(0, statMod(character.wisdom || 10));
+        }
+      }
+      damageBonus += potentBonus;
+
       // H1/H5 fix — slot validation uses the same level-indexed tables as handleRest,
       // and ALL validation (slots + metamagic sorcery points) happens BEFORE any
       // deduction is persisted. Deductions are batched into a single update at the end.
@@ -654,7 +666,7 @@ Deno.serve(async (req) => {
           usedLegendaryResistance = true;
         }
 
-        const dmg2 = rollDiceStr(damageDice);
+        const dmg2 = rollDiceStr(damageDice) + potentBonus; // Potent Spellcasting applies to save cantrips (Sacred Flame)
         // On save failure: minimum 1 damage. On success: half damage (can be 0 for weak saves)
         let finalDmg = effectiveSaveFailed ? Math.max(1, dmg2) : Math.max(0, Math.floor(dmg2 / 2));
         // Evasion (Rogue L7, PHB p.96): DEX saves → no damage on success, half on failure
@@ -930,6 +942,15 @@ Deno.serve(async (req) => {
           && target.hp_current < target.hp_max && !combatLog.world_state?.colossus_slayer_used) {
         extraDamageDice.push({ dice: '1d8', type: 'colossus', label: 'Colossus Slayer' });
         colossusApplied = true;
+      }
+      // Cleric Divine Strike (PHB p.59, weapon-strike domains, level 8+): once per
+      // turn, +1d8 on a weapon hit (2d8 at level 14). Automatic (H-C2 fix).
+      if ((character.class || '') === 'Cleric' && (character.level || 1) >= 8 && !combatLog.world_state?.divine_strike_used) {
+        const dsub = (character.subclass || '').toLowerCase();
+        const hasDivineStrike = ['life', 'nature', 'tempest', 'trickery', 'war', 'death', 'forge', 'order'].some(d => dsub.includes(d));
+        if (hasDivineStrike) {
+          extraDamageDice.push({ dice: (character.level || 1) >= 14 ? '2d8' : '1d8', type: 'divine_strike', label: 'Divine Strike' });
+        }
       }
       // Reckless Attack (PHB p.48): advantage on melee STR attacks this turn.
       // Register as an advantage source — resolved in the single final roll.
@@ -1301,6 +1322,8 @@ Deno.serve(async (req) => {
     if (colossusApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.colossus_slayer_used = true;
     // Bugbear Surprise Attack consumed (once per combat) when its bonus damage lands
     if (hit && extraDamageDice.some(e => e.type === 'surprise')) newWorldState.bugbear_surprise_used = true;
+    // Divine Strike is once per turn (PHB p.59) — consumed when its bonus lands
+    if (hit && extraDamageDice.some(e => e.type === 'divine_strike')) newWorldState.divine_strike_used = true;
     // Aasimar rider is once per turn; Fury of the Small is spent when it lands
     if (logEntry.aasimar_rider) newWorldState.aasimar_rider_used = true;
     if (logEntry.fury_of_the_small) newWorldState.fury_primed = false;
@@ -1732,8 +1755,17 @@ Deno.serve(async (req) => {
     // Both consume the player's one reaction per round.
     const playerReactionUsed = !!combatLog.world_state?.player_reaction_used;
     if (finalDamage > 0 && !playerReactionUsed) {
-      // Stone's Endurance takes priority (bigger reduction on average)
-      if ((charFull?.race === 'Goliath') && !(charFull?.short_rest_abilities?.stones_endurance_used)) {
+      const isRangedAttack = (currentCombatant.attack_type || 'melee') === 'ranged';
+      // Monk Deflect Missiles (PHB p.78): reaction vs a ranged weapon attack —
+      // reduce damage by 1d10 + DEX + monk level (M-C2 fix). Automatic.
+      if (charFull?.class === 'Monk' && (charFull?.level || 1) >= 3 && isRangedAttack) {
+        const deflect = rollDice(10) + statMod(charFull.dexterity || 10) + (charFull.level || 1);
+        const reduced = Math.max(0, finalDamage - deflect);
+        attackLogs.push(`[Deflect Missiles: -${deflect} → ${reduced}${reduced === 0 ? ' — missile caught!' : ''}]`);
+        finalDamage = reduced;
+        usedReaction = true;
+      // Stone's Endurance takes priority over Uncanny Dodge (bigger reduction on average)
+      } else if ((charFull?.race === 'Goliath') && !(charFull?.short_rest_abilities?.stones_endurance_used)) {
         const stoneRed = rollDice(12) + statMod(charFull.constitution || 10);
         finalDamage = Math.max(0, finalDamage - stoneRed);
         attackLogs.push(`[Stone's Endurance: -${stoneRed} → ${finalDamage}]`);
@@ -2147,113 +2179,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  // ─── PATIENT DEFENSE (Monk L2, PHB p.78) ───────────────────────────────────
-  // Bonus action: spend 1 Ki to gain the effects of the Dodge action. Does NOT end the turn.
-  if (action === 'patient_defense') {
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const character = await base44.entities.Character.get(character_id);
-    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
-
-    const level = character.level || 1;
-    if ((character.class || '').toLowerCase() !== 'monk' || level < 2) {
-      return Response.json({ error: 'Patient Defense requires Monk level 2+.', invalid: true }, { status: 400 });
-    }
-    const kiRemaining = character.ki_points_remaining ?? 0;
-    if (kiRemaining <= 0) {
-      return Response.json({ error: 'No Ki points remaining.', invalid: true }, { status: 400 });
-    }
-    if (combatLog.world_state?.bonus_action_used) {
-      return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
-    }
-
-    await base44.entities.Character.update(character_id, {
-      ki_points_remaining: Math.max(0, kiRemaining - 1),
-    });
-
-    const logEntry = {
-      round: combatLog.round, actor: character.name, action: 'patient_defense',
-      text: `🛡️ ${character.name} uses Patient Defense — gains the effects of Dodge (attacks against them have disadvantage). (${Math.max(0, kiRemaining - 1)} Ki remaining)`,
-    };
-
-    // Set player_dodging + consume bonus action — do NOT advance the turn
-    await base44.entities.CombatLog.update(combat_id, {
-      log_entries: [...(combatLog.log_entries || []), logEntry],
-      world_state: { ...(combatLog.world_state || {}), player_dodging: true, bonus_action_used: true },
-    });
-
-    return Response.json({ success: true, log_entry: logEntry, ki_remaining: Math.max(0, kiRemaining - 1) });
-  }
-
-  // ─── STUNNING STRIKE (Monk L5, PHB p.79) ───────────────────────────────────
-  // After hitting with a melee weapon attack, spend 1 Ki to force a CON save.
-  // On failure, the target is stunned until the end of your next turn.
-  // Does NOT consume an action — it's a rider on a melee hit.
-  if (action === 'stunning_strike') {
-    const { target_id } = payload || {};
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const character = await base44.entities.Character.get(character_id);
-    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
-
-    const level = character.level || 1;
-    if ((character.class || '').toLowerCase() !== 'monk' || level < 5) {
-      return Response.json({ error: 'Stunning Strike requires Monk level 5+.', invalid: true }, { status: 400 });
-    }
-    const kiRemaining = character.ki_points_remaining ?? 0;
-    if (kiRemaining <= 0) {
-      return Response.json({ error: 'No Ki points remaining.', invalid: true }, { status: 400 });
-    }
-
-    const combatants = [...combatLog.combatants];
-    const target = combatants.find(c => c.id === target_id);
-    if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });
-    if (!target.is_conscious) {
-      return Response.json({ error: 'Target is already downed.', invalid: true }, { status: 400 });
-    }
-
-    // Ki save DC = 8 + proficiency + WIS (PHB p.79)
-    const wisMod = statMod(character.wisdom || 10);
-    const profBonus = character.proficiency_bonus || 2;
-    const kiDC = 8 + wisMod + profBonus;
-
-    // Target CON save
-    const targetCon = target.constitution || 10;
-    const saveRoll = rollD20() + statMod(targetCon);
-    const saveFailed = saveRoll < kiDC;
-
-    // Spend 1 Ki regardless of outcome
-    await base44.entities.Character.update(character_id, {
-      ki_points_remaining: Math.max(0, kiRemaining - 1),
-    });
-
-    let logText;
-    if (saveFailed) {
-      // Apply stunned condition until end of monk's next turn
-      const existing = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
-      if (!existing.includes('stunned')) {
-        target.conditions = [...(target.conditions || []), { name: 'stunned', source: 'Stunning Strike', save_dc: kiDC, save_ability: 'constitution', caster: character.name }];
-      }
-      logText = `💥 ${character.name} uses Stunning Strike! ${target.name} fails a CON save (${saveRoll} vs DC ${kiDC}) and is STUNNED until the end of ${character.name}'s next turn!`;
-    } else {
-      logText = `${character.name} uses Stunning Strike! ${target.name} resists (CON save ${saveRoll} vs DC ${kiDC}).`;
-    }
-
-    const logEntry = {
-      round: combatLog.round, actor: character.name, action: 'stunning_strike', target: target.name,
-      hit: saveFailed, text: logText,
-    };
-
-    const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
-
-    // Stunning Strike does NOT consume an action or bonus action
-    await base44.entities.CombatLog.update(combat_id, {
-      combatants: updatedCombatants,
-      log_entries: [...(combatLog.log_entries || []), logEntry],
-    });
-
-    return Response.json({
-      success: saveFailed, log_entry: logEntry, ki_remaining: Math.max(0, kiRemaining - 1),
-    });
-  }
+  // Monk Patient Defense / Step of the Wind / Stunning Strike were extracted to
+  // base44/functions/monkActions/entry.ts to keep this file within size limits.
+  // Flurry of Blows remains above (it needs the turn-advancement helpers).
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ACTION: next_turn — simply advance the initiative tracker (used when the

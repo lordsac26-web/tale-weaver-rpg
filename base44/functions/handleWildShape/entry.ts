@@ -59,22 +59,29 @@ Deno.serve(async (req) => {
   if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
   if (character.created_by !== user.email) return Response.json({ error: 'Forbidden' }, { status: 403 });
 
-  // Only Druids can Wild Shape
-  if ((character.class || '').toLowerCase() !== 'druid') {
+  // Wild Shape scales on DRUID levels, not total character level (PHB p.66).
+  // Multiclass characters with Druid levels can Wild Shape; their DRUID level
+  // drives CR caps, movement gates, and Moon Circle scaling (H-C1 fix).
+  const mcArr = Array.isArray(character.multiclass) ? character.multiclass : [];
+  const druidMC = mcArr.find(m => (m?.class || '').toLowerCase() === 'druid');
+  const isPrimaryDruid = (character.class || '').toLowerCase() === 'druid';
+  const level = isPrimaryDruid ? (character.level || 1) : (druidMC?.levels || 0);
+  if (level === 0) {
     return Response.json({ error: 'Only Druids can use Wild Shape (PHB p.66).', invalid: true }, { status: 400 });
   }
-
-  const level = character.level || 1;
   if (level < 2) {
     return Response.json({ error: 'Wild Shape is gained at Druid level 2.', invalid: true }, { status: 400 });
   }
 
-  const isCircleOfMoon = (character.subclass || '').toLowerCase().includes('moon');
+  const druidSubclass = isPrimaryDruid ? (character.subclass || '') : (druidMC?.subclass || '');
+  const isCircleOfMoon = druidSubclass.toLowerCase().includes('moon');
 
   // Current use tracking stored in character.short_rest_abilities.wild_shape_used
   const sra = character.short_rest_abilities || {};
   const usedCount = sra.wild_shape_used || 0;
-  const maxUses = 2; // PHB p.66: 2 uses recovered on short or long rest
+  // PHB p.66: 2 uses, recovered on a short or long rest.
+  // Archdruid (Druid 20, PHB p.67): unlimited Wild Shape uses (M-C3 fix).
+  const maxUses = level >= 20 ? 9999 : 2;
 
   // ── check_uses ─────────────────────────────────────────────────────────────
   if (action === 'check_uses') {

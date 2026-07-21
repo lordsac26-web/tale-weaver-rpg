@@ -5,7 +5,7 @@ import { getFightingStyleDesc } from './abilityHelpers';
 
 // Build Paladin abilities: Lay on Hands, Fighting Style, Divine Smite.
 export function buildPaladinAbilities(ctx) {
-  const { character, level, longRestAbilities, onMessage, onAbilityUsed } = ctx;
+  const { character, level, longRestAbilities, onMessage, onAbilityUsed, openLayOnHands } = ctx;
   const abilities = [];
 
   // Lay on Hands
@@ -21,22 +21,13 @@ export function buildPaladinAbilities(ctx) {
     bgColor: 'rgba(8,40,18,0.7)',
     activeBg: 'rgba(15,65,30,0.85)',
     type: 'action',
-    description: `Action. Heal up to ${lohLeft} HP remaining (pool of ${lohMax}). 1 HP cures disease/poison instead.`,
-    shortDesc: `Heal up to ${lohLeft}/${lohMax} HP`,
+    description: `Action. Choose how many points to spend — heal that many HP (pool of ${lohMax}), or spend 1 point to cure a disease/poison.`,
+    shortDesc: `${lohLeft}/${lohMax} points — pick amount`,
     restType: 'long',
     used: lohLeft <= 0,
     usedLabel: `Pool depleted (${lohMax} on long rest)`,
     available: lohLeft > 0,
-    onUse: async () => {
-      const heal = Math.min(lohLeft, character.hp_max - (character.hp_current || 0));
-      const newHp = (character.hp_current || 0) + heal;
-      await base44.entities.Character.update(character.id, {
-        hp_current: newHp,
-        long_rest_abilities: { ...longRestAbilities, lay_on_hands_used: lohUsed + heal }
-      });
-      onMessage?.(`🙏 Lay on Hands! ${character.name} heals ${heal} HP (${newHp}/${character.hp_max}).`);
-      onAbilityUsed?.('lay_on_hands', { heal, newHp });
-    }
+    onUse: () => openLayOnHands?.(),
   });
 
   // Paladin Fighting Style (level 2+)

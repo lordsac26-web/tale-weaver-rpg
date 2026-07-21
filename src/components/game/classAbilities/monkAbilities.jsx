@@ -14,10 +14,11 @@ export function buildMonkAbilities(ctx) {
   const wisMod = Math.floor(((character.wisdom || 10) - 10) / 2);
   const kiDC = 8 + profBonus + wisMod;
 
-  // Helper: invoke a Monk combat engine action
-  const invokeCombat = async (action, payload = {}) => {
+  // Helper: invoke a Monk combat action. Flurry of Blows lives in combatEngine
+  // (it advances the turn); the other Ki abilities live in monkActions.
+  const invokeCombat = async (action, payload = {}, fnName = 'monkActions') => {
     try {
-      const res = await base44.functions.invoke('combatEngine', {
+      const res = await base44.functions.invoke(fnName, {
         action,
         session_id: combat?.session_id,
         combat_id: combat?.id,
@@ -75,7 +76,7 @@ export function buildMonkAbilities(ctx) {
       used: kiLeft <= 0 || bonusActionUsed,
       usedLabel: kiLeft <= 0 ? 'No Ki remaining' : 'Bonus action used',
       available: kiLeft > 0 && !bonusActionUsed && !!selectedTargetId,
-      onUse: () => invokeCombat('flurry_of_blows', { target_id: selectedTargetId }),
+      onUse: () => invokeCombat('flurry_of_blows', { target_id: selectedTargetId }, 'combatEngine'),
     });
 
     // Patient Defense — Dodge as bonus action (1 Ki, PHB p.78)
@@ -93,6 +94,40 @@ export function buildMonkAbilities(ctx) {
       usedLabel: kiLeft <= 0 ? 'No Ki' : 'Bonus action used',
       available: kiLeft > 0 && !bonusActionUsed,
       onUse: () => invokeCombat('patient_defense'),
+    });
+
+    // Step of the Wind — Dash/Disengage as bonus action (1 Ki, PHB p.78)
+    abilities.push({
+      id: 'step_of_the_wind',
+      name: 'Step of the Wind',
+      icon: <Zap className="w-4 h-4" />,
+      color: '#7dd3fc',
+      borderColor: 'rgba(90,200,250,0.35)',
+      bgColor: 'rgba(4,25,40,0.65)',
+      type: 'bonus_action',
+      description: `Bonus Action: Disengage or Dash, and your jump distance is doubled this turn. Costs 1 Ki. (${kiLeft} Ki remaining)`,
+      shortDesc: `Dash/Disengage (1 Ki — ${kiLeft} left)`,
+      used: kiLeft <= 0 || bonusActionUsed,
+      usedLabel: kiLeft <= 0 ? 'No Ki' : 'Bonus action used',
+      available: kiLeft > 0 && !bonusActionUsed,
+      onUse: () => invokeCombat('step_of_the_wind', { mode: 'disengage' }),
+    });
+  }
+
+  // Deflect Missiles (L3+, PHB p.78) — automatic reaction, handled by the engine
+  if (level >= 3) {
+    abilities.push({
+      id: 'deflect_missiles',
+      name: 'Deflect Missiles',
+      icon: <Shield className="w-4 h-4" />,
+      color: '#a5b4fc',
+      borderColor: 'rgba(140,150,250,0.3)',
+      bgColor: 'rgba(12,12,45,0.5)',
+      type: 'passive',
+      description: `When a ranged weapon attack hits you, your reaction automatically reduces its damage by 1d10 + DEX + your Monk level. Reduced to 0 = missile caught.`,
+      shortDesc: 'Auto: -1d10+DEX+level vs ranged',
+      used: false,
+      available: true,
     });
   }
 
