@@ -29,6 +29,7 @@ import LevelUpModal from '@/components/game/LevelUpModal';
 import { canLevelUp } from '@/components/game/levelUpUtils';
 import SkillCheckRollModal from '@/components/game/SkillCheckRollModal';
 import { getManualRollEnabled } from '@/components/game/rollPreferences';
+import { resolveSkillCheck, canonicalSkillName } from '@/components/game/skillCheckResolver';
 
 export default function Game() {
   const navigate = useNavigate();
@@ -209,14 +210,17 @@ export default function Game() {
     }
   };
 
-  // Compute skill check modifier from character stats + proficiency
+  // Compute skill check modifier from character stats + proficiency.
+  // Normalizes AI-generated labels like "STR Athletics" or "Athletics (Strength)"
+  // to the canonical skill so the stat and proficiency lookups never miss.
   const computeSkillModifier = (skillName) => {
     if (!character) return 0;
-    const stat = SKILL_STAT_MAP[skillName];
+    const { skill, stat } = resolveSkillCheck(skillName);
     const base = stat ? calcStatMod(character[stat]) : 0;
+    if (!skill) return base; // raw ability check (no skill proficiency applies)
     const prof = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
     // character.skills stores exact skill name as key, value is 'proficient', 'expert', or true (legacy)
-    const skillVal = (character.skills || {})[skillName];
+    const skillVal = (character.skills || {})[skill];
     const isProficient = skillVal === 'proficient' || skillVal === true;
     const isExpert = skillVal === 'expert';
     return base + (isExpert ? prof * 2 : isProficient ? prof : 0);
@@ -325,7 +329,7 @@ export default function Game() {
       return;
     }
 
-    const equipAdv = getEquipmentAdvantage(character?.equipped, choice.skill_check);
+    const equipAdv = getEquipmentAdvantage(character?.equipped, canonicalSkillName(choice.skill_check));
     const modifier = computeSkillModifier(choice.skill_check);
 
     // Manual mode: open the dice roller pre-configured for this check. The story
@@ -422,7 +426,7 @@ export default function Game() {
       return;
     }
 
-    const equipAdv = getEquipmentAdvantage(character?.equipped, skill);
+    const equipAdv = getEquipmentAdvantage(character?.equipped, canonicalSkillName(skill));
     const modifier = computeSkillModifier(skill);
 
     // Manual mode: prompt the player to roll the configured dice.
@@ -529,7 +533,7 @@ export default function Game() {
 
     let success = true;
     if (requires_check && skill && dc) {
-      const equipAdv = getEquipmentAdvantage(character?.equipped, skill);
+      const equipAdv = getEquipmentAdvantage(character?.equipped, canonicalSkillName(skill));
       const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
       const modifier = computeSkillModifier(skill);
       const final = raw + modifier;
