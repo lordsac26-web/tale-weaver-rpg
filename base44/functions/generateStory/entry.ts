@@ -344,6 +344,13 @@ Write a gripping 1-2 paragraph combat narrative.`;
         }
       }
 
+      // XP earned — persist to the character record so progress and level-ups are real
+      if (result.xp_earned && character) {
+        await base44.entities.Character.update(character.id, {
+          xp: (character.xp || 0) + result.xp_earned
+        });
+      }
+
       // TODO: Add your full loot + alignment code here if needed
     }
 
