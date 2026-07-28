@@ -16,13 +16,13 @@ Deno.serve(async (req) => {
     }
 
     // Fetch NPC data
-    const npc = await base44.entities.NPC.get(npc_id);
+    const npc = await base44.asServiceRole.entities.NPC.get(npc_id);
     if (!npc) {
       return Response.json({ error: 'NPC not found' }, { status: 404 });
     }
 
     // Fetch player character
-    const character = await base44.entities.Character.get(character_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) {
       return Response.json({ error: 'Character not found' }, { status: 404 });
     }
@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     // Fetch active session if provided
     let sessionContext = '';
     if (session_id) {
-      const session = await base44.entities.GameSession.get(session_id);
+      const session = await base44.asServiceRole.entities.GameSession.get(session_id);
       if (session) {
         sessionContext = `
 Current quest context:

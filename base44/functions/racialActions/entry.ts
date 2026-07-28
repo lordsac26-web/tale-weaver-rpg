@@ -5,6 +5,7 @@ import { statMod, rollD20, rollDice, condName } from '../../shared/dice.ts';
 // Hungry Jaws, Fury of the Small, Draconic Cry, Shell Defense). Kept separate from
 // combatActions to respect per-file size limits. Reads/writes the same CombatLog.
 Deno.serve(async (req) => {
+  try {
   const base44 = createClientFromRequest(req);
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -248,4 +249,7 @@ Deno.serve(async (req) => {
   }
 
   return Response.json({ error: 'Unknown action. Use: aasimar_transform | healing_hands | hungry_jaws | fury_of_the_small | draconic_cry | shell_defense' }, { status: 400 });
+  } catch (error) {
+    return Response.json({ error: error.message || 'Racial action error' }, { status: 500 });
+  }
 });

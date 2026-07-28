@@ -5,6 +5,7 @@ import { statMod, rollD20, rollDice } from '../../shared/dice.ts';
 // in the combatEngine (they arm world_state flags) or that resolve immediately.
 // Kept separate from combatActions to respect file-size limits.
 Deno.serve(async (req) => {
+  try {
   const base44 = createClientFromRequest(req);
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -233,4 +234,7 @@ Deno.serve(async (req) => {
   }
 
   return Response.json({ error: 'Unknown action. Use: channel_divinity_radiance_of_dawn | channel_divinity_destructive_wrath | channel_divinity_path_to_grave | planar_warrior | cutting_words_arm | combat_inspiration | use_portent' }, { status: 400 });
+  } catch (error) {
+    return Response.json({ error: error.message || 'Subclass action error' }, { status: 500 });
+  }
 });

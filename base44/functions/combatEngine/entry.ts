@@ -21,6 +21,7 @@ import {
  * racial abilities in racialActions/combatActions; subclass activations in subclassActions.
  */
 Deno.serve(async (req) => {
+  try {
   const base44 = createClientFromRequest(req);
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -45,4 +46,7 @@ Deno.serve(async (req) => {
   const handler = HANDLERS[action];
   if (!handler) return Response.json({ error: 'Unknown action' }, { status: 400 });
   return await handler(ctx);
+  } catch (error) {
+    return Response.json({ error: error.message || 'Combat engine error' }, { status: 500 });
+  }
 });

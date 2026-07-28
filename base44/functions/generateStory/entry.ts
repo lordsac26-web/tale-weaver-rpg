@@ -14,14 +14,14 @@ Deno.serve(async (req) => {
 
     const { session_id, action, choice_index, custom_input } = await req.json();
 
-    const session = await base44.entities.GameSession.get(session_id);
+    const session = await base44.asServiceRole.entities.GameSession.get(session_id);
     if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
 
-    const character = await base44.entities.Character.get(session.character_id);
+    const character = await base44.asServiceRole.entities.Character.get(session.character_id);
     const charLevel = character?.level || 1;
 
     // ====================== MONSTER LOADING ======================
-    const monsters = await base44.entities.Monster.list('-created_date', 50);
+    const monsters = await base44.asServiceRole.entities.Monster.list('-created_date', 50);
     
     const parseCR = (crStr) => {
       if (!crStr) return 999;
@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
       return `${playerLine}${e.text}`;
     }).join('\n\n');
 
-    const journalNotes = await base44.entities.PlayerNote.filter({ session_id }, '-updated_date', 20);
+    const journalNotes = await base44.asServiceRole.entities.PlayerNote.filter({ session_id }, '-updated_date', 20);
     const journalSummary = journalNotes.length
       ? journalNotes.map(note => `- [${note.category || 'General'}] ${note.title}: ${String(note.content || '').slice(0, 200)}`).join('\n')
       : 'No campaign journal notes yet.';
@@ -242,7 +242,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
     // clear in_combat so the client never gets stuck on the combat panel. A
     // combat_trigger sets it true. This runs even when result.narrative is empty.
     if (action === 'choice') {
-      await base44.entities.GameSession.update(session_id, {
+      await base44.asServiceRole.entities.GameSession.update(session_id, {
         in_combat: !!result.combat_trigger,
       });
     }
@@ -323,14 +323,14 @@ Write a gripping 1-2 paragraph combat narrative.`;
         }
       }
 
-      await base44.entities.GameSession.update(session_id, updateData);
+      await base44.asServiceRole.entities.GameSession.update(session_id, updateData);
 
       // Character condition update
       if (result.new_condition && character) {
         const currentConditions = character.conditions || [];
         const condName = result.new_condition;
         if (!currentConditions.some(c => (typeof c === 'string' ? c : c.name) === condName)) {
-          await base44.entities.Character.update(character.id, {
+          await base44.asServiceRole.entities.Character.update(character.id, {
             conditions: [...currentConditions, { name: condName, source: 'story', applied_at: new Date().toISOString() }]
           });
         }
@@ -340,13 +340,13 @@ Write a gripping 1-2 paragraph combat narrative.`;
       if (result.hp_change && character) {
         const newHp = Math.max(0, Math.min(character.hp_max || 0, (character.hp_current || 0) + result.hp_change));
         if (newHp !== character.hp_current) {
-          await base44.entities.Character.update(character.id, { hp_current: newHp });
+          await base44.asServiceRole.entities.Character.update(character.id, { hp_current: newHp });
         }
       }
 
       // XP earned — persist to the character record so progress and level-ups are real
       if (result.xp_earned && character) {
-        await base44.entities.Character.update(character.id, {
+        await base44.asServiceRole.entities.Character.update(character.id, {
           xp: (character.xp || 0) + result.xp_earned
         });
       }

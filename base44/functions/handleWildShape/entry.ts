@@ -46,6 +46,7 @@ const maxCRForLevel = (level) => {
 };
 
 Deno.serve(async (req) => {
+  try {
   const base44 = createClientFromRequest(req);
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -469,4 +470,7 @@ Deno.serve(async (req) => {
   }
 
   return Response.json({ error: 'action must be transform | revert | check_uses | beast_damage | elemental_wild_shape | slot_heal', invalid: true }, { status: 400 });
+  } catch (error) {
+    return Response.json({ error: error.message || 'Wild Shape error' }, { status: 500 });
+  }
 });

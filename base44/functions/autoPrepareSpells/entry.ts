@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { character_id } = await req.json();
-    const character = await base44.entities.Character.get(character_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
     if (character.created_by !== user.email) return Response.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
       preparedSet.add(spell); // domain spells are always prepared
     }
 
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       spells_known: Array.from(knownSet),
       spells_prepared: Array.from(preparedSet),
     });

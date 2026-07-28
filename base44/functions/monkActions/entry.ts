@@ -6,6 +6,7 @@ import { statMod, rollD20 } from '../../shared/dice.ts';
 // turn-advancement helpers); Patient Defense, Step of the Wind, and Stunning
 // Strike only touch the CombatLog directly and live here.
 Deno.serve(async (req) => {
+  try {
   const base44 = createClientFromRequest(req);
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -114,4 +115,7 @@ Deno.serve(async (req) => {
   }
 
   return Response.json({ error: 'Unknown action. Use: patient_defense | step_of_the_wind | stunning_strike' }, { status: 400 });
+  } catch (error) {
+    return Response.json({ error: error.message || 'Monk action error' }, { status: 500 });
+  }
 });

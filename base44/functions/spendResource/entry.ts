@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     const { resource, character_id, amount = 1, ability } = await req.json();
     if (!character_id) return Response.json({ error: 'character_id required' }, { status: 400 });
 
-    const character = await base44.entities.Character.get(character_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
 
     const statMod = (s) => Math.floor(((s || 10) - 10) / 2);
@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
         return Response.json({ error: `Not enough Ki (need ${cost}, have ${remaining}).`, invalid: true }, { status: 400 });
       }
       const newRemaining = remaining - cost;
-      await base44.entities.Character.update(character_id, {
+      await base44.asServiceRole.entities.Character.update(character_id, {
         ki_points_max: max,
         ki_points_remaining: newRemaining,
       });
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
         return Response.json({ error: `No Bardic Inspiration uses left (refreshes on a rest).`, invalid: true }, { status: 400 });
       }
       const newRemaining = remaining - cost;
-      await base44.entities.Character.update(character_id, {
+      await base44.asServiceRole.entities.Character.update(character_id, {
         bardic_inspiration_max: max,
         bardic_inspiration_remaining: newRemaining,
       });

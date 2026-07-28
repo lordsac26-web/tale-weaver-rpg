@@ -5,6 +5,7 @@ import { statMod, rollD20, rollDice } from '../../shared/dice.ts';
 // the main combatEngine to keep file sizes manageable. Each action reads/writes
 // the same CombatLog record that combatEngine uses.
 Deno.serve(async (req) => {
+  try {
   const base44 = createClientFromRequest(req);
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -589,4 +590,7 @@ Deno.serve(async (req) => {
   }
 
   return Response.json({ error: 'Unknown action. Use: companion_turn | breath_weapon | second_wind | channel_divinity_turn_undead | channel_divinity_guided_strike | channel_divinity_preserve_life | hidden_step | daunting_roar | adrenaline_rush | frenzy_attack | hexblade_curse' }, { status: 400 });
+  } catch (error) {
+    return Response.json({ error: error.message || 'Combat action error' }, { status: 500 });
+  }
 });

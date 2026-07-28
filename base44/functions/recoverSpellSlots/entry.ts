@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     }
 
     // Fetch character
-    const characters = await base44.entities.Character.filter({ id: character_id });
+    const characters = await base44.asServiceRole.entities.Character.filter({ id: character_id });
     const character = characters[0];
 
     if (!character) {
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
           
           if (recovered.length > 0) {
             // Mark Arcane Recovery as used
-            await base44.entities.Character.update(character_id, { arcane_recovery_used: true });
+            await base44.asServiceRole.entities.Character.update(character_id, { arcane_recovery_used: true });
           } else {
             recovered = ['No spell slots to recover with Arcane Recovery'];
           }
@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
       updates.arcane_recovery_used = false;
     }
 
-    await base44.entities.Character.update(character_id, updates);
+    await base44.asServiceRole.entities.Character.update(character_id, updates);
 
     const updatedCharacter = { ...character, ...updates };
 

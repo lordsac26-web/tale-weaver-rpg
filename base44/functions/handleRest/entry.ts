@@ -80,6 +80,7 @@ function getBardLevels(character) {
  * Restores HP, spell slots, hit dice, and class abilities per D&D 5E rules
  */
 Deno.serve(async (req) => {
+  try {
   const base44 = createClientFromRequest(req);
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -387,4 +388,7 @@ Deno.serve(async (req) => {
     restorations,
     narrative: rest_type === 'long' ? restNarrative : undefined
   });
+  } catch (error) {
+    return Response.json({ error: error.message || 'Rest error' }, { status: 500 });
+  }
 });

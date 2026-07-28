@@ -1,291 +1,61 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
-
 /**
- * Roll Dice Engine - All rolls computed server-side from DB state
- * Accepts: { session_id, character_id, roll_type, dice, dc, context }
- * Fetches active conditions + modifiers from DB before calculating
+ * Roll Dice Engine — pure math, no auth/session required.
+ *
+ * Accepts: { dice, modifier, advantage, disadvantage }
+ *   - dice: string like "1d20" or "2d6"
+ *   - modifier: number added to the final result (default 0)
+ *   - advantage: boolean — roll twice, take higher (single d20 only, PHB p.173)
+ *   - disadvantage: boolean — roll twice, take lower (single d20 only, PHB p.173)
+ *
+ * Returns: { rolls, total, modifier, final_result }
+ *   - rolls: array of raw die values (includes both rolls when adv/disadv)
+ *   - total: sum of kept dice (higher/lower die for adv/disadv on d20)
+ *   - modifier: the modifier passed in
+ *   - final_result: total + modifier
  */
 Deno.serve(async (req) => {
-  const base44 = createClientFromRequest(req);
-  const user = await base44.auth.me();
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const body = await req.json().catch(() => ({}));
+    const { dice, modifier = 0, advantage = false, disadvantage = false } = body;
 
-  const { session_id, character_id, roll_type, dice, dc, context, advantage, disadvantage, use_luck } = await req.json();
+    if (!dice || typeof dice !== 'string') {
+      return Response.json({ error: 'dice notation required (e.g. "1d20", "2d6")' }, { status: 400 });
+    }
 
-  // Parse dice notation e.g. "2d6", "1d20", "4d6"
-  const diceMatch = dice.match(/^(\d+)d(\d+)$/i);
-  if (!diceMatch) return Response.json({ error: 'Invalid dice notation' }, { status: 400 });
+    const match = dice.match(/^(\d+)d(\d+)$/i);
+    if (!match) {
+      return Response.json({ error: 'Invalid dice notation. Use format like "1d20" or "2d6".' }, { status: 400 });
+    }
 
-  const numDice = parseInt(diceMatch[1]);
-  const diceSides = parseInt(diceMatch[2]);
+    const numDice = parseInt(match[1]);
+    const diceSides = parseInt(match[2]);
+    const rollDie = () => Math.floor(Math.random() * diceSides) + 1;
 
-  // Roll the dice
-  let rawRolls = [];
-  for (let i = 0; i < numDice; i++) {
-    rawRolls.push(Math.floor(Math.random() * diceSides) + 1);
+    const rolls = [];
+    for (let i = 0; i < numDice; i++) rolls.push(rollDie());
+
+    // Advantage/disadvantage: roll a second d20, keep higher/lower (PHB p.173).
+    // Only applies to a single d20. Both set = cancel (neither applies).
+    const useAdv = !!advantage && !disadvantage;
+    const useDis = !!disadvantage && !advantage;
+    if (diceSides === 20 && numDice === 1 && (useAdv || useDis)) {
+      rolls.push(rollDie());
+    }
+
+    let total;
+    if (diceSides === 20 && numDice === 1 && useAdv) {
+      total = Math.max(rolls[0], rolls[1]);
+    } else if (diceSides === 20 && numDice === 1 && useDis) {
+      total = Math.min(rolls[0], rolls[1]);
+    } else {
+      total = rolls.reduce((a, b) => a + b, 0);
+    }
+
+    const mod = Number(modifier) || 0;
+    const finalResult = total + mod;
+
+    return Response.json({ rolls, total, modifier: mod, final_result: finalResult });
+  } catch (error) {
+    return Response.json({ error: error.message || 'Dice roll failed' }, { status: 500 });
   }
-
-  // Poisoned imposes disadvantage on attack rolls and ability checks (PHB p.292) — not a flat penalty.
-  // Determine effective disadvantage before resolving the d20.
-  let effectiveDisadvantage = !!disadvantage;
-  let effectiveAdvantage = !!advantage;
-
-  // Fetch character to get modifiers
-  let character = null;
-  let modifiersApplied = [];
-  let modifierTotal = 0;
-  let conditionsActive = [];
-
-  if (character_id) {
-    try {
-      const chars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
-      character = chars[0];
-    } catch (_e) {}
-  }
-
-  // ── EXHAUSTION (PHB p.291): determine forced disadvantage by roll category ──
-  // Level 1+: disadvantage on ability checks (incl. skills).
-  // Level 3+: also disadvantage on attack rolls and saving throws.
-  const isAttackRoll = ['attack_melee', 'attack_ranged', 'attack_spell'].includes(roll_type);
-  const normRoll = (roll_type || '').toLowerCase().replace(/\s+/g, '_');
-  const isSaveRoll = normRoll.includes('save') || normRoll.includes('saving_throw');
-  const isAbilityCheck = !isAttackRoll && !isSaveRoll; // skills + raw ability checks
-  let exhaustionDisadvantage = false;
-  let exhaustionLevel = character?.exhaustion_level || 0;
-  if (exhaustionLevel >= 1 && isAbilityCheck) exhaustionDisadvantage = true;
-  if (exhaustionLevel >= 3 && (isAttackRoll || isSaveRoll)) exhaustionDisadvantage = true;
-  if (exhaustionDisadvantage) effectiveDisadvantage = true;
-
-  // Advantage/Disadvantage for d20 rolls (advantage + disadvantage cancel, PHB p.173)
-  let effectiveRolls = [...rawRolls];
-  let luckUsed = false;
-  if (diceSides === 20 && numDice === 1) {
-    const netAdv = effectiveAdvantage && !effectiveDisadvantage;
-    const netDis = effectiveDisadvantage && !effectiveAdvantage;
-    if (netAdv) {
-      const roll2 = Math.floor(Math.random() * 20) + 1;
-      rawRolls.push(roll2);
-      effectiveRolls = [Math.max(rawRolls[0], roll2)];
-    } else if (netDis) {
-      const roll2 = Math.floor(Math.random() * 20) + 1;
-      rawRolls.push(roll2);
-      effectiveRolls = [Math.min(rawRolls[0], roll2)];
-    }
-
-    // ── LUCKY feat (PHB p.167): spend 1 luck point to roll an extra d20,
-    // then choose which die to use. We roll the extra die and keep the BEST
-    // result (most favourable for the player). Only valid on attack/check/save d20s.
-    if (use_luck && character && (character.luck_points_remaining || 0) > 0) {
-      const luckDie = Math.floor(Math.random() * 20) + 1;
-      rawRolls.push(luckDie);
-      effectiveRolls = [Math.max(effectiveRolls[0], luckDie)];
-      luckUsed = true;
-      modifiersApplied.push({ source: 'Lucky (rerolled, kept best)', value: 0, type: 'feat' });
-      // Consume a luck point
-      await base44.asServiceRole.entities.Character.update(character_id, {
-        luck_points_remaining: Math.max(0, (character.luck_points_remaining || 0) - 1)
-      });
-    }
-
-    if (exhaustionDisadvantage) {
-      modifiersApplied.push({ source: `Exhaustion ${exhaustionLevel} (disadvantage)`, value: 0, type: 'condition' });
-    }
-  }
-
-  if (character) {
-    // Active conditions (poisoned = disadv, stunned, etc.)
-    const conditions = character.conditions || [];
-    conditionsActive = conditions.map(c => c.name || c);
-
-    // Active temporary modifiers
-    const activeMods = character.active_modifiers || [];
-    
-    // Determine which modifiers apply to this roll type
-    for (const mod of activeMods) {
-      if (!mod.expires_at || new Date(mod.expires_at) > new Date()) {
-        if (!mod.applies_to || mod.applies_to === roll_type || mod.applies_to === 'all') {
-          modifiersApplied.push({ source: mod.source, value: mod.value, type: mod.type });
-          modifierTotal += mod.value;
-        }
-      }
-    }
-
-    // Stat-based modifiers per roll type
-    const statMod = (stat) => Math.floor(((stat || 10) - 10) / 2);
-    const profBonus = character.proficiency_bonus || 2;
-
-    // Normalize roll_type: lowercase, replace spaces with underscores
-    const normalizedRollType = roll_type.toLowerCase().replace(/\s+/g, '_');
-
-    // Determine spellcasting ability based on class
-    const spellcastingAbilityMap = {
-      wizard: 'intelligence', eldritch_knight: 'intelligence', arcane_trickster: 'intelligence',
-      cleric: 'wisdom', druid: 'wisdom', ranger: 'wisdom',
-      bard: 'charisma', paladin: 'charisma', sorcerer: 'charisma', warlock: 'charisma'
-    };
-    const charClass = (character.class || '').toLowerCase();
-    const spellcastingAbility = spellcastingAbilityMap[charClass] || 'intelligence';
-    const spellMod = statMod(character[spellcastingAbility]);
-
-    // Helper: proficiency for a skill key
-    const skillProf = (key) => {
-      const val = character.skills?.[key];
-      return val === 'expert' ? profBonus * 2 : val === 'proficient' ? profBonus : 0;
-    };
-
-    const rollModMap = {
-      // Attacks
-      'attack_melee': statMod(character.strength) + (character.equipped?.weapon?.attack_bonus || 0),
-      'attack_ranged': statMod(character.dexterity) + (character.equipped?.weapon?.attack_bonus || 0),
-      'attack_spell': spellMod + profBonus + (character.equipped?.spellcasting_focus?.bonus || 0),
-      // Initiative
-      'initiative': statMod(character.dexterity),
-      // Raw ability checks
-      'strength_check': statMod(character.strength),
-      'dexterity_check': statMod(character.dexterity),
-      'constitution_check': statMod(character.constitution),
-      'intelligence_check': statMod(character.intelligence),
-      'wisdom_check': statMod(character.wisdom),
-      'charisma_check': statMod(character.charisma),
-      // Saving throws
-      'strength_save': statMod(character.strength) + (character.saving_throws?.strength ? profBonus : 0),
-      'dexterity_save': statMod(character.dexterity) + (character.saving_throws?.dexterity ? profBonus : 0),
-      'constitution_save': statMod(character.constitution) + (character.saving_throws?.constitution ? profBonus : 0),
-      'intelligence_save': statMod(character.intelligence) + (character.saving_throws?.intelligence ? profBonus : 0),
-      'wisdom_save': statMod(character.wisdom) + (character.saving_throws?.wisdom ? profBonus : 0),
-      'charisma_save': statMod(character.charisma) + (character.saving_throws?.charisma ? profBonus : 0),
-      // Skills (STR)
-      'athletics': statMod(character.strength) + skillProf('athletics'),
-      // Skills (DEX)
-      'acrobatics': statMod(character.dexterity) + skillProf('acrobatics'),
-      'sleight_of_hand': statMod(character.dexterity) + skillProf('sleight_of_hand'),
-      'stealth': statMod(character.dexterity) + skillProf('stealth'),
-      // Skills (INT)
-      'arcana': statMod(character.intelligence) + skillProf('arcana'),
-      'history': statMod(character.intelligence) + skillProf('history'),
-      'investigation': statMod(character.intelligence) + skillProf('investigation'),
-      'nature': statMod(character.intelligence) + skillProf('nature'),
-      'religion': statMod(character.intelligence) + skillProf('religion'),
-      // Skills (WIS)
-      'animal_handling': statMod(character.wisdom) + skillProf('animal_handling'),
-      'insight': statMod(character.wisdom) + skillProf('insight'),
-      'medicine': statMod(character.wisdom) + skillProf('medicine'),
-      'perception': statMod(character.wisdom) + skillProf('perception'),
-      'survival': statMod(character.wisdom) + skillProf('survival'),
-      // Skills (CHA)
-      'deception': statMod(character.charisma) + skillProf('deception'),
-      'intimidation': statMod(character.charisma) + skillProf('intimidation'),
-      'performance': statMod(character.charisma) + skillProf('performance'),
-      'persuasion': statMod(character.charisma) + skillProf('persuasion'),
-    };
-
-    // Look up by normalized roll type — also try common aliases and partial matches
-    const aliasMap = {
-      // Raw stat names -> check key
-      'strength': 'strength_check', 'str': 'strength_check',
-      'dexterity': 'dexterity_check', 'dex': 'dexterity_check',
-      'constitution': 'constitution_check', 'con': 'constitution_check',
-      'intelligence': 'intelligence_check', 'int': 'intelligence_check',
-      'wisdom': 'wisdom_check', 'wis': 'wisdom_check',
-      'charisma': 'charisma_check', 'cha': 'charisma_check',
-      // "X check" -> strip " check"
-      'strength_check': 'strength_check', 'dexterity_check': 'dexterity_check',
-      'constitution_check': 'constitution_check', 'intelligence_check': 'intelligence_check',
-      'wisdom_check': 'wisdom_check', 'charisma_check': 'charisma_check',
-      // Saving throws aliases
-      'strength_saving_throw': 'strength_save', 'dexterity_saving_throw': 'dexterity_save',
-      'constitution_saving_throw': 'constitution_save', 'intelligence_saving_throw': 'intelligence_save',
-      'wisdom_saving_throw': 'wisdom_save', 'charisma_saving_throw': 'charisma_save',
-    };
-
-    // Clean up common suffixes/prefixes so "Charisma Check" -> "charisma"
-    let lookupKey = normalizedRollType
-      .replace(/_check$/, '')   // "charisma_check" -> "charisma"
-      .replace(/_save$/, '_save')
-      .replace(/_saving_throw$/, '_save');
-
-    // Try direct map first, then alias, then stripped key, then partial match
-    const resolvedKey =
-      rollModMap[normalizedRollType] !== undefined ? normalizedRollType :
-      rollModMap[aliasMap[normalizedRollType]] !== undefined ? aliasMap[normalizedRollType] :
-      rollModMap[aliasMap[lookupKey]] !== undefined ? aliasMap[lookupKey] :
-      rollModMap[lookupKey] !== undefined ? lookupKey :
-      // Partial match: find first key containing the roll_type word
-      Object.keys(rollModMap).find(k => k.includes(lookupKey) || lookupKey.includes(k.replace(/_check|_save/, ''))) || null;
-
-    if (resolvedKey && rollModMap[resolvedKey] !== undefined) {
-      const baseMod = rollModMap[resolvedKey];
-      modifiersApplied.push({ source: `${resolvedKey} (stat+skill)`, value: baseMod, type: 'base' });
-      modifierTotal += baseMod;
-    }
-
-    // Poisoned: disadvantage on attack rolls and ability checks (PHB p.292), NOT a flat penalty.
-    // A skill/save/check or attack counts; apply disadvantage if not already advantaged/disadvantaged.
-    const isAttack = ['attack_melee', 'attack_ranged', 'attack_spell'].includes(roll_type);
-    const isAbilityCheckRoll = resolvedKey && !resolvedKey.endsWith('_save'); // skills + ability checks (not saves)
-    const poisonApplies = isAttack || isAbilityCheckRoll;
-    if (conditionsActive.includes('poisoned') && poisonApplies && diceSides === 20 && numDice === 1 && !effectiveDisadvantage && !effectiveAdvantage) {
-      const roll2 = Math.floor(Math.random() * 20) + 1;
-      rawRolls.push(roll2);
-      effectiveRolls = [Math.min(effectiveRolls[0], roll2)];
-      effectiveDisadvantage = true;
-      modifiersApplied.push({ source: 'Poisoned (disadvantage)', value: 0, type: 'condition' });
-    }
-  }
-
-  // Compute raw total AFTER all advantage/disadvantage resolution (incl. poisoned)
-  const rawTotal = effectiveRolls.reduce((a, b) => a + b, 0);
-
-  // Fetch environmental modifiers from session
-  if (session_id) {
-    try {
-      const sessions = await base44.asServiceRole.entities.GameSession.filter({ id: session_id });
-      const session = sessions[0];
-      if (session?.environmental_modifiers) {
-        for (const envMod of session.environmental_modifiers) {
-          if (!envMod.applies_to || envMod.applies_to === roll_type || envMod.applies_to === 'all') {
-            modifiersApplied.push({ source: envMod.source, value: envMod.value, type: 'environmental' });
-            modifierTotal += envMod.value;
-          }
-        }
-      }
-    } catch (_e) {}
-  }
-
-  const finalResult = rawTotal + modifierTotal;
-  const success = dc !== undefined ? finalResult >= dc : null;
-
-  // Store roll record
-  const rollRecord = {
-    session_id: session_id || '',
-    character_id: character_id || '',
-    roll_type,
-    dice,
-    raw_rolls: rawRolls,
-    raw_total: rawTotal,
-    modifiers_applied: modifiersApplied,
-    modifier_total: modifierTotal,
-    final_result: finalResult,
-    dc: dc || null,
-    success,
-    context: context || '',
-    conditions_active: conditionsActive
-  };
-
-  await base44.asServiceRole.entities.RollRecord.create(rollRecord);
-
-  return Response.json({
-    raw_rolls: rawRolls,
-    raw_total: rawTotal,
-    modifiers_applied: modifiersApplied,
-    modifier_total: modifierTotal,
-    final_result: finalResult,
-    dc,
-    success,
-    conditions_active: conditionsActive,
-    luck_used: luckUsed,
-    luck_points_remaining: luckUsed ? Math.max(0, (character?.luck_points_remaining || 0) - 1) : (character?.luck_points_remaining || 0),
-    exhaustion_level: exhaustionLevel,
-    exhaustion_disadvantage: exhaustionDisadvantage
-  });
 });

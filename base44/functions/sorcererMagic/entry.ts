@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { action, character_id, slot_level, combat_id } = await req.json();
-    const character = await base44.entities.Character.get(character_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
     if (character.created_by !== user.email) return Response.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
       if (slotsUsed <= 0) return Response.json({ error: `All ${slot_level}th-level slots already available.`, invalid: true }, { status: 400 });
 
       const newSP = spCurrent - spCost;
-      await base44.entities.Character.update(character_id, {
+      await base44.asServiceRole.entities.Character.update(character_id, {
         sorcery_points_current: newSP,
         sorcery_points_max: spMax,
         spell_slots: { ...(character.spell_slots || {}), [`level_${slot_level}`]: slotsUsed - 1 },
@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
       const spCurrent = character.sorcery_points_current ?? 0;
       const spMax = character.sorcery_points_max ?? level;
       const newSP = Math.min(spMax, spCurrent + spGained);
-      await base44.entities.Character.update(character_id, {
+      await base44.asServiceRole.entities.Character.update(character_id, {
         sorcery_points_current: newSP,
         sorcery_points_max: spMax,
         spell_slots: { ...(character.spell_slots || {}), [`level_${slot_level}`]: slotsUsed + 1 },
@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
       if (!isWildMagic) return Response.json({ error: 'Tides of Chaos requires Wild Magic origin.', invalid: true }, { status: 400 });
       const lra = character.long_rest_abilities || {};
       if (lra.tides_of_chaos_used) return Response.json({ error: 'Tides of Chaos already used. Long rest to regain.', invalid: true }, { status: 400 });
-      await base44.entities.Character.update(character_id, { long_rest_abilities: { ...lra, tides_of_chaos_used: true } });
+      await base44.asServiceRole.entities.Character.update(character_id, { long_rest_abilities: { ...lra, tides_of_chaos_used: true } });
       return Response.json({ success: true, message: '🌊 Tides of Chaos! Gain advantage on your next attack, check, or save. Your next spell may trigger a Wild Magic Surge.' });
     }
 
@@ -154,12 +154,12 @@ Deno.serve(async (req) => {
         updates.long_rest_abilities = { ...lra, tides_of_chaos_used: false };
         note = ' Tides of Chaos regained!';
       }
-      if (Object.keys(updates).length > 0) await base44.entities.Character.update(character_id, updates);
+      if (Object.keys(updates).length > 0) await base44.asServiceRole.entities.Character.update(character_id, updates);
 
       if (combat_id) {
         try {
-          const cl = await base44.entities.CombatLog.get(combat_id);
-          if (cl) await base44.entities.CombatLog.update(combat_id, {
+          const cl = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+          if (cl) await base44.asServiceRole.entities.CombatLog.update(combat_id, {
             log_entries: [...(cl.log_entries || []), { round: cl.round, actor: character.name, action: 'wild_magic_surge', text: `🎲 WILD MAGIC SURGE! ${effect.text}${note}` }],
           });
         } catch { /* optional */ }
