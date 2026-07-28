@@ -44,6 +44,10 @@
     },
     "raw_data": {
       "type": "object"
+    },
+    "image_url": {
+      "type": "string",
+      "description": "Optional URL to an image/icon representing this magic item."
     }
   },
   "required": [
