@@ -25,13 +25,13 @@ Deno.serve(async (req) => {
     }
 
     // Fetch character and item
-    const chars = await base44.entities.Character.filter({ id: character_id });
+    const chars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
     const character = chars[0];
     if (!character) {
       return Response.json({ error: 'Character not found' }, { status: 404 });
     }
 
-    const items = await base44.entities.MagicItem.filter({ id: item_id });
+    const items = await base44.asServiceRole.entities.MagicItem.filter({ id: item_id });
     const item = items[0];
     if (!item) {
       return Response.json({ error: 'Item not found' }, { status: 404 });
@@ -60,15 +60,15 @@ Deno.serve(async (req) => {
 
     // Deduct gold and identify the item
     const newGold = (character.gold || 0) - fee;
-    await base44.entities.Character.update(character_id, { gold: newGold });
-    await base44.entities.MagicItem.update(item_id, { is_identified: true });
+    await base44.asServiceRole.entities.Character.update(character_id, { gold: newGold });
+    await base44.asServiceRole.entities.MagicItem.update(item_id, { is_identified: true });
 
     // Add gold to vendor
-    const vendors = await base44.entities.Vendor.filter({ id: vendor_id });
+    const vendors = await base44.asServiceRole.entities.Vendor.filter({ id: vendor_id });
     const vendor = vendors[0];
     if (vendor) {
       const newVendorGold = (vendor.gold_reserve || 200) + fee;
-      await base44.entities.Vendor.update(vendor_id, { gold_reserve: newVendorGold });
+      await base44.asServiceRole.entities.Vendor.update(vendor_id, { gold_reserve: newVendorGold });
     }
 
     return Response.json({

@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
   // H4 fix: remember which client successfully read the character — the SAME client
   // must perform the update and re-read below, or fallback users get a rest whose
   // writes silently fail under the same RLS quirk that broke their read.
-  let dbClient = base44;
+  let dbClient = base44.asServiceRole;
   try {
     character = await base44.asServiceRole.entities.Character.get(character_id);
   } catch {

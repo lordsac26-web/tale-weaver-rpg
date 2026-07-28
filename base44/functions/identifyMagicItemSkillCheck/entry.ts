@@ -33,13 +33,13 @@ Deno.serve(async (req) => {
     }
 
     // Fetch character and item
-    const chars = await base44.entities.Character.filter({ id: character_id });
+    const chars = await base44.asServiceRole.entities.Character.filter({ id: character_id });
     const character = chars[0];
     if (!character) {
       return Response.json({ error: 'Character not found' }, { status: 404 });
     }
 
-    const items = await base44.entities.MagicItem.filter({ id: item_id });
+    const items = await base44.asServiceRole.entities.MagicItem.filter({ id: item_id });
     const item = items[0];
     if (!item) {
       return Response.json({ error: 'Item not found' }, { status: 404 });
@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
 
     // If successful, identify the item
     if (success) {
-      await base44.entities.MagicItem.update(item_id, {
+      await base44.asServiceRole.entities.MagicItem.update(item_id, {
         is_identified: true,
       });
     }
