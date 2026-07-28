@@ -11,7 +11,7 @@ import { inferArchetype, chooseTactic } from '../monsterAI.ts';
 
 export async function handleEnemyTurn(ctx) {
   const { base44, session_id, combat_id } = ctx;
-  const combatLog = await base44.entities.CombatLog.get(combat_id);
+  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
   const combatants = [...combatLog.combatants];
 
   // Find current enemy turn
@@ -22,7 +22,7 @@ export async function handleEnemyTurn(ctx) {
 
   // Legendary creature: refresh its 3 legendary actions at the start of its turn (MM).
   if (currentCombatant.is_legendary) {
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       world_state: { ...(combatLog.world_state || {}), legendary_actions_remaining: 3 }
     });
     combatLog.world_state = { ...(combatLog.world_state || {}), legendary_actions_remaining: 3 };
@@ -59,7 +59,7 @@ export async function handleEnemyTurn(ctx) {
     const skipText = conditionCleared
       ? `${currentCombatant.name} shakes off ${conditionCleared}, but is still incapacitated and loses its turn!`
       : `${currentCombatant.name} is incapacitated and can take no actions!`;
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: updatedSkip,
       log_entries: [...(combatLog.log_entries || []), { round: combatLog.round, actor: currentCombatant.name, action: 'incapacitated', text: skipText }],
       current_turn_index: niSk, round: nrSk,
@@ -80,7 +80,7 @@ export async function handleEnemyTurn(ctx) {
   // enemy damage is subtracted from the player's ACTUAL current HP, not the snapshot.
   let liveChar = null;
   {
-    const livePlayer = await base44.entities.Character.get(player.id);
+    const livePlayer = await base44.asServiceRole.entities.Character.get(player.id);
     if (livePlayer) {
       liveChar = livePlayer;
       player.hp_current = Math.min(livePlayer.hp_max ?? player.hp_max, livePlayer.hp_current ?? player.hp_current);
@@ -94,7 +94,7 @@ export async function handleEnemyTurn(ctx) {
   // Player is at 0 HP (downed): an attack that hits causes a death save failure (PHB p.197).
   // A melee hit from within 5 ft is an automatic critical → 2 failures.
   if (!player.is_conscious || player.hp_current === 0) {
-    const downedChar = await base44.entities.Character.get(player.id);
+    const downedChar = await base44.asServiceRole.entities.Character.get(player.id);
     const atkRoll = rollD20();
     const atkBonus = currentCombatant.attack_bonus || 3;
     const isCrit = atkRoll === 20;
@@ -108,7 +108,7 @@ export async function handleEnemyTurn(ctx) {
       const isMeleeEnemy = (currentCombatant.attack_type || 'melee') !== 'ranged';
       const failuresToAdd = (isCrit || isMeleeEnemy) ? 2 : 1;
       const newFailures = Math.min(3, (downedChar.death_saves_failure || 0) + failuresToAdd);
-      await base44.entities.Character.update(player.id, { death_saves_failure: newFailures });
+      await base44.asServiceRole.entities.Character.update(player.id, { death_saves_failure: newFailures });
       downedLog += ` — a brutal blow lands! +${failuresToAdd} death save failure${failuresToAdd > 1 ? 's' : ''} (${newFailures}/3).`;
       if (newFailures >= 3) downedLog += ` ${player.name} has died.`;
     } else {
@@ -116,7 +116,7 @@ export async function handleEnemyTurn(ctx) {
     }
 
     const { nextIndex: ni0, nextRound: nr0 } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       log_entries: [...(combatLog.log_entries || []), { round: combatLog.round, actor: currentCombatant.name, action: 'attack_downed', target: player.name, hit: hitDowned, text: downedLog }],
       current_turn_index: ni0,
       round: nr0,
@@ -245,7 +245,7 @@ export async function handleEnemyTurn(ctx) {
   const physicalTypes = ['bludgeoning', 'piercing', 'slashing'];
   // PERFORMANCE: only fetch the full character record when an attack actually landed —
   // all mitigation, temp-HP, and concentration logic below depends on a hit.
-  const charFull = anyHit ? await base44.entities.Character.get(player.id) : null;
+  const charFull = anyHit ? await base44.asServiceRole.entities.Character.get(player.id) : null;
   const charFeats = charFull?.feats || [];
   const charFeatFlags = charFull?._feat_flags || [];
   const playerHasFeat = (name) => charFeats.includes(name) || charFeatFlags.includes(name.toLowerCase().replace(/\s+/g,'_'));
@@ -326,7 +326,7 @@ export async function handleEnemyTurn(ctx) {
       const stoneRed = rollDice(12) + statMod(charFull.constitution || 10);
       finalDamage = Math.max(0, finalDamage - stoneRed);
       attackLogs.push(`[Stone's Endurance: -${stoneRed} → ${finalDamage}]`);
-      await base44.entities.Character.update(player.id, {
+      await base44.asServiceRole.entities.Character.update(player.id, {
         short_rest_abilities: { ...(charFull.short_rest_abilities || {}), stones_endurance_used: true },
       });
       usedReaction = true;
@@ -344,7 +344,7 @@ export async function handleEnemyTurn(ctx) {
       const absorbed = Math.min(wardHp, finalDamage);
       finalDamage -= absorbed;
       totalDamage = finalDamage;
-      await base44.entities.Character.update(player.id, { long_rest_abilities: { ...(charFull.long_rest_abilities || {}), arcane_ward_hp: wardHp - absorbed } });
+      await base44.asServiceRole.entities.Character.update(player.id, { long_rest_abilities: { ...(charFull.long_rest_abilities || {}), arcane_ward_hp: wardHp - absorbed } });
       attackLogs.push(`[🛡️ Arcane Ward absorbs ${absorbed} (${wardHp - absorbed} ward HP left)]`);
     }
   }
@@ -358,7 +358,7 @@ export async function handleEnemyTurn(ctx) {
       const tempAbsorbed = Math.min(currentTempHP, remainingDamage);
       remainingDamage -= tempAbsorbed;
       const newTempHP = currentTempHP - tempAbsorbed;
-      await base44.entities.Character.update(player.id, { temp_hp: newTempHP });
+      await base44.asServiceRole.entities.Character.update(player.id, { temp_hp: newTempHP });
       if (tempAbsorbed > 0) {
         attackLogs.push(`[Temp HP absorbed ${tempAbsorbed} damage (${newTempHP} temp HP remaining)]`);
       }
@@ -372,7 +372,7 @@ export async function handleEnemyTurn(ctx) {
         // Instant Death (PHB p.197): if remaining damage >= max HP, the creature dies instantly
         if (overkill >= (player.hp_max || 0)) {
           instantDeath = true;
-          await base44.entities.Character.update(player.id, {
+          await base44.asServiceRole.entities.Character.update(player.id, {
             hp_current: 0,
             death_saves_failure: 3,
             death_saves_success: 0,
@@ -384,14 +384,14 @@ export async function handleEnemyTurn(ctx) {
           && !(charFull?.long_rest_abilities?.relentless_endurance_used)) {
         player.hp_current = 1;
         player.is_conscious = true;
-        await base44.entities.Character.update(player.id, {
+        await base44.asServiceRole.entities.Character.update(player.id, {
           hp_current: 1,
           long_rest_abilities: { ...(charFull.long_rest_abilities || {}), relentless_endurance_used: true },
         });
         attackLogs.push(`[Relentless Endurance: dropped to 1 HP instead of 0!]`);
       }
       if (!instantDeath) {
-        await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
+        await base44.asServiceRole.entities.Character.update(player.id, { hp_current: player.hp_current });
       }
     }
     totalDamage = finalDamage; // reflects actual damage after temp HP absorption
@@ -423,7 +423,7 @@ export async function handleEnemyTurn(ctx) {
   if (cwConsumed) {
     newWS.cutting_words_armed = false;
     newWS.player_reaction_used = true;
-    await base44.entities.Character.update(player.id, { bardic_inspiration_remaining: Math.max(0, (liveChar?.bardic_inspiration_remaining || 1) - 1) });
+    await base44.asServiceRole.entities.Character.update(player.id, { bardic_inspiration_remaining: Math.max(0, (liveChar?.bardic_inspiration_remaining || 1) - 1) });
   }
   if (updatedCombatants[nextIndex]?.type === 'player') {
     newWS.player_reckless = false;
@@ -453,7 +453,7 @@ export async function handleEnemyTurn(ctx) {
 
   // Persist consumed rune invocations (Cloud/Stone are single-use reactions).
   if (runesConsumed.length > 0 && liveChar) {
-    await base44.entities.Character.update(player.id, {
+    await base44.asServiceRole.entities.Character.update(player.id, {
       active_modifiers: (liveChar.active_modifiers || []).filter(m => !runesConsumed.includes(m.effect)),
     });
   }
@@ -461,7 +461,7 @@ export async function handleEnemyTurn(ctx) {
   // A Cloud Rune redirect can fell an enemy on its own turn — check for victory.
   const allEnemiesDown = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
 
-  await base44.entities.CombatLog.update(combat_id, {
+  await base44.asServiceRole.entities.CombatLog.update(combat_id, {
     combatants: updatedCombatants,
     log_entries: [...(combatLog.log_entries || []), logEntry],
     current_turn_index: nextIndex,
@@ -470,7 +470,7 @@ export async function handleEnemyTurn(ctx) {
     ...(allEnemiesDown ? { is_active: false, result: 'victory' } : {}),
   });
   if (allEnemiesDown) {
-    await base44.entities.GameSession.update(session_id, { in_combat: false });
+    await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
     await awardVictoryXP(base44, combat_id, updatedCombatants, player.id);
   }
 
@@ -490,7 +490,7 @@ export async function handleEnemyTurn(ctx) {
 // attack against the player.
 export async function handleLegendaryAction(ctx) {
   const { base44, combat_id } = ctx;
-  const combatLog = await base44.entities.CombatLog.get(combat_id);
+  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
   const combatants = [...combatLog.combatants];
 
   // Find the legendary enemy (first conscious enemy flagged legendary with budget left)
@@ -516,18 +516,18 @@ export async function handleLegendaryAction(ctx) {
     for (let i = 0; i < numDice; i++) dmg += rollDice(sides);
     dmg = Math.max(1, dmg + (legendary.damage_bonus || 0));
     // Temp HP absorbs legendary action damage first (PHB p.198)
-    const laCharFull = await base44.entities.Character.get(player.id);
+    const laCharFull = await base44.asServiceRole.entities.Character.get(player.id);
     const laTempHP = laCharFull.temp_hp || 0;
     let laRemainingDmg = dmg;
     if (laTempHP > 0) {
       const absorbed = Math.min(laTempHP, laRemainingDmg);
       laRemainingDmg -= absorbed;
-      await base44.entities.Character.update(player.id, { temp_hp: laTempHP - absorbed });
+      await base44.asServiceRole.entities.Character.update(player.id, { temp_hp: laTempHP - absorbed });
     }
     if (laRemainingDmg > 0) { // legendary damage is only computed inside `if (hit)`, so dmg>0 here
       player.hp_current = Math.max(0, player.hp_current - laRemainingDmg);
       if (player.hp_current === 0) player.is_conscious = false;
-      await base44.entities.Character.update(player.id, { hp_current: player.hp_current });
+      await base44.asServiceRole.entities.Character.update(player.id, { hp_current: player.hp_current });
     }
   }
 
@@ -540,7 +540,7 @@ export async function handleLegendaryAction(ctx) {
       : `✨ LEGENDARY ACTION — ${legendary.name} strikes at ${player.name} but misses. (${newBudget} legendary actions left)`
   };
 
-  await base44.entities.CombatLog.update(combat_id, {
+  await base44.asServiceRole.entities.CombatLog.update(combat_id, {
     combatants: combatants.map(c => c.id === player.id ? player : c),
     log_entries: [...(combatLog.log_entries || []), logEntry],
     world_state: { ...ws, legendary_actions_remaining: newBudget },

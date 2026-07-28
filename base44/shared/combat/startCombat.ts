@@ -6,9 +6,9 @@ import { inferArchetype } from '../monsterAI.ts';
 export async function handleStartCombat(ctx) {
   const { base44, session_id, payload } = ctx;
   let { enemies } = payload;
-  const session = await base44.entities.GameSession.get(session_id);
+  const session = await base44.asServiceRole.entities.GameSession.get(session_id);
   if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
-  const character = await base44.entities.Character.get(session.character_id);
+  const character = await base44.asServiceRole.entities.Character.get(session.character_id);
 
   // ─── DYNAMIC ENCOUNTER SCALING ──────────────────────────────────────────
   // Keep solo-player encounters balanced and challenging by scaling enemy HP,
@@ -114,7 +114,7 @@ export async function handleStartCombat(ctx) {
 
   // Beast Master Ranger: add summoned companions to initiative (PHB p.93)
   try {
-    const companions = await base44.entities.Companion.filter({ character_id: character.id, is_summoned: true });
+    const companions = await base44.asServiceRole.entities.Companion.filter({ character_id: character.id, is_summoned: true });
     for (const comp of (companions || [])) {
       if (!comp.is_active) continue;
       const compInitRoll = rollD20();
@@ -180,7 +180,7 @@ export async function handleStartCombat(ctx) {
     return b.initiative_mod - a.initiative_mod;
   });
 
-  const combatLog = await base44.entities.CombatLog.create({
+  const combatLog = await base44.asServiceRole.entities.CombatLog.create({
     session_id,
     round: 1,
     combatants,
@@ -192,7 +192,7 @@ export async function handleStartCombat(ctx) {
     world_state: { actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false }
   });
 
-  await base44.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: combatLog.id } });
+  await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: combatLog.id } });
 
   return Response.json({ combat_id: combatLog.id, combatants, initiative_order: combatants });
 }

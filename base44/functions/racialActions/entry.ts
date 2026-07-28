@@ -12,17 +12,17 @@ Deno.serve(async (req) => {
 
   const { action, combat_id, session_id, character_id, payload } = await req.json();
 
-  const character = await base44.entities.Character.get(character_id);
+  const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
   const race = character.race || '';
   const level = character.level || 1;
   const sra = character.short_rest_abilities || {};
   const lra = character.long_rest_abilities || {};
 
-  const loadCombat = async () => (combat_id ? await base44.entities.CombatLog.get(combat_id) : null);
+  const loadCombat = async () => (combat_id ? await base44.asServiceRole.entities.CombatLog.get(combat_id) : null);
   const appendLog = async (combatLog, logEntry, extra = {}) => {
     if (!combatLog) return;
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       log_entries: [...(combatLog.log_entries || []), logEntry], ...extra,
     });
   };
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     if (bonusActionBlocked(combatLog)) return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
 
     const charConds = (character.conditions || []).filter(c => !['radiant_soul', 'radiant_consumption', 'necrotic_shroud'].includes(condName(c)));
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       conditions: [...charConds, { name: form, source: 'Celestial Revelation' }],
       long_rest_abilities: { ...lra, aasimar_transform_used: true },
     });
@@ -85,14 +85,14 @@ Deno.serve(async (req) => {
         }
         if (playerComp) {
           playerComp.hp_current = Math.max(1, playerComp.hp_current - aura);
-          await base44.entities.Character.update(character_id, { hp_current: playerComp.hp_current });
+          await base44.asServiceRole.entities.Character.update(character_id, { hp_current: playerComp.hp_current });
           hitLogs.push(`${character.name} is seared for ${aura} radiant by their own light`);
         }
       }
       if (hitLogs.length > 0) text += ` ${hitLogs.join('; ')}`;
 
       const logEntry = { round: combatLog.round, actor: character.name, action: 'aasimar_transform', text };
-      await base44.entities.CombatLog.update(combat_id, {
+      await base44.asServiceRole.entities.CombatLog.update(combat_id, {
         combatants,
         log_entries: [...(combatLog.log_entries || []), logEntry],
         world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     if (lra.healing_hands_used) return Response.json({ error: 'Healing Hands already used. Long rest to recover.', invalid: true }, { status: 400 });
     const healAmount = level;
     const newHp = Math.min(character.hp_max || 1, (character.hp_current || 0) + healAmount);
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       hp_current: newHp,
       long_rest_abilities: { ...lra, healing_hands_used: true },
     });
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
     if (combatLog) {
       const combatants = (combatLog.combatants || []).map(c => c.type === 'player' ? { ...c, hp_current: newHp } : c);
       const ws = { ...(combatLog.world_state || {}), actions_used_this_turn: (combatLog.world_state?.actions_used_this_turn || 0) + 1 };
-      await base44.entities.CombatLog.update(combat_id, {
+      await base44.asServiceRole.entities.CombatLog.update(combat_id, {
         combatants, log_entries: [...(combatLog.log_entries || []), logEntry], world_state: ws,
       });
     }
@@ -152,12 +152,12 @@ Deno.serve(async (req) => {
       if (target.hp_current === 0) target.is_conscious = false;
       // Temp HP doesn't stack — keep the higher value (PHB p.198)
       tempGained = Math.max(1, statMod(character.constitution || 10));
-      await base44.entities.Character.update(character_id, {
+      await base44.asServiceRole.entities.Character.update(character_id, {
         temp_hp: Math.max(character.temp_hp || 0, tempGained),
         short_rest_abilities: { ...sra, hungry_jaws_used: true },
       });
     } else {
-      await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, hungry_jaws_used: true } });
+      await base44.asServiceRole.entities.Character.update(character_id, { short_rest_abilities: { ...sra, hungry_jaws_used: true } });
     }
     const logEntry = {
       round: combatLog.round, actor: character.name, action: 'hungry_jaws', target: target.name, hit, critical: isCrit, damage,
@@ -167,12 +167,12 @@ Deno.serve(async (req) => {
     };
     const updated = combatants.map(c => c.id === target.id ? target : c);
     const allDead = updated.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: updated, log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },
       ...(allDead ? { is_active: false, result: 'victory' } : {}),
     });
-    if (allDead) await base44.entities.GameSession.update(session_id, { in_combat: false });
+    if (allDead) await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
     return Response.json({ success: true, hit, damage, temp_hp: tempGained, log_entry: logEntry, result: allDead ? 'victory' : 'ongoing', combat_ended: allDead, bonus_action_used: true });
   }
 
@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
     if (sra.fury_of_the_small_used) return Response.json({ error: 'Fury of the Small already used. Short rest to recover.', invalid: true }, { status: 400 });
     const combatLog = await loadCombat();
     if (!combatLog) return Response.json({ error: 'Fury of the Small can only be used in combat.', invalid: true }, { status: 400 });
-    await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, fury_of_the_small_used: true } });
+    await base44.asServiceRole.entities.Character.update(character_id, { short_rest_abilities: { ...sra, fury_of_the_small_used: true } });
     const logEntry = { round: combatLog.round, actor: character.name, action: 'fury_of_the_small', text: `😤 ${character.name} channels Fury of the Small — their next hit deals +${level} bonus damage!` };
     await appendLog(combatLog, logEntry, { world_state: { ...(combatLog.world_state || {}), fury_primed: true } });
     return Response.json({ success: true, log_entry: logEntry, bonus_damage: level });
@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
     const combatLog = await loadCombat();
     if (!combatLog) return Response.json({ error: 'Draconic Cry can only be used in combat.', invalid: true }, { status: 400 });
     if (bonusActionBlocked(combatLog)) return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
-    await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, draconic_cry_used: true } });
+    await base44.asServiceRole.entities.Character.update(character_id, { short_rest_abilities: { ...sra, draconic_cry_used: true } });
     const logEntry = { round: combatLog.round, actor: character.name, action: 'draconic_cry', text: `🐉 ${character.name} lets out a Draconic Cry — advantage on attacks against nearby enemies this turn!` };
     await appendLog(combatLog, logEntry, { world_state: { ...(combatLog.world_state || {}), draconic_cry_active: true, bonus_action_used: true } });
     return Response.json({ success: true, log_entry: logEntry, bonus_action_used: true });
@@ -221,11 +221,11 @@ Deno.serve(async (req) => {
       playerComp.shell_original_ac = playerComp.ac;
       playerComp.ac = 19;
       playerComp.conditions = [...(playerComp.conditions || []), { name: 'shell_defense', source: 'Shell Defense' }];
-      await base44.entities.Character.update(character_id, {
+      await base44.asServiceRole.entities.Character.update(character_id, {
         conditions: [...(character.conditions || []), { name: 'shell_defense', source: 'Shell Defense' }],
       });
       const logEntry = { round: combatLog.round, actor: character.name, action: 'shell_defense', text: `🐢 ${character.name} withdraws into their shell — AC 19, speed 0, advantage on STR/CON saves. (Use an action to emerge.)` };
-      await base44.entities.CombatLog.update(combat_id, {
+      await base44.asServiceRole.entities.CombatLog.update(combat_id, {
         combatants, log_entries: [...(combatLog.log_entries || []), logEntry],
         world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },
       });
@@ -237,11 +237,11 @@ Deno.serve(async (req) => {
     playerComp.ac = playerComp.shell_original_ac || character.armor_class || playerComp.ac;
     playerComp.shell_original_ac = null;
     playerComp.conditions = (playerComp.conditions || []).filter(c => condName(c) !== 'shell_defense');
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       conditions: (character.conditions || []).filter(c => condName(c) !== 'shell_defense'),
     });
     const logEntry = { round: combatLog.round, actor: character.name, action: 'shell_defense', text: `🐢 ${character.name} emerges from their shell, ready to fight!` };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants, log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: (combatLog.world_state?.actions_used_this_turn || 0) + 1 },
     });

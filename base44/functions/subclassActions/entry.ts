@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
 
   const { action, combat_id, session_id, character_id, payload } = await req.json();
 
-  const character = await base44.entities.Character.get(character_id);
+  const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
   const level = character.level || 1;
   const subclass = (character.subclass || '').toLowerCase();
@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
     return null;
   };
   const spendChannelDivinity = () =>
-    base44.entities.Character.update(character_id, {
+    base44.asServiceRole.entities.Character.update(character_id, {
       short_rest_abilities: { ...sra, channel_divinity_used: (sra.channel_divinity_used || 0) + 1 },
     });
 
@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
   if (action === 'channel_divinity_radiance_of_dawn') {
     const gateErr = requireChannelDivinity('light');
     if (gateErr) return Response.json({ error: gateErr, invalid: true }, { status: 400 });
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
     const dc = 8 + statMod(character.wisdom || 10) + (character.proficiency_bonus || 2);
     const combatants = [...(combatLog.combatants || [])];
     const targets = combatants.filter(c => c.type === 'enemy' && c.is_conscious);
@@ -65,11 +65,11 @@ Deno.serve(async (req) => {
     const allDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
     const result = allDead ? 'victory' : 'ongoing';
     const ws = { ...(combatLog.world_state || {}), actions_used_this_turn: (combatLog.world_state?.actions_used_this_turn || 0) + 1 };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants, log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: ws, is_active: result === 'ongoing', result,
     });
-    if (allDead) await base44.entities.GameSession.update(session_id, { in_combat: false });
+    if (allDead) await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
     return Response.json({ success: true, log_entry: logEntry, result, combat_ended: result !== 'ongoing' });
   }
 
@@ -78,13 +78,13 @@ Deno.serve(async (req) => {
   if (action === 'channel_divinity_destructive_wrath') {
     const gateErr = requireChannelDivinity('tempest');
     if (gateErr) return Response.json({ error: gateErr, invalid: true }, { status: 400 });
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
     await spendChannelDivinity();
     const logEntry = {
       round: combatLog.round, actor: character.name, action: 'channel_divinity_destructive_wrath',
       text: `⚡ ${character.name} channels Destructive Wrath — the next lightning or thunder spell deals MAXIMUM damage!`,
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), destructive_wrath: true },
     });
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
   if (action === 'channel_divinity_path_to_grave') {
     const gateErr = requireChannelDivinity('grave');
     if (gateErr) return Response.json({ error: gateErr, invalid: true }, { status: 400 });
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
     const combatants = [...(combatLog.combatants || [])];
     const target = combatants.find(c => c.id === payload?.target_id && c.type === 'enemy' && c.is_conscious)
       || combatants.find(c => c.type === 'enemy' && c.is_conscious);
@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
       text: `⚰️ ${character.name} marks ${target.name} with Path to the Grave — the next attack to hit it deals DOUBLE damage!`,
     };
     const ws = { ...(combatLog.world_state || {}), actions_used_this_turn: (combatLog.world_state?.actions_used_this_turn || 0) + 1 };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: combatants.map(c => c.id === target.id ? target : c),
       log_entries: [...(combatLog.log_entries || []), logEntry], world_state: ws,
     });
@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
     if ((character.class || '') !== 'Ranger' || !subclass.includes('horizon') || level < 3) {
       return Response.json({ error: 'Planar Warrior requires a Horizon Walker Ranger, level 3+.', invalid: true }, { status: 400 });
     }
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
     if (combatLog.world_state?.bonus_action_used) {
       return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
     }
@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
       round: combatLog.round, actor: character.name, action: 'planar_warrior', target: target.name,
       text: `🌌 ${character.name} channels planar energy at ${target.name} — the next hit against it deals +${dice} force damage!`,
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), planar_warrior_target: target.id, bonus_action_used: true },
     });
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
     if ((character.bardic_inspiration_remaining || 0) <= 0) {
       return Response.json({ error: 'No Bardic Inspiration uses remaining.', invalid: true }, { status: 400 });
     }
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
     const armed = !combatLog.world_state?.cutting_words_armed;
     const logEntry = {
       round: combatLog.round, actor: character.name, action: 'cutting_words_arm',
@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
         ? `🎭 ${character.name} readies Cutting Words — the next enemy attack that would hit will be mocked mid-swing!`
         : `${character.name} lowers their Cutting Words.`,
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), cutting_words_armed: armed },
     });
@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
     if ((character.bardic_inspiration_remaining || 0) <= 0) {
       return Response.json({ error: 'No Bardic Inspiration uses remaining.', invalid: true }, { status: 400 });
     }
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
     if (combatLog.world_state?.bonus_action_used) {
       return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
     }
@@ -187,14 +187,14 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No conscious companion to inspire.', invalid: true }, { status: 400 });
     }
     const die = level < 5 ? 6 : level < 10 ? 8 : level < 15 ? 10 : 12;
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       bardic_inspiration_remaining: Math.max(0, (character.bardic_inspiration_remaining || 1) - 1),
     });
     const logEntry = {
       round: combatLog.round, actor: character.name, action: 'combat_inspiration', target: companion.name,
       text: `🎶 ${character.name} plays a battle hymn — ${companion.name} gains Combat Inspiration (+1d${die} on its next attack's damage)!`,
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), companion_inspiration_die: die, bonus_action_used: true },
     });
@@ -212,21 +212,21 @@ Deno.serve(async (req) => {
     if (portents.length === 0) {
       return Response.json({ error: 'No Portent dice remaining. Long rest to foresee new ones.', invalid: true }, { status: 400 });
     }
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
     if (combatLog.world_state?.portent_value != null) {
       return Response.json({ error: 'A Portent die is already armed for your next attack.', invalid: true }, { status: 400 });
     }
     const idx = Number.isInteger(payload?.roll_index) && payload.roll_index >= 0 && payload.roll_index < portents.length
       ? payload.roll_index : 0;
     const value = portents[idx];
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       long_rest_abilities: { ...lra, portent_rolls: portents.filter((_, i) => i !== idx) },
     });
     const logEntry = {
       round: combatLog.round, actor: character.name, action: 'use_portent',
       text: `🔮 ${character.name} invokes a Portent — their next attack roll is foreseen as a ${value}!`,
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), portent_value: value },
     });

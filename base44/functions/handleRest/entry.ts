@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
   // writes silently fail under the same RLS quirk that broke their read.
   let dbClient = base44;
   try {
-    character = await base44.entities.Character.get(character_id);
+    character = await base44.asServiceRole.entities.Character.get(character_id);
   } catch {
     character = null;
   }

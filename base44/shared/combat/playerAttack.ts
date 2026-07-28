@@ -12,11 +12,11 @@ import { finalizeAndPersistCombat } from './persistence.ts';
 export async function handlePlayerAttack(ctx) {
   const { base44, session_id, combat_id, character_id, payload } = ctx;
   const { target_id, weapon, spell, modifiers = {} } = payload;
-  const combatLog = await base44.entities.CombatLog.get(combat_id);
+  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
   // User-scoped fetch: RLS only returns the record if the user may read (owns) it,
   // so a successful fetch proves ownership. (Manual created_by/email compare was
   // fragile and caused false 403s for the legitimate owner.)
-  const character = await base44.entities.Character.get(character_id);
+  const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
 
   const combatants = [...combatLog.combatants];
@@ -109,7 +109,7 @@ export async function handlePlayerAttack(ctx) {
       const lraW = character.long_rest_abilities || {};
       const wardMax = 2 * (character.level || 1) + statMod(character.intelligence || 10);
       const newWard = lraW.arcane_ward_created ? Math.min(wardMax, (lraW.arcane_ward_hp || 0) + 2 * spell.slot_level) : wardMax;
-      await base44.entities.Character.update(character_id, { long_rest_abilities: { ...lraW, arcane_ward_hp: newWard, arcane_ward_created: true } });
+      await base44.asServiceRole.entities.Character.update(character_id, { long_rest_abilities: { ...lraW, arcane_ward_hp: newWard, arcane_ward_created: true } });
     }
 
     // H1/H5 fix — slot validation uses the same level-indexed tables as handleRest,
@@ -188,7 +188,7 @@ export async function handlePlayerAttack(ctx) {
       const deductUpdates = {};
       if (slotDeduction) deductUpdates.spell_slots = { ...(character.spell_slots || {}), [slotDeduction.slotsKey]: slotDeduction.currentUsed + 1 };
       if (spDeduction) { deductUpdates.sorcery_points_max = spDeduction.spMax; deductUpdates.sorcery_points_current = spDeduction.newCurrent; }
-      await base44.entities.Character.update(character_id, deductUpdates);
+      await base44.asServiceRole.entities.Character.update(character_id, deductUpdates);
     }
 
     // === UTILITY / BUFF spells ===
@@ -201,7 +201,7 @@ export async function handlePlayerAttack(ctx) {
       const updatedLog = [...(combatLog.log_entries || []), utilEntry];
       const { nextIndex: nextIndex2, nextRound: nextRound2, actionsRemaining: actionsRemaining2, worldState: newWorldState2 } =
         resolveActionAndAdvance(combatLog, combatants, character);
-      await base44.entities.CombatLog.update(combat_id, {
+      await base44.asServiceRole.entities.CombatLog.update(combat_id, {
         log_entries: updatedLog, current_turn_index: nextIndex2, round: nextRound2, world_state: newWorldState2
       });
       return Response.json({ hit: null, damage: 0, log_entry: utilEntry, result: 'ongoing', combat_ended: false, actions_remaining: actionsRemaining2, next_turn_index: nextIndex2 });
@@ -219,7 +219,7 @@ export async function handlePlayerAttack(ctx) {
       const player2 = combatants.find(c => c.type === 'player');
       if (player2) {
         player2.hp_current = Math.min(player2.hp_max, player2.hp_current + healAmt);
-        await base44.entities.Character.update(character_id, { hp_current: player2.hp_current });
+        await base44.asServiceRole.entities.Character.update(character_id, { hp_current: player2.hp_current });
       }
       const healEntry = {
         round: combatLog.round, actor: character.name, action: 'spell', target: character.name,
@@ -229,7 +229,7 @@ export async function handlePlayerAttack(ctx) {
       const updatedCombatants2 = combatants.map(c => c.type === 'player' ? player2 : c);
       const { nextIndex: ni3, nextRound: nr3, actionsRemaining: actionsRem3, worldState: ws3 } =
         resolveActionAndAdvance(combatLog, updatedCombatants2, character);
-      await base44.entities.CombatLog.update(combat_id, {
+      await base44.asServiceRole.entities.CombatLog.update(combat_id, {
         combatants: updatedCombatants2, log_entries: [...(combatLog.log_entries || []), healEntry],
         current_turn_index: ni3, round: nr3, world_state: ws3
       });
@@ -460,7 +460,7 @@ export async function handlePlayerAttack(ctx) {
       }
       // Decrement one unit of ammunition
       const newInv = inv.map((it, i) => i === ammoIdx ? { ...it, quantity: Math.max(0, (it.quantity ?? 1) - 1) } : it);
-      await base44.entities.Character.update(character_id, { inventory: newInv });
+      await base44.asServiceRole.entities.Character.update(character_id, { inventory: newInv });
     }
     const isFinesse = (weapon.properties || []).includes('finesse');
     const strMod = statMod(character.strength);
@@ -710,7 +710,7 @@ export async function handlePlayerAttack(ctx) {
     if (luckyRoll > attackResult.roll) {
       attackResult = { ...attackResult, roll: luckyRoll, isCritical: forceCrit || luckyRoll === 20, isMiss: luckyRoll === 1 };
     }
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       luck_points_remaining: Math.max(0, (character.luck_points_remaining || 0) - 1),
     });
   }
@@ -828,7 +828,7 @@ export async function handlePlayerAttack(ctx) {
         damage += smiteDmg;
         // Consume spell slot (increment used count)
         const slotKey = `level_${smiteLevel}`;
-        await base44.entities.Character.update(character_id, {
+        await base44.asServiceRole.entities.Character.update(character_id, {
           spell_slots: { ...slots, [slotKey]: (slots[slotKey] || 0) + 1 }
         });
       }
@@ -906,7 +906,7 @@ export async function handlePlayerAttack(ctx) {
         shackleNote = ` but resists the fiery shackles. (STR save ${fSave} vs DC ${runeDC})`;
       }
       fireRuneText = ` 🔥 FIRE RUNE: ${target.name} takes +${fireMod.amount} fire damage${shackleNote}`;
-      await base44.entities.Character.update(character_id, {
+      await base44.asServiceRole.entities.Character.update(character_id, {
         active_modifiers: activeMods.filter(m => m.effect !== 'fire_shackle'),
       });
     }
@@ -922,7 +922,7 @@ export async function handlePlayerAttack(ctx) {
     if (target.hp_current === 0 && target.hexblade_cursed_by === character_id) {
       const curseHeal = (character.level || 1) + Math.max(0, statMod(character.charisma || 10));
       const healedTo = Math.min(character.hp_max, (character.hp_current || 0) + curseHeal);
-      await base44.entities.Character.update(character_id, { hp_current: healedTo });
+      await base44.asServiceRole.entities.Character.update(character_id, { hp_current: healedTo });
       const pcHx = combatants.find(c => c.type === 'player');
       if (pcHx) pcHx.hp_current = healedTo;
       logEntry.curse_heal = curseHeal;
@@ -937,7 +937,7 @@ export async function handlePlayerAttack(ctx) {
     const concSpell = combatLog.world_state?.concentration_spell;
     const concCaster = combatLog.world_state?.concentration_caster;
     if (concSpell && damage > 0 && target.type === 'player' && target.name === concCaster) {
-      const concChar = target.id === character_id ? character : await base44.entities.Character.get(target.id);
+      const concChar = target.id === character_id ? character : await base44.asServiceRole.entities.Character.get(target.id);
       const conc = rollConcentrationSave(concChar, damage);
       if (conc.broken) {
         concentrationBrokenSelf = `${concCaster}'s concentration on ${concSpell} is broken! (CON save: ${conc.save} vs DC ${conc.dc})`;
@@ -961,7 +961,7 @@ export async function handlePlayerAttack(ctx) {
   // Invisibility ends when you attack — strip it from the character + combatant.
   if (attackerWasInvisible) {
     const stripInvis = (arr) => (arr || []).filter(c => (typeof c === 'string' ? c : c?.name) !== 'invisible');
-    await base44.entities.Character.update(character_id, { conditions: stripInvis(character.conditions) });
+    await base44.asServiceRole.entities.Character.update(character_id, { conditions: stripInvis(character.conditions) });
     const pcInv = combatants.find(c => c.type === 'player');
     if (pcInv) pcInv.conditions = stripInvis(pcInv.conditions);
   }
@@ -1040,8 +1040,8 @@ export async function handlePlayerAttack(ctx) {
 export async function handleOffhandAttack(ctx) {
   const { base44, session_id, combat_id, character_id, payload } = ctx;
   const { target_id, modifiers = {} } = payload;
-  const combatLog = await base44.entities.CombatLog.get(combat_id);
-  const character = await base44.entities.Character.get(character_id);
+  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+  const character = await base44.asServiceRole.entities.Character.get(character_id);
   const combatants = [...combatLog.combatants];
   const target = combatants.find(c => c.id === target_id);
   if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });

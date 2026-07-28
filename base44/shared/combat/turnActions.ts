@@ -11,8 +11,8 @@ import { finalizeAndPersistCombat } from './persistence.ts';
 // Server-authoritative: tracked in character.short_rest_abilities.action_surge_used.
 export async function handleActionSurge(ctx) {
   const { base44, combat_id, character_id } = ctx;
-  const combatLog = await base44.entities.CombatLog.get(combat_id);
-  const character = await base44.entities.Character.get(character_id);
+  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+  const character = await base44.asServiceRole.entities.Character.get(character_id);
   const charClass = (character.class || '').toLowerCase();
   const level = character.level || 1;
 
@@ -28,7 +28,7 @@ export async function handleActionSurge(ctx) {
   }
 
   // Consume one use (persist to character)
-  await base44.entities.Character.update(character_id, {
+  await base44.asServiceRole.entities.Character.update(character_id, {
     short_rest_abilities: { ...sra, action_surge_used: used + 1 }
   });
 
@@ -39,7 +39,7 @@ export async function handleActionSurge(ctx) {
     round: combatLog.round, actor: character.name, action: 'action_surge',
     text: `⚡ ${character.name} uses Action Surge — gaining an extra action this turn! (${used + 1}/${maxUses} used)`
   };
-  await base44.entities.CombatLog.update(combat_id, {
+  await base44.asServiceRole.entities.CombatLog.update(combat_id, {
     log_entries: [...(combatLog.log_entries || []), logEntry],
     world_state: { ...ws, actions_used_this_turn: newUsed },
   });
@@ -53,8 +53,8 @@ export async function handleActionSurge(ctx) {
 export async function handleGrapple(ctx) {
   const { base44, combat_id, character_id, payload } = ctx;
   const { target_id } = payload || {};
-  const combatLog = await base44.entities.CombatLog.get(combat_id);
-  const character = await base44.entities.Character.get(character_id);
+  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+  const character = await base44.asServiceRole.entities.Character.get(character_id);
   const combatants = [...combatLog.combatants];
   const target = combatants.find(c => c.id === target_id);
   if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });
@@ -91,7 +91,7 @@ export async function handleGrapple(ctx) {
   const { nextIndex, nextRound, actionsRemaining, worldState: newWorldState } =
     resolveActionAndAdvance(combatLog, updatedCombatants, character);
 
-  await base44.entities.CombatLog.update(combat_id, {
+  await base44.asServiceRole.entities.CombatLog.update(combat_id, {
     combatants: updatedCombatants,
     log_entries: [...(combatLog.log_entries || []), logEntry],
     current_turn_index: nextIndex,
@@ -109,15 +109,15 @@ export async function handleGrapple(ctx) {
 // applies disadvantage to attacks against the player.
 export async function handleDodge(ctx) {
   const { base44, combat_id, character_id } = ctx;
-  const combatLog = await base44.entities.CombatLog.get(combat_id);
+  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
   const combatants = combatLog.combatants;
-  const character = await base44.entities.Character.get(character_id);
+  const character = await base44.asServiceRole.entities.Character.get(character_id);
   const logEntry = {
     round: combatLog.round, actor: character.name, action: 'dodge',
     text: `🛡️ ${character.name} takes the Dodge action — attacks against them have disadvantage until their next turn.`
   };
   const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
-  await base44.entities.CombatLog.update(combat_id, {
+  await base44.asServiceRole.entities.CombatLog.update(combat_id, {
     log_entries: [...(combatLog.log_entries || []), logEntry],
     current_turn_index: nextIndex,
     round: nextRound,
@@ -132,8 +132,8 @@ export async function handleDodge(ctx) {
 export async function handleFlurryOfBlows(ctx) {
   const { base44, session_id, combat_id, character_id, payload } = ctx;
   const { target_id } = payload || {};
-  const combatLog = await base44.entities.CombatLog.get(combat_id);
-  const character = await base44.entities.Character.get(character_id);
+  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+  const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
 
   const level = character.level || 1;
@@ -200,7 +200,7 @@ export async function handleFlurryOfBlows(ctx) {
   }
 
   // Spend 1 Ki
-  await base44.entities.Character.update(character_id, {
+  await base44.asServiceRole.entities.Character.update(character_id, {
     ki_points_remaining: Math.max(0, kiRemaining - 1),
   });
 
@@ -230,7 +230,7 @@ export async function handleFlurryOfBlows(ctx) {
 // ═══════════════════════════════════════════════════════════════════════════
 export async function handleNextTurn(ctx) {
   const { base44, combat_id } = ctx;
-  const combatLog = await base44.entities.CombatLog.get(combat_id);
+  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
   const combatants = [...combatLog.combatants];
   const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
   const nextWS = resetTurnWorldState(combatLog);
@@ -244,7 +244,7 @@ export async function handleNextTurn(ctx) {
     nextWS.player_reckless = false; nextWS.player_reaction_used = false;
     const pc = combatants[nextIndex];
     if ((pc.conditions || []).some(c => SAVEABLE_CONDITIONS[(typeof c === 'string' ? c : c?.name || '').toLowerCase()])) {
-      const ch = await base44.entities.Character.get(pc.id);
+      const ch = await base44.asServiceRole.entities.Character.get(pc.id);
       if (ch) {
         const race = (ch.race || '').toLowerCase();
         const auraBonus = ((ch.class || '') === 'Paladin' && (ch.level || 1) >= 6) ? Math.max(1, statMod(ch.charisma || 10)) : 0;
@@ -272,7 +272,7 @@ export async function handleNextTurn(ctx) {
       }
     }
   }
-  await base44.entities.CombatLog.update(combat_id, {
+  await base44.asServiceRole.entities.CombatLog.update(combat_id, {
     current_turn_index: nextIndex, round: nextRound, world_state: nextWS,
     ...(condLog ? { log_entries: [...(combatLog.log_entries || []), condLog], combatants } : {}),
   });
@@ -287,9 +287,9 @@ export async function handleNextTurn(ctx) {
 // Nat 1  = counts as 2 failures.
 export async function handleDeathSave(ctx) {
   const { base44, combat_id, character_id } = ctx;
-  const character = await base44.entities.Character.get(character_id);
+  const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
-  const combatLog = await base44.entities.CombatLog.get(combat_id);
+  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
   const combatants = [...combatLog.combatants];
   const playerCombatant = combatants.find(c => c.type === 'player');
 
@@ -309,7 +309,7 @@ export async function handleDeathSave(ctx) {
 
   if (roll === 20) {
     // Nat 20: regain 1 HP, stand up (PHB p.197)
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       hp_current: 1,
       death_saves_success: 0,
       death_saves_failure: 0,
@@ -340,18 +340,18 @@ export async function handleDeathSave(ctx) {
       // Stabilized: unconscious but no longer dying (PHB p.197)
       stabilized = true;
       logText += ` — ${character.name} is STABILIZED and no longer dying!`;
-      await base44.entities.Character.update(character_id, {
+      await base44.asServiceRole.entities.Character.update(character_id, {
         death_saves_success: newSuccesses,
         death_saves_failure: newFailures,
       });
     } else if (newFailures >= 3) {
       logText += ` — ${character.name} has DIED. ☠️`;
-      await base44.entities.Character.update(character_id, {
+      await base44.asServiceRole.entities.Character.update(character_id, {
         death_saves_success: newSuccesses,
         death_saves_failure: 3,
       });
     } else {
-      await base44.entities.Character.update(character_id, {
+      await base44.asServiceRole.entities.Character.update(character_id, {
         death_saves_success: newSuccesses,
         death_saves_failure: newFailures,
       });
@@ -370,7 +370,7 @@ export async function handleDeathSave(ctx) {
   const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
   const updatedCombatants = playerCombatant ? combatants.map(c => c.type === 'player' ? playerCombatant : c) : combatants;
 
-  await base44.entities.CombatLog.update(combat_id, {
+  await base44.asServiceRole.entities.CombatLog.update(combat_id, {
     combatants: updatedCombatants,
     log_entries: [...(combatLog.log_entries || []), logEntry],
     current_turn_index: nextIndex,

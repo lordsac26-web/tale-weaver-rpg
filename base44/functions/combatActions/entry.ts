@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
   // ─── COMPANION TURN (Beast Master Ranger, PHB p.93) ────────────────────────
   if (action === 'companion_turn') {
     const { target_id } = payload || {};
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
     const combatants = [...combatLog.combatants];
     const companion = combatants[combatLog.current_turn_index];
     if (!companion || companion.type !== 'companion' || !companion.is_conscious) {
@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
       || combatants.find(c => c.type === 'enemy' && c.is_conscious);
     if (!target) {
       const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
-      await base44.entities.CombatLog.update(combat_id, { current_turn_index: nextIndex, round: nextRound, world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false } });
+      await base44.asServiceRole.entities.CombatLog.update(combat_id, { current_turn_index: nextIndex, round: nextRound, world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false } });
       return Response.json({ no_target: true, next_turn_index: nextIndex });
     }
 
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     let roll = rollD20();
     let wolfAdv = false;
     if (wsC.player_rage_active && companion.owner_id) {
-      const owner = await base44.entities.Character.get(companion.owner_id).catch(() => null);
+      const owner = await base44.asServiceRole.entities.Character.get(companion.owner_id).catch(() => null);
       if ((owner?.class_choices?.totem_spirit || '').toLowerCase() === 'wolf') {
         roll = Math.max(roll, rollD20());
         wolfAdv = true;
@@ -100,13 +100,13 @@ Deno.serve(async (req) => {
     const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCombatants);
     const allDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
     const result = allDead ? 'victory' : 'ongoing';
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants, log_entries: [...(combatLog.log_entries || []), logEntry],
       current_turn_index: nextIndex, round: nextRound, is_active: result === 'ongoing', result,
       world_state: { ...(combatLog.world_state || {}), actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, companion_inspiration_die: null },
     });
     if (allDead) {
-      await base44.entities.GameSession.update(session_id, { in_combat: false });
+      await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
     }
 
     return Response.json({ hit, damage, log_entry: logEntry, result, combat_ended: result !== 'ongoing', next_turn_index: nextIndex });
@@ -115,8 +115,8 @@ Deno.serve(async (req) => {
   // ─── DRAGONBORN BREATH WEAPON (PHB p.34) ────────────────────────────────────
   if (action === 'breath_weapon') {
     const { target_ids } = payload || {};
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const character = await base44.entities.Character.get(character_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
     if ((character.race || '') !== 'Dragonborn') {
       return Response.json({ error: 'Breath Weapon is a Dragonborn racial trait.', invalid: true }, { status: 400 });
@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
     const numDice = charLevel >= 16 ? 5 : charLevel >= 11 ? 4 : charLevel >= 6 ? 3 : 2;
     const breathDC = 8 + statMod(character.constitution || 10) + (character.proficiency_bonus || 2);
 
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       short_rest_abilities: { ...sra, breath_weapon_used: true },
     });
 
@@ -178,13 +178,13 @@ Deno.serve(async (req) => {
     const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, updatedCombatants);
     const allDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
     const result = allDead ? 'victory' : 'ongoing';
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants, log_entries: [...(combatLog.log_entries || []), logEntry],
       current_turn_index: nextIndex, round: nextRound, is_active: result === 'ongoing', result,
       world_state: { ...ws, actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false },
     });
     if (allDead) {
-      await base44.entities.GameSession.update(session_id, { in_combat: false });
+      await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
     }
 
     return Response.json({ hit: true, damage: numDice * 6, log_entry: logEntry, result,
@@ -194,8 +194,8 @@ Deno.serve(async (req) => {
   // ─── SECOND WIND (Fighter, PHB p.72) ────────────────────────────────────────
   // Bonus action: regain 1d10 + fighter level HP. Once per short rest.
   if (action === 'second_wind') {
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const character = await base44.entities.Character.get(character_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
     if ((character.class || '').toLowerCase() !== 'fighter') {
       return Response.json({ error: 'Second Wind requires Fighter class.', invalid: true }, { status: 400 });
@@ -210,7 +210,7 @@ Deno.serve(async (req) => {
     }
     const healAmount = rollDice(10) + level;
     const newHp = Math.min(character.hp_max || 1, (character.hp_current || 0) + healAmount);
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       hp_current: newHp,
       short_rest_abilities: { ...sra, second_wind_used: true },
     });
@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
       text: `💨 ${character.name} uses Second Wind and heals ${healAmount} HP! (now ${newHp}/${character.hp_max})`
     };
     const ws = { ...(combatLog.world_state || {}), bonus_action_used: true };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: playerComp ? combatants.map(c => c.type === 'player' ? playerComp : c) : combatLog.combatants,
       log_entries: [...(combatLog.log_entries || []), logEntry], world_state: ws,
     });
@@ -233,8 +233,8 @@ Deno.serve(async (req) => {
   // Action: each undead within 30ft makes WIS save or is turned (flee) for 1 min.
   // Undead with CR ≤ floor(cleric level / 2) are destroyed outright.
   if (action === 'channel_divinity_turn_undead') {
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const character = await base44.entities.Character.get(character_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
     const level = character.level || 1;
     if ((character.class || '') !== 'Cleric' || level < 2) {
@@ -270,7 +270,7 @@ Deno.serve(async (req) => {
         hitLogs.push(`${target.name}: TURNED (will flee)`);
       }
     }
-    await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
+    await base44.asServiceRole.entities.Character.update(character_id, { short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
     const updatedCombatants = combatants.map(c => { const u = targets.find(t => t.id === c.id); return u || c; });
     const allDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
     const result = allDead ? 'victory' : 'ongoing';
@@ -279,19 +279,19 @@ Deno.serve(async (req) => {
       text: `✨ ${character.name} channels divine energy to Turn Undead! ${hitLogs.length > 0 ? hitLogs.join('; ') : 'No undead in range.'}${turned > 0 ? ` ${turned} undead turned!` : ''}`
     };
     const ws = { ...(combatLog.world_state || {}), actions_used_this_turn: (combatLog.world_state?.actions_used_this_turn || 0) + 1 };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants, log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: ws, is_active: result === 'ongoing', result,
     });
-    if (allDead) await base44.entities.GameSession.update(session_id, { in_combat: false });
+    if (allDead) await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
     return Response.json({ success: true, log_entry: logEntry, turned, result, combat_ended: result !== 'ongoing', uses_remaining: maxCD - (cdUsed + 1) });
   }
 
   // ─── CHANNEL DIVINITY: GUIDED STRIKE (Cleric L2, PHB p.59) ──────────────────
   // Does NOT consume an action: gain +10 to your next attack roll this turn.
   if (action === 'channel_divinity_guided_strike') {
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const character = await base44.entities.Character.get(character_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
     const level = character.level || 1;
     if ((character.class || '') !== 'Cleric' || level < 2) {
@@ -303,12 +303,12 @@ Deno.serve(async (req) => {
     if (cdUsed >= maxCD) {
       return Response.json({ error: 'Channel Divinity exhausted.', invalid: true }, { status: 400 });
     }
-    await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
+    await base44.asServiceRole.entities.Character.update(character_id, { short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
     const logEntry = {
       round: combatLog.round, actor: character.name, action: 'channel_divinity_guided_strike',
       text: `✨ ${character.name} uses Channel Divinity: Guided Strike — +10 to next attack roll!`
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), guided_strike_bonus: 10 },
     });
@@ -319,8 +319,8 @@ Deno.serve(async (req) => {
   // Action: restore HP to creatures within 30ft. Pool = 5 × cleric level.
   // No target heals above half their max HP.
   if (action === 'channel_divinity_preserve_life') {
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const character = await base44.entities.Character.get(character_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
     const level = character.level || 1;
     if ((character.class || '') !== 'Cleric' || level < 2) {
@@ -347,14 +347,14 @@ Deno.serve(async (req) => {
       healLogs.push(`${ally.name}: +${maxHeal} HP`);
     }
     const playerComp = combatants.find(c => c.type === 'player');
-    if (playerComp) await base44.entities.Character.update(character_id, { hp_current: playerComp.hp_current, short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
-    else await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
+    if (playerComp) await base44.asServiceRole.entities.Character.update(character_id, { hp_current: playerComp.hp_current, short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
+    else await base44.asServiceRole.entities.Character.update(character_id, { short_rest_abilities: { ...sra, channel_divinity_used: cdUsed + 1 } });
     const logEntry = {
       round: combatLog.round, actor: character.name, action: 'channel_divinity_preserve_life',
       text: `✨ ${character.name} uses Channel Divinity: Preserve Life! Pool: ${healPool} HP. ${healLogs.length > 0 ? healLogs.join('; ') : 'No allies needed healing.'}`
     };
     const ws = { ...(combatLog.world_state || {}), actions_used_this_turn: (combatLog.world_state?.actions_used_this_turn || 0) + 1 };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants, log_entries: [...(combatLog.log_entries || []), logEntry], world_state: ws,
     });
     return Response.json({ success: true, log_entry: logEntry, heal_pool: healPool, uses_remaining: maxCD - (cdUsed + 1) });
@@ -365,8 +365,8 @@ Deno.serve(async (req) => {
   // attack/cast/force a save. 1/short rest. Engine gives attackers disadvantage
   // and clears invisibility when the player attacks.
   if (action === 'hidden_step') {
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const character = await base44.entities.Character.get(character_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
     if ((character.race || '') !== 'Firbolg') {
       return Response.json({ error: 'Hidden Step is a Firbolg racial trait.', invalid: true }, { status: 400 });
@@ -380,7 +380,7 @@ Deno.serve(async (req) => {
     }
     const invisCond = { name: 'invisible', source: 'Hidden Step' };
     const charConds = (character.conditions || []).filter(c => (typeof c === 'string' ? c : c?.name) !== 'invisible');
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       conditions: [...charConds, invisCond],
       short_rest_abilities: { ...sra, hidden_step_used: true },
     });
@@ -393,7 +393,7 @@ Deno.serve(async (req) => {
       round: combatLog.round, actor: character.name, action: 'hidden_step',
       text: `👻 ${character.name} uses Hidden Step and vanishes from sight! Attacks against them have disadvantage until they attack.`
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants, log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },
     });
@@ -404,8 +404,8 @@ Deno.serve(async (req) => {
   // Bonus action: enemies within 10ft make a WIS save (DC 8 + prof + CON) or are
   // frightened until the end of your next turn. 1/short rest.
   if (action === 'daunting_roar') {
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const character = await base44.entities.Character.get(character_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
     if ((character.race || '') !== 'Leonin') {
       return Response.json({ error: 'Daunting Roar is a Leonin racial trait.', invalid: true }, { status: 400 });
@@ -430,12 +430,12 @@ Deno.serve(async (req) => {
       }
       hitLogs.push(`${target.name}: FRIGHTENED (${saveRoll} vs DC ${roarDC})`);
     }
-    await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, daunting_roar_used: true } });
+    await base44.asServiceRole.entities.Character.update(character_id, { short_rest_abilities: { ...sra, daunting_roar_used: true } });
     const logEntry = {
       round: combatLog.round, actor: character.name, action: 'daunting_roar',
       text: `🦁 ${character.name} lets out a Daunting Roar! ${hitLogs.join('; ')}`
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants, log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },
     });
@@ -446,8 +446,8 @@ Deno.serve(async (req) => {
   // Bonus action: Dash and gain temp HP = proficiency bonus. Usable proficiency
   // bonus times per long rest.
   if (action === 'adrenaline_rush') {
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
-    const character = await base44.entities.Character.get(character_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
     if ((character.race || '') !== 'Orc') {
       return Response.json({ error: 'Adrenaline Rush is an Orc racial trait.', invalid: true }, { status: 400 });
@@ -463,7 +463,7 @@ Deno.serve(async (req) => {
     }
     // Temp HP doesn't stack — keep the higher value (PHB p.198)
     const newTempHp = Math.max(character.temp_hp || 0, prof);
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       temp_hp: newTempHp,
       long_rest_abilities: { ...lra, adrenaline_rush_used: used + 1 },
     });
@@ -471,7 +471,7 @@ Deno.serve(async (req) => {
       round: combatLog.round, actor: character.name, action: 'adrenaline_rush',
       text: `💢 ${character.name} surges with Adrenaline Rush — Dashes and gains ${prof} temp HP! (${used + 1}/${prof} uses)`
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },
     });
@@ -484,13 +484,13 @@ Deno.serve(async (req) => {
   // front — it represents the crash when the rage ends).
   if (action === 'frenzy_attack') {
     const { target_id, raging } = payload || {};
-    const character = await base44.entities.Character.get(character_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
     const level = character.level || 1;
     if ((character.class || '') !== 'Barbarian' || !(character.subclass || '').toLowerCase().includes('berserker') || level < 3) {
       return Response.json({ error: 'Frenzy requires a Berserker Barbarian, level 3+.', invalid: true }, { status: 400 });
     }
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
     const isRaging = raging || (character.conditions || []).some(c => (typeof c === 'string' ? c : c?.name) === 'raging');
     if (!isRaging) {
       return Response.json({ error: 'Frenzy attacks are only possible while raging.', invalid: true }, { status: 400 });
@@ -531,7 +531,7 @@ Deno.serve(async (req) => {
       target.hp_current = Math.max(0, target.hp_current - damage);
       if (target.hp_current === 0) target.is_conscious = false;
     }
-    if (Object.keys(charUpdates).length > 0) await base44.entities.Character.update(character_id, charUpdates);
+    if (Object.keys(charUpdates).length > 0) await base44.asServiceRole.entities.Character.update(character_id, charUpdates);
 
     const logEntry = {
       round: combatLog.round, actor: character.name, action: 'frenzy_attack', target: target.name,
@@ -543,12 +543,12 @@ Deno.serve(async (req) => {
 
     const updatedCombatants = combatants.map(c => c.id === target.id ? target : c);
     const allDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: updatedCombatants, log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), bonus_action_used: true, frenzy_started: true },
       ...(allDead ? { is_active: false, result: 'victory' } : {}),
     });
-    if (allDead) await base44.entities.GameSession.update(session_id, { in_combat: false });
+    if (allDead) await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
     return Response.json({ success: true, hit, damage, log_entry: logEntry, result: allDead ? 'victory' : 'ongoing', combat_ended: allDead, bonus_action_used: true });
   }
 
@@ -557,12 +557,12 @@ Deno.serve(async (req) => {
   // damage against it, crits on 19-20, and heals you when it dies.
   if (action === 'hexblade_curse') {
     const { target_id } = payload || {};
-    const character = await base44.entities.Character.get(character_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
     if ((character.class || '') !== 'Warlock' || !(character.subclass || '').toLowerCase().includes('hexblade')) {
       return Response.json({ error: "Hexblade's Curse requires the Hexblade patron.", invalid: true }, { status: 400 });
     }
-    const combatLog = await base44.entities.CombatLog.get(combat_id);
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
     const sra = character.short_rest_abilities || {};
     if (sra.hexblade_curse_used) {
       return Response.json({ error: "Hexblade's Curse already used. Short rest to recover.", invalid: true }, { status: 400 });
@@ -576,12 +576,12 @@ Deno.serve(async (req) => {
     if (!target) return Response.json({ error: 'No conscious target.', invalid: true }, { status: 400 });
 
     target.hexblade_cursed_by = character_id;
-    await base44.entities.Character.update(character_id, { short_rest_abilities: { ...sra, hexblade_curse_used: true } });
+    await base44.asServiceRole.entities.Character.update(character_id, { short_rest_abilities: { ...sra, hexblade_curse_used: true } });
     const logEntry = {
       round: combatLog.round, actor: character.name, action: 'hexblade_curse', target: target.name,
       text: `☠️ ${character.name} places Hexblade's Curse on ${target.name} — +${character.proficiency_bonus || 2} damage against it, crits on 19-20, and its death restores HP!`,
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: combatants.map(c => c.id === target.id ? target : c),
       log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },

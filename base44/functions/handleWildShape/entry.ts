@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
 
   if (!character_id) return Response.json({ error: 'character_id is required' }, { status: 400 });
 
-  const character = await base44.entities.Character.get(character_id);
+  const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
   if (character.created_by !== user.email) return Response.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
     };
 
     // Persist Wild Shape state to the character
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       short_rest_abilities: {
         ...sra,
         wild_shape_used: usedCount + 1,
@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
     // If in active combat, update the combatant's stat block to beast form
     let combatantUpdate = null;
     if (combat_id) {
-      const combatLog = await base44.entities.CombatLog.get(combat_id);
+      const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
       if (combatLog) {
         const updatedCombatants = combatLog.combatants.map(c => {
           if (c.id !== character_id) return c;
@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
           action: 'wild_shape_transform',
           text: `🐾 ${character.name} uses Wild Shape, transforming into a ${beast.name}! (HP: ${beastHP}, AC: ${beast.armor_class || '?'})`,
         };
-        await base44.entities.CombatLog.update(combat_id, {
+        await base44.asServiceRole.entities.CombatLog.update(combat_id, {
           combatants: updatedCombatants,
           log_entries: [...(combatLog.log_entries || []), logEntry],
         });
@@ -233,7 +233,7 @@ Deno.serve(async (req) => {
     const druidHP = Math.max(0, original.hp_current || character.hp_current || 1);
 
     // Restore original character stats
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       hp_current: druidHP,
       short_rest_abilities: {
         ...sra,
@@ -246,7 +246,7 @@ Deno.serve(async (req) => {
 
     // If in active combat, restore combatant to humanoid stats
     if (combat_id) {
-      const combatLog = await base44.entities.CombatLog.get(combat_id);
+      const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
       if (combatLog) {
         const beastName = sra.wild_shape_beast?.name || 'beast form';
         const updatedCombatants = combatLog.combatants.map(c => {
@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
           action: 'wild_shape_revert',
           text: `🧙 ${character.name} reverts from ${beastName} back to humanoid form. (Druid HP: ${druidHP})`,
         };
-        await base44.entities.CombatLog.update(combat_id, {
+        await base44.asServiceRole.entities.CombatLog.update(combat_id, {
           combatants: updatedCombatants,
           log_entries: [...(combatLog.log_entries || []), logEntry],
         });
@@ -309,14 +309,14 @@ Deno.serve(async (req) => {
     if (beastRemaining === 0) {
       // Beast felled — force revert with carry-over damage
       const original = sra.wild_shape_original || {};
-      await base44.entities.Character.update(character_id, {
+      await base44.asServiceRole.entities.Character.update(character_id, {
         hp_current: druidHP,
         short_rest_abilities: { ...sra, wild_shape_active: false, wild_shape_beast: null, wild_shape_beast_hp: 0, wild_shape_original: null },
       });
 
       // Update the CombatLog combatant back to humanoid if in combat
       if (combat_id) {
-        const combatLog = await base44.entities.CombatLog.get(combat_id);
+        const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
         if (combatLog) {
           const beastName = sra.wild_shape_beast?.name || 'beast form';
           const updatedCombatants = combatLog.combatants.map(c => {
@@ -337,7 +337,7 @@ Deno.serve(async (req) => {
             round: combatLog.round, actor: character.name, action: 'wild_shape_revert',
             text: `💥 ${character.name}'s ${beastName} form collapses from the assault! Reverts to humanoid with ${druidHP} HP${overflow > 0 ? ` (${overflow} overflow damage carried through)` : ''}.`,
           };
-          await base44.entities.CombatLog.update(combat_id, {
+          await base44.asServiceRole.entities.CombatLog.update(combat_id, {
             combatants: updatedCombatants,
             log_entries: [...(combatLog.log_entries || []), revertEntry],
           });
@@ -348,7 +348,7 @@ Deno.serve(async (req) => {
     }
 
     // Beast still standing — update beast HP only
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       short_rest_abilities: { ...sra, wild_shape_beast_hp: beastRemaining },
     });
     return Response.json({ beast_felled: false, beast_hp_remaining: beastRemaining, druid_hp: originalDruidHP });
@@ -388,7 +388,7 @@ Deno.serve(async (req) => {
       constitution: character.constitution,
     };
 
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       short_rest_abilities: {
         ...sra, wild_shape_used: usedCount + 2, wild_shape_active: true,
         wild_shape_beast: elemental, wild_shape_beast_hp: elemental.hp,
@@ -397,7 +397,7 @@ Deno.serve(async (req) => {
     });
 
     if (combat_id) {
-      const cl = await base44.entities.CombatLog.get(combat_id);
+      const cl = await base44.asServiceRole.entities.CombatLog.get(combat_id);
       if (cl) {
         const updatedCombatants = cl.combatants.map(c => {
           if (c.id !== character_id) return c;
@@ -407,7 +407,7 @@ Deno.serve(async (req) => {
             damage_dice: elemental.damage_dice, attack_bonus: 7, damage_bonus: elemental.damage_bonus,
             damage_type: elemental.damage_type, is_wild_shaped: true, wild_shape_beast_name: elemental.name };
         });
-        await base44.entities.CombatLog.update(combat_id, {
+        await base44.asServiceRole.entities.CombatLog.update(combat_id, {
           combatants: updatedCombatants,
           log_entries: [...(cl.log_entries || []), { round: cl.round, actor: character.name, action: 'elemental_wild_shape', text: `🌀 ${character.name} uses Elemental Wild Shape, becoming a ${elemental.name}! (HP: ${elemental.hp}, AC: ${elemental.ac})` }],
         });
@@ -445,20 +445,20 @@ Deno.serve(async (req) => {
     const beastMaxHP = sra.wild_shape_beast?.hp_max || sra.wild_shape_beast?.hp || 10;
     const newBeastHP = Math.min(beastMaxHP, currentBeastHP + healAmt);
 
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       spell_slots: { ...(character.spell_slots || {}), [`level_${slotLevel}`]: slotsUsed + 1 },
       short_rest_abilities: { ...sra, wild_shape_beast_hp: newBeastHP },
     });
 
     // Update combatant if in combat
     if (combat_id) {
-      const cl = await base44.entities.CombatLog.get(combat_id);
+      const cl = await base44.asServiceRole.entities.CombatLog.get(combat_id);
       if (cl) {
         const updatedCombatants = cl.combatants.map(c => {
           if (c.id !== character_id) return c;
           return { ...c, hp_current: newBeastHP };
         });
-        await base44.entities.CombatLog.update(combat_id, {
+        await base44.asServiceRole.entities.CombatLog.update(combat_id, {
           combatants: updatedCombatants,
           log_entries: [...(cl.log_entries || []), { round: cl.round, actor: character.name, action: 'slot_heal', text: `💚 ${character.name} expends a ${slotLevel}th-level slot to heal their beast form for ${healAmt} HP! (${newBeastHP}/${beastMaxHP})` }],
         });

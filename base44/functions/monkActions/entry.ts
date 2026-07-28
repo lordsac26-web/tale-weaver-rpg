@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
 
   const { action, combat_id, character_id, payload } = await req.json();
 
-  const character = await base44.entities.Character.get(character_id);
+  const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
 
   const level = character.level || 1;
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
   if (!combat_id) {
     return Response.json({ error: 'These abilities can only be used in combat.', invalid: true }, { status: 400 });
   }
-  const combatLog = await base44.entities.CombatLog.get(combat_id);
+  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
 
   // ─── PATIENT DEFENSE (PHB p.78) ─────────────────────────────────────────────
   // Bonus action: spend 1 Ki to gain the effects of the Dodge action. Does NOT end the turn.
@@ -36,14 +36,14 @@ Deno.serve(async (req) => {
     if (combatLog.world_state?.bonus_action_used) {
       return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
     }
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       ki_points_remaining: Math.max(0, kiRemaining - 1),
     });
     const logEntry = {
       round: combatLog.round, actor: character.name, action: 'patient_defense',
       text: `🛡️ ${character.name} uses Patient Defense — gains the effects of Dodge (attacks against them have disadvantage). (${Math.max(0, kiRemaining - 1)} Ki remaining)`,
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), player_dodging: true, bonus_action_used: true },
     });
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     if (combatLog.world_state?.bonus_action_used) {
       return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
     }
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       ki_points_remaining: Math.max(0, kiRemaining - 1),
     });
     const mode = (payload?.mode === 'dash') ? 'Dash' : 'Disengage';
@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
       round: combatLog.round, actor: character.name, action: 'step_of_the_wind',
       text: `💨 ${character.name} uses Step of the Wind (${mode}) — ${mode === 'Dash' ? 'movement doubled' : 'movement provokes no opportunity attacks'} and jump distance doubled this turn. (${Math.max(0, kiRemaining - 1)} Ki remaining)`,
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       log_entries: [...(combatLog.log_entries || []), logEntry],
       world_state: { ...(combatLog.world_state || {}), bonus_action_used: true },
     });
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
     const saveFailed = saveRoll < kiDC;
 
     // Spend 1 Ki regardless of outcome
-    await base44.entities.Character.update(character_id, {
+    await base44.asServiceRole.entities.Character.update(character_id, {
       ki_points_remaining: Math.max(0, kiRemaining - 1),
     });
 
@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
       round: combatLog.round, actor: character.name, action: 'stunning_strike', target: target.name,
       hit: saveFailed, text: logText,
     };
-    await base44.entities.CombatLog.update(combat_id, {
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
       combatants: combatants.map(c => c.id === target.id ? target : c),
       log_entries: [...(combatLog.log_entries || []), logEntry],
     });
