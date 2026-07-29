@@ -1118,13 +1118,36 @@ export default function Game() {
   };
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: '#0d0a07' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#0d0a07', minHeight: '100dvh' }}>
       <div className="text-center">
         <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
           style={{ border: '2px solid rgba(201,169,110,0.3)', boxShadow: '0 0 30px rgba(201,169,110,0.1)' }}>
           <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#c9a96e' }} />
         </div>
         <p className="font-fantasy text-sm tracking-widest" style={{ color: 'rgba(220,190,140,0.85)' }}>Preparing your world...</p>
+      </div>
+    </div>
+  );
+
+  if (loadError) return (
+    <div className="min-h-screen flex items-center justify-center p-6 parchment-bg" style={{ minHeight: '100dvh' }}>
+      <div className="glass-panel rounded-2xl p-8 max-w-md w-full text-center">
+        <h2 className="font-fantasy text-xl mb-3 text-glow-gold" style={{ color: '#f0c040' }}>The Realm Flickers...</h2>
+        <p className="mb-6 text-sm leading-relaxed" style={{ color: 'rgba(232,213,183,0.9)', fontFamily: 'EB Garamond, serif', fontSize: '1rem' }}>
+          Your adventure could not be loaded: {loadError}
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <button onClick={() => { setLoadError(null); setLoading(true); loadState().catch((err) => { setLoadError(err?.message || 'Failed to load.'); setLoading(false); }); }}
+            className="px-6 py-3 rounded-xl btn-fantasy flex items-center gap-2 justify-center"
+            style={{ minHeight: 44, minWidth: 120 }}>
+            <Loader2 className="w-4 h-4" /> Retry
+          </button>
+          <button onClick={() => navigate('/Home')}
+            className="px-6 py-3 rounded-xl btn-fantasy flex items-center gap-2 justify-center"
+            style={{ minHeight: 44, minWidth: 120 }}>
+            <ChevronLeft className="w-4 h-4" /> Back to Sessions
+          </button>
+        </div>
       </div>
     </div>
   );
