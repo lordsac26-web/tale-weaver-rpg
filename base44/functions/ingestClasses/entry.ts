@@ -17,31 +17,58 @@ Deno.serve(async (req) => {
     const data = await res.json();
     const classes = data.results || [];
 
-    // Transform to DnDClass entity schema
-    const transformed = classes.map(c => ({
-      name: c.name,
-      description: c.desc || '',
-      hit_die: parseInt(c.hit_die) || 8,
-      primary_ability: c.primary_ability || 'strength',
-      saving_throw_proficiencies: c.saving_throws || [],
-      armor_proficiencies: c.armor_proficiencies || [],
-      weapon_proficiencies: c.weapon_proficiencies || [],
-      skill_choices: c.skill_choices || [],
-      skill_count: c.skill_count || 2,
-      subclasses: c.subclasses || [],
-      features_by_level: c.features_by_level || {},
-      spell_slots_by_level: c.spell_slots_by_level || {},
-      spellcasting_ability: c.spellcasting_ability || '',
-      raw_data: c
-    }));
+    // Idempotent upsert: for each Open5e class, query DnDClass by exact name;
+    // update the existing canonical record if found (no duplicate creation),
+    // otherwise create a new record.
+    const db = base44.asServiceRole.entities.DnDClass;
+    let created = 0;
+    let updated = 0;
+    const skipped = [];
 
-    // Bulk create
-    const result = await base44.asServiceRole.entities.DnDClass.bulkCreate(transformed);
-    
-    return Response.json({ 
-      success: true, 
-      count: result.length,
-      message: `Ingested ${result.length} classes`
+    for (const c of classes) {
+      const name = c.name;
+      if (!name) { skipped.push({ reason: 'missing name', data: c }); continue; }
+
+      const transformed = {
+        name,
+        description: c.desc || '',
+        hit_die: parseInt(c.hit_die) || 8,
+        primary_ability: c.primary_ability || 'strength',
+        saving_throw_proficiencies: c.saving_throws || [],
+        armor_proficiencies: c.armor_proficiencies || [],
+        weapon_proficiencies: c.weapon_proficiencies || [],
+        skill_choices: c.skill_choices || [],
+        skill_count: c.skill_count || 2,
+        subclasses: c.subclasses || [],
+        features_by_level: c.features_by_level || {},
+        spell_slots_by_level: c.spell_slots_by_level || {},
+        spellcasting_ability: c.spellcasting_ability || '',
+        raw_data: c
+      };
+
+      // Query existing records by exact name
+      const existing = await db.filter({ name }, undefined, 50);
+      if (existing.length > 0) {
+        // Update only the canonical record (first match); leave any duplicates untouched.
+        const canonical = existing[0];
+        await db.update(canonical.id, transformed);
+        updated++;
+        if (existing.length > 1) {
+          skipped.push({ reason: `${existing.length - 1} duplicate(s) left untouched`, name });
+        }
+      } else {
+        await db.create(transformed);
+        created++;
+      }
+    }
+
+    return Response.json({
+      success: true,
+      created,
+      updated,
+      skipped,
+      total: classes.length,
+      message: `Created ${created}, updated ${updated} of ${classes.length} classes`
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
