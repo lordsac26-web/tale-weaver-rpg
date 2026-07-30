@@ -246,7 +246,11 @@ export default function Game() {
     const skillVal = (character.skills || {})[skill];
     const isProficient = skillVal === 'proficient' || skillVal === true;
     const isExpert = skillVal === 'expert';
-    return base + (isExpert ? prof * 2 : isProficient ? prof : 0);
+    const now = Date.now();
+    const activeSkillBonus = (character.active_modifiers || [])
+      .filter(m => m?.effect === 'skill_bonus' && canonicalSkillName(m.skill) === skill && (!m.expires_at || new Date(m.expires_at).getTime() > now))
+      .reduce((sum, m) => sum + (Number(m.bonus) || 0), 0);
+    return base + (isExpert ? prof * 2 : isProficient ? prof : 0) + activeSkillBonus;
   };
 
   // Generate brief feedback text for a skill check result
@@ -400,11 +404,37 @@ export default function Game() {
     }
   };
 
+  // Convert supported utility-spell requests from the free-text Act window into
+  // authoritative mechanics before asking the DM to narrate the outcome.
+  const maybeCastStoryUtilitySpell = async (action) => {
+    if (!/\bpass\s+without\s+(?:a\s+)?trace\b/i.test(action || '')) return null;
+    const result = await base44.functions.invoke('castUtilitySpell', {
+      session_id: sessionId,
+      character_id: character?.id,
+      spell_name: 'Pass without Trace',
+    });
+    const data = result.data;
+    if (!data?.success) throw new Error(data?.error || 'Pass without Trace could not be cast.');
+    setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers } : prev);
+    setNarrative(prev => [...prev, {
+      type: 'roll_result',
+      text: data.already_active
+        ? '🔮 Pass without Trace is already active; no additional spell slot was used.'
+        : `🔮 Pass without Trace cast. +10 Stealth while concentrating; ${data.remaining_slots}/${data.max_slots} level-2 slots remain.`,
+      success: true,
+    }]);
+    return data;
+  };
+
   // Continues a custom action's story after its (optional) skill check resolves.
   const runProposalStory = async (action, checkResult) => {
     setStoryLoading(true);
     try {
-      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: action + checkResult });
+      const mechanicalCast = await maybeCastStoryUtilitySpell(action);
+      const mechanicsContext = mechanicalCast
+        ? ` [MECHANICS: ${mechanicalCast.spell_name} is active; level-${mechanicalCast.slot_level || 2} slot state was updated; concentration and +10 Stealth apply.]`
+        : '';
+      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: action + checkResult + mechanicsContext });
       const data = result.data;
       if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);

@@ -94,14 +94,15 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const concentrationSpell = world_state?.concentration_spell;
 
   const handleAction = () => {
-    if (!selectedTarget) return;
+    const details = action === 'spell' && selectedSpell ? (SPELL_DETAILS[selectedSpell] || {}) : {};
+    const effectiveTarget = details.is_utility ? (player?.id || selectedTarget) : selectedTarget;
+    if (!effectiveTarget) return;
     if (action === 'spell' && selectedSpell) {
-      const details = SPELL_DETAILS[selectedSpell] || {};
       // Warn player if they're replacing concentration
       if (concentrationSpell && details.requires_concentration && concentrationSpell !== selectedSpell) {
         if (!window.confirm(`You are concentrating on ${concentrationSpell}. Casting ${selectedSpell} will end it. Continue?`)) return;
       }
-      onPlayerAttack(selectedTarget, 'spell', {
+      onPlayerAttack(effectiveTarget, 'spell', {
         name: selectedSpell,
         damage_dice: details.damage_dice || '2d6',
         damage_type: details.damage_type || 'force',
