@@ -1132,7 +1132,7 @@ export default function Game() {
   const inCombat = session?.in_combat && combat;
 
   return (
-    <div className="flex flex-col parchment-bg overflow-hidden min-h-0" style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
+    <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
       {/* HUD */}
       <HUD character={character} session={session} />
 

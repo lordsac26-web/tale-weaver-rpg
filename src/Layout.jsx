@@ -41,6 +41,16 @@ export default function Layout({ children, currentPageName }) {
           color: var(--text-bright);
         }
 
+        /* Full-viewport game shell with dvh fallback (vh) for older browsers.
+           Inline height:'100dvh' on the Game root is ignored as invalid on
+           browsers without dvh support, so this class cascade takes over. */
+        .game-viewport {
+          height: 100vh;
+          height: 100dvh;
+          max-height: 100vh;
+          max-height: 100dvh;
+        }
+
         body { background: var(--wood-deep); color: var(--text-bright); }
 
         /* ── Fonts ── */
