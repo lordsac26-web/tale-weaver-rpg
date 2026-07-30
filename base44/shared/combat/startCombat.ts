@@ -8,6 +8,18 @@ export async function handleStartCombat(ctx) {
   let { enemies } = payload;
   const session = await base44.asServiceRole.entities.GameSession.get(session_id);
   if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
+
+  // Idempotency: a delayed/repeated story callback must resume the existing live
+  // encounter instead of creating another active CombatLog for the same session.
+  if (session.in_combat && session.combat_state?.combat_id) {
+    try {
+      const existing = await base44.asServiceRole.entities.CombatLog.get(session.combat_state.combat_id);
+      if (existing?.is_active) {
+        return Response.json({ combat_id: existing.id, combatants: existing.combatants || [], initiative_order: existing.initiative_order || [], resumed: true });
+      }
+    } catch { /* stale reference; create a fresh encounter below */ }
+  }
+
   const character = await base44.asServiceRole.entities.Character.get(session.character_id);
 
   // ─── DYNAMIC ENCOUNTER SCALING ──────────────────────────────────────────
@@ -73,7 +85,7 @@ export async function handleStartCombat(ctx) {
   // Player initiative
   const playerInitRoll = rollD20();
   const alertBonus = hasAlert ? 5 : 0;
-  const playerInitMod = statMod(character.dexterity) + (character.initiative || 0) + alertBonus + harengonInitBonus;
+  const playerInitMod = statMod(character.dexterity) + alertBonus + harengonInitBonus;
   // Heavy armor STR requirement speed penalty (PHB p.144): -10 ft if STR < armor minimum
   let playerSpeed = character.speed || 30;
   const equippedArmor = character.equipped?.armor;
@@ -180,6 +192,10 @@ export async function handleStartCombat(ctx) {
     return b.initiative_mod - a.initiative_mod;
   });
 
+  const activeConcentration = (character.active_modifiers || []).find(m =>
+    m?.concentration && (!m.expires_at || new Date(m.expires_at).getTime() > Date.now())
+  );
+
   const combatLog = await base44.asServiceRole.entities.CombatLog.create({
     session_id,
     round: 1,
@@ -189,7 +205,7 @@ export async function handleStartCombat(ctx) {
     log_entries: [{ round: 1, text: `⚔️ Combat begins! Initiative: ${combatants.map(c => `${c.name} (${c.initiative_total})`).join(' → ')}` }],
     is_active: true,
     result: 'ongoing',
-    world_state: { actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false }
+    world_state: { actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, concentration_spell: activeConcentration?.source || null, concentration_caster: activeConcentration ? character.name : null }
   });
 
   await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: combatLog.id } });
