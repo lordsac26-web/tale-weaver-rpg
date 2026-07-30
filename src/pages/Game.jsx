@@ -72,6 +72,21 @@ export default function Game() {
   // the staged callback runs once the player rolls (or skips on cancel = auto).
   const [pendingRoll, setPendingRoll] = useState(null);
 
+  // Combat creation and the following entity read can briefly race each other.
+  // Retry the authoritative CombatLog read so mobile never falls back to stale
+  // story choices after the server has already marked the session in combat.
+  const readActiveCombat = useCallback(async (combatId, attempts = 6) => {
+    if (!combatId) return null;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      const logs = await base44.entities.CombatLog.filter({ id: combatId });
+      if (logs[0]?.is_active) return logs[0];
+      if (attempt < attempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
+      }
+    }
+    return null;
+  }, []);
+
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate('/Home'); return; }
     const sessions = await base44.entities.GameSession.filter({ id: sessionId });
@@ -119,7 +134,8 @@ export default function Game() {
       });
       setStarted(true);
       const lastEntry = sess.story_log[sess.story_log.length - 1];
-      if (lastEntry?.choices?.length > 0) setChoices(lastEntry.choices);
+      if (!sess.in_combat && lastEntry?.choices?.length > 0) setChoices(lastEntry.choices);
+      else if (sess.in_combat) setChoices([]);
     }
 
     // Combat panel is shown only when the session is in combat AND a live combat log
@@ -127,9 +143,9 @@ export default function Game() {
     // combat, and clears stale combat state when the fight is over — preventing the
     // UI from getting stuck on the combat panel after victory/defeat/flee.
     if (sess.in_combat && sess.combat_state?.combat_id) {
-      const logs = await base44.entities.CombatLog.filter({ id: sess.combat_state.combat_id });
-      if (logs[0]?.is_active) setCombat(logs[0]);
-      else setCombat(null);
+      const activeCombat = await readActiveCombat(sess.combat_state.combat_id);
+      setCombat(activeCombat);
+      if (activeCombat) setCombatViewTab('combat');
     } else {
       setCombat(null);
     }
@@ -141,7 +157,7 @@ export default function Game() {
     }
     
     setLoading(false);
-  }, [sessionId]);
+  }, [sessionId, readActiveCombat]);
 
   useEffect(() => {
     loadState().catch((err) => {
@@ -611,6 +627,12 @@ export default function Game() {
   };
 
   const startCombat = async (enemies) => {
+    // Clear story affordances immediately. If the server write is visible before
+    // the new CombatLog read, the user must never be allowed to submit another
+    // story choice and accidentally start a duplicate fight.
+    setChoices([]);
+    setCombatViewTab('combat');
+
     const result = await base44.functions.invoke('combatEngine', {
       action: 'start_combat',
       session_id: sessionId,
@@ -618,9 +640,20 @@ export default function Game() {
       payload: { enemies }
     });
 
-    // Load the full CombatLog from DB to ensure combat state matches DB exactly
-    const logs = await base44.entities.CombatLog.filter({ id: result.data.combat_id });
-    if (logs[0]) setCombat(logs[0]);
+    const combatId = result.data?.combat_id;
+    if (!combatId) throw new Error('Combat engine did not return a combat ID.');
+
+    setSession(prev => prev ? {
+      ...prev,
+      in_combat: true,
+      combat_state: { ...(prev.combat_state || {}), combat_id: combatId },
+    } : prev);
+
+    // Read-after-write can be briefly eventually consistent; retry rather than
+    // rendering the non-combat story branch with stale choices.
+    const activeCombat = await readActiveCombat(combatId);
+    if (!activeCombat) throw new Error('Combat was created but its state is not available yet. Reload to resume safely.');
+    setCombat(activeCombat);
 
     await loadState();
   };
@@ -629,6 +662,23 @@ export default function Game() {
     const logs = await base44.entities.CombatLog.filter({ id: combatId });
     if (logs[0]) setCombat(logs[0]);
   };
+
+  // Self-heal an in-combat session whose local CombatLog was not yet available
+  // on the first render (mobile/network latency). This also resumes fights after
+  // a refresh without exposing stale story choices.
+  useEffect(() => {
+    const combatId = session?.combat_state?.combat_id;
+    if (!session?.in_combat || !combatId || combat?.id === combatId) return;
+    let cancelled = false;
+    readActiveCombat(combatId).then(activeCombat => {
+      if (!cancelled && activeCombat) {
+        setCombat(activeCombat);
+        setCombatViewTab('combat');
+        setChoices([]);
+      }
+    }).catch(err => console.error('Failed to resume active combat:', err));
+    return () => { cancelled = true; };
+  }, [session?.in_combat, session?.combat_state?.combat_id, combat?.id, readActiveCombat]);
 
   const handlePlayerAttack = async (targetId, actionType, weaponOrSpell, modifiers = {}) => {
     if (!combat?.id && !session?.combat_state?.combat_id) return;
@@ -1129,7 +1179,8 @@ export default function Game() {
     </div>
   );
 
-  const inCombat = session?.in_combat && combat;
+  const inCombat = !!(session?.in_combat && combat);
+  const combatPending = !!(session?.in_combat && !combat);
 
   return (
     <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
@@ -1180,7 +1231,15 @@ export default function Game() {
 
       {/* Main Game Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
-        {inCombat ? (
+        {combatPending ? (
+          <div className="flex-1 flex items-center justify-center min-h-0 p-6" style={{ background: 'rgba(10,3,3,0.9)' }}>
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" style={{ color: '#dc2626' }} />
+              <p className="font-fantasy uppercase tracking-widest" style={{ color: '#fca5a5' }}>Entering combat…</p>
+              <p className="text-xs mt-2" style={{ color: 'rgba(220,190,180,0.6)' }}>Synchronizing initiative and combatants.</p>
+            </div>
+          </div>
+        ) : inCombat ? (
           <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             {/* Mobile tab switcher — only visible on small screens */}
             <div className="flex lg:hidden flex-shrink-0" style={{ borderBottom: '1px solid rgba(180,30,30,0.2)', background: 'rgba(10,3,3,0.8)' }}>
