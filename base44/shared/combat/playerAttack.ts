@@ -201,6 +201,16 @@ export async function handlePlayerAttack(ctx) {
       const updatedLog = [...(combatLog.log_entries || []), utilEntry];
       const { nextIndex: nextIndex2, nextRound: nextRound2, actionsRemaining: actionsRemaining2, worldState: newWorldState2 } =
         resolveActionAndAdvance(combatLog, combatants, character);
+      if (spell.requires_concentration) {
+        newWorldState2.concentration_spell = spell.name;
+        newWorldState2.concentration_caster = character.name;
+      }
+      if ((spell.special_effects || []).includes('pass_without_trace')) {
+        const now = Date.now();
+        const active = (character.active_modifiers || []).filter(m => !m.concentration && (!m.expires_at || new Date(m.expires_at).getTime() > now));
+        active.push({ id: `spell_pass_without_trace_${now}`, source: 'Pass without Trace', effect: 'skill_bonus', skill: 'Stealth', bonus: 10, concentration: true, applied_at: new Date(now).toISOString(), expires_at: new Date(now + 3600000).toISOString(), duration: '1 hour' });
+        await base44.asServiceRole.entities.Character.update(character_id, { active_modifiers: active });
+      }
       await base44.asServiceRole.entities.CombatLog.update(combat_id, {
         log_entries: updatedLog, current_turn_index: nextIndex2, round: nextRound2, world_state: newWorldState2
       });
@@ -1018,6 +1028,13 @@ export async function handlePlayerAttack(ctx) {
   if (concentrationBrokenSelf) {
     newWorldState.concentration_spell = null;
     newWorldState.concentration_caster = null;
+    const concentrationOwner = updatedCombatants.find(c => c.type === 'player' && c.name === concCaster);
+    if (concentrationOwner) {
+      const fullOwner = await base44.asServiceRole.entities.Character.get(concentrationOwner.id);
+      await base44.asServiceRole.entities.Character.update(concentrationOwner.id, {
+        active_modifiers: (fullOwner.active_modifiers || []).filter(m => !m.concentration),
+      });
+    }
     logEntry.text += ` ⚠️ ${concentrationBrokenSelf}`;
     logEntry.concentration_broken = true;
   }
