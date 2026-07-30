@@ -23,9 +23,6 @@ import {
 Deno.serve(async (req) => {
   try {
   const base44 = createClientFromRequest(req);
-  const user = await base44.auth.me();
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
   const { action, session_id, combat_id, character_id, payload } = await req.json();
   const ctx = { base44, session_id, combat_id, character_id, payload };
 
