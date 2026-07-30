@@ -114,6 +114,7 @@ export const SPELLS_BY_CLASS = {
 
 // Detailed spell mechanics
 export const SPELL_DETAILS = {
+  'Pass without Trace': { level: 2, school: 'Abjuration', casting_time: '1 action', range: 'Self (30-foot aura)', components: 'V, S, M', duration: 'Concentration, up to 1 hour', description: 'A veil of shadows and silence grants affected creatures +10 to Dexterity (Stealth) checks and prevents tracking except by magical means.', attack_type: 'utility', is_utility: true, requires_concentration: true, special_effects: ['pass_without_trace', 'stealth_bonus_10'] },
   // === CANTRIPS ===
   'Fire Bolt': { level: 0, school: 'Evocation', casting_time: '1 action', range: '120 ft', components: 'V, S', duration: 'Instantaneous', description: 'A mote of fire hurls at a creature or object.', attack_type: 'ranged_spell_attack', damage_dice: '1d10', damage_type: 'fire', higher_levels: 'Damage increases at levels 5 (2d10), 11 (3d10), 17 (4d10).' },
   'Ray of Frost': { level: 0, school: 'Evocation', casting_time: '1 action', range: '60 ft', components: 'V, S', duration: 'Instantaneous', description: 'A frigid beam of blue-white light streaks toward the target. Hit: target\'s speed is reduced by 10ft until next turn.', attack_type: 'ranged_spell_attack', damage_dice: '1d8', damage_type: 'cold', special_effects: ['speed_reduce_10'] },
