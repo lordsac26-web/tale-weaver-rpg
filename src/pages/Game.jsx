@@ -1132,7 +1132,7 @@ export default function Game() {
   const inCombat = session?.in_combat && combat;
 
   return (
-    <div className="h-screen flex flex-col parchment-bg overflow-hidden" style={{ color: '#e8d5b7' }}>
+    <div className="flex flex-col parchment-bg overflow-hidden min-h-0" style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
       {/* HUD */}
       <HUD character={character} session={session} />
 
@@ -1251,7 +1251,7 @@ export default function Game() {
                 </motion.div>
               </div>
             ) : (
-              <div className="h-full flex flex-col overflow-hidden">
+              <div className="h-full flex flex-col min-h-0 overflow-hidden">
                 <div className="flex flex-shrink-0" style={{ background: 'rgba(8,5,2,0.72)', borderBottom: '1px solid rgba(180,140,90,0.16)' }}>
                   {[['story', '📜 Story'], ['journal', '📓 Journal']].map(([key, label]) => (
                     <button
