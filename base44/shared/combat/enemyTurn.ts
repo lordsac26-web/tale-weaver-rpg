@@ -435,6 +435,11 @@ export async function handleEnemyTurn(ctx) {
     if (conc.broken) {
       newWS.concentration_spell = null;
       newWS.concentration_caster = null;
+      if (charFull) {
+        await base44.asServiceRole.entities.Character.update(player.id, {
+          active_modifiers: (charFull.active_modifiers || []).filter(m => !m.concentration),
+        });
+      }
       logText += ` ⚠️ Concentration on ${concentrationSpellCheck} broken! (CON save: ${conc.save} vs DC ${conc.dc})`;
     }
   }
