@@ -7,7 +7,6 @@ const UTILITY_SPELLS = {
   'pass without trace': {
     canonicalName: 'Pass without Trace',
     level: 2,
-    durationMs: 60 * 60 * 1000,
     modifier: { effect: 'skill_bonus', skill: 'Stealth', bonus: 10 },
     concentration: true,
   },
@@ -45,7 +44,18 @@ Deno.serve(async (req) => {
     const active = (character.active_modifiers || []).filter(m => !m.expires_at || new Date(m.expires_at).getTime() > now);
     const existing = active.find(m => m.source === config.canonicalName && m.concentration);
     if (existing) {
-      return Response.json({ success: true, already_active: true, spell_name: config.canonicalName, spell_slots: character.spell_slots || {}, active_modifiers: active });
+      // Utility-spell duration follows game time/concentration, not wall-clock time;
+      // normalize older records that used a real-time expires_at value.
+      const activeModifiers = active.map(m => {
+        if (m !== existing || !m.expires_at) return m;
+        const normalized = { ...m };
+        delete normalized.expires_at;
+        return normalized;
+      });
+      if (existing.expires_at) {
+        await base44.asServiceRole.entities.Character.update(character_id, { active_modifiers: activeModifiers });
+      }
+      return Response.json({ success: true, already_active: true, spell_name: config.canonicalName, spell_slots: character.spell_slots || {}, active_modifiers: activeModifiers });
     }
 
     const slotKey = `level_${config.level}`;
@@ -64,7 +74,6 @@ Deno.serve(async (req) => {
       ...config.modifier,
       concentration: true,
       applied_at: appliedAt,
-      expires_at: new Date(now + config.durationMs).toISOString(),
       duration: '1 hour',
     };
     const spellSlots = { ...(character.spell_slots || {}), [slotKey]: used + 1 };

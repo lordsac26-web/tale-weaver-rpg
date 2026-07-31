@@ -208,7 +208,7 @@ export async function handlePlayerAttack(ctx) {
       if ((spell.special_effects || []).includes('pass_without_trace')) {
         const now = Date.now();
         const active = (character.active_modifiers || []).filter(m => !m.concentration && (!m.expires_at || new Date(m.expires_at).getTime() > now));
-        active.push({ id: `spell_pass_without_trace_${now}`, source: 'Pass without Trace', effect: 'skill_bonus', skill: 'Stealth', bonus: 10, concentration: true, applied_at: new Date(now).toISOString(), expires_at: new Date(now + 3600000).toISOString(), duration: '1 hour' });
+        active.push({ id: `spell_pass_without_trace_${now}`, source: 'Pass without Trace', effect: 'skill_bonus', skill: 'Stealth', bonus: 10, concentration: true, applied_at: new Date(now).toISOString(), duration: '1 hour (game time)' });
         await base44.asServiceRole.entities.Character.update(character_id, { active_modifiers: active });
       }
       await base44.asServiceRole.entities.CombatLog.update(combat_id, {

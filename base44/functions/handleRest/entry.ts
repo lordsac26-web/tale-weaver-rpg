@@ -82,41 +82,12 @@ function getBardLevels(character) {
 Deno.serve(async (req) => {
   try {
   const base44 = createClientFromRequest(req);
-  const user = await base44.auth.me();
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
   const { character_id, rest_type, hit_dice_to_spend, had_food_water = true, location_safe = false, action, slot_levels } = await req.json();
 
-  // Fetch the character. Try the USER-SCOPED .get() first (RLS proves ownership).
-  // If that returns nothing — which can happen for legitimately-owned characters when
-  // RLS evaluation is fragile — fall back to a SERVICE-ROLE read plus an explicit
-  // ownership check. This guarantees the real owner can always rest while still
-  // blocking other users. (Root cause of "rest only plays the animation" was the
-  // user-scoped fetch silently returning null and 404ing.)
-  let character = null;
-  // H4 fix: remember which client successfully read the character — the SAME client
-  // must perform the update and re-read below, or fallback users get a rest whose
-  // writes silently fail under the same RLS quirk that broke their read.
-  let dbClient = base44.asServiceRole;
-  try {
-    character = await base44.asServiceRole.entities.Character.get(character_id);
-  } catch {
-    character = null;
-  }
-  if (!character) {
-    try {
-      const svcChar = await base44.asServiceRole.entities.Character.get(character_id);
-      // Allow only the owner (by email or user id) to rest this character.
-      if (svcChar && (svcChar.created_by === user.email || svcChar.created_by_id === user.id)) {
-        character = svcChar;
-        dbClient = base44.asServiceRole; // ownership verified above — write with the client that can see the record
-      } else if (svcChar) {
-        return Response.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    } catch {
-      character = null;
-    }
-  }
+  // Server-authoritative rest execution: all entity access uses the service role so
+  // scheduled/server calls do not depend on a browser auth session.
+  const dbClient = base44.asServiceRole;
+  const character = await dbClient.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
 
   // ── ARCANE RECOVERY (Wizard, PHB p.115) ──────────────────────────────────
@@ -364,6 +335,11 @@ Deno.serve(async (req) => {
 
     updates.death_saves_success = 0;
     updates.death_saves_failure = 0;
+    const nonConcentrationModifiers = (character.active_modifiers || []).filter(m => !m.concentration);
+    if (nonConcentrationModifiers.length !== (character.active_modifiers || []).length) {
+      restorations.push('Concentration ended');
+    }
+    updates.active_modifiers = nonConcentrationModifiers;
     updates.short_rest_abilities = {};
     updates.long_rest_abilities = {};
     // Portent (Divination Wizard 2+, PHB p.116): foresee 2 d20 rolls (3 at L14) after a long rest
