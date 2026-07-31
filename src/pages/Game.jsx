@@ -66,6 +66,7 @@ export default function Game() {
   const [showRestModal, setShowRestModal] = useState(false);
   const [mainViewTab, setMainViewTab] = useState('story');
   const [combatViewTab, setCombatViewTab] = useState('combat'); // 'story' | 'combat' | 'journal' — for mobile
+  const [combatSyncError, setCombatSyncError] = useState(null);
   const [showLevelUpToast, setShowLevelUpToast] = useState(false);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   // Manual dice-roll prompt: when set, a pre-configured roll modal is shown and
@@ -87,12 +88,40 @@ export default function Game() {
     return null;
   }, []);
 
+  const resolveSessionCombat = useCallback(async (sessionRecord) => {
+    if (!sessionRecord?.in_combat || !sessionRecord?.combat_state?.combat_id) {
+      return { session: sessionRecord, combat: null, recovered: false, error: null };
+    }
+    const combatId = sessionRecord.combat_state.combat_id;
+    const activeCombat = await readActiveCombat(combatId);
+    if (activeCombat) return { session: sessionRecord, combat: activeCombat, recovered: false, error: null };
+
+    const logs = await base44.entities.CombatLog.filter({ id: combatId });
+    const referenced = logs[0];
+    if (referenced && !referenced.is_active) {
+      const repaired = { ...sessionRecord, in_combat: false, combat_state: {} };
+      await base44.entities.GameSession.update(sessionId, { in_combat: false, combat_state: {} });
+      return { session: repaired, combat: null, recovered: true, error: null };
+    }
+    return {
+      session: sessionRecord,
+      combat: null,
+      recovered: false,
+      error: 'The combat record is temporarily unavailable. Retry synchronization before taking another action.',
+    };
+  }, [readActiveCombat, sessionId]);
+
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate('/Home'); return; }
     const sessions = await base44.entities.GameSession.filter({ id: sessionId });
-    const sess = sessions[0];
+    let sess = sessions[0];
     if (!sess) { navigate('/Home'); return; }
+    const combatResolution = await resolveSessionCombat(sess);
+    sess = combatResolution.session;
     setSession(sess);
+    setCombat(combatResolution.combat);
+    setCombatSyncError(combatResolution.error);
+    if (combatResolution.combat) setCombatViewTab('combat');
 
     let chars = await base44.entities.Character.filter({ id: sess.character_id });
     let loadedChar = chars[0] || null;
@@ -138,16 +167,11 @@ export default function Game() {
       else if (sess.in_combat) setChoices([]);
     }
 
-    // Combat panel is shown only when the session is in combat AND a live combat log
-    // exists. This block is authoritative in BOTH directions: it loads an active
-    // combat, and clears stale combat state when the fight is over — preventing the
-    // UI from getting stuck on the combat panel after victory/defeat/flee.
-    if (sess.in_combat && sess.combat_state?.combat_id) {
-      const activeCombat = await readActiveCombat(sess.combat_state.combat_id);
-      setCombat(activeCombat);
-      if (activeCombat) setCombatViewTab('combat');
-    } else {
-      setCombat(null);
+    // resolveSessionCombat above is authoritative in both directions: it resumes
+    // an active fight, exits an already-completed fight, or surfaces a retryable
+    // synchronization error instead of leaving the player on an endless spinner.
+    if (combatResolution.recovered) {
+      setNarrative(prev => [...prev, { type: 'narration', text: 'The previous combat had already ended. Your story state has been safely restored.' }]);
     }
     
     // If character is at 0 HP on load, show death saves modal immediately
@@ -157,7 +181,7 @@ export default function Game() {
     }
     
     setLoading(false);
-  }, [sessionId, readActiveCombat]);
+  }, [sessionId, resolveSessionCombat]);
 
   useEffect(() => {
     loadState().catch((err) => {
@@ -625,7 +649,7 @@ export default function Game() {
       setCombatLoading(true);
       try {
         if (combatId) await base44.entities.CombatLog.update(combatId, { is_active: false, result: 'resolved' });
-        await base44.entities.GameSession.update(sessionId, { in_combat: false });
+        await base44.entities.GameSession.update(sessionId, { in_combat: false, combat_state: {} });
         setCombat(null);
         const storyResult = await base44.functions.invoke('generateStory', {
           session_id: sessionId, action: 'choice',
@@ -693,22 +717,24 @@ export default function Game() {
     if (logs[0]) setCombat(logs[0]);
   };
 
-  // Self-heal an in-combat session whose local CombatLog was not yet available
-  // on the first render (mobile/network latency). This also resumes fights after
-  // a refresh without exposing stale story choices.
+  // Self-heal a delayed combat record, and also recover sessions whose referenced
+  // combat completed while the browser was disconnected.
   useEffect(() => {
     const combatId = session?.combat_state?.combat_id;
     if (!session?.in_combat || !combatId || combat?.id === combatId) return;
     let cancelled = false;
-    readActiveCombat(combatId).then(activeCombat => {
-      if (!cancelled && activeCombat) {
-        setCombat(activeCombat);
+    resolveSessionCombat(session).then(resolution => {
+      if (cancelled) return;
+      setSession(resolution.session);
+      setCombat(resolution.combat);
+      setCombatSyncError(resolution.error);
+      if (resolution.combat) {
         setCombatViewTab('combat');
         setChoices([]);
       }
-    }).catch(err => console.error('Failed to resume active combat:', err));
+    }).catch(err => setCombatSyncError(err?.message || 'Failed to resume active combat.'));
     return () => { cancelled = true; };
-  }, [session?.in_combat, session?.combat_state?.combat_id, combat?.id, readActiveCombat]);
+  }, [session?.in_combat, session?.combat_state?.combat_id, combat?.id, resolveSessionCombat]);
 
   const handlePlayerAttack = async (targetId, actionType, weaponOrSpell, modifiers = {}) => {
     if (!combat?.id && !session?.combat_state?.combat_id) return;
@@ -791,9 +817,9 @@ export default function Game() {
         await saveCombatHistory(combatId, 'victory', victoriousEnemies, freshCombat?.round);
         // Authoritatively exit combat BEFORE the (fallible) story call, and clear it
         // locally so the UI leaves the combat panel even if generateStory fails.
-        await base44.entities.GameSession.update(sessionId, { in_combat: false });
+        await base44.entities.GameSession.update(sessionId, { in_combat: false, combat_state: {} });
         setCombat(null);
-        setSession(prev => prev ? { ...prev, in_combat: false } : prev);
+        setSession(prev => prev ? { ...prev, in_combat: false, combat_state: {} } : prev);
         try {
           const storyResult = await base44.functions.invoke('generateStory', {
             session_id: sessionId, action: 'choice', custom_input: 'The combat has ended in victory. Narrate the aftermath and present the next choices.'
@@ -850,9 +876,9 @@ export default function Game() {
       setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! The battle is won.' }]);
       await saveCombatHistory(combatId, 'victory', victoriousEnemies, freshCombat?.round);
       // Authoritatively leave combat (don't rely on a later story call to do it).
-      await base44.entities.GameSession.update(sessionId, { in_combat: false });
+      await base44.entities.GameSession.update(sessionId, { in_combat: false, combat_state: {} });
       setCombat(null);
-      setSession(prev => prev ? { ...prev, in_combat: false } : prev);
+      setSession(prev => prev ? { ...prev, in_combat: false, combat_state: {} } : prev);
       try {
         const storyResult = await base44.functions.invoke('generateStory', {
           session_id: sessionId, action: 'choice', custom_input: 'The combat has ended in victory. Narrate the aftermath and present the next choices.'
@@ -967,7 +993,7 @@ export default function Game() {
           setShowDeathSaves(true);
           setCombat(null);
           // Clear the in_combat flag on the session so resume doesn't loop back into combat
-          await base44.entities.GameSession.update(sessionId, { in_combat: false });
+          await base44.entities.GameSession.update(sessionId, { in_combat: false, combat_state: {} });
           break;
         }
         await reloadCombat(combatId);
@@ -1098,7 +1124,7 @@ export default function Game() {
       setNarrative(prev => [...prev, { type: 'roll_result', text: `Acrobatics: ${roll.final_result} vs DC 12 — You escape!`, success: true }]);
       const combatId = combat?.id || session?.combat_state?.combat_id;
       if (combatId) await base44.entities.CombatLog.update(combatId, { is_active: false, result: 'fled' });
-      await base44.entities.GameSession.update(sessionId, { in_combat: false });
+      await base44.entities.GameSession.update(sessionId, { in_combat: false, combat_state: {} });
       setCombat(null);
       const storyResult = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: 'You fled from combat successfully.' });
       if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
@@ -1210,7 +1236,7 @@ export default function Game() {
   );
 
   const inCombat = !!(session?.in_combat && combat);
-  const combatPending = !!(session?.in_combat && !combat);
+  const combatPending = !!(session?.in_combat && !combat && !combatSyncError);
 
   return (
     <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
@@ -1261,7 +1287,20 @@ export default function Game() {
 
       {/* Main Game Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
-        {combatPending ? (
+        {combatSyncError ? (
+          <div className="flex-1 flex items-center justify-center min-h-0 p-6" style={{ background: 'rgba(10,3,3,0.9)' }}>
+            <div className="text-center max-w-sm">
+              <Swords className="w-8 h-8 mx-auto mb-3" style={{ color: '#fca5a5' }} />
+              <p className="font-fantasy uppercase tracking-widest" style={{ color: '#fca5a5' }}>Combat synchronization paused</p>
+              <p className="text-sm mt-2" style={{ color: 'rgba(220,190,180,0.75)' }}>{combatSyncError}</p>
+              <button onClick={() => { setCombatSyncError(null); setLoading(true); loadState().finally(() => setLoading(false)); }}
+                className="mt-4 px-4 py-2 rounded-lg font-fantasy text-sm"
+                style={{ background: 'rgba(100,10,10,0.9)', border: '1px solid rgba(220,50,50,0.6)', color: '#fca5a5' }}>
+                Retry Combat Sync
+              </button>
+            </div>
+          </div>
+        ) : combatPending ? (
           <div className="flex-1 flex items-center justify-center min-h-0 p-6" style={{ background: 'rgba(10,3,3,0.9)' }}>
             <div className="text-center">
               <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" style={{ color: '#dc2626' }} />

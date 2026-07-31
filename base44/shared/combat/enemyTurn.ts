@@ -475,7 +475,7 @@ export async function handleEnemyTurn(ctx) {
     ...(allEnemiesDown ? { is_active: false, result: 'victory' } : {}),
   });
   if (allEnemiesDown) {
-    await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false });
+    await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false, combat_state: {} });
     await awardVictoryXP(base44, combat_id, updatedCombatants, player.id);
   }
 

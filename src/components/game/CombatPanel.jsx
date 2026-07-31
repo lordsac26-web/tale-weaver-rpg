@@ -171,7 +171,11 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   };
 
   const isDodging = !!world_state?.player_dodging;
-  const canAct = isPlayerTurn && selectedTarget && (action !== 'spell' || selectedSpell);
+  const selectedSpellDetails = selectedSpell ? (SPELL_DETAILS[selectedSpell] || {}) : {};
+  const actionReady = action === 'spell'
+    ? !!selectedSpell && (!!selectedTarget || !!selectedSpellDetails.is_utility)
+    : !!selectedTarget;
+  const canAct = isPlayerTurn && actionReady;
 
   return (
     <div className="flex flex-col h-full overflow-hidden relative" style={{ background: 'rgba(8,3,3,0.95)' }}>
@@ -225,6 +229,20 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         </div>
       </div>
 
+      {/* Always-visible mobile turn guidance */}
+      <div className="lg:hidden flex items-center justify-between gap-3 px-3 py-2 flex-shrink-0"
+        style={{ background: isPlayerTurn ? 'rgba(20,65,35,0.85)' : 'rgba(55,20,20,0.85)', borderBottom: '1px solid rgba(201,169,110,0.2)' }}>
+        <div>
+          <p className="font-fantasy text-xs uppercase tracking-wider" style={{ color: isPlayerTurn ? '#86efac' : '#fca5a5' }}>
+            {isPlayerTurn ? 'Your turn' : `${currentCombatant?.name || 'Enemy'} is acting`}
+          </p>
+          <p className="text-xs" style={{ color: 'rgba(232,213,183,0.72)' }}>
+            {isPlayerTurn ? 'Select a target, choose an action, then use the full-width action button.' : 'Use the process-turn button below when ready.'}
+          </p>
+        </div>
+        {isPlayerTurn && <span className="font-mono text-xs whitespace-nowrap" style={{ color: '#fde68a' }}>{actionsRemaining}/{actionsPerTurn} actions</span>}
+      </div>
+
       {/* Initiative Tracker */}
       <InitiativeTracker
         combatants={combatants || []}
@@ -234,11 +252,11 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         combatStartTime={combat.created_date}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden min-h-0">
         {/* LEFT — targets + actions (single unified scroll container so the
             action panel / Attack button can never be clipped, regardless of
             how many ability toasts are stacked) */}
-        <div className="flex flex-col w-1/2 overflow-y-auto min-h-0" style={{ borderRight: '1px solid rgba(180,50,50,0.2)' }}>
+        <div className="flex flex-col w-full lg:w-1/2 overflow-visible lg:overflow-y-auto min-h-0" style={{ borderRight: '1px solid rgba(180,50,50,0.2)' }}>
 
           {/* Enemy targets */}
           <div className="p-3 space-y-2">
@@ -563,8 +581,9 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Swords className="w-4 h-4" />}
                 {loading ? 'Resolving...' :
                   actionsRemaining === 0 ? 'No Actions Left' :
-                  !selectedTarget ? 'Select a Target' :
                   action === 'spell' && !selectedSpell ? 'Select a Spell' :
+                  action === 'spell' && selectedSpellDetails.is_utility ? `Cast ${selectedSpell}` :
+                  !selectedTarget ? 'Select a Target' :
                   action === 'spell' ? `Cast ${selectedSpell}` :
                   (() => {
                     const w = getActiveWeapon();
@@ -587,7 +606,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         </div>
 
         {/* RIGHT — Visual Combat Log */}
-        <div className="flex flex-col w-1/2 overflow-hidden">
+        <div className="flex flex-col w-full lg:w-1/2 min-h-[180px] max-h-[35dvh] lg:max-h-none overflow-hidden flex-shrink-0 lg:flex-shrink">
           <CombatLog logEntries={log_entries || []} player={player} />
         </div>
       </div>

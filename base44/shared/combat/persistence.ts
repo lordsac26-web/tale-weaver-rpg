@@ -22,7 +22,7 @@ export const finalizeAndPersistCombat = async (base44, character_id, cid, sid, u
     world_state: worldState, is_active: result === 'ongoing', result, ...extraFields
   });
   if (result !== 'ongoing') {
-    await base44.asServiceRole.entities.GameSession.update(sid, { in_combat: false });
+    await base44.asServiceRole.entities.GameSession.update(sid, { in_combat: false, combat_state: {} });
     if (result === 'victory') await awardVictoryXP(base44, cid, updatedCombatants, character_id);
   }
   return result;
