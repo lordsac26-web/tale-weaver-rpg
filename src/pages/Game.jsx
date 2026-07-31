@@ -822,8 +822,8 @@ export default function Game() {
     if (data.combat_ended) {
       if (data.result === 'victory') {
         // Grab combatants from the freshly reloaded log (not stale combat state)
-        const freshLogs = await base44.entities.CombatLog.filter({ id: combatId });
-        const freshCombat = freshLogs[0];
+        const freshState = await readCombatState(combatId);
+        const freshCombat = freshState.combat;
         const victoriousEnemies = (freshCombat?.combatants || []).filter(c => c.type === 'enemy');
         setDefeatedEnemies(victoriousEnemies);
         setShowLootModal(true);
@@ -847,8 +847,8 @@ export default function Game() {
           setChoices([]);
         }
       } else if (data.result === 'defeat') {
-        const freshLogs = await base44.entities.CombatLog.filter({ id: combatId });
-        const freshCombat = freshLogs[0];
+        const freshState = await readCombatState(combatId);
+        const freshCombat = freshState.combat;
         const defeatedEnemyList = (freshCombat?.combatants || combat?.combatants || []).filter(c => c.type === 'enemy');
         await saveCombatHistory(combatId, 'defeat', defeatedEnemyList, freshCombat?.round);
         // Per 5e: player reaches 0 HP → death saving throws, not instant death
@@ -882,8 +882,8 @@ export default function Game() {
     }
     await reloadCombat(combatId);
     if (data?.combat_ended && data?.result === 'victory') {
-      const freshLogs = await base44.entities.CombatLog.filter({ id: combatId });
-      const freshCombat = freshLogs[0];
+      const freshState = await readCombatState(combatId);
+      const freshCombat = freshState.combat;
       const victoriousEnemies = (freshCombat?.combatants || []).filter(c => c.type === 'enemy');
       setDefeatedEnemies(victoriousEnemies);
       setShowLootModal(true);
@@ -911,9 +911,9 @@ export default function Game() {
   // Legendary Actions (MM): a legendary creature spends actions at the END of another
   // creature's turn. We resolve up to 3 at the end of the player's turn.
   const processLegendaryActions = async (combatId) => {
-    const logs = await base44.entities.CombatLog.filter({ id: combatId });
-    const log = logs[0];
-    if (!log || !log.is_active) return;
+    const state = await readCombatState(combatId);
+    const log = state.combat;
+    if (state.state !== 'active' || !log) return;
     const hasLegendary = (log.combatants || []).some(c => c.type === 'enemy' && c.is_conscious && c.is_legendary);
     const player = (log.combatants || []).find(c => c.type === 'player');
     if (!hasLegendary || !player?.is_conscious) return;
@@ -943,16 +943,17 @@ export default function Game() {
 
     // Record the starting round — enemies should only act once per round.
     // When the round advances, stop and let the player go next.
-    const initialLogs = await base44.entities.CombatLog.filter({ id: combatId });
-    const startRound = initialLogs[0]?.round || 1;
-    if (!initialLogs[0]) return; // combat log gone — bail out cleanly
+    const initialState = await readCombatState(combatId);
+    const initialLog = initialState.combat;
+    const startRound = initialLog?.round || 1;
+    if (initialState.state !== 'active' || !initialLog) return;
 
     let attempts = 0;
     while (attempts < 10) {
       attempts++;
-      const logs = await base44.entities.CombatLog.filter({ id: combatId });
-      const log = logs[0];
-      if (!log || !log.is_active) break;
+      const state = await readCombatState(combatId);
+      const log = state.combat;
+      if (state.state !== 'active' || !log) break;
       // Stop when a new round has begun — prevents enemies from acting twice
       if (log.round > startRound) break;
       const current = log.combatants[log.current_turn_index];
@@ -1034,8 +1035,8 @@ export default function Game() {
     // Fetch current round from DB if not provided, to avoid stale closure on combat?.round
     let totalRounds = freshRound;
     if (totalRounds == null) {
-      const logs = await base44.entities.CombatLog.filter({ id: combatId });
-      totalRounds = logs[0]?.round || 0;
+      const state = await readCombatState(combatId);
+      totalRounds = state.combat?.round || 0;
     }
     await base44.entities.CombatLog.update(combatId, {
       result,
@@ -1060,10 +1061,17 @@ export default function Game() {
     }
     
     setCombatLoading(true);
-    await processEnemyTurns(combatId);
-    await reloadCombat(combatId);
-    await loadState();
-    setCombatLoading(false);
+    try {
+      await processEnemyTurns(combatId);
+      await reloadCombat(combatId);
+      await loadState();
+    } catch (error) {
+      console.error('Enemy turn processing failed:', error);
+      setNarrative(prev => [...prev, { type: 'roll_result', text: error?.message || 'Enemy turn processing failed. Retry the turn.', success: false }]);
+      setCombatSyncError(error?.message || 'Enemy turn processing failed. Retry synchronization.');
+    } finally {
+      setCombatLoading(false);
+    }
   };
 
   const handleEndTurn = async () => {
@@ -1091,8 +1099,8 @@ export default function Game() {
     await reloadCombat(combatId);
     
     // Only process enemy turns if combat is still active
-    const freshLogs = await base44.entities.CombatLog.filter({ id: combatId });
-    if (freshLogs[0]?.is_active) {
+    const freshState = await readCombatState(combatId);
+    if (freshState.state === 'active') {
       await processEnemyTurns(combatId);
     }
     
