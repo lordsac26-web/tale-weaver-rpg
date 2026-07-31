@@ -67,10 +67,16 @@ export default function LootModal({ enemies = [], character, onClose, onCollect 
       inventory: [...(character.inventory || []), ...selectedItems],
     };
 
-    await base44.entities.Character.update(character.id, updates);
-    await onCollect(updates, loot);
-    setCollected(true);
-    setCollecting(false);
+    try {
+      await base44.entities.Character.update(character.id, updates);
+      await onCollect(updates, loot);
+      setCollected(true);
+    } catch (error) {
+      console.error('Loot collection failed:', error);
+      setLootError(error?.message || 'Loot was saved, but the story handoff paused. Close this window to continue.');
+    } finally {
+      setCollecting(false);
+    }
   };
 
   const toggleItem = (item) => {

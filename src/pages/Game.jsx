@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 
 import { useNavigate } from 'react-router-dom';
@@ -59,6 +59,8 @@ export default function Game() {
   const [lastCombatEvent, setLastCombatEvent] = useState(null);
   const [showLootModal, setShowLootModal] = useState(false);
   const [defeatedEnemies, setDefeatedEnemies] = useState([]);
+  const [completedCombatId, setCompletedCombatId] = useState(null);
+  const victoryResumeInFlight = useRef(false);
   const [companions, setCompanions] = useState([]);
   const [showCompanions, setShowCompanions] = useState(false);
   const [showDeathModal, setShowDeathModal] = useState(false);
@@ -826,26 +828,13 @@ export default function Game() {
         const freshCombat = freshState.combat;
         const victoriousEnemies = (freshCombat?.combatants || []).filter(c => c.type === 'enemy');
         setDefeatedEnemies(victoriousEnemies);
+        setCompletedCombatId(combatId);
+        victoryResumeInFlight.current = false;
         setShowLootModal(true);
-        setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! The battle is won. Your enemies lie defeated.' }]);
+        setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! Search the fallen, then continue the story.' }]);
         await saveCombatHistory(combatId, 'victory', victoriousEnemies, freshCombat?.round);
-        // Authoritatively exit combat BEFORE the (fallible) story call, and clear it
-        // locally so the UI leaves the combat panel even if generateStory fails.
-        await base44.entities.GameSession.update(sessionId, { in_combat: false, combat_state: {} });
         setCombat(null);
         setSession(prev => prev ? { ...prev, in_combat: false, combat_state: {} } : prev);
-        try {
-          const storyResult = await base44.functions.invoke('generateStory', {
-            session_id: sessionId, action: 'choice', custom_input: 'The combat has ended in victory. Narrate the aftermath and present the next choices.'
-          });
-          if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
-          setChoices(storyResult.data?.choices || []);
-        } catch (err) {
-          console.error('Post-victory story generation failed:', err);
-          // Give the player a way forward even if the DM call failed.
-          setNarrative(prev => [...prev, { type: 'narration', text: 'The dust settles. (The storyteller paused — describe what you do next using the action box below.)' }]);
-          setChoices([]);
-        }
       } else if (data.result === 'defeat') {
         const freshState = await readCombatState(combatId);
         const freshCombat = freshState.combat;
@@ -886,23 +875,13 @@ export default function Game() {
       const freshCombat = freshState.combat;
       const victoriousEnemies = (freshCombat?.combatants || []).filter(c => c.type === 'enemy');
       setDefeatedEnemies(victoriousEnemies);
+      setCompletedCombatId(combatId);
+      victoryResumeInFlight.current = false;
       setShowLootModal(true);
-      setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! The battle is won.' }]);
+      setNarrative(prev => [...prev, { type: 'narration', text: '⚔️ Victory! Search the fallen, then continue the story.' }]);
       await saveCombatHistory(combatId, 'victory', victoriousEnemies, freshCombat?.round);
-      // Authoritatively leave combat (don't rely on a later story call to do it).
-      await base44.entities.GameSession.update(sessionId, { in_combat: false, combat_state: {} });
       setCombat(null);
       setSession(prev => prev ? { ...prev, in_combat: false, combat_state: {} } : prev);
-      try {
-        const storyResult = await base44.functions.invoke('generateStory', {
-          session_id: sessionId, action: 'choice', custom_input: 'The combat has ended in victory. Narrate the aftermath and present the next choices.'
-        });
-        if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
-        setChoices(storyResult.data?.choices || []);
-      } catch (err) {
-        console.error('Post-victory story generation failed:', err);
-        setNarrative(prev => [...prev, { type: 'narration', text: 'The dust settles. (Describe what you do next using the action box below.)' }]);
-      }
     }
     await loadState();
     setCombatLoading(false);
@@ -1023,6 +1002,32 @@ export default function Game() {
     }
   };
 
+  const resumeStoryAfterVictory = async () => {
+    if (victoryResumeInFlight.current) return;
+    victoryResumeInFlight.current = true;
+    setShowLootModal(false);
+    setMainViewTab('story');
+    setCombatViewTab('story');
+    setStoryLoading(true);
+    try {
+      const storyResult = await base44.functions.invoke('generateStory', {
+        session_id: sessionId,
+        action: 'choice',
+        custom_input: 'The combat has ended in victory and the player has finished searching the defeated enemies. Narrate the immediate aftermath, preserve current HP and depleted resources, and provide the next meaningful choices. Do not award duplicate combat XP, do not generate additional automatic loot, and do not immediately start another combat.'
+      });
+      if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
+      setChoices(storyResult.data?.choices || []);
+      await loadState();
+    } catch (error) {
+      console.error('Post-loot story generation failed:', error);
+      setNarrative(prev => [...prev, { type: 'narration', text: 'The battlefield falls silent. The path forward is open—describe what you do next below.' }]);
+      setChoices([]);
+      setCombatSyncError(error?.message || 'The storyteller paused after combat. You can continue with a custom action.');
+    } finally {
+      setStoryLoading(false);
+    }
+  };
+
   // Saves a completed encounter snapshot to the CombatLog for history tracking
   // Takes an optional freshRound param to avoid reading from stale combat state closure
   const saveCombatHistory = async (combatId, result, enemies, freshRound) => {
@@ -1038,15 +1043,19 @@ export default function Game() {
       const state = await readCombatState(combatId);
       totalRounds = state.combat?.round || 0;
     }
-    await base44.entities.CombatLog.update(combatId, {
-      result,
-      is_active: false,
-      enemies_faced: enemySnapshot,
-      session_title: session?.title || 'Unknown Campaign',
-      character_name: character?.name || '',
-      location: session?.current_location || '',
-      total_rounds: totalRounds,
-      encounter_date: new Date().toISOString(),
+    await base44.functions.invoke('combatEngine', {
+      action: 'update_combat_history',
+      session_id: sessionId,
+      combat_id: combatId,
+      character_id: character?.id,
+      payload: { updates: {
+        enemies_faced: enemySnapshot,
+        session_title: session?.title || 'Unknown Campaign',
+        character_name: character?.name || '',
+        location: session?.current_location || '',
+        total_rounds: totalRounds,
+        encounter_date: new Date().toISOString(),
+      } },
     });
   };
 
@@ -1520,7 +1529,7 @@ export default function Game() {
           <LootModal
             enemies={defeatedEnemies}
             character={character}
-            onClose={() => setShowLootModal(false)}
+            onClose={resumeStoryAfterVictory}
             onCollect={async (updates, lootSnapshot) => {
               // Use functional updater to get current character state, avoiding stale closure
               setCharacter(prev => {
@@ -1537,11 +1546,18 @@ export default function Game() {
                 }
                 return { ...prev, ...updates };
               });
-              // Persist loot snapshot to combat history record
-              if (lootSnapshot && session?.combat_state?.combat_id) {
-                await base44.entities.CombatLog.update(session.combat_state.combat_id, {
-                  loot_collected: lootSnapshot,
-                });
+              try {
+                if (lootSnapshot && completedCombatId) {
+                  await base44.functions.invoke('combatEngine', {
+                    action: 'update_combat_history',
+                    session_id: sessionId,
+                    combat_id: completedCombatId,
+                    character_id: character?.id,
+                    payload: { updates: { loot_collected: lootSnapshot } },
+                  });
+                }
+              } finally {
+                await resumeStoryAfterVictory();
               }
             }}
           />

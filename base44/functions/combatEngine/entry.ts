@@ -48,8 +48,28 @@ Deno.serve(async (req) => {
     }
   };
 
+  // Narrow service-role write for completed-combat history. Browser-scoped
+  // CombatLog writes can be blocked because combat records are service-created.
+  const handleUpdateCombatHistory = async ({ base44, session_id, combat_id, payload }) => {
+    if (!session_id || !combat_id) return Response.json({ error: 'session_id and combat_id are required' }, { status: 400 });
+    const [session, combat] = await Promise.all([
+      base44.asServiceRole.entities.GameSession.get(session_id),
+      base44.asServiceRole.entities.CombatLog.get(combat_id),
+    ]);
+    if (!session || !combat || combat.session_id !== session.id) {
+      return Response.json({ error: 'Combat does not belong to this session' }, { status: 403 });
+    }
+    const requested = payload?.updates || {};
+    const allowed = ['enemies_faced', 'session_title', 'character_name', 'location', 'total_rounds', 'encounter_date', 'loot_collected'];
+    const updates = Object.fromEntries(allowed.filter(key => requested[key] !== undefined).map(key => [key, requested[key]]));
+    if (!Object.keys(updates).length) return Response.json({ error: 'No permitted history fields supplied' }, { status: 400 });
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, updates);
+    return Response.json({ success: true, combat_id, updated_fields: Object.keys(updates) });
+  };
+
   const HANDLERS = {
     get_combat_state: handleGetCombatState,
+    update_combat_history: handleUpdateCombatHistory,
     start_combat: handleStartCombat,
     player_attack: handlePlayerAttack,
     offhand_attack: handleOffhandAttack,
