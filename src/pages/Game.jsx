@@ -73,20 +73,30 @@ export default function Game() {
   // the staged callback runs once the player rolls (or skips on cancel = auto).
   const [pendingRoll, setPendingRoll] = useState(null);
 
-  // Combat creation and the following entity read can briefly race each other.
-  // Retry the authoritative CombatLog read so mobile never falls back to stale
-  // story choices after the server has already marked the session in combat.
+  // CombatLogs are created by service-role backend functions and may not be
+  // visible to browser-scoped entity reads under RLS. Always resume through the
+  // read-only authoritative combatEngine action instead of querying CombatLog here.
+  const readCombatState = useCallback(async (combatId) => {
+    if (!combatId || !sessionId) return { state: 'none', combat: null };
+    const result = await base44.functions.invoke('combatEngine', {
+      action: 'get_combat_state',
+      session_id: sessionId,
+      combat_id: combatId,
+      payload: { combat_id: combatId },
+    });
+    return result.data || { state: 'missing', combat: null };
+  }, [sessionId]);
+
   const readActiveCombat = useCallback(async (combatId, attempts = 6) => {
     if (!combatId) return null;
     for (let attempt = 0; attempt < attempts; attempt++) {
-      const logs = await base44.entities.CombatLog.filter({ id: combatId });
-      if (logs[0]?.is_active) return logs[0];
-      if (attempt < attempts - 1) {
-        await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
-      }
+      const state = await readCombatState(combatId);
+      if (state.state === 'active' && state.combat) return state.combat;
+      if (state.state === 'completed') return null;
+      if (attempt < attempts - 1) await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
     }
     return null;
-  }, []);
+  }, [readCombatState]);
 
   const resolveSessionCombat = useCallback(async (sessionRecord) => {
     if (!sessionRecord?.in_combat || !sessionRecord?.combat_state?.combat_id) {
@@ -96,9 +106,8 @@ export default function Game() {
     const activeCombat = await readActiveCombat(combatId);
     if (activeCombat) return { session: sessionRecord, combat: activeCombat, recovered: false, error: null };
 
-    const logs = await base44.entities.CombatLog.filter({ id: combatId });
-    const referenced = logs[0];
-    if (referenced && !referenced.is_active) {
+    const authoritative = await readCombatState(combatId);
+    if (authoritative.state === 'completed') {
       const repaired = { ...sessionRecord, in_combat: false, combat_state: {} };
       await base44.entities.GameSession.update(sessionId, { in_combat: false, combat_state: {} });
       return { session: repaired, combat: null, recovered: true, error: null };
@@ -109,7 +118,7 @@ export default function Game() {
       recovered: false,
       error: 'The combat record is temporarily unavailable. Retry synchronization before taking another action.',
     };
-  }, [readActiveCombat, sessionId]);
+  }, [readActiveCombat, readCombatState, sessionId]);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate('/Home'); return; }
@@ -713,8 +722,12 @@ export default function Game() {
   };
 
   const reloadCombat = async (combatId) => {
-    const logs = await base44.entities.CombatLog.filter({ id: combatId });
-    if (logs[0]) setCombat(logs[0]);
+    const state = await readCombatState(combatId);
+    if (state.state === 'active' && state.combat) setCombat(state.combat);
+    else if (state.state === 'completed') {
+      setCombat(null);
+      setSession(prev => prev ? { ...prev, in_combat: false, combat_state: {} } : prev);
+    }
   };
 
   // Self-heal a delayed combat record, and also recover sessions whose referenced

@@ -26,7 +26,30 @@ Deno.serve(async (req) => {
   const { action, session_id, combat_id, character_id, payload } = await req.json();
   const ctx = { base44, session_id, combat_id, character_id, payload };
 
+  // Authoritative, read-only combat resume. CombatLog records are created by the
+  // service role, so browser-scoped entity reads can be invisible under RLS even
+  // when the session legitimately belongs to the player.
+  const handleGetCombatState = async ({ base44, session_id, combat_id, payload }) => {
+    if (!session_id) return Response.json({ error: 'session_id is required' }, { status: 400 });
+    const session = await base44.asServiceRole.entities.GameSession.get(session_id);
+    if (!session) return Response.json({ state: 'missing_session', combat: null }, { status: 404 });
+    const requestedId = combat_id || payload?.combat_id || session.combat_state?.combat_id;
+    const referencedId = session.combat_state?.combat_id || null;
+    if (!requestedId) return Response.json({ state: 'none', combat: null, session_in_combat: !!session.in_combat });
+    if (referencedId && requestedId !== referencedId) {
+      return Response.json({ state: 'mismatch', combat: null, combat_id: requestedId, referenced_combat_id: referencedId }, { status: 409 });
+    }
+    try {
+      const combat = await base44.asServiceRole.entities.CombatLog.get(requestedId);
+      if (!combat) return Response.json({ state: 'missing', combat: null, combat_id: requestedId });
+      return Response.json({ state: combat.is_active ? 'active' : 'completed', combat, combat_id: requestedId, session_in_combat: !!session.in_combat });
+    } catch {
+      return Response.json({ state: 'missing', combat: null, combat_id: requestedId });
+    }
+  };
+
   const HANDLERS = {
+    get_combat_state: handleGetCombatState,
     start_combat: handleStartCombat,
     player_attack: handlePlayerAttack,
     offhand_attack: handleOffhandAttack,
