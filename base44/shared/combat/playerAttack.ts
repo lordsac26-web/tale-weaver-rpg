@@ -21,7 +21,16 @@ export async function handlePlayerAttack(ctx) {
 
   const combatants = [...combatLog.combatants];
   const target = combatants.find(c => c.id === target_id);
-  if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });
+  if (!target) return Response.json({ error: 'Target not found', invalid: true }, { status: 404 });
+  if (target.type === 'enemy' && (!target.is_conscious || (target.hp_current ?? target.hp ?? 0) <= 0)) {
+    const nextTarget = combatants.find(c => c.type === 'enemy' && c.is_conscious && (c.hp_current ?? c.hp ?? 0) > 0);
+    return Response.json({
+      error: `${target.name} is already defeated. Select another target.`,
+      invalid: true,
+      target_defeated: true,
+      suggested_target_id: nextTarget?.id || null,
+    }, { status: 409 });
+  }
 
   // Centralized attack roll: gather all advantage/disadvantage SOURCES here, then
   // roll exactly once at the end (see resolveAttackRoll in helpers). The

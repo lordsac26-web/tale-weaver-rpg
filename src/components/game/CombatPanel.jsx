@@ -41,6 +41,15 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   // Paladin Divine Smite: chosen spell slot level for the next weapon attack (null = no smite)
   const [smiteSlotLevel, setSmiteSlotLevel] = useState(null);
 
+  // Keep the selection authoritative after every combat reload. If the selected
+  // enemy was just defeated, move to the next conscious enemy so an Extra Attack
+  // can never be submitted against a stale/dead target.
+  useEffect(() => {
+    const liveEnemies = (combat?.combatants || []).filter(c => c.type === 'enemy' && c.is_conscious && (c.hp_current ?? c.hp ?? 0) > 0);
+    const selectedIsLive = liveEnemies.some(c => c.id === selectedTarget);
+    if (!selectedIsLive) setSelectedTarget(liveEnemies[0]?.id || null);
+  }, [combat?.combatants, selectedTarget]);
+
   if (!combat) return null;
 
   const { combatants, initiative_order, log_entries, round, current_turn_index, world_state } = combat;
@@ -181,12 +190,12 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
     <div className="flex flex-col h-full overflow-hidden relative" style={{ background: 'rgba(8,3,3,0.95)' }}>
       <CombatFloatingText event={lastCombatEvent} />
       {/* Header — Combat Banner with Round Counter */}
-      <div className="flex items-center justify-between px-4 py-2.5 flex-shrink-0 combat-active"
+      <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 flex-shrink-0 combat-active"
         style={{
           background: 'linear-gradient(90deg, rgba(80,5,5,0.9), rgba(50,5,5,0.95))',
           borderBottom: '1px solid rgba(180,30,30,0.4)',
         }}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <div className="flex items-center gap-2">
             <Swords className="w-4 h-4" style={{ color: '#fca5a5' }} />
             <span className="font-fantasy font-bold text-sm tracking-widest" style={{ color: '#fca5a5', textShadow: '0 0 10px rgba(220,50,50,0.5)' }}>
@@ -202,22 +211,22 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
             Round {round || 1}
           </div>
           {concentrationSpell && (
-            <div className="px-2 py-0.5 rounded-full text-xs font-fantasy"
+            <div className="hidden sm:block px-2 py-0.5 rounded-full text-xs font-fantasy"
               style={{ background: 'rgba(80,40,120,0.6)', border: '1px solid rgba(160,100,255,0.4)', color: '#c4b5fd' }}>
               🔮 {concentrationSpell}
             </div>
           )}
           {isDodging && (
-            <div className="px-2 py-0.5 rounded-full text-xs font-fantasy"
+            <div className="hidden sm:block px-2 py-0.5 rounded-full text-xs font-fantasy"
               style={{ background: 'rgba(8,30,60,0.7)', border: '1px solid rgba(80,140,220,0.4)', color: '#93c5fd' }}>
               🛡️ Dodging
             </div>
           )}
           {(player?.conditions || character?.conditions || []).length > 0 && (
-            <ConditionBadges conditions={player?.conditions || character?.conditions || []} max={4} />
+            <div className="hidden sm:block"><ConditionBadges conditions={player?.conditions || character?.conditions || []} max={4} /></div>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="hidden sm:flex items-center gap-2 text-xs">
           <span style={{ color: 'rgba(180,100,100,0.6)', fontFamily: 'EB Garamond, serif' }}>Now:</span>
           <span className="font-fantasy font-semibold" style={{ color: '#fde68a' }}>{currentCombatant?.name || '?'}</span>
           {isPlayerTurn && (
@@ -252,14 +261,14 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         combatStartTime={combat.created_date}
       />
 
-      <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden min-h-0">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden min-h-0 items-stretch">
         {/* LEFT — targets + actions (single unified scroll container so the
             action panel / Attack button can never be clipped, regardless of
             how many ability toasts are stacked) */}
-        <div className="flex flex-col w-full lg:w-1/2 overflow-visible lg:overflow-y-auto min-h-0" style={{ borderRight: '1px solid rgba(180,50,50,0.2)' }}>
+        <div className="flex flex-col w-full flex-none lg:w-1/2 lg:flex-1 lg:min-h-0 overflow-visible lg:overflow-y-auto" style={{ borderRight: '1px solid rgba(180,50,50,0.2)' }}>
 
           {/* Enemy targets */}
-          <div className="p-3 space-y-2">
+          <div className={`p-3 space-y-2 ${isPlayerTurn ? '' : 'hidden lg:block'}`}>
             <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(180,100,100,0.5)', fontSize: '0.65rem' }}>SELECT TARGET</div>
             {enemies.map(enemy => {
               // hp_current is the live value updated during combat; hp is the initial value set at start
@@ -606,7 +615,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         </div>
 
         {/* RIGHT — Visual Combat Log */}
-        <div className="flex flex-col w-full lg:w-1/2 min-h-[180px] max-h-[35dvh] lg:max-h-none overflow-hidden flex-shrink-0 lg:flex-shrink">
+        <div className="flex flex-col w-full h-[260px] flex-none lg:w-1/2 lg:h-auto lg:flex-1 lg:min-h-0 overflow-hidden">
           <CombatLog logEntries={log_entries || []} player={player} />
         </div>
       </div>

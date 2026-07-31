@@ -771,6 +771,7 @@ export default function Game() {
     // Invalid action (e.g. out of ammunition) — surface message, don't consume the turn
     if (data?.invalid) {
       setNarrative(prev => [...prev, { type: 'roll_result', text: data.error || 'That action is not available.', success: false }]);
+      if (data.target_defeated) await reloadCombat(combatId);
       setCombatLoading(false);
       return;
     }
