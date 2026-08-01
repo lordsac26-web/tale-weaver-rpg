@@ -6,6 +6,16 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
  * deep reactivity, cinematic style, refined NC-17 support.
  */
 
+const CONDITION_PLACEHOLDERS = new Set(['', 'none', 'normal', 'no condition', 'no conditions', 'n/a', 'null', 'undefined']);
+const TEMPORARY_STORY_CONDITIONS = new Set([
+  'silenced', 'silence', 'blinded', 'charmed', 'deafened', 'frightened', 'grappled',
+  'incapacitated', 'invisible', 'paralyzed', 'petrified', 'poisoned', 'prone',
+  'restrained', 'stunned', 'unconscious', 'hidden', 'marked target', 'alert', 'rejuvenated'
+]);
+const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
+const conditionKey = (value) => conditionName(value).toLowerCase();
+const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -184,6 +194,8 @@ ${adultToneInstruction}
 
 Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely.
 
+CONDITION CONTRACT: condition_update is ONLY for a real mechanical status affecting the PLAYER CHARACTER. Set target to "player" only when the player is actually affected; use "other" for an enemy/NPC effect and "none" when no player condition changes. Never use placeholder labels such as "None", "Normal", or "N/A". Use the remove field when a prior player condition ends. Choose duration "scene", "combat", or "persistent" accurately. Enemy conditions that begin combat belong in that enemy's starting_conditions, never on the player.
+
 KEY EVENT TRACKING: If this turn produces a CRITICAL, story-defining, irreversible development — something that must shape every future scene (e.g. the player swallows/consumes a magic item, kills or spares a major NPC, makes a binding pact, gains/loses a unique power, destroys an artifact, makes a permanent vow or transformation) — set the "key_event" field to a concise one-sentence summary of that fact written in past tense (e.g. "Blade swallowed the unknown power-exuding amulet, which now resides inside him."). Only set "key_event" for genuinely permanent, plot-defining moments — leave it empty for routine actions.
 
 CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" text itself. The narrative must be pure prose — never include lines like "1. ...", "2. ...", "What do you do?", or any enumerated options. The choices belong solely in the structured choices array.`;
@@ -202,7 +214,15 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
           loot_coins: { type: 'object', properties: { gold:{type:'number'}, silver:{type:'number'}, copper:{type:'number'} } },
           location_update: { type: 'string' },
           quest_update: { type: 'object', properties: { new_quest:{type:'string'}, completed_quest:{type:'string'} } },
-          new_condition: { type: 'string' },
+          condition_update: {
+            type: 'object',
+            properties: {
+              target: { type: 'string', enum: ['player', 'other', 'none'] },
+              add: { type: 'string' },
+              remove: { type: 'array', items: { type: 'string' } },
+              duration: { type: 'string', enum: ['scene', 'combat', 'persistent'] }
+            }
+          },
           plot_flag: { type: 'string' },
           key_event: { type: 'string' },
           alignment_shift: { type: 'object', properties: { good_evil:{type:'number'}, law_chaos:{type:'number'}, sanity:{type:'number'}, severity:{type:'string', enum:['none','minor','meaningful','critical']}, reason:{type:'string'} } }
@@ -325,14 +345,39 @@ Write a gripping 1-2 paragraph combat narrative.`;
 
       await base44.asServiceRole.entities.GameSession.update(session_id, updateData);
 
-      // Character condition update
-      if (result.new_condition && character) {
-        const currentConditions = character.conditions || [];
-        const condName = result.new_condition;
-        if (!currentConditions.some(c => (typeof c === 'string' ? c : c.name) === condName)) {
-          await base44.asServiceRole.entities.Character.update(character.id, {
-            conditions: [...currentConditions, { name: condName, source: 'story', applied_at: new Date().toISOString() }]
-          });
+      // Target-aware character conditions. Enemy/NPC effects never belong on the
+      // Character record, and placeholders such as "None" are always discarded.
+      if (character) {
+        const originalConditions = Array.isArray(character.conditions) ? character.conditions : [];
+        const incoming = result.condition_update && typeof result.condition_update === 'object'
+          ? result.condition_update
+          : { target: 'none', add: '', remove: [], duration: 'scene' };
+        const removals = new Set((Array.isArray(incoming.remove) ? incoming.remove : [])
+          .map(conditionKey).filter(Boolean));
+        const changingLocation = !!(result.location_update && result.location_update !== session.current_location);
+        const leavingCombat = action === 'choice' && !result.combat_trigger && !session.in_combat;
+        let nextConditions = originalConditions.filter(cond => {
+          const key = conditionKey(cond);
+          if (!validConditionName(cond) || removals.has(key)) return false;
+          const duration = typeof cond === 'object' ? cond.duration : null;
+          if (duration === 'scene' && changingLocation) return false;
+          if (duration === 'combat' && leavingCombat) return false;
+          // Migrate old story-created temporary records that had no duration metadata.
+          if (!duration && typeof cond === 'object' && cond.source === 'story' && !session.in_combat && TEMPORARY_STORY_CONDITIONS.has(key)) return false;
+          return true;
+        });
+        if (incoming.target === 'player' && validConditionName(incoming.add)) {
+          const name = conditionName(incoming.add);
+          const key = name.toLowerCase();
+          if (!nextConditions.some(cond => conditionKey(cond) === key)) {
+            nextConditions.push({
+              name, source: 'story', duration: incoming.duration || 'scene',
+              applied_at: new Date().toISOString()
+            });
+          }
+        }
+        if (JSON.stringify(nextConditions) !== JSON.stringify(originalConditions)) {
+          await base44.asServiceRole.entities.Character.update(character.id, { conditions: nextConditions });
         }
       }
 

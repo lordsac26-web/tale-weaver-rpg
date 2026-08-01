@@ -21,6 +21,11 @@ export default function HUD({ character, session }) {
   const currentSlots = character.spell_slots || {};
   const totalSlotsUsed = Object.keys(currentSlots).reduce((sum, key) => sum + (currentSlots[key] || 0), 0);
   const totalSlotsMax = slotMaxArr.reduce((sum, val) => sum + val, 0);
+  const CONDITION_PLACEHOLDERS = new Set(['', 'none', 'normal', 'no condition', 'no conditions', 'n/a', 'null', 'undefined']);
+  const visibleConditions = (character.conditions || []).filter(cond => {
+    const name = String(typeof cond === 'string' ? cond : cond?.name || '').trim().toLowerCase();
+    return !CONDITION_PLACEHOLDERS.has(name);
+  });
  
   return (
     <div className="glass-panel border-b border-gold/30 px-4 py-2.5 relative overflow-hidden flex-shrink-0"
@@ -133,9 +138,9 @@ export default function HUD({ character, session }) {
         )}
  
         {/* Active Conditions */}
-        {(character.conditions || []).length > 0 && (
+        {visibleConditions.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
-            {character.conditions.slice(0, 4).map((cond, i) => {
+            {visibleConditions.slice(0, 4).map((cond, i) => {
               const condName = typeof cond === 'string' ? cond : cond.name;
               const condData = CONDITIONS[condName?.toLowerCase()] || {};
               return (
