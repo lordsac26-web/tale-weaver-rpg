@@ -295,13 +295,29 @@ Deno.serve(async (req) => {
         restorations.push(`Exhaustion not reduced — no food or water (still level ${currentExhaustion})`);
       }
     }
-    // Legacy: also clear a single 'exhausted' condition tag if present
-    const conditions = character.conditions || [];
-    const exhaustIdx = conditions.findIndex(c => (typeof c === 'string' ? c : c.name) === 'exhausted');
-    if (exhaustIdx >= 0) {
-      const newConditions = [...conditions];
-      newConditions.splice(exhaustIdx, 1);
-      updates.conditions = newConditions;
+    // A completed long rest advances the scene and ends scene/combat/rest-scoped
+    // story effects. Preserve persistent injuries/curses unless they explicitly opt
+    // into long-rest recovery. Exhaustion is case-insensitive and only clears when
+    // food/water requirements were met, matching the exhaustion-level rule above.
+    const conditions = Array.isArray(character.conditions) ? character.conditions : [];
+    const clearedConditions = [];
+    const retainedConditions = conditions.filter(condition => {
+      const name = String(typeof condition === 'string' ? condition : condition?.name || '').trim();
+      const key = name.toLowerCase();
+      const duration = typeof condition === 'object' ? String(condition?.duration || '').toLowerCase() : '';
+      const clearsOnLongRest = typeof condition === 'object' && condition?.clears_on_long_rest === true;
+      const isExhausted = key === 'exhausted' || key === 'exhaustion';
+      const temporaryDuration = ['scene', 'combat', 'rest', 'short_rest', 'long_rest'].includes(duration);
+      const shouldClear = clearsOnLongRest || temporaryDuration || (isExhausted && had_food_water);
+      if (shouldClear && !(isExhausted && !had_food_water)) {
+        if (name) clearedConditions.push(name);
+        return false;
+      }
+      return true;
+    });
+    if (retainedConditions.length !== conditions.length) {
+      updates.conditions = retainedConditions;
+      restorations.push(`Temporary conditions cleared: ${clearedConditions.join(', ')}`);
     }
 
     // Lucky feat: restore luck points to maximum on a long rest (PHB p.167)
