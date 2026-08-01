@@ -106,15 +106,18 @@ export const inferArchetype = (enemy = {}) => {
   ].filter(Boolean).join(' ').toLowerCase();
   const explicitMagicAttack = ['spell', 'magic'].includes(String(enemy.attack_type || '').toLowerCase());
   const matchesCaster = explicitMagicAttack || CASTER_PATTERN.test(text);
-  // Repair legacy records where the generic fallback persisted "brute" on an obvious caster.
+  const matchesSoldier = /knight|guard|soldier|veteran|captain|legionnaire|hobgoblin|warrior|paladin|myrmidon|skeleton/.test(text);
+  // Repair legacy records where the generic fallback persisted "brute" on an
+  // obvious caster or disciplined/skeletal soldier.
   if (enemy.archetype && AI_ARCHETYPES[enemy.archetype]) {
     if (enemy.archetype === 'brute' && matchesCaster) return 'spellcaster';
+    if (enemy.archetype === 'brute' && matchesSoldier) return 'soldier';
     return enemy.archetype;
   }
   if (enemy.is_legendary || cr >= 10) return 'boss';
   if (matchesCaster) return 'spellcaster';
   if (/scout|rogue|assassin|thief|archer|skirmisher|goblin|kobold|wolf|raptor|stalker|ranger/.test(text)) return 'scout';
-  if (/knight|guard|soldier|veteran|captain|legionnaire|hobgoblin|warrior|paladin|myrmidon|skeleton/.test(text)) return 'soldier';
+  if (matchesSoldier) return 'soldier';
   if (cr >= 5) return 'boss';
   return 'brute';
 };
