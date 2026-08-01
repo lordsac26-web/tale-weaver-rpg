@@ -36,6 +36,10 @@ Deno.serve(async (req) => {
     }
     const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
+    const conditionNames = (character.conditions || []).map(c => String(typeof c === 'string' ? c : c?.name || '').toLowerCase().trim());
+    if (conditionNames.includes('silenced') || conditionNames.includes('silence')) {
+      return Response.json({ error: `${character.name} is silenced and cannot cast ${config.canonicalName}, which requires a verbal component.`, invalid: true }, { status: 400 });
+    }
 
     const knowsSpell = (character.spells_known || []).some(s => String(s).toLowerCase() === config.canonicalName.toLowerCase());
     if (!knowsSpell) return Response.json({ error: `${character.name} does not know ${config.canonicalName}` }, { status: 400 });

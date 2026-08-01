@@ -1,6 +1,45 @@
 // ─── DATA-DRIVEN MONSTER AI ─────────────────────────────────────────────────
 // Extracted from combatEngine/entry.ts to keep that file under the size limit.
 // Archetype → prioritized tactic list. Edit AI_ARCHETYPES to tune monster behavior.
+export const parseCR = (cr) => {
+  if (typeof cr === 'number') return Number.isFinite(cr) ? cr : 1;
+  if (typeof cr === 'string') {
+    const value = cr.trim();
+    if (value.includes('/')) {
+      const [num, den] = value.split('/').map(Number);
+      if (Number.isFinite(num) && Number.isFinite(den) && den !== 0) return num / den;
+    }
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 1;
+};
+
+export const clampTacticByCR = (effects = {}, cr, nativeAttacks = 1) => {
+  const numericCR = parseCR(cr);
+  let maxAttacks = Math.max(1, Number(nativeAttacks) || 1);
+  let maxAttackBonus = 1;
+  let maxBonusDamage = 1;
+  if (numericCR >= 10) {
+    maxAttacks = Math.max(3, maxAttacks); maxAttackBonus = 3; maxBonusDamage = 3;
+  } else if (numericCR >= 5) {
+    maxAttacks = Math.max(2, maxAttacks); maxAttackBonus = 3; maxBonusDamage = 3;
+  } else if (numericCR >= 2) {
+    maxAttacks = Math.max(2, maxAttacks); maxAttackBonus = 2; maxBonusDamage = 2;
+  } else if (numericCR >= 1) {
+    maxAttackBonus = 2; maxBonusDamage = 2;
+  }
+  const rawAttackBonus = Number(effects.attackBonus) || 0;
+  const rawBonusDamage = Number(effects.bonusDamage) || 0;
+  return {
+    numAttacks: Math.min(Math.max(1, Number(effects.numAttacks) || 1), maxAttacks),
+    attackBonus: rawAttackBonus > 0 ? Math.min(rawAttackBonus, maxAttackBonus) : rawAttackBonus,
+    bonusDamage: rawBonusDamage > 0 ? Math.min(rawBonusDamage, maxBonusDamage) : rawBonusDamage,
+  };
+};
+
+const CASTER_PATTERN = /mage|wizard|sorcerer|warlock|caster|cultist|priest|priestess|shaman|witch|lich|spell|necromanc|mancer|cleric|druid|bard|archmage|conjurer|evoker|illusionist|transmuter|diviner|enchanter|abjurer|invoker|summoner|elementalist|pyromancer|cryomancer|arcanist|hierophant|acolyte|seer|oracle|mystic|occult|incantation|cantrip|magic/;
+
 export const AI_ARCHETYPES = {
   // Big dumb melee: hits hard, gets reckless when wounded.
   brute: {
@@ -55,21 +94,32 @@ export const AI_ARCHETYPES = {
 };
 
 // Infer an archetype from monster metadata when one isn't explicitly provided.
-export const inferArchetype = (enemy) => {
-  if (enemy.archetype && AI_ARCHETYPES[enemy.archetype]) return enemy.archetype;
-  const cr = enemy.cr || 1;
+export const inferArchetype = (enemy = {}) => {
+  const cr = parseCR(enemy.cr);
+  const text = [
+    enemy.name, enemy.monster_name, enemy.meta, enemy.type, enemy.creature_type,
+    enemy.role, enemy.description,
+    Array.isArray(enemy.actions) ? enemy.actions.join(' ') : enemy.actions,
+    Array.isArray(enemy.spells) ? enemy.spells.join(' ') : enemy.spells,
+    Array.isArray(enemy.traits) ? enemy.traits.join(' ') : enemy.traits,
+    Array.isArray(enemy.special_abilities) ? enemy.special_abilities.join(' ') : enemy.special_abilities,
+  ].filter(Boolean).join(' ').toLowerCase();
+  const explicitMagicAttack = ['spell', 'magic'].includes(String(enemy.attack_type || '').toLowerCase());
+  const matchesCaster = explicitMagicAttack || CASTER_PATTERN.test(text);
+  // Repair legacy records where the generic fallback persisted "brute" on an obvious caster.
+  if (enemy.archetype && AI_ARCHETYPES[enemy.archetype]) {
+    if (enemy.archetype === 'brute' && matchesCaster) return 'spellcaster';
+    return enemy.archetype;
+  }
   if (enemy.is_legendary || cr >= 10) return 'boss';
-  const text = `${enemy.name || ''} ${enemy.monster_name || ''} ${enemy.meta || ''} ${enemy.type || ''} ${(enemy.actions || '')}`.toLowerCase();
-  if ((enemy.attack_type === 'ranged') || /mage|wizard|sorcerer|warlock|caster|cultist|priest|shaman|witch|lich|spell/.test(text)) return 'spellcaster';
-  if (/scout|rogue|assassin|thief|archer|skirmisher|goblin|kobold|wolf|raptor|stalker/.test(text)) return 'scout';
-  if (/knight|guard|soldier|veteran|captain|legionnaire|hobgoblin|warrior/.test(text)) return 'soldier';
+  if (matchesCaster) return 'spellcaster';
+  if (/scout|rogue|assassin|thief|archer|skirmisher|goblin|kobold|wolf|raptor|stalker|ranger/.test(text)) return 'scout';
+  if (/knight|guard|soldier|veteran|captain|legionnaire|hobgoblin|warrior|paladin|myrmidon|skeleton/.test(text)) return 'soldier';
   if (cr >= 5) return 'boss';
   return 'brute';
 };
 
-// Evaluate an archetype's tactic list against the current battlefield state and
-// return the chosen tactic effects ({ numAttacks, attackBonus, bonusDamage, desc }).
-export const chooseTactic = (archetypeKey, ctx) => {
+export const chooseTactic = (archetypeKey, ctx = {}) => {
   const arch = AI_ARCHETYPES[archetypeKey] || AI_ARCHETYPES.brute;
   const passes = (when = {}) => {
     if (when.selfHpBelow != null && !(ctx.selfHpPct < when.selfHpBelow)) return false;
@@ -80,13 +130,12 @@ export const chooseTactic = (archetypeKey, ctx) => {
     return true;
   };
   const chosen = (arch.tactics || []).find(t => passes(t.when)) || null;
-  const eff = chosen ? chosen.effects : (arch.default || {});
+  const effects = chosen ? chosen.effects : (arch.default || {});
+  const bounded = clampTacticByCR(effects, ctx.cr, ctx.nativeAttacks || 1);
   return {
     id: chosen ? chosen.id : 'default',
-    numAttacks: eff.numAttacks || 1,
-    attackBonus: eff.attackBonus || 0,
-    bonusDamage: eff.bonusDamage || 0,
-    desc: eff.desc || null,
+    ...bounded,
+    desc: effects.desc || null,
     archetype: arch.label || archetypeKey,
   };
 };

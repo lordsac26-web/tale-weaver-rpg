@@ -128,13 +128,25 @@ export async function handleEnemyTurn(ctx) {
   // === DATA-DRIVEN AI: pick a tactic from the enemy's archetype preset ===
   const enemyHpPct = currentCombatant.hp_max ? currentCombatant.hp_current / currentCombatant.hp_max : 1;
   const playerHpPct = player.hp_max ? player.hp_current / player.hp_max : 1;
-  // Older combats may predate the `archetype` field — infer on the fly as a fallback.
-  const archetypeKey = currentCombatant.archetype || inferArchetype(currentCombatant);
-  const tactic = chooseTactic(archetypeKey, {
+  // Re-infer every turn so legacy records that persisted the generic "brute"
+  // fallback on obvious casters self-heal without a data migration.
+  const archetypeKey = inferArchetype(currentCombatant);
+  let tactic = chooseTactic(archetypeKey, {
     selfHpPct: enemyHpPct,
     playerHpPct,
     round: combatLog.round,
+    cr: currentCombatant.cr,
+    nativeAttacks: currentCombatant.num_attacks || 1,
   });
+  const enemyConditions = (currentCombatant.conditions || []).map(c => String(typeof c === 'string' ? c : c?.name || '').toLowerCase().trim());
+  const isSilenced = enemyConditions.includes('silenced') || enemyConditions.includes('silence');
+  if (isSilenced && archetypeKey === 'spellcaster') {
+    tactic = {
+      id: 'silenced_physical_fallback', numAttacks: 1, attackBonus: 0, bonusDamage: 0,
+      desc: 'is silenced and unable to speak an incantation, so strikes physically instead!',
+      archetype: archetypeKey,
+    };
+  }
   const strategy = `${archetypeKey}:${tactic.id}`;
   const strategyDesc = tactic.desc;
 

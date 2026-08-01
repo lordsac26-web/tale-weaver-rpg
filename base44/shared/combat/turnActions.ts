@@ -286,7 +286,7 @@ export async function handleNextTurn(ctx) {
 // Nat 20 = regain 1 HP and stand up immediately.
 // Nat 1  = counts as 2 failures.
 export async function handleDeathSave(ctx) {
-  const { base44, combat_id, character_id } = ctx;
+  const { base44, session_id, combat_id, character_id } = ctx;
   const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
   const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
@@ -337,13 +337,13 @@ export async function handleDeathSave(ctx) {
 
   if (!regainedHP) {
     if (newSuccesses >= 3) {
-      // Stabilized: unconscious but no longer dying (PHB p.197)
+      // Solo recovery rule: stabilization closes the lost encounter at 1 HP.
       stabilized = true;
-      logText += ` — ${character.name} is STABILIZED and no longer dying!`;
+      logText += ` — ${character.name} is STABILIZED and regains 1 HP as the encounter ends.`;
       await base44.asServiceRole.entities.Character.update(character_id, {
-        death_saves_success: newSuccesses,
-        death_saves_failure: newFailures,
+        hp_current: 1, death_saves_success: 0, death_saves_failure: 0,
       });
+      if (playerCombatant) { playerCombatant.hp_current = 1; playerCombatant.is_conscious = true; }
     } else if (newFailures >= 3) {
       logText += ` — ${character.name} has DIED. ☠️`;
       await base44.asServiceRole.entities.Character.update(character_id, {
@@ -370,13 +370,18 @@ export async function handleDeathSave(ctx) {
   const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
   const updatedCombatants = playerCombatant ? combatants.map(c => c.type === 'player' ? playerCombatant : c) : combatants;
 
+  const terminalDefeat = stabilized || (newFailures >= 3 && !regainedHP);
   await base44.asServiceRole.entities.CombatLog.update(combat_id, {
     combatants: updatedCombatants,
     log_entries: [...(combatLog.log_entries || []), logEntry],
     current_turn_index: nextIndex,
     round: nextRound,
     world_state: resetTurnWorldState(combatLog),
+    ...(terminalDefeat ? { is_active: false, result: 'defeat' } : {}),
   });
+  if (terminalDefeat && session_id) {
+    await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false, combat_state: {} });
+  }
 
   return Response.json({
     roll,

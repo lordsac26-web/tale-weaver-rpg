@@ -182,7 +182,8 @@ export async function handleStartCombat(ctx) {
       legendary_resistance_remaining: isLegendary ? 3 : 0,
       // Data-driven AI: explicit archetype if provided, else inferred from meta/CR.
       archetype: inferArchetype(enemy),
-      attack_type: enemy.attack_type || 'melee'
+      attack_type: enemy.attack_type || (inferArchetype(enemy) === 'spellcaster' || inferArchetype(enemy) === 'scout' ? 'ranged' : 'melee'),
+      num_attacks: Math.max(1, Number(enemy.num_attacks) || 1)
     });
   }
 

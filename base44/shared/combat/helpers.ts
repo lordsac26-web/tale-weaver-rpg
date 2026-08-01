@@ -63,6 +63,7 @@ export const CONDITION_FLAGS = {
   turned:      { no_actions: true, removed_from_combat: true },
   prone:       {},
   invisible:   { incoming_attack_disadvantage: true },
+  silenced:    { suppresses_verbal: true },
 };
 export const condNames = (arr) => (arr || []).map(c => String(typeof c === 'string' ? c : c?.name || '').toLowerCase().trim());
 export const hasNoActions = (arr) => condNames(arr).some(n => CONDITION_FLAGS[n]?.no_actions);

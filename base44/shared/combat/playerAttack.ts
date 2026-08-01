@@ -58,6 +58,12 @@ export async function handlePlayerAttack(ctx) {
     if (playerConds.includes('raging')) {
       return Response.json({ error: 'You cannot cast spells while raging (PHB p.48).', invalid: true }, { status: 400 });
     }
+    const isSilenced = playerConds.includes('silenced') || playerConds.includes('silence');
+    const isSubtle = !!(modifiers?.metamagic?.subtle || modifiers?.subtle_spell);
+    const components = Array.isArray(spell.components) ? spell.components.join('') : String(spell.components || 'V');
+    if (isSilenced && !isSubtle && components.toUpperCase().includes('V')) {
+      return Response.json({ error: `You are silenced and cannot cast ${spell.name || 'that spell'} because it requires a verbal component.`, invalid: true }, { status: 400 });
+    }
     const spellAbility = SPELL_ABILITY_MAP[(character.class || '').toLowerCase()] || 'intelligence';
     const spellStatMod = statMod(character[spellAbility]);
     const profBonus = character.proficiency_bonus || 2;
