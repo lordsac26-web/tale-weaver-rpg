@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 Deno.serve(async (req) => {
+ try {
   const base44 = createClientFromRequest(req);
   const body = await req.json().catch(() => ({}));
   if (body.action === 'setup') {
@@ -9,7 +10,7 @@ Deno.serve(async (req) => {
       spell_slots: { level_1: 3, level_2: 2 }, hit_dice_remaining: 1,
       conditions: [
         { name: 'Frostbitten Fingers', source: 'story', duration: 'scene' },
-        'Exhausted',
+        { name: 'Exhausted', source: 'story', duration: 'persistent' },
         { name: 'Persistent Curse', source: 'story', duration: 'persistent' }
       ], exhaustion_level: 1,
     });
@@ -34,4 +35,5 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, removed: before.length - after.length, conditions: after });
   }
   return Response.json({ error: 'Invalid action' }, { status: 400 });
+ } catch (error) { return Response.json({ error: error.message, stack: error.stack }, { status: 500 }); }
 });
