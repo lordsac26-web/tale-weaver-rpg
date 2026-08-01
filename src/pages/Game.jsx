@@ -982,12 +982,11 @@ export default function Game() {
             });
           }
         if (data.player_at_zero_hp) {
-          // Per 5e: dropping to 0 HP triggers death saving throws, not instant death
-          await loadState(); // sync HP to 0 before showing modal
+          // Keep the active CombatLog linked while death saves resolve. Detaching the
+          // session here orphaned the combat and forced client-side fallback rolls.
+          setCharacter(prev => prev ? { ...prev, hp_current: 0 } : prev);
+          await reloadCombat(combatId);
           setShowDeathSaves(true);
-          setCombat(null);
-          // Clear the in_combat flag on the session so resume doesn't loop back into combat
-          await base44.entities.GameSession.update(sessionId, { in_combat: false, combat_state: {} });
           break;
         }
         await reloadCombat(combatId);
