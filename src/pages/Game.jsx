@@ -347,13 +347,17 @@ export default function Game() {
   const runChoiceStory = async (choice, choiceIndex, skillSuccess) => {
     setStoryLoading(true);
     try {
+      const mechanicalCast = await maybeCastStorySpell(choice.text);
+      const mechanicsContext = mechanicalCast
+        ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]`
+        : '';
       const result = await base44.functions.invoke('generateStory', {
         session_id: sessionId,
         action: 'choice',
         choice_index: choiceIndex,
-        custom_input: choice.skill_check
+        custom_input: (choice.skill_check
           ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}]`
-          : choice.text,
+          : choice.text) + mechanicsContext,
       });
       const data = result.data;
 
