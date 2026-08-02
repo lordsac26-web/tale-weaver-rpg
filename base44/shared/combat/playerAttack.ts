@@ -175,7 +175,7 @@ export async function handlePlayerAttack(ctx) {
         maxForLevel = (((SLOT_TABLES[character.class] || [])[charLevel - 1]) || [])[slotIdx] || 0;
       }
       if (currentUsed >= maxForLevel) {
-        return Response.json({ error: `No ${spell.slot_level === 1 ? '1st' : spell.slot_level + 'th'}-level spell slots remaining.`, invalid: true }, { status: 400 });
+        return Response.json({ error: `No ${spell.slot_level === 1 ? '1st' : spell.slot_level === 2 ? '2nd' : spell.slot_level === 3 ? '3rd' : spell.slot_level + 'th'}-level spell slots remaining.`, invalid: true }, { status: 400 });
       }
       slotDeduction = { slotsKey, currentUsed };
     }
