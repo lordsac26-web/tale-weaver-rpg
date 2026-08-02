@@ -10,9 +10,11 @@ Deno.serve(async (req) => {
     const logs = await base44.asServiceRole.entities.CombatLog.filter({ session_id }, '-updated_date', 50);
     const combat = [];
     for (const log of logs) {
-      for (const [i, e] of (log.combat_history || []).entries()) {
-        const raw = JSON.stringify(e);
-        if (SPELL_RE.test(raw)) combat.push({ combat_id: log.id, updated_date: log.updated_date, index: i, entry: raw.slice(0, 1000) });
+      for (const field of ['log_entries', 'combat_history']) {
+        for (const [i, e] of (log[field] || []).entries()) {
+          const raw = JSON.stringify(e);
+          if (SPELL_RE.test(raw)) combat.push({ combat_id: log.id, updated_date: log.updated_date, field, index: i, entry: raw.slice(0, 1000) });
+        }
       }
     }
     return Response.json({ success: true, story, combat: combat.slice(-50), spell_slots: (await base44.asServiceRole.entities.Character.get(session.character_id)).spell_slots || {} });
