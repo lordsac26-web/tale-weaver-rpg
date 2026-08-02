@@ -369,7 +369,11 @@ Write a gripping 1-2 paragraph combat narrative.`;
         if (incoming.target === 'player' && validConditionName(incoming.add)) {
           const name = conditionName(incoming.add);
           const key = name.toLowerCase();
-          if (!nextConditions.some(cond => conditionKey(cond) === key)) {
+          // Exhaustion is a mechanical level, not a free-form story badge. Never
+          // let narrative output add Exhausted while the authoritative level is 0.
+          const mechanicalExhaustion = Number(character.exhaustion_level || 0);
+          const isInvalidExhaustionAdd = (key === 'exhausted' || key === 'exhaustion') && mechanicalExhaustion <= 0;
+          if (!isInvalidExhaustionAdd && !nextConditions.some(cond => conditionKey(cond) === key)) {
             nextConditions.push({
               name, source: 'story', duration: incoming.duration || 'scene',
               applied_at: new Date().toISOString()
