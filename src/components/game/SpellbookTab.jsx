@@ -279,6 +279,8 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
                       onTogglePrepared={togglePrepared}
                       onCast={spellLvl > 0 ? handleCastSpell : undefined}
                       canCast={canCast}
+                      castLabel={onCastSpell ? 'Cast' : 'Use Slot'}
+                      castTitle={onCastSpell ? undefined : 'Manual bookkeeping only — does not resolve spell mechanics'}
                       sourceClass={isMulticlass ? s.sourceClass : undefined} />
                   </div>
                 );

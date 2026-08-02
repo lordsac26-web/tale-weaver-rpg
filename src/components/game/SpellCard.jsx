@@ -15,7 +15,7 @@ const ATTACK_ICONS = {
   utility: '🔧',
 };
 
-export default function SpellCard({ spell, spellName, character, isKnown, isPrepared, onToggleKnown, onTogglePrepared, onCast, canCast, sourceClass, compact = false }) {
+export default function SpellCard({ spell, spellName, character, isKnown, isPrepared, onToggleKnown, onTogglePrepared, onCast, canCast, castLabel = 'Cast', castTitle, sourceClass, compact = false }) {
   const [showDetail, setShowDetail] = useState(false);
   const details = SPELL_DETAILS[spellName] || spell || {};
   const schoolColor = SCHOOL_COLORS[details.school] || 'text-slate-400';
@@ -90,9 +90,9 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
                 border: '1px solid rgba(120,60,30,0.2)',
                 color: 'rgba(180,140,90,0.3)',
               }}
-              title={canCast ? 'Cast this spell (uses a spell slot)' : 'No spell slots remaining'}>
+              title={canCast ? (castTitle || `${castLabel} this spell (uses a spell slot)`) : 'No spell slots remaining'}>
               <Flame className="w-3 h-3" />
-              Cast
+              {castLabel}
             </button>
           )}
           {onTogglePrepared && isKnown && (
