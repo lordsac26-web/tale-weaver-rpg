@@ -17,6 +17,7 @@ Deno.serve(async (req) => {
         }
       }
     }
-    return Response.json({ success: true, story, combat: combat.slice(-50), spell_slots: (await base44.asServiceRole.entities.Character.get(session.character_id)).spell_slots || {} });
+    const recentCombat = logs.slice(0, 5).map(log => ({ combat_id: log.id, updated_date: log.updated_date, entries: (log.log_entries || []).map(e => ({ round: e.round, actor: e.actor, action: e.action, spell_name: e.spell_name, text: String(e.text || '').slice(0, 300) })) }));
+    return Response.json({ success: true, story, combat: combat.slice(-50), recentCombat, spell_slots: (await base44.asServiceRole.entities.Character.get(session.character_id)).spell_slots || {} });
   } catch (error) { return Response.json({ error: error.message }, { status: 500 }); }
 });
