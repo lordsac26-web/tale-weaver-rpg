@@ -374,7 +374,7 @@ export default function Game() {
       await loadState();
     } catch (err) {
       console.error('Failed to process choice:', err);
-      setNarrative(prev => [...prev, { type: 'narration', text: 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
+      setNarrative(prev => [...prev, { type: 'narration', text: err?.message || 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
     } finally {
       setStoryLoading(false);
     }
@@ -439,23 +439,44 @@ export default function Game() {
     }
   };
 
-  // Convert supported utility-spell requests from the free-text Act window into
-  // authoritative mechanics before asking the DM to narrate the outcome.
-  const maybeCastStoryUtilitySpell = async (action) => {
-    if (!/\bpass\s+without\s+(?:a\s+)?trace\b/i.test(action || '')) return null;
+  // Recognize only explicit casts of spells the character actually knows or has
+  // prepared. Apostrophes and punctuation are ignored so "hunters mark" still
+  // resolves to the canonical "Hunter's Mark" record.
+  const findTypedSpellName = (action) => {
+    if (!/\b(cast|casting|invoke|invoking|use|using|channel|channeling)\b/i.test(action || '')) return null;
+    const normalizeSpellText = (value) => String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const normalizedAction = normalizeSpellText(action);
+    return [...new Set([...(character?.spells_prepared || []), ...(character?.spells_known || [])].filter(Boolean))]
+      .sort((a, b) => normalizeSpellText(b).length - normalizeSpellText(a).length)
+      .find(name => normalizedAction.includes(normalizeSpellText(name))) || null;
+  };
+
+  // Story-mode typed casts use one authoritative backend transaction for spell
+  // recognition, canonical level/upcast validation, slot deduction, concentration,
+  // and a same-rest idempotency receipt.
+  const maybeCastStorySpell = async (action) => {
+    const spellName = findTypedSpellName(action);
+    if (!spellName) return null;
     const result = await base44.functions.invoke('castUtilitySpell', {
       session_id: sessionId,
       character_id: character?.id,
-      spell_name: 'Pass without Trace',
+      spell_name: spellName,
+      action_text: action,
+      cast_token: `story:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`,
     });
     const data = result.data;
-    if (!data?.success) throw new Error(data?.error || 'Pass without Trace could not be cast.');
+    if (!data?.success || !data?.spell_detected) throw new Error(data?.error || `${spellName} could not be cast.`);
     setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers } : prev);
+    const slotText = data.slot_level > 0 && Number.isFinite(data.remaining_slots)
+      ? ` ${data.remaining_slots}/${data.max_slots} level-${data.slot_level} slots remain.`
+      : '';
     setNarrative(prev => [...prev, {
       type: 'roll_result',
-      text: data.already_active
-        ? '🔮 Pass without Trace is already active; no additional spell slot was used.'
-        : `🔮 Pass without Trace cast. +10 Stealth while concentrating; ${data.remaining_slots}/${data.max_slots} level-2 slots remain.`,
+      text: data.already_processed
+        ? `${data.spell_name} was already recorded; no additional spell slot was used.`
+        : data.already_active
+          ? `${data.spell_name} is already active; no additional spell slot was used.`
+          : `${data.spell_name} cast.${slotText}`,
       success: true,
     }]);
     return data;
@@ -465,9 +486,9 @@ export default function Game() {
   const runProposalStory = async (action, checkResult) => {
     setStoryLoading(true);
     try {
-      const mechanicalCast = await maybeCastStoryUtilitySpell(action);
+      const mechanicalCast = await maybeCastStorySpell(action);
       const mechanicsContext = mechanicalCast
-        ? ` [MECHANICS: ${mechanicalCast.spell_name} is active; level-${mechanicalCast.slot_level || 2} slot state was updated; concentration and +10 Stealth apply.]`
+        ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]`
         : '';
       const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: action + checkResult + mechanicsContext });
       const data = result.data;
@@ -486,7 +507,7 @@ export default function Game() {
       await loadState();
     } catch (err) {
       console.error('Failed to execute action:', err);
-      setNarrative(prev => [...prev, { type: 'narration', text: 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
+      setNarrative(prev => [...prev, { type: 'narration', text: err?.message || 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
     } finally {
       setStoryLoading(false);
     }
@@ -612,6 +633,27 @@ export default function Game() {
     const combatId = combat?.id || session?.combat_state?.combat_id;
 
     setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
+
+    // A typed combat spell must use the exact same player_attack pipeline as the
+    // Spell button. The resolver is read-only and returns canonical spell data;
+    // player_attack then validates/deducts the slot and consumes the turn once.
+    if (findTypedSpellName(action)) {
+      try {
+        const resolved = await base44.functions.invoke('combatEngine', {
+          action: 'resolve_typed_spell', session_id: sessionId, combat_id: combatId,
+          character_id: character?.id, payload: { action_text: action },
+        });
+        const spellData = resolved.data;
+        if (spellData?.invalid) throw new Error(spellData.error || 'That spell cannot be cast right now.');
+        if (spellData?.spell_detected && spellData?.spell && spellData?.target_id) {
+          await handlePlayerAttack(spellData.target_id, 'spell', spellData.spell);
+          return;
+        }
+      } catch (err) {
+        setNarrative(prev => [...prev, { type: 'roll_result', text: err?.message || 'That spell could not be resolved.', success: false }]);
+        return;
+      }
+    }
 
     // continue_combat with no check — just remind the player to use combat actions
     if (outcome_type === 'continue_combat' && !requires_check) {
@@ -798,8 +840,14 @@ export default function Game() {
       type: 'roll_result', text: data.log_entry?.text || 'Attack resolved.', success: data.hit
     }]);
 
-    // CRITICAL: Reload combat state immediately to update action tracking
+    // CRITICAL: Reload combat state immediately to update action tracking.
+    // Spell casts also refresh Character before Extra Attack can return early, so
+    // the HUD reflects the deducted slot immediately rather than one turn later.
     await reloadCombat(combatId);
+    if (isSpell) {
+      const freshSpellChars = await base44.entities.Character.filter({ id: character?.id });
+      if (freshSpellChars[0]) setCharacter(prev => ({ ...prev, ...freshSpellChars[0] }));
+    }
 
     if (data.actions_remaining > 0 && !data.combat_ended) {
       setNarrative(prev => [...prev, {
