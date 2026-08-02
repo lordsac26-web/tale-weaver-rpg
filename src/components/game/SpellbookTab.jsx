@@ -16,13 +16,14 @@ import { calcStatMod } from './gameData';
 
 const LEVEL_LABELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
 
-export default function SpellbookTab({ character, onUpdateCharacter }) {
+export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLevel, setFilterLevel] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [filterSource, setFilterSource] = useState('all');
   const [activeSection, setActiveSection] = useState('prepared');
   const [castFlash, setCastFlash] = useState(null);
+  const [castingSpell, setCastingSpell] = useState(null);
 
   // All hooks BEFORE any early returns
   const preparedSpells = new Set(character?.spells_prepared || []);
@@ -127,17 +128,28 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
     onUpdateCharacter({ spells_prepared: updated, spells_known: finalKnown });
   };
 
-  const handleCastSpell = (spellName) => {
+  const handleCastSpell = async (spellName) => {
     const details = SPELL_DETAILS[spellName] || {};
     const spellLevel = details.level ?? 1;
-    if (spellLevel === 0) return;
+    if (spellLevel === 0 || castingSpell) return;
     const slotLevel = findLowestAvailableSlot(spellLevel);
     if (slotLevel === null) return;
-    const slotKey = `level_${slotLevel}`;
-    const newUsed = (currentSlots[slotKey] || 0) + 1;
-    onUpdateCharacter({ spell_slots: { ...currentSlots, [slotKey]: newUsed } });
-    setCastFlash(spellName);
-    setTimeout(() => setCastFlash(null), 800);
+    setCastingSpell(spellName);
+    try {
+      if (onCastSpell) {
+        const succeeded = await onCastSpell(spellName, { ...details, name: spellName, slot_level: slotLevel, base_level: spellLevel });
+        if (!succeeded) return;
+      } else {
+        // Outside an active game this remains an explicit manual slot tracker.
+        const slotKey = `level_${slotLevel}`;
+        const newUsed = (currentSlots[slotKey] || 0) + 1;
+        await onUpdateCharacter({ spell_slots: { ...currentSlots, [slotKey]: newUsed } });
+      }
+      setCastFlash(spellName);
+      setTimeout(() => setCastFlash(null), 800);
+    } finally {
+      setCastingSpell(null);
+    }
   };
 
   // Filtering
@@ -260,7 +272,7 @@ export default function SpellbookTab({ character, onUpdateCharacter }) {
               slotMaxArr={slotMaxArr} getRemainingSlots={getRemainingSlots}
               renderCard={(s) => {
                 const spellLvl = SPELL_DETAILS[s.name]?.level ?? s.level;
-                const canCast = spellLvl === 0 || findLowestAvailableSlot(spellLvl) !== null;
+                const canCast = !castingSpell && (spellLvl === 0 || findLowestAvailableSlot(spellLvl) !== null);
                 return (
                   <div key={s.name} className={`transition-all ${castFlash === s.name ? 'crit-flash rounded-xl' : ''}`}>
                     <SpellCard spellName={s.name} character={spellCardCharacter} isKnown isPrepared

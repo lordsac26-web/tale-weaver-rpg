@@ -802,7 +802,7 @@ export default function Game() {
   }, [session?.in_combat, session?.combat_state?.combat_id, combat?.id, resolveSessionCombat]);
 
   const handlePlayerAttack = async (targetId, actionType, weaponOrSpell, modifiers = {}) => {
-    if (!combat?.id && !session?.combat_state?.combat_id) return;
+    if (!combat?.id && !session?.combat_state?.combat_id) return false;
     const combatId = combat?.id || session?.combat_state?.combat_id;
     setCombatLoading(true);
 
@@ -822,7 +822,7 @@ export default function Game() {
     } catch (err) {
       setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'That action could not be resolved.'), success: false }]);
       setCombatLoading(false);
-      return;
+      return false;
     }
 
     const data = result.data;
@@ -832,7 +832,7 @@ export default function Game() {
       setNarrative(prev => [...prev, { type: 'roll_result', text: data.error || 'That action is not available.', success: false }]);
       if (data.target_defeated) await reloadCombat(combatId);
       setCombatLoading(false);
-      return;
+      return false;
     }
 
     // Emit floating combat text event + haptic feedback
@@ -872,7 +872,7 @@ export default function Game() {
       }]);
       await reloadCombat(combatId); // keep UI in sync
       setCombatLoading(false);
-      return; // Stop here - player still has actions
+      return true; // Stop here - player still has actions
     }
 
     // No actions remaining - process enemy turns
@@ -911,6 +911,39 @@ export default function Game() {
     // Single loadState at end of full turn resolution (not after every sub-step)
     await loadState();
     setCombatLoading(false);
+    return true;
+  };
+
+  const handleSheetSpellCast = async (spellName, spellPayload) => {
+    const selfResolvable = spellPayload?.attack_type === 'healing' || spellPayload?.is_utility;
+    if (!selfResolvable) {
+      setNarrative(prev => [...prev, { type: 'roll_result', text: `${spellName} needs a target. Use the Combat Spell action or Act to choose one.`, success: false }]);
+      return false;
+    }
+    const activeCombatId = combat?.id || session?.combat_state?.combat_id;
+    if (session?.in_combat && activeCombatId) {
+      const succeeded = await handlePlayerAttack(character?.id, 'spell', spellPayload);
+      if (succeeded) setShowCharSheet(false);
+      return succeeded;
+    }
+    try {
+      const result = await base44.functions.invoke('castUtilitySpell', {
+        session_id: sessionId,
+        character_id: character?.id,
+        spell_name: spellName,
+        action_text: spellPayload?.attack_type === 'healing' ? `cast ${spellName} on myself` : `cast ${spellName}`,
+        cast_token: `sheet:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`,
+      });
+      const data = result.data;
+      if (!data?.success) throw new Error(data?.error || `${spellName} could not be cast.`);
+      setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, ...(typeof data.hp_current === 'number' ? { hp_current: data.hp_current } : {}) } : prev);
+      setNarrative(prev => [...prev, { type: 'roll_result', text: `${spellName} cast.${data.heal_amount > 0 ? ` Restored ${data.heal_amount} HP.` : ''}`, success: true }]);
+      setShowCharSheet(false);
+      return true;
+    } catch (err) {
+      setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, `${spellName} could not be cast.`), success: false }]);
+      return false;
+    }
   };
 
   // Two-Weapon Fighting bonus-action off-hand strike (PHB p.195)
@@ -1559,7 +1592,7 @@ export default function Game() {
       {/* Character Sheet Modal */}
       {showCharSheet && (
         <CharacterSheet character={character} onClose={() => setShowCharSheet(false)}
-          onCharacterUpdate={setCharacter} />
+          onCharacterUpdate={setCharacter} onCastSpell={handleSheetSpellCast} />
       )}
 
       {/* Scene Visualizer */}

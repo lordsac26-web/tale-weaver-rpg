@@ -64,7 +64,7 @@ const TABS = [
   { id: 'features',   label: 'Features',   icon: '📜' },
 ];
  
-export default function CharacterSheet({ character: initialCharacter, onClose, onCharacterUpdate }) {
+export default function CharacterSheet({ character: initialCharacter, onClose, onCharacterUpdate, onCastSpell }) {
   const [tab, setTab] = useState('stats');
   const [character, setCharacter] = useState(initialCharacter);
   if (!character) return null;
@@ -91,8 +91,8 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ type: 'spring', stiffness: 320, damping: 28 }}
         className="w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col rounded-2xl"
-        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
         style={{
+          paddingTop: 'env(safe-area-inset-top, 0px)',
           background: 'rgba(12,8,4,0.98)',
           border: '1px solid rgba(180,140,90,0.3)',
           boxShadow: '0 0 60px rgba(0,0,0,0.8), 0 0 30px rgba(201,169,110,0.08)',
@@ -157,7 +157,7 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
               {tab === 'skills' && <SkillsTab character={character} profBonus={profBonus} onUpdate={handleUpdateCharacter} />}
               {tab === 'combat' && <CombatTab character={character} profBonus={profBonus} isCaster={isCaster} onUpdate={handleUpdateCharacter} />}
               {tab === 'inventory' && <InventoryTab character={character} onUpdate={handleUpdateCharacter} onIdentify={null} />}
-              {tab === 'spells' && <SpellbookTab character={character} onUpdateCharacter={handleUpdateCharacter} />}
+              {tab === 'spells' && <SpellbookTab character={character} onUpdateCharacter={handleUpdateCharacter} onCastSpell={onCastSpell} />}
               {tab === 'conditions' && <ConditionsTab character={character} onUpdate={handleUpdateCharacter} />}
               {tab === 'features' && <FeaturesTab character={character} onUpdate={handleUpdateCharacter} />}
             </motion.div>
