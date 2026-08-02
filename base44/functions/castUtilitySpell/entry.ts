@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
     if (prior) {
       const maximum = maxSlots(character, prior.slot_level);
       const used = Number((character.spell_slots || {})[`level_${prior.slot_level}`]) || 0;
-      return Response.json({ success: true, spell_detected: true, already_processed: true, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: character.spell_slots || {}, active_modifiers: character.active_modifiers || [] });
+      return Response.json({ success: true, spell_detected: true, already_processed: true, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: character.spell_slots || {}, active_modifiers: character.active_modifiers || [], heal_amount: prior.heal_amount || 0, hp_current: character.hp_current });
     }
 
     const now = Date.now();
@@ -124,15 +124,35 @@ Deno.serve(async (req) => {
 
     let activeModifiers = active;
     if (spell.concentration) activeModifiers = [...active.filter(m => !m.concentration), concentrationModifier(spell, now)];
-    if (token) abilities.__typed_spell_casts = [...receipts.filter(r => r?.token !== token).slice(-24), { token, spell_name: canonicalName, slot_level: selectedLevel, at: new Date(now).toISOString() }];
 
-    await base44.asServiceRole.entities.Character.update(character_id, { spell_slots: spellSlots, active_modifiers: activeModifiers, long_rest_abilities: abilities });
+    // Story-mode healing must complete in the same Character update as slot
+    // consumption. Narration is downstream and may fail; it never owns HP state.
+    let healAmount = 0;
+    let hpCurrent = Number(character.hp_current) || 0;
+    const selfTarget = /\b(myself|my self|on me|heal me|my wounds)\b/i.test(String(action_text || ''));
+    if (spell.attack_type === 'healing' && selfTarget) {
+      const dice = String(spell.description || '').match(/(\d+)d(\d+)/i);
+      const baseDiceCount = Number(dice?.[1]) || 1;
+      const dieSize = Number(dice?.[2]) || 8;
+      const diceCount = baseDiceCount + Math.max(0, selectedLevel - baseLevel);
+      const abilityByClass = { Cleric: 'wisdom', Druid: 'wisdom', Ranger: 'wisdom', Paladin: 'charisma', Bard: 'charisma', Sorcerer: 'charisma', Warlock: 'charisma', Wizard: 'intelligence', Artificer: 'intelligence' };
+      const ability = abilityByClass[character.class] || 'wisdom';
+      const abilityMod = Math.floor(((Number(character[ability]) || 10) - 10) / 2);
+      for (let i = 0; i < diceCount; i++) healAmount += Math.floor(Math.random() * dieSize) + 1;
+      healAmount = Math.max(0, healAmount + abilityMod);
+      hpCurrent = Math.min(Number(character.hp_max) || hpCurrent, hpCurrent + healAmount);
+    }
+    if (token) abilities.__typed_spell_casts = [...receipts.filter(r => r?.token !== token).slice(-24), { token, spell_name: canonicalName, slot_level: selectedLevel, heal_amount: healAmount, at: new Date(now).toISOString() }];
+
+    const characterUpdates = { spell_slots: spellSlots, active_modifiers: activeModifiers, long_rest_abilities: abilities };
+    if (healAmount > 0) characterUpdates.hp_current = hpCurrent;
+    await base44.asServiceRole.entities.Character.update(character_id, characterUpdates);
     if (session.in_combat && session.combat_state?.combat_id && spell.concentration) {
       const combat = await base44.asServiceRole.entities.CombatLog.get(session.combat_state.combat_id);
       if (combat?.is_active) await base44.asServiceRole.entities.CombatLog.update(combat.id, { world_state: { ...(combat.world_state || {}), concentration_spell: canonicalName, concentration_caster: character.name } });
     }
 
-    return Response.json({ success: true, spell_detected: true, already_active: false, spell_name: canonicalName, slot_level: selectedLevel, base_level: baseLevel, used_slots: usedAfter, max_slots: maximum, remaining_slots: Math.max(0, maximum - usedAfter), spell_slots: spellSlots, active_modifiers: activeModifiers, concentration: !!spell.concentration, duration: spell.duration, attack_type: spell.attack_type, components: spell.components });
+    return Response.json({ success: true, spell_detected: true, already_active: false, spell_name: canonicalName, slot_level: selectedLevel, base_level: baseLevel, used_slots: usedAfter, max_slots: maximum, remaining_slots: Math.max(0, maximum - usedAfter), spell_slots: spellSlots, active_modifiers: activeModifiers, concentration: !!spell.concentration, duration: spell.duration, attack_type: spell.attack_type, components: spell.components, heal_amount: healAmount, hp_current: hpCurrent });
   } catch (error) {
     return Response.json({ error: error.message || 'Typed spell cast failed' }, { status: 500 });
   }

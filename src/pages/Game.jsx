@@ -31,6 +31,10 @@ import SkillCheckRollModal from '@/components/game/SkillCheckRollModal';
 import { getManualRollEnabled } from '@/components/game/rollPreferences';
 import { resolveSkillCheck, canonicalSkillName } from '@/components/game/skillCheckResolver';
 
+const getFunctionErrorMessage = (error, fallback) =>
+  error?.response?.data?.error || error?.response?.data?.message ||
+  error?.data?.error || error?.data?.message || error?.message || fallback;
+
 export default function Game() {
   const navigate = useNavigate();
   const urlParams = new URLSearchParams(window.location.search);
@@ -378,7 +382,7 @@ export default function Game() {
       await loadState();
     } catch (err) {
       console.error('Failed to process choice:', err);
-      setNarrative(prev => [...prev, { type: 'narration', text: err?.message || 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
+      setNarrative(prev => [...prev, { type: 'narration', text: getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry. Please try again.') }]);
     } finally {
       setStoryLoading(false);
     }
@@ -470,7 +474,7 @@ export default function Game() {
     });
     const data = result.data;
     if (!data?.success || !data?.spell_detected) throw new Error(data?.error || `${spellName} could not be cast.`);
-    setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers } : prev);
+    setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, ...(typeof data.hp_current === 'number' ? { hp_current: data.hp_current } : {}) } : prev);
     const slotText = data.slot_level > 0 && Number.isFinite(data.remaining_slots)
       ? ` ${data.remaining_slots}/${data.max_slots} level-${data.slot_level} slots remain.`
       : '';
@@ -480,7 +484,7 @@ export default function Game() {
         ? `${data.spell_name} was already recorded; no additional spell slot was used.`
         : data.already_active
           ? `${data.spell_name} is already active; no additional spell slot was used.`
-          : `${data.spell_name} cast.${slotText}`,
+          : `${data.spell_name} cast.${data.heal_amount > 0 ? ` Restored ${data.heal_amount} HP.` : ''}${slotText}`,
       success: true,
     }]);
     return data;
@@ -511,7 +515,7 @@ export default function Game() {
       await loadState();
     } catch (err) {
       console.error('Failed to execute action:', err);
-      setNarrative(prev => [...prev, { type: 'narration', text: err?.message || 'The Dungeon Master pauses... Something went awry. Please try again.' }]);
+      setNarrative(prev => [...prev, { type: 'narration', text: getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry. Please try again.') }]);
     } finally {
       setStoryLoading(false);
     }
@@ -654,7 +658,7 @@ export default function Game() {
           return;
         }
       } catch (err) {
-        setNarrative(prev => [...prev, { type: 'roll_result', text: err?.message || 'That spell could not be resolved.', success: false }]);
+        setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'That spell could not be resolved.'), success: false }]);
         return;
       }
     }
@@ -809,10 +813,17 @@ export default function Game() {
     // Twinned Spell metamagic targets a second creature — lift it to payload top-level
     const twinTargetId = modifiers?.twin_target_id || null;
 
-    const result = await base44.functions.invoke('combatEngine', {
-      action: 'player_attack', session_id: sessionId, combat_id: combatId,
-      character_id: character?.id, payload: { target_id: targetId, weapon, spell, modifiers, twin_target_id: twinTargetId }
-    });
+    let result;
+    try {
+      result = await base44.functions.invoke('combatEngine', {
+        action: 'player_attack', session_id: sessionId, combat_id: combatId,
+        character_id: character?.id, payload: { target_id: targetId, weapon, spell, modifiers, twin_target_id: twinTargetId }
+      });
+    } catch (err) {
+      setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'That action could not be resolved.'), success: false }]);
+      setCombatLoading(false);
+      return;
+    }
 
     const data = result.data;
 
