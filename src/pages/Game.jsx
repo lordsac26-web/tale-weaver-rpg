@@ -1170,10 +1170,21 @@ export default function Game() {
     setCombatViewTab('story');
     setStoryLoading(true);
     try {
+      // Read the completed combat authoritatively before asking the DM to narrate.
+      // The story engine must not invent survivors, escapes, or unfinished enemies
+      // after the combat engine has recorded every enemy at 0 HP.
+      const finalCombatState = completedCombatId ? await readCombatState(completedCombatId) : null;
+      const finalCombat = finalCombatState?.combat;
+      const finalEnemies = (finalCombat?.combatants || defeatedEnemies || []).filter(c => c.type === 'enemy');
+      const defeatedNames = finalEnemies.filter(e => Number(e.hp_current ?? e.hp ?? 0) <= 0 || e.is_conscious === false).map(e => e.name);
+      const survivingNames = finalEnemies.filter(e => Number(e.hp_current ?? e.hp ?? 0) > 0 && e.is_conscious !== false).map(e => e.name);
+      const combatFacts = survivingNames.length
+        ? `AUTHORITATIVE COMBAT FACTS: Defeated enemies: ${defeatedNames.join(', ') || 'none'}. Surviving enemies: ${survivingNames.join(', ')}. Do not claim a surviving enemy escaped unless the combat facts explicitly list it as surviving.`
+        : `AUTHORITATIVE COMBAT FACTS: Every enemy in this encounter is defeated at 0 HP and unconscious. Defeated enemies: ${defeatedNames.join(', ') || 'all listed enemies'}. No enemy escaped, fled, or remains alive. Do not introduce a survivor or retreating enemy in the aftermath.`;
       const storyResult = await base44.functions.invoke('generateStory', {
         session_id: sessionId,
         action: 'choice',
-        custom_input: 'The combat has ended in victory and the player has finished searching the defeated enemies. Narrate the immediate aftermath, preserve current HP and depleted resources, and provide the next meaningful choices. Do not award duplicate combat XP, do not generate additional automatic loot, and do not immediately start another combat.'
+        custom_input: `${combatFacts} The combat has ended in victory and the player has finished searching the defeated enemies. Narrate the immediate aftermath, preserve current HP and depleted resources, and provide the next meaningful choices. Do not award duplicate combat XP, do not generate additional automatic loot, and do not immediately start another combat.`
       });
       if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
       setChoices(storyResult.data?.choices || []);
