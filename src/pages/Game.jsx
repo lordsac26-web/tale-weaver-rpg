@@ -474,7 +474,7 @@ export default function Game() {
     });
     const data = result.data;
     if (!data?.success || !data?.spell_detected) throw new Error(data?.error || `${spellName} could not be cast.`);
-    setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, ...(typeof data.hp_current === 'number' ? { hp_current: data.hp_current } : {}) } : prev);
+    setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, ...(typeof data.hp_current === 'number' ? { hp_current: data.hp_current } : {}), ...(data.inventory ? { inventory: data.inventory } : {}) } : prev);
     const slotText = data.slot_level > 0 && Number.isFinite(data.remaining_slots)
       ? ` ${data.remaining_slots}/${data.max_slots} level-${data.slot_level} slots remain.`
       : '';
@@ -936,7 +936,7 @@ export default function Game() {
       });
       const data = result.data;
       if (!data?.success) throw new Error(data?.error || `${spellName} could not be cast.`);
-      setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, ...(typeof data.hp_current === 'number' ? { hp_current: data.hp_current } : {}) } : prev);
+      setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, ...(typeof data.hp_current === 'number' ? { hp_current: data.hp_current } : {}), ...(data.inventory ? { inventory: data.inventory } : {}) } : prev);
       setNarrative(prev => [...prev, { type: 'roll_result', text: `${spellName} cast.${data.heal_amount > 0 ? ` Restored ${data.heal_amount} HP.` : ''}`, success: true }]);
       setShowCharSheet(false);
       return true;

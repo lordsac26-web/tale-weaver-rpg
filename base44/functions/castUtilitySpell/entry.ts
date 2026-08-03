@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
     if (prior) {
       const maximum = maxSlots(character, prior.slot_level);
       const used = Number((character.spell_slots || {})[`level_${prior.slot_level}`]) || 0;
-      return Response.json({ success: true, spell_detected: true, already_processed: true, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: character.spell_slots || {}, active_modifiers: character.active_modifiers || [], heal_amount: prior.heal_amount || 0, hp_current: character.hp_current });
+      return Response.json({ success: true, spell_detected: true, already_processed: true, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: character.spell_slots || {}, active_modifiers: character.active_modifiers || [], inventory: character.inventory || [], heal_amount: prior.heal_amount || 0, hp_current: character.hp_current });
     }
 
     const now = Date.now();
@@ -142,17 +142,40 @@ Deno.serve(async (req) => {
       healAmount = Math.max(0, healAmount + abilityMod);
       hpCurrent = Math.min(Number(character.hp_max) || hpCurrent, hpCurrent + healAmount);
     }
-    if (token) abilities.__typed_spell_casts = [...receipts.filter(r => r?.token !== token).slice(-24), { token, spell_name: canonicalName, slot_level: selectedLevel, heal_amount: healAmount, at: new Date(now).toISOString() }];
+
+    // Goodberry (PHB p.236): the cast transmutes ten berries that each restore
+    // 1 HP and nourish for one day. Grant them as a single consumable inventory
+    // stack scoped to this cast's receipt so a retry (same token) can never
+    // double-grant. The slot above is already consumed; this only adds berries.
+    let grantedInventory = null;
+    let grantedGoodberry = false;
+    if (normalize(canonicalName) === 'goodberry') {
+      grantedGoodberry = true;
+      const ttlMs = 24 * 60 * 60 * 1000;
+      const inv = Array.isArray(character.inventory) ? [...character.inventory] : [];
+      const idx = inv.findIndex(it => normalize(it?.name) === 'goodberry');
+      if (idx >= 0) {
+        const existing = inv[idx];
+        const existingExpiry = existing.expires_at ? new Date(existing.expires_at).getTime() : 0;
+        inv[idx] = { ...existing, quantity: (Number(existing.quantity) || 0) + 10, expires_at: new Date(Math.max(existingExpiry, now + ttlMs)).toISOString() };
+      } else {
+        inv.push({ name: 'Goodberry', category: 'Consumable', quantity: 10, description: 'A transmuted berry that restores 1 Hit Point when eaten and provides enough nourishment to sustain a creature for one day. Expires 24 hours after casting.', expires_at: new Date(now + ttlMs).toISOString() });
+      }
+      grantedInventory = inv;
+    }
+
+    if (token) abilities.__typed_spell_casts = [...receipts.filter(r => r?.token !== token).slice(-24), { token, spell_name: canonicalName, slot_level: selectedLevel, heal_amount: healAmount, granted_goodberry: grantedGoodberry, at: new Date(now).toISOString() }];
 
     const characterUpdates = { spell_slots: spellSlots, active_modifiers: activeModifiers, long_rest_abilities: abilities };
     if (healAmount > 0) characterUpdates.hp_current = hpCurrent;
+    if (grantedInventory) characterUpdates.inventory = grantedInventory;
     await base44.asServiceRole.entities.Character.update(character_id, characterUpdates);
     if (session.in_combat && session.combat_state?.combat_id && spell.concentration) {
       const combat = await base44.asServiceRole.entities.CombatLog.get(session.combat_state.combat_id);
       if (combat?.is_active) await base44.asServiceRole.entities.CombatLog.update(combat.id, { world_state: { ...(combat.world_state || {}), concentration_spell: canonicalName, concentration_caster: character.name } });
     }
 
-    return Response.json({ success: true, spell_detected: true, already_active: false, spell_name: canonicalName, slot_level: selectedLevel, base_level: baseLevel, used_slots: usedAfter, max_slots: maximum, remaining_slots: Math.max(0, maximum - usedAfter), spell_slots: spellSlots, active_modifiers: activeModifiers, concentration: !!spell.concentration, duration: spell.duration, attack_type: spell.attack_type, components: spell.components, heal_amount: healAmount, hp_current: hpCurrent });
+    return Response.json({ success: true, spell_detected: true, already_active: false, spell_name: canonicalName, slot_level: selectedLevel, base_level: baseLevel, used_slots: usedAfter, max_slots: maximum, remaining_slots: Math.max(0, maximum - usedAfter), spell_slots: spellSlots, active_modifiers: activeModifiers, concentration: !!spell.concentration, duration: spell.duration, attack_type: spell.attack_type, components: spell.components, inventory: grantedInventory || character.inventory || [], heal_amount: healAmount, hp_current: hpCurrent });
   } catch (error) {
     return Response.json({ error: error.message || 'Typed spell cast failed' }, { status: 500 });
   }

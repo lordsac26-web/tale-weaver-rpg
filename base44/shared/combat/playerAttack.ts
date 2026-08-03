@@ -473,8 +473,10 @@ export async function handlePlayerAttack(ctx) {
     }
     // Ammunition (PHB p.146): ranged weapons with the Ammunition property must
     // consume a matching ammo item from inventory. Block the attack if none left.
+    // Ammunition property may be stored as "Ammunition (150/600)" etc., so match
+    // case-insensitively with a contains predicate rather than an exact match.
     const weaponProps = (weapon.properties || []).map(p => p.toLowerCase());
-    const usesAmmo = weaponProps.includes('ammunition');
+    const usesAmmo = weaponProps.some(p => p.includes('ammunition'));
     // Loading (PHB p.147): validated BEFORE ammunition is consumed — a blocked
     // shot must never eat a bolt/arrow (H5 fix: validation before persistence).
     const hasLoading = weaponProps.includes('loading');

@@ -348,7 +348,13 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // Target-aware character conditions. Enemy/NPC effects never belong on the
       // Character record, and placeholders such as "None" are always discarded.
       if (character) {
-        const originalConditions = Array.isArray(character.conditions) ? character.conditions : [];
+        // Re-read the authoritative exhaustion level + conditions right before
+        // reconciling, so a long rest that reduced exhaustion to 0 (and cleared
+        // the Exhausted badge) during the LLM call is honored. Never keep or
+        // re-add a stale Exhausted/Exhaustion badge when the level is 0.
+        const freshChar = await base44.asServiceRole.entities.Character.get(character.id);
+        const authoritativeExhaustion = Number((freshChar || character).exhaustion_level || 0);
+        const originalConditions = Array.isArray((freshChar || character).conditions) ? (freshChar || character).conditions : [];
         const incoming = result.condition_update && typeof result.condition_update === 'object'
           ? result.condition_update
           : { target: 'none', add: '', remove: [], duration: 'scene' };
@@ -361,7 +367,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
           if (!validConditionName(cond) || removals.has(key)) return false;
           // Exhausted is authoritative only when the mechanical exhaustion level is positive.
           // Purge stale story badges left by earlier narrative turns.
-          if ((key === 'exhausted' || key === 'exhaustion') && Number(character.exhaustion_level || 0) <= 0) return false;
+          if ((key === 'exhausted' || key === 'exhaustion') && authoritativeExhaustion <= 0) return false;
           const duration = typeof cond === 'object' ? cond.duration : null;
           if (duration === 'scene' && changingLocation) return false;
           if (duration === 'combat' && leavingCombat) return false;
@@ -374,7 +380,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
           const key = name.toLowerCase();
           // Exhaustion is a mechanical level, not a free-form story badge. Never
           // let narrative output add Exhausted while the authoritative level is 0.
-          const mechanicalExhaustion = Number(character.exhaustion_level || 0);
+          const mechanicalExhaustion = authoritativeExhaustion;
           const isInvalidExhaustionAdd = (key === 'exhausted' || key === 'exhaustion') && mechanicalExhaustion <= 0;
           if (!isInvalidExhaustionAdd && !nextConditions.some(cond => conditionKey(cond) === key)) {
             nextConditions.push({
