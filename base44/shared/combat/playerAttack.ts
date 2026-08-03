@@ -18,6 +18,10 @@ export async function handlePlayerAttack(ctx) {
   // fragile and caused false 403s for the legitimate owner.)
   const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+  const featureNames = (character.features || []).map(f => String(f).toLowerCase());
+  const hasHordeBreaker = featureNames.some(f => f.includes('horde breaker'));
+  const hasColossusSlayer = featureNames.some(f => f.includes('colossus slayer'));
+  const isHordeBreakerAttack = modifiers.horde_breaker === true;
 
   const combatants = [...combatLog.combatants];
   const target = combatants.find(c => c.id === target_id);
@@ -30,6 +34,14 @@ export async function handlePlayerAttack(ctx) {
       target_defeated: true,
       suggested_target_id: nextTarget?.id || null,
     }, { status: 409 });
+  }
+
+  if (isHordeBreakerAttack) {
+    const ws = combatLog.world_state || {};
+    if (!hasHordeBreaker) return Response.json({ error: 'Horde Breaker is not selected for this character.', invalid: true }, { status: 400 });
+    if (!ws.horde_breaker_available || ws.horde_breaker_used) return Response.json({ error: 'Horde Breaker is not available this turn.', invalid: true }, { status: 409 });
+    if (ws.horde_breaker_origin_target_id === target_id) return Response.json({ error: 'Horde Breaker must target a different creature.', invalid: true }, { status: 400 });
+    if (target.type !== 'enemy' || !target.is_conscious || (target.hp_current ?? target.hp ?? 0) <= 0) return Response.json({ error: 'Choose a different living enemy for Horde Breaker.', invalid: true }, { status: 409 });
   }
 
   // Centralized attack roll: gather all advantage/disadvantage SOURCES here, then
@@ -567,9 +579,9 @@ export async function handlePlayerAttack(ctx) {
       damageBonus += rageDamage;
     }
 
-    // Hunter Ranger — Colossus Slayer (PHB p.93): once per turn, +1d8 damage
-    // when the target is already below its hit point maximum. Automatic.
-    if ((character.class || '') === 'Ranger' && (character.subclass || '').toLowerCase().includes('hunter')
+    // Hunter Ranger — only the selected Hunter's Prey feature is active.
+    // Colossus Slayer is not applied to Horde Breaker characters.
+    if (hasColossusSlayer && (character.class || '') === 'Ranger' && (character.subclass || '').toLowerCase().includes('hunter')
         && target.hp_current < target.hp_max && !combatLog.world_state?.colossus_slayer_used) {
       extraDamageDice.push({ dice: '1d8', type: 'colossus', label: 'Colossus Slayer' });
       colossusApplied = true;
@@ -999,11 +1011,22 @@ export async function handlePlayerAttack(ctx) {
   const isQuickenedMain = !!modifiers.metamagic?.quickened && !!spell;
   const actionsPerTurn = getActionsPerTurn(character);
   const { nextIndex, nextRound, actionsRemaining, worldState: newWorldState } =
-    resolveActionAndAdvance(combatLog, updatedCombatants, character, { isQuickened: isQuickenedMain });
+    resolveActionAndAdvance(combatLog, updatedCombatants, character, { isQuickened: isQuickenedMain, isHordeBreaker: isHordeBreakerAttack });
   // Mark Sneak Attack consumed for this turn so it can't trigger again until next turn
   if (sneakAttackApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.sneak_attack_used = true;
   // Clear Channel Divinity: Guided Strike bonus (consumed by this attack)
   if (combatLog.world_state?.guided_strike_bonus) newWorldState.guided_strike_bonus = 0;
+  // Horde Breaker is a free, different-target attack once per turn.
+  if (isHordeBreakerAttack) {
+    newWorldState.horde_breaker_available = false;
+    newWorldState.horde_breaker_used = true;
+    newWorldState.horde_breaker_origin_target_id = null;
+  } else if (hasHordeBreaker && hit && newWorldState.actions_used_this_turn !== 0
+      && updatedCombatants.some(c => c.type === 'enemy' && c.id !== target_id && c.is_conscious && (c.hp_current ?? c.hp ?? 0) > 0)) {
+    newWorldState.horde_breaker_available = true;
+    newWorldState.horde_breaker_origin_target_id = target_id;
+  }
+
   // Mark Colossus Slayer consumed for this turn (once-per-turn, PHB p.93)
   if (colossusApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.colossus_slayer_used = true;
   // Bugbear Surprise Attack consumed (once per combat) when its bonus damage lands

@@ -152,9 +152,9 @@ export const getActionsPerTurn = (character) => {
 };
 
 export const resolveActionAndAdvance = (combatLog, combatants, character, opts = {}) => {
-  const { isQuickened = false, isBonusAction = false } = opts;
+  const { isQuickened = false, isBonusAction = false, isHordeBreaker = false } = opts;
   const apt = getActionsPerTurn(character);
-  const acu = (isQuickened || isBonusAction)
+  const acu = (isQuickened || isBonusAction || isHordeBreaker)
     ? (combatLog.world_state?.actions_used_this_turn || 0)
     : (combatLog.world_state?.actions_used_this_turn || 0) + 1;
   const ar = apt - acu;
@@ -181,6 +181,9 @@ export const resetTurnWorldState = (combatLog, extra = {}) => ({
   sneak_attack_used: false,
   loading_weapon_fired: false,
   colossus_slayer_used: false,
+  horde_breaker_available: false,
+  horde_breaker_origin_target_id: null,
+  horde_breaker_used: false,
   aasimar_rider_used: false,
   draconic_cry_active: false,
   divine_strike_used: false,

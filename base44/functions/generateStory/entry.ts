@@ -359,6 +359,9 @@ Write a gripping 1-2 paragraph combat narrative.`;
         let nextConditions = originalConditions.filter(cond => {
           const key = conditionKey(cond);
           if (!validConditionName(cond) || removals.has(key)) return false;
+          // Exhausted is authoritative only when the mechanical exhaustion level is positive.
+          // Purge stale story badges left by earlier narrative turns.
+          if ((key === 'exhausted' || key === 'exhaustion') && Number(character.exhaustion_level || 0) <= 0) return false;
           const duration = typeof cond === 'object' ? cond.duration : null;
           if (duration === 'scene' && changingLocation) return false;
           if (duration === 'combat' && leavingCombat) return false;
