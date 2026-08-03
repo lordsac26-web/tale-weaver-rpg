@@ -59,14 +59,28 @@ export function buildGenericSubclassAbilities(ctx) {
 
   if (charClass === 'Ranger' && sub.includes('hunter')) {
     hasDedicated = true;
-    abilities.push(pill({
-      id: 'colossus_slayer',
-      name: 'Colossus Slayer',
-      icon: <Target className="w-4 h-4" />,
-      color: '#6ee7b7',
-      shortDesc: '+1d8 vs wounded targets — automatic',
-      description: '⚙ Once per turn, when you hit a creature that is below its hit point maximum, you deal an extra 1d8 damage (PHB p.93). The combat engine applies this automatically.',
-    }));
+    const featureNames = (character.features || []).map(f => String(f).toLowerCase());
+    const hasHordeBreaker = featureNames.some(f => f.includes('horde breaker'));
+    const hasColossusSlayer = featureNames.some(f => f.includes('colossus slayer'));
+    if (hasHordeBreaker) {
+      abilities.push(pill({
+        id: 'horde_breaker',
+        name: 'Horde Breaker',
+        icon: <Target className="w-4 h-4" />,
+        color: '#6ee7b7',
+        shortDesc: 'Different target attack — once per turn',
+        description: '⚙ Once per turn after a weapon attack, choose a different living creature within the encounter as the second target. The combat engine validates and resolves this as a free extra attack.',
+      }));
+    } else if (hasColossusSlayer) {
+      abilities.push(pill({
+        id: 'colossus_slayer',
+        name: 'Colossus Slayer',
+        icon: <Target className="w-4 h-4" />,
+        color: '#6ee7b7',
+        shortDesc: '+1d8 vs wounded targets — automatic',
+        description: '⚙ Once per turn, when you hit a creature that is below its hit point maximum, you deal an extra 1d8 damage (PHB p.93). The combat engine applies this automatically.',
+      }));
+    }
   }
 
   if (charClass === 'Cleric' && sub.includes('life')) {
