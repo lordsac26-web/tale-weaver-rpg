@@ -359,11 +359,11 @@ export default function Game() {
       skill: choice.skill_check, dc: choice.dc, raw, allRolls, hadAdvantage, hadDisadvantage,
       advantageSources, modifier, final, success, feedback, character_name: character?.name,
     }]);
-    await runChoiceStory(choice, choiceIndex, success);
+    await runChoiceStory(choice, choiceIndex, success, advantageSources);
   };
 
   // Sends the chosen action (and any resolved skill check) to the story engine.
-  const runChoiceStory = async (choice, choiceIndex, skillSuccess) => {
+  const runChoiceStory = async (choice, choiceIndex, skillSuccess, tacticalSources) => {
     setStoryLoading(true);
     try {
       const mechanicalCast = await maybeCastStorySpell(choice.text);
@@ -372,13 +372,16 @@ export default function Game() {
         mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
         mechanicalItem ? ` [MECHANICS: ${mechanicalItem.quantity} ${mechanicalItem.item_name} were authoritatively consumed and restored ${mechanicalItem.heal_amount} HP. Do not narrate a different quantity or apply another mechanical heal.]` : '',
       ].join('');
+      const tacticalContext = (tacticalSources && tacticalSources.length > 0)
+        ? ` [TACTICAL: Attack has advantage (${tacticalSources.join('; ')}). Apply advantage to the attack roll.]`
+        : '';
       const result = await base44.functions.invoke('generateStory', {
         session_id: sessionId,
         action: 'choice',
         choice_index: choiceIndex,
         custom_input: (choice.skill_check
           ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}]`
-          : choice.text) + mechanicsContext,
+          : choice.text) + mechanicsContext + tacticalContext,
       });
       const data = result.data;
 
