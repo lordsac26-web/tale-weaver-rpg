@@ -40,6 +40,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const [twinTargetId, setTwinTargetId] = useState(null);
   // Paladin Divine Smite: chosen spell slot level for the next weapon attack (null = no smite)
   const [smiteSlotLevel, setSmiteSlotLevel] = useState(null);
+  const [hordeBreakerTarget, setHordeBreakerTarget] = useState('');
 
   // Keep the selection authoritative after every combat reload. If the selected
   // enemy was just defeated, move to the next conscious enemy so an Extra Attack
@@ -61,6 +62,10 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const actionsPerTurn = getActionsPerTurn(character);
   const actionsUsed = world_state?.actions_used_this_turn || 0;
   const actionsRemaining = Math.max(0, actionsPerTurn - actionsUsed);
+  const featureNames = (character?.features || []).map(f => String(f).toLowerCase());
+  const hasHordeBreaker = featureNames.some(f => f.includes('horde breaker'));
+  const hordeBreakerAvailable = hasHordeBreaker && !!world_state?.horde_breaker_available && !world_state?.horde_breaker_used;
+  const hordeTargets = enemies.filter(e => e.is_conscious && (e.hp_current ?? e.hp ?? 0) > 0 && e.id !== world_state?.horde_breaker_origin_target_id);
 
   // The equipped weapon — stored as full object. 'weapon' is the alias written by recalculateStats;
   // 'mainhand' is the raw slot key used by InventoryTab/EquipmentManager
@@ -570,6 +575,23 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {hordeBreakerAvailable && hordeTargets.length > 0 && (
+                <div className="rounded-lg p-2" style={{ background: 'rgba(20,45,30,0.7)', border: '1px solid rgba(80,220,160,0.45)' }}>
+                  <div className="text-xs font-fantasy mb-1" style={{ color: '#9ff0c8' }}>Horde Breaker — choose a different target</div>
+                  <div className="flex gap-2">
+                    <select value={hordeBreakerTarget} onChange={e => setHordeBreakerTarget(e.target.value)} className="flex-1 rounded-lg px-2 py-1.5 text-xs" style={{ background: 'rgba(5,25,15,0.9)', color: '#d8ffe8', border: '1px solid rgba(80,220,160,0.35)' }}>
+                      <option value="">Select target…</option>
+                      {hordeTargets.map(e => <option key={e.id} value={e.id}>{e.name} (HP {e.hp_current}/{e.hp_max})</option>)}
+                    </select>
+                    <button disabled={!hordeBreakerTarget || loading} onClick={() => {
+                      const weapon = getActiveWeapon() || { name: 'Unarmed Strike', damage_dice: '1d4', attack_bonus: 0, damage_bonus: 0, type: 'melee', properties: [] };
+                      onPlayerAttack(hordeBreakerTarget, 'attack', weapon, { ...combatModifiers, horde_breaker: true });
+                      setHordeBreakerTarget('');
+                    }} className="px-3 py-1.5 rounded-lg text-xs font-bold" style={{ background: hordeBreakerTarget ? 'rgba(40,150,90,0.8)' : 'rgba(40,70,50,0.5)', color: '#eafff0' }}>Attack</button>
+                  </div>
+                </div>
+              )}
 
               {/* Action button */}
               <motion.button onClick={handleAction} disabled={!canAct || loading || actionsRemaining === 0}
