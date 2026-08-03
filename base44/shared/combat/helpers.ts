@@ -167,6 +167,7 @@ export const resolveActionAndAdvance = (combatLog, combatants, character, opts =
     ni = adv.nextIndex; nr = adv.nextRound;
     ws = { ...ws, actions_used_this_turn: 0, bonus_action_used: false,
            sneak_attack_used: false, loading_weapon_fired: false, colossus_slayer_used: false,
+           horde_breaker_available: false, horde_breaker_origin_target_id: null, horde_breaker_used: false,
            aasimar_rider_used: false, draconic_cry_active: false, divine_strike_used: false,
            divine_fury_used: false };
   }
