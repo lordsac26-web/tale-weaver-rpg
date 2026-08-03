@@ -6,6 +6,7 @@ import { getFeatEffectSummary } from '@/components/game/featEffects';
 import FeatChoiceControls from '@/components/creation/FeatChoiceControls';
 import { hasFeatChoicesComplete } from '@/components/game/featChoiceConfig';
 import { CLASSES } from '@/components/game/gameData';
+import { resolveDescription } from '@/components/game/descriptionResolver';
 
 // Merge the curated FEATS (which carry engine metadata: stat_req, asi_choices, race_req,
 // caster_only) with feats ingested into the DB. Curated entries win on name collision so
@@ -243,7 +244,7 @@ export default function StepFeats({ character, set }) {
 
               {isExpanded && (
                 <div className="px-4 pb-4 space-y-3 border-t border-slate-700/30 pt-3">
-                  <p className="text-sm text-amber-100/70 leading-relaxed">{feat.description}</p>
+                  <p className="text-sm text-amber-100/70 leading-relaxed whitespace-pre-wrap break-words">{resolveDescription(feat, feat.benefits?.length ? feat.benefits.map(b => '\u2022 ' + b).join('\n') : 'No description available.')}</p>
                   <div>
                     <div className="text-xs text-slate-500 uppercase tracking-widest mb-1.5">Benefits</div>
                     <div className="space-y-1">

@@ -124,7 +124,7 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
             {details.effect_summary && (
               <p className="text-xs leading-relaxed font-medium mb-2" style={{ color: 'rgba(147,197,253,0.8)' }}>⚡ {details.effect_summary}</p>
             )}
-            <p className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
+            <p className="text-xs leading-relaxed mb-2 whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
               {details.description || 'No description available.'}
             </p>
             {details.higher_level_scaling && (

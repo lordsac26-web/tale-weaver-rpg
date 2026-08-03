@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { Coins, Gem, ScrollText, ShieldCheck, Sparkles, Wand2 } from 'lucide-react';
+import { resolveDescription } from '@/components/game/descriptionResolver';
 
 const RARITY_ORDER = ['common', 'uncommon', 'rare', 'very rare', 'legendary'];
 
@@ -42,6 +43,19 @@ function getMechanicalSummary(item) {
   return entries;
 }
 
+// Reference-only items: artifacts and named reference entries that should be
+// displayed as reference material, not purchasable as standalone inventory items.
+// They remain stored non-destructively in the MagicItem entity collection.
+const REFERENCE_ONLY_NAMES = [
+  'apparatus of the crab levers',
+];
+
+function isReferenceOnly(item) {
+  const name = (item.identified_name || item.name || '').toLowerCase();
+  const category = (item.category || '').toLowerCase();
+  return category.includes('artifact') || REFERENCE_ONLY_NAMES.includes(name);
+}
+
 function buildInventoryItem(item) {
   const rarity = normalizeRarity(item.rarity);
   return {
@@ -72,9 +86,11 @@ function MagicItemCard({ item, character, onBuy }) {
   const cost = getMagicItemCost(item);
   const canAfford = (character?.gold || 0) >= cost;
   const mechanics = getMechanicalSummary(item);
+  const referenceOnly = isReferenceOnly(item);
+  const desc = resolveDescription(item, item.unidentified_description || 'A magical item with unusual properties.');
 
   const handleBuy = async () => {
-    if (!canAfford) return;
+    if (!canAfford || referenceOnly) return;
     setBuying(true);
     await onBuy(item);
     setBuying(false);
@@ -92,12 +108,17 @@ function MagicItemCard({ item, character, onBuy }) {
             <span>{meta.label}</span>
             <span>·</span>
             <span>{item.category || 'Wondrous Item'}</span>
+            {referenceOnly && (
+              <span className="px-1.5 py-0.5 rounded-full text-xs" style={{ background: 'rgba(60,50,30,0.4)', border: '1px solid rgba(180,140,90,0.3)', color: 'rgba(201,169,110,0.7)' }}>
+                Reference
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      <p className="text-xs leading-relaxed line-clamp-3" style={{ color: 'rgba(232,213,183,0.66)', fontFamily: 'EB Garamond, serif' }}>
-        {item.description || item.unidentified_description || 'A magical item with unusual properties.'}
+      <p className="text-xs leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.66)', fontFamily: 'EB Garamond, serif' }}>
+        {desc}
       </p>
 
       {mechanics.length > 0 && (
@@ -111,12 +132,20 @@ function MagicItemCard({ item, character, onBuy }) {
       )}
 
       <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'rgba(180,140,90,0.1)' }}>
-        <div className="flex items-center gap-1.5 font-fantasy font-bold" style={{ color: '#fbbf24' }}>
-          <Coins className="w-4 h-4" /> {cost} gp
-        </div>
-        <button onClick={handleBuy} disabled={!canAfford || buying} className="px-3 py-1.5 rounded-lg font-fantasy text-xs disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(50,35,5,0.85)', border: '1px solid rgba(201,169,110,0.42)', color: '#f0c040' }}>
-          {buying ? 'Buying...' : canAfford ? 'Buy' : 'Too Costly'}
-        </button>
+        {referenceOnly ? (
+          <span className="text-xs font-fantasy" style={{ color: 'rgba(180,140,90,0.5)' }}>
+            <ScrollText className="w-3.5 h-3.5 inline-block mr-1" />Reference Only
+          </span>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5 font-fantasy font-bold" style={{ color: '#fbbf24' }}>
+              <Coins className="w-4 h-4" /> {cost} gp
+            </div>
+            <button onClick={handleBuy} disabled={!canAfford || buying} className="px-3 py-1.5 rounded-lg font-fantasy text-xs disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(50,35,5,0.85)', border: '1px solid rgba(201,169,110,0.42)', color: '#f0c040' }}>
+              {buying ? 'Buying...' : canAfford ? 'Buy' : 'Too Costly'}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

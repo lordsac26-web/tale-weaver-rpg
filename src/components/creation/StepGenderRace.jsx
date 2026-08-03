@@ -1,5 +1,6 @@
 import React from 'react';
 import { RACES } from '@/components/game/gameData';
+import { resolveDescription } from '@/components/game/descriptionResolver';
 
 const STAT_LABELS = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
 
@@ -76,7 +77,7 @@ export default function StepGenderRace({ character, set }) {
                 <span className="text-xl">{RACE_ICONS[race] || '👤'}</span>
                 <span className="font-bold text-amber-200">{race}</span>
               </div>
-              <p className="text-amber-400/60 text-xs mb-2 leading-relaxed">{data.description}</p>
+              <p className="text-amber-400/60 text-xs mb-2 leading-relaxed whitespace-pre-wrap break-words">{resolveDescription(data, 'A unique heritage with its own traits and abilities.')}</p>
               <div className="flex flex-wrap gap-1 mb-1">
                 {Object.entries(data.stat_bonuses).map(([stat, val]) => (
                   <span key={stat} className="bg-amber-900/40 text-amber-300 text-xs px-2 py-0.5 rounded-full">

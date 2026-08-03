@@ -85,7 +85,7 @@ export default function SubclassSection({ character, Section }) {
                 <span className="text-sm font-fantasy" style={{ color: 'rgba(210,235,200,0.9)' }}>{f.name}</span>
               </div>
               {f.desc && (
-                <p className="text-xs mt-1.5 ml-1 leading-relaxed whitespace-pre-line"
+                <p className="text-xs mt-1.5 ml-1 leading-relaxed whitespace-pre-wrap break-words"
                   style={{ color: 'rgba(190,215,180,0.6)', fontFamily: 'EB Garamond, serif', lineHeight: '1.6' }}>
                   {f.desc}
                 </p>

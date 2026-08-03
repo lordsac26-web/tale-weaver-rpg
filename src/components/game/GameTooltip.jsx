@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CLASSES, RACES, CONDITIONS, SKILL_STAT_MAP, BACKGROUNDS } from './gameData';
 import { SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS } from './spellData';
+import { resolveDescription } from './descriptionResolver';
 
 /**
  * Reusable tooltip for D&D game elements.
@@ -113,7 +114,7 @@ export default function GameTooltip({ content, title, subtitle, icon, position =
             </div>
           )}
           {content && (
-            <div className="text-xs leading-relaxed" style={{ color: 'rgba(232,213,183,0.85)' }}>
+            <div className="text-xs leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.85)' }}>
               {content}
             </div>
           )}
@@ -132,7 +133,8 @@ export function SpellTooltip({ name, spellData, children, position = 'top' }) {
   // Prefer the curated local detail, but fall back to canonical Spell entity data
   // passed by SpellCard so every valid spell still has a hover description.
   const spell = SPELL_DETAILS[name] || spellData;
-  if (!spell || !spell.description) return children;
+  if (!spell) return children;
+  const desc = resolveDescription(spell, 'No description available.');
   const schoolColor = SCHOOL_COLORS[spell.school] || '';
   const dmgColor = DAMAGE_TYPE_COLORS[spell.damage_type] || '';
   const levelLabel = Number(spell.level) === 0 ? 'Cantrip' : `Level ${spell.level ?? 1}`;
@@ -151,7 +153,7 @@ export function SpellTooltip({ name, spellData, children, position = 'top' }) {
             <span>Duration: {spell.duration}</span>
             {spell.components && <span>Components: {spell.components}</span>}
           </div>
-          <p>{spell.description}</p>
+          <p className="whitespace-pre-wrap break-words">{desc}</p>
           {spell.damage_dice && spell.damage_dice !== '0' && (
             <div className="text-xs" style={{ color: 'rgba(252,165,165,0.8)' }}>
               Damage: {spell.damage_dice} {spell.damage_type}
@@ -259,6 +261,7 @@ export function SubclassTooltip({ className, subclassName, children, position = 
   const classData = CLASSES[className];
   const subclass = classData?.subclasses?.find(s => s.name === subclassName);
   if (!subclass) return children;
+  const subDesc = resolveDescription(subclass, 'A unique path within the ' + className + ' class.');
 
   return (
     <GameTooltip
@@ -267,7 +270,7 @@ export function SubclassTooltip({ className, subclassName, children, position = 
       title={subclassName}
       subtitle={`${className} Subclass`}
       icon="🏛️"
-      content={subclass.desc}>
+      content={subDesc}>
       {children}
     </GameTooltip>
   );
@@ -277,6 +280,7 @@ export function SubclassTooltip({ className, subclassName, children, position = 
 export function RaceTooltip({ raceName, children, position = 'top' }) {
   const race = RACES[raceName];
   if (!race) return children;
+  const raceDesc = resolveDescription(race, 'A unique heritage with its own traits and abilities.');
   const bonuses = Object.entries(race.stat_bonuses || {}).map(([k, v]) => `+${v} ${k.slice(0, 3).toUpperCase()}`).join(', ');
 
   return (
@@ -288,7 +292,7 @@ export function RaceTooltip({ raceName, children, position = 'top' }) {
       icon="👤"
       content={
         <div className="space-y-1">
-          <p>{race.description}</p>
+          <p className="whitespace-pre-wrap break-words">{raceDesc}</p>
           {race.traits?.length > 0 && (
             <div className="text-xs" style={{ color: 'rgba(134,239,172,0.7)' }}>
               Traits: {race.traits.join(', ')}

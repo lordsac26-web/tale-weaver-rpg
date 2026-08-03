@@ -550,8 +550,8 @@ function FeaturesTab({ character, onUpdate }) {
                     <span className="text-xs badge-green">{ability.usage}</span>
                   )}
                 </div>
-                <div className="text-xs mt-1" style={{ color: 'rgba(200,220,180,0.6)', fontFamily: 'EB Garamond, serif' }}>
-                  {ability.desc}
+                <div className="text-xs mt-1 whitespace-pre-wrap break-words" style={{ color: 'rgba(200,220,180,0.6)', fontFamily: 'EB Garamond, serif' }}>
+                   {ability.desc}
                 </div>
               </div>
             ))}
@@ -580,7 +580,7 @@ function FeaturesTab({ character, onUpdate }) {
                   <FeatureTooltip featureName={featName} description={featDesc || undefined} position="right">
                     <div className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{featName}</div>
                   </FeatureTooltip>
-                  {featDesc && <div className="text-xs mt-1" style={{ color: 'rgba(180,150,100,0.5)', fontFamily: 'EB Garamond, serif' }}>{featDesc}</div>}
+                  {featDesc && <div className="text-xs mt-1 whitespace-pre-wrap break-words" style={{ color: 'rgba(180,150,100,0.5)', fontFamily: 'EB Garamond, serif' }}>{featDesc}</div>}
                 </div>
               );
             })}
@@ -630,7 +630,7 @@ function FeaturesTab({ character, onUpdate }) {
                   <FeatureTooltip featureName={featName} description={featDesc || undefined} position="right">
                     <div className="text-sm" style={{ color: '#c4b5fd', fontFamily: 'EB Garamond, serif' }}>{featName}</div>
                   </FeatureTooltip>
-                  {featDesc && <div className="text-xs mt-1" style={{ color: 'rgba(180,150,220,0.45)', fontFamily: 'EB Garamond, serif' }}>{featDesc}</div>}
+                  {featDesc && <div className="text-xs mt-1 whitespace-pre-wrap break-words" style={{ color: 'rgba(180,150,220,0.45)', fontFamily: 'EB Garamond, serif' }}>{featDesc}</div>}
                 </div>
               );
             })}

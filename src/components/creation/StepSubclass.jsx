@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Check, ChevronDown, ChevronUp, Search, Loader2, Sparkles } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { resolveDescription } from '@/components/game/descriptionResolver';
 
 // Level at which each class chooses its subclass (most are 3).
 const SUBCLASS_LEVEL = { Cleric: 1, Sorcerer: 1, Warlock: 1, Druid: 2, Wizard: 2 };
@@ -122,10 +123,10 @@ export default function StepSubclass({ character, set }) {
                   {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
                 </button>
               </div>
-              {isExpanded && sc.description && (
+              {isExpanded && (
                 <div className="px-4 pb-4 border-t border-slate-700/30 pt-3">
-                  <p className="text-sm text-amber-100/70 leading-relaxed whitespace-pre-line">
-                    {sc.description.replace(/[#*]/g, '').slice(0, 1200)}
+                  <p className="text-sm text-amber-100/70 leading-relaxed whitespace-pre-wrap break-words">
+                    {resolveDescription(sc, 'No description available.').replace(/[#*]/g, '').slice(0, 1200)}
                   </p>
                 </div>
               )}
