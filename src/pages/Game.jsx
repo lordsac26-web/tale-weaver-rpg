@@ -352,9 +352,11 @@ export default function Game() {
     setStoryLoading(true);
     try {
       const mechanicalCast = await maybeCastStorySpell(choice.text);
-      const mechanicsContext = mechanicalCast
-        ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]`
-        : '';
+      const mechanicalItem = await maybeUseStoryConsumable(choice.text);
+      const mechanicsContext = [
+        mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
+        mechanicalItem ? ` [MECHANICS: ${mechanicalItem.quantity} ${mechanicalItem.item_name} were authoritatively consumed and restored ${mechanicalItem.heal_amount} HP. Do not narrate a different quantity or apply another mechanical heal.]` : '',
+      ].join('');
       const result = await base44.functions.invoke('generateStory', {
         session_id: sessionId,
         action: 'choice',
@@ -459,6 +461,46 @@ export default function Game() {
       .find(name => normalizedAction.includes(normalizeSpellText(name))) || null;
   };
 
+  // Story-mode consumable use goes through an authoritative transaction before narration.
+  // This covers natural language variants such as "use two good berries" and "utilize 2 Goodberry".
+  const findTypedConsumable = (action) => {
+    if (!/\b(use|using|utilize|utilizing|eat|eating|consume|consuming|take|taking)\b/i.test(action || '')) return null;
+    const normalizeItemText = (value) => String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const compact = normalizeItemText(action).replace(/\s+/g, '');
+    if (!compact.includes('goodberry') && !compact.includes('goodberries')) return null;
+    const words = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+    const normalized = normalizeItemText(action);
+    const word = Object.keys(words).find(w => new RegExp(`\\b${w}\\b`).test(normalized));
+    const numeric = normalized.match(/\b(\d+)\b/)?.[1];
+    return { item_name: 'Goodberry', quantity: word ? words[word] : numeric ? Number(numeric) : 1 };
+  };
+
+  const normalizeItemTextForToken = (value) => String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '_').slice(0, 100);
+
+  const maybeUseStoryConsumable = async (action) => {
+    const item = findTypedConsumable(action);
+    if (!item) return null;
+    const result = await base44.functions.invoke('useConsumable', {
+      session_id: sessionId,
+      character_id: character?.id,
+      item_name: item.item_name,
+      action_text: action,
+      quantity: item.quantity,
+      use_token: `story:item:${sessionId}:${narrative.length}:${normalizeItemTextForToken(action)}`,
+    });
+    const data = result.data;
+    if (!data?.success) throw new Error(data?.error || `${item.item_name} could not be used.`);
+    setCharacter(prev => prev ? { ...prev, hp_current: data.hp_current, inventory: data.inventory } : prev);
+    setNarrative(prev => [...prev, {
+      type: 'roll_result',
+      text: data.already_processed
+        ? `${data.item_name} use was already recorded; no additional item was consumed.`
+        : `Consumed ${data.quantity} ${data.item_name}${data.quantity === 1 ? '' : 's'} and restored ${data.heal_amount} HP.`,
+      success: true,
+    }]);
+    return data;
+  };
+
   // Story-mode typed casts use one authoritative backend transaction for spell
   // recognition, canonical level/upcast validation, slot deduction, concentration,
   // and a same-rest idempotency receipt.
@@ -495,9 +537,11 @@ export default function Game() {
     setStoryLoading(true);
     try {
       const mechanicalCast = await maybeCastStorySpell(action);
-      const mechanicsContext = mechanicalCast
-        ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]`
-        : '';
+      const mechanicalItem = await maybeUseStoryConsumable(action);
+      const mechanicsContext = [
+        mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
+        mechanicalItem ? ` [MECHANICS: ${mechanicalItem.quantity} ${mechanicalItem.item_name} were authoritatively consumed and restored ${mechanicalItem.heal_amount} HP. Do not narrate a different quantity or apply another mechanical heal.]` : '',
+      ].join('');
       const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: action + checkResult + mechanicsContext });
       const data = result.data;
       if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
