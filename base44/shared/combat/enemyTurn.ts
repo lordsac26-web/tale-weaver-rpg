@@ -222,13 +222,14 @@ export async function handleEnemyTurn(ctx) {
 
     if (hit) {
       anyHit = true;
-      const dMatch = (currentCombatant.damage_dice || '1d6').match(/^(\d+)d(\d+)$/);
+      const dMatch = String(currentCombatant.damage_dice || '1d6').replace(/\s+/g, '').match(/^(\d+)d(\d+)(?:([+-])(\d+))?$/i);
       if (dMatch) {
         const numDice = isCrit ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1]);
         const sides = parseInt(dMatch[2]);
+        const embeddedBonus = dMatch[4] ? (dMatch[3] === '-' ? -1 : 1) * parseInt(dMatch[4]) : 0;
         let dmg = 0;
         for (let i = 0; i < numDice; i++) dmg += rollDice(sides);
-        dmg += (currentCombatant.damage_bonus || 0) + bonusDamage;
+        dmg += embeddedBonus + (currentCombatant.damage_bonus || 0) + bonusDamage;
         dmg = Math.max(1, dmg);
         // Cloud Rune (reaction): redirect the first attack that hits to another
         // creature — another enemy if present, otherwise the attacker itself.
@@ -527,11 +528,12 @@ export async function handleLegendaryAction(ctx) {
   const hit = !(atkRoll === 1) && (isCrit || (atkRoll + atkBonus) >= player.ac);
   let dmg = 0;
   if (hit) {
-    const dMatch = (legendary.damage_dice || '2d6').match(/^(\d+)d(\d+)$/);
+    const dMatch = String(legendary.damage_dice || '2d6').replace(/\s+/g, '').match(/^(\d+)d(\d+)(?:([+-])(\d+))?$/i);
     const numDice = dMatch ? (isCrit ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1])) : (isCrit ? 4 : 2);
     const sides = dMatch ? parseInt(dMatch[2]) : 6;
+    const embeddedBonus = dMatch?.[4] ? (dMatch[3] === '-' ? -1 : 1) * parseInt(dMatch[4]) : 0;
     for (let i = 0; i < numDice; i++) dmg += rollDice(sides);
-    dmg = Math.max(1, dmg + (legendary.damage_bonus || 0));
+    dmg = Math.max(1, dmg + embeddedBonus + (legendary.damage_bonus || 0));
     // Temp HP absorbs legendary action damage first (PHB p.198)
     const laCharFull = await base44.asServiceRole.entities.Character.get(player.id);
     const laTempHP = laCharFull.temp_hp || 0;
