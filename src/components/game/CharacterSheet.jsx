@@ -577,7 +577,9 @@ function FeaturesTab({ character, onUpdate }) {
               return (
                 <div key={i} className="p-2.5 rounded-lg"
                   style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.1)' }}>
-                  <div className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{featName}</div>
+                  <FeatureTooltip featureName={featName} description={featDesc || undefined} position="right">
+                    <div className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{featName}</div>
+                  </FeatureTooltip>
                   {featDesc && <div className="text-xs mt-1" style={{ color: 'rgba(180,150,100,0.5)', fontFamily: 'EB Garamond, serif' }}>{featDesc}</div>}
                 </div>
               );
@@ -625,7 +627,9 @@ function FeaturesTab({ character, onUpdate }) {
               return (
                 <div key={i} className="p-2.5 rounded-lg"
                   style={{ background: 'rgba(30,10,50,0.4)', border: '1px solid rgba(120,60,200,0.15)' }}>
-                  <div className="text-sm" style={{ color: '#c4b5fd', fontFamily: 'EB Garamond, serif' }}>{featName}</div>
+                  <FeatureTooltip featureName={featName} description={featDesc || undefined} position="right">
+                    <div className="text-sm" style={{ color: '#c4b5fd', fontFamily: 'EB Garamond, serif' }}>{featName}</div>
+                  </FeatureTooltip>
                   {featDesc && <div className="text-xs mt-1" style={{ color: 'rgba(180,150,220,0.45)', fontFamily: 'EB Garamond, serif' }}>{featDesc}</div>}
                 </div>
               );

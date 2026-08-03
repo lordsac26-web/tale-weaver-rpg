@@ -128,12 +128,14 @@ export default function GameTooltip({ content, title, subtitle, icon, position =
 // ──────────────────────────────────────────────
 
 /** Tooltip for a spell by name */
-export function SpellTooltip({ name, children, position = 'top' }) {
-  const spell = SPELL_DETAILS[name];
-  if (!spell) return children;
+export function SpellTooltip({ name, spellData, children, position = 'top' }) {
+  // Prefer the curated local detail, but fall back to canonical Spell entity data
+  // passed by SpellCard so every valid spell still has a hover description.
+  const spell = SPELL_DETAILS[name] || spellData;
+  if (!spell || !spell.description) return children;
   const schoolColor = SCHOOL_COLORS[spell.school] || '';
   const dmgColor = DAMAGE_TYPE_COLORS[spell.damage_type] || '';
-  const levelLabel = spell.level === 0 ? 'Cantrip' : `Level ${spell.level}`;
+  const levelLabel = Number(spell.level) === 0 ? 'Cantrip' : `Level ${spell.level ?? 1}`;
 
   return (
     <GameTooltip
@@ -184,12 +186,24 @@ export function ConditionTooltip({ name, children, position = 'top' }) {
 }
 
 /** Tooltip for a class feature by name */
-export function FeatureTooltip({ featureName, className, children, position = 'top' }) {
-  // Features already contain their description in the string (e.g. "Second Wind (1d10+level...)")
-  // Extract the parenthetical as the description
-  const match = featureName?.match(/^([^(]+)\(([^)]+)\)$/);
-  const title = match ? match[1].trim() : featureName;
-  const desc = match ? match[2] : null;
+const FEATURE_DESCRIPTIONS = {
+  'extra attack': 'You can attack twice, instead of once, whenever you take the Attack action on your turn.',
+  'horde breaker': 'Once on each of your turns when you make a weapon attack, you can make another attack with the same weapon against a different creature within 5 feet of the original target.',
+  'colossus slayer': 'Once on each of your turns, when you hit a creature with a weapon attack, the creature takes an extra 1d8 damage if it is below its hit point maximum.',
+  'giant killer': 'When a Large or larger creature within 5 feet of you misses you with an attack, you can use your reaction to make a melee attack against it.',
+  'archery': 'You gain a +2 bonus to attack rolls you make with ranged weapons.',
+  'favored enemy: undead': 'You have heightened awareness and useful experience when tracking and recalling information about undead.',
+  'natural explorer: ruins': 'You are especially familiar with ruin terrain, improving your travel, navigation, and survival there.',
+  'primeval awareness': 'You can use your connection to nature to sense certain creature types in the surrounding area.',
+};
+
+export function FeatureTooltip({ featureName, description, className, children, position = 'top' }) {
+  const rawName = typeof featureName === 'string' ? featureName : (featureName?.name || featureName?.title || 'Feature');
+  const match = rawName?.match(/^([^(]+)\(([^)]+)\)$/);
+  const title = match ? match[1].trim() : rawName;
+  const embedded = match ? match[2].trim() : '';
+  const key = title.toLowerCase().replace(/\s+/g, ' ').trim();
+  const desc = description || embedded || FEATURE_DESCRIPTIONS[key] || `A feature of the ${className || 'character'} class.`;
 
   return (
     <GameTooltip
@@ -197,7 +211,7 @@ export function FeatureTooltip({ featureName, className, children, position = 't
       title={title}
       subtitle={className ? `${className} Feature` : undefined}
       icon="⚔️"
-      content={desc || `A feature of the ${className || 'character'} class.`}>
+      content={desc}>
       {children}
     </GameTooltip>
   );

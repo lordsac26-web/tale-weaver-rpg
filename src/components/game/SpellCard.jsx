@@ -5,6 +5,7 @@ import {
   SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS,
   getCantripDamageDice
 } from './spellData';
+import { SpellTooltip } from './GameTooltip';
 
 const ATTACK_ICONS = {
   ranged_spell_attack: '🎯',
@@ -38,9 +39,11 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
         <span className="text-base flex-shrink-0 mt-0.5">{attackIcon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`text-sm font-fantasy font-medium ${isPrepared ? 'text-glow-gold' : isKnown ? 'text-amber-200' : 'text-slate-300'}`} style={{ color: isPrepared ? '#f0c040' : undefined }}>
-              {spellName}
-            </span>
+            <SpellTooltip name={spellName} spellData={spell} position="top">
+              <span className={`text-sm font-fantasy font-medium ${isPrepared ? 'text-glow-gold' : isKnown ? 'text-amber-200' : 'text-slate-300'}`} style={{ color: isPrepared ? '#f0c040' : undefined }}>
+                {spellName}
+              </span>
+            </SpellTooltip>
             {isPrepared && <span className="px-1.5 py-0.5 rounded-full text-xs badge-gold">READY</span>}
             {sourceClass && (
               <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(60,90,140,0.3)', border: '1px solid rgba(100,140,200,0.25)', color: 'rgba(147,197,253,0.8)' }}>
