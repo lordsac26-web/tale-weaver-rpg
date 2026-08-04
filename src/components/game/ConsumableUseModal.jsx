@@ -1,20 +1,15 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Heart, Zap, Shield } from 'lucide-react';
+import { X, Heart } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 import { CATEGORY_ICONS, ITEM_RARITY } from './itemData';
 
-// Maps item name keywords to effects
+// Maps item name keywords to effects for NON-healing consumables only.
+// Healing potions and Goodberry are resolved server-side by useConsumable.
 function parseConsumableEffect(item) {
   const name = item.name?.toLowerCase() || '';
   const desc = item.description?.toLowerCase() || '';
 
-  if (name.includes('healing') || desc.includes('heal') || desc.includes('hit point')) {
-    // Order matters — check most specific names first (supreme contains 'superior' substring check fails, so order: supreme > superior > greater > default)
-    if (name.includes('supreme'))  return { type: 'heal', dice: '10d4+20', label: 'Heals 10d4+20 HP', icon: '❤️' };
-    if (name.includes('superior')) return { type: 'heal', dice: '8d4+8',   label: 'Heals 8d4+8 HP',   icon: '❤️' };
-    if (name.includes('greater'))  return { type: 'heal', dice: '4d4+4',   label: 'Heals 4d4+4 HP',   icon: '❤️' };
-    return { type: 'heal', dice: '2d4+2', label: 'Heals 2d4+2 HP', icon: '❤️' };
-  }
   if (name.includes('mana') || name.includes('arcane') || desc.includes('spell slot')) {
     return { type: 'restore_spell_slot', label: 'Restores a spell slot', icon: '🔮' };
   }
@@ -40,42 +35,76 @@ function parseConsumableEffect(item) {
   return { type: 'generic', label: 'Item used', icon: CATEGORY_ICONS[item.category] || '🧪' };
 }
 
-function rollDice(notation) {
-  // e.g. "2d4+2"
-  const match = notation.match(/(\d+)d(\d+)(?:\+(\d+))?/);
-  if (!match) return parseInt(notation) || 0;
-  const [, count, sides, bonus] = match;
-  let total = 0;
-  for (let i = 0; i < parseInt(count); i++) {
-    total += Math.floor(Math.random() * parseInt(sides)) + 1;
-  }
-  return total + (parseInt(bonus) || 0);
+// Detect healing consumables (potions + Goodberry) that must go through the
+// authoritative useConsumable backend — no client-side dice rolls.
+function isHealingConsumable(item) {
+  const name = item.name?.toLowerCase() || '';
+  const desc = item.description?.toLowerCase() || '';
+  if (name.includes('goodberry') || name.includes('goodberries')) return true;
+  if (name.includes('healing') || desc.includes('heal') || desc.includes('hit point')) return true;
+  return false;
 }
 
-export default function ConsumableUseModal({ item, character, onUse, onClose }) {
+export default function ConsumableUseModal({ item, character, sessionId, onUse, onClose }) {
   const [result, setResult] = useState(null);
   const [used, setUsed] = useState(false);
-  
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
   // Guard: if item is undefined/null, close modal
   if (!item) {
     onClose?.();
     return null;
   }
-  
+
   const rarity = ITEM_RARITY[item.rarity] || ITEM_RARITY.common;
-  const effect = parseConsumableEffect(item);
+  const healing = isHealingConsumable(item);
+  const effect = healing
+    ? { type: 'heal', icon: '❤️', label: 'Restores HP (rolled server-side)' }
+    : parseConsumableEffect(item);
 
-  const handleUse = () => {
+  const handleUse = async () => {
+    setError(null);
+
+    if (healing) {
+      // ── Authoritative path: useConsumable rolls + persists server-side ──
+      if (!sessionId) {
+        setError('Healing items can only be used during an active game session.');
+        return;
+      }
+      setBusy(true);
+      try {
+        const token = `modal:${sessionId}:${character?.id}:${item.name}:${Date.now()}`;
+        const res = await base44.functions.invoke('useConsumable', {
+          session_id: sessionId,
+          character_id: character?.id,
+          item_name: item.name,
+          use_token: token,
+        });
+        const data = res.data;
+        if (!data?.success) throw new Error(data?.error || `${item.name} could not be used.`);
+        const healed = data.heal_amount || 0;
+        setResult({
+          message: data.already_processed
+            ? `${data.item_name} was already used; no additional item consumed.`
+            : `You consume the ${item.name} and recover ${healed} hit point${healed === 1 ? '' : 's'}.`,
+          healed,
+          newHP: data.hp_current,
+          alreadyProcessed: !!data.already_processed,
+        });
+        setUsed(true);
+        onUse(item, { hp_current: data.hp_current, inventory: data.inventory });
+      } catch (err) {
+        setError(err?.message || 'Failed to use item.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    // ── Non-healing consumables: existing client-side effect path ──
     let outcome = { effect, updates: {} };
-
-    if (effect.type === 'heal') {
-      const rolled = rollDice(effect.dice);
-      const newHP = Math.min((character.hp_current || 0) + rolled, character.hp_max || 999);
-      outcome.healed = rolled;
-      outcome.newHP = newHP;
-      outcome.updates = { hp_current: newHP };
-      outcome.message = `You drink the ${item.name} and recover ${rolled} hit points!`;
-    } else if (effect.type === 'condition_cure') {
+    if (effect.type === 'condition_cure') {
       const conditions = (character.conditions || []).filter(c => {
         const name = typeof c === 'string' ? c : c.name;
         return name?.toLowerCase() !== effect.condition;
@@ -95,7 +124,6 @@ export default function ConsumableUseModal({ item, character, onUse, onClose }) 
     } else {
       outcome.message = `You use the ${item.name}. ${item.description?.slice(0, 100) || ''}`;
     }
-
     setResult(outcome);
     setUsed(true);
     onUse(item, outcome.updates);
@@ -147,6 +175,12 @@ export default function ConsumableUseModal({ item, character, onUse, onClose }) 
             </div>
           </div>
 
+          {error && (
+            <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(40,10,5,0.6)', border: '1px solid rgba(220,80,50,0.3)' }}>
+              <p className="text-sm" style={{ color: '#fca5a5', fontFamily: 'IM Fell English, serif' }}>{error}</p>
+            </div>
+          )}
+
           <AnimatePresence>
             {result && (
               <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
@@ -154,7 +188,7 @@ export default function ConsumableUseModal({ item, character, onUse, onClose }) 
                 <p className="text-sm" style={{ color: '#e8d5b7', fontFamily: 'IM Fell English, serif', lineHeight: 1.6 }}>
                   {result.message}
                 </p>
-                {result.healed && (
+                {result.healed != null && result.healed > 0 && (
                   <div className="flex items-center gap-2 mt-2">
                     <Heart className="w-4 h-4" style={{ color: '#dc2626' }} />
                     <span className="font-fantasy font-bold" style={{ color: '#86efac' }}>+{result.healed} HP</span>
@@ -167,12 +201,12 @@ export default function ConsumableUseModal({ item, character, onUse, onClose }) 
 
           <div className="flex gap-2">
             {!used ? (
-              <button onClick={handleUse}
-                className="flex-1 py-2.5 rounded-xl text-sm font-fantasy transition-all"
+              <button onClick={handleUse} disabled={busy}
+                className="flex-1 py-2.5 rounded-xl text-sm font-fantasy transition-all disabled:opacity-50"
                 style={{ background: 'rgba(10,50,15,0.8)', border: '1px solid rgba(40,160,80,0.4)', color: '#86efac' }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(86,239,172,0.6)'}
+                onMouseEnter={e => !busy && (e.currentTarget.style.borderColor = 'rgba(86,239,172,0.6)')}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(40,160,80,0.4)'}>
-                ✨ Use Item
+                {busy ? 'Using…' : '✨ Use Item'}
               </button>
             ) : (
               <button onClick={onClose}
@@ -182,8 +216,8 @@ export default function ConsumableUseModal({ item, character, onUse, onClose }) 
               </button>
             )}
             {!used && (
-              <button onClick={onClose}
-                className="px-4 py-2.5 rounded-xl text-sm"
+              <button onClick={onClose} disabled={busy}
+                className="px-4 py-2.5 rounded-xl text-sm disabled:opacity-50"
                 style={{ border: '1px solid rgba(180,140,90,0.15)', color: 'rgba(180,140,90,0.4)' }}>
                 Cancel
               </button>

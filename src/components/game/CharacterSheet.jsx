@@ -64,7 +64,7 @@ const TABS = [
   { id: 'features',   label: 'Features',   icon: '📜' },
 ];
  
-export default function CharacterSheet({ character: initialCharacter, onClose, onCharacterUpdate, onCastSpell }) {
+export default function CharacterSheet({ character: initialCharacter, onClose, onCharacterUpdate, onCastSpell, sessionId }) {
   const [tab, setTab] = useState('stats');
   const [character, setCharacter] = useState(initialCharacter);
   if (!character) return null;
@@ -156,7 +156,7 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
               {tab === 'stats' && <StatsTab character={character} profBonus={profBonus} />}
               {tab === 'skills' && <SkillsTab character={character} profBonus={profBonus} onUpdate={handleUpdateCharacter} />}
               {tab === 'combat' && <CombatTab character={character} profBonus={profBonus} isCaster={isCaster} onUpdate={handleUpdateCharacter} />}
-              {tab === 'inventory' && <InventoryTab character={character} onUpdate={handleUpdateCharacter} onIdentify={null} />}
+              {tab === 'inventory' && <InventoryTab character={character} onUpdate={handleUpdateCharacter} onIdentify={null} sessionId={sessionId} />}
               {tab === 'spells' && <SpellbookTab character={character} onUpdateCharacter={handleUpdateCharacter} onCastSpell={onCastSpell} />}
               {tab === 'conditions' && <ConditionsTab character={character} onUpdate={handleUpdateCharacter} />}
               {tab === 'features' && <FeaturesTab character={character} onUpdate={handleUpdateCharacter} />}

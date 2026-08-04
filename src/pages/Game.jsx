@@ -1667,7 +1667,7 @@ export default function Game() {
 
       {/* Character Sheet Modal */}
       {showCharSheet && (
-        <CharacterSheet character={character} onClose={() => setShowCharSheet(false)}
+        <CharacterSheet character={character} sessionId={sessionId} onClose={() => setShowCharSheet(false)}
           onCharacterUpdate={setCharacter} onCastSpell={handleSheetSpellCast} />
       )}
 

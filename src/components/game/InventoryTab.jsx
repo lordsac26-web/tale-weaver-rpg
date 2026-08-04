@@ -243,7 +243,7 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
 }
 
 // ─── Main InventoryTab ─────────────────────────────────────────────────────────
-export default function InventoryTab({ character, onUpdate, onIdentify }) {
+export default function InventoryTab({ character, onUpdate, onIdentify, sessionId }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [sortBy, setSortBy] = useState('name');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -309,16 +309,36 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
   };
 
   const handleConsumableUsed = (item, updates) => {
-    // Consume 1 quantity or remove entirely
-    const inventory = character.inventory || [];
-    const idx = consumableModal.index;
-    let newInventory;
-    if ((item.quantity || 1) > 1) {
-      newInventory = inventory.map((it, i) => i === idx ? { ...it, quantity: it.quantity - 1 } : it);
+    // Healing consumables are decremented server-side by useConsumable, which
+    // returns the authoritative inventory — apply it directly without a local
+    // re-decrement. Non-healing items still decrement locally here.
+    const name = item.name?.toLowerCase() || '';
+    const isHealing = name.includes('goodberry') || name.includes('goodberries') ||
+      name.includes('healing') || (item.description || '').toLowerCase().includes('heal');
+    if (isHealing && updates?.inventory) {
+      onUpdate({ ...updates });
+    } else if (isHealing) {
+      // Backend returned HP but no inventory — still decrement locally as fallback
+      const inventory = character.inventory || [];
+      const idx = consumableModal.index;
+      let newInventory;
+      if ((item.quantity || 1) > 1) {
+        newInventory = inventory.map((it, i) => i === idx ? { ...it, quantity: it.quantity - 1 } : it);
+      } else {
+        newInventory = inventory.filter((_, i) => i !== idx);
+      }
+      onUpdate({ ...updates, inventory: newInventory });
     } else {
-      newInventory = inventory.filter((_, i) => i !== idx);
+      const inventory = character.inventory || [];
+      const idx = consumableModal.index;
+      let newInventory;
+      if ((item.quantity || 1) > 1) {
+        newInventory = inventory.map((it, i) => i === idx ? { ...it, quantity: it.quantity - 1 } : it);
+      } else {
+        newInventory = inventory.filter((_, i) => i !== idx);
+      }
+      onUpdate({ ...updates, inventory: newInventory });
     }
-    onUpdate({ ...updates, inventory: newInventory });
     setConsumableModal(null);
   };
 
@@ -438,10 +458,11 @@ export default function InventoryTab({ character, onUpdate, onIdentify }) {
       )}
 
       <ConsumableUseModal
-        item={consumableModal?.item}
-        character={character}
-        onUse={handleConsumableUsed}
-        onClose={() => setConsumableModal(null)}
+         item={consumableModal?.item}
+         character={character}
+         sessionId={sessionId}
+         onUse={handleConsumableUsed}
+         onClose={() => setConsumableModal(null)}
       />
     </div>
   );
