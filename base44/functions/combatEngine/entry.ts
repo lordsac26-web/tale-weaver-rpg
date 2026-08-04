@@ -6,16 +6,24 @@ import {
   handleActionSurge, handleGrapple, handleDodge,
   handleFlurryOfBlows, handleNextTurn, handleDeathSave,
 } from '../../shared/combat/turnActions.ts';
+import {
+  handleFleeCombat, handleResolveCombat, handleCollectLoot,
+} from '../../shared/combat/transitions.ts';
+import {
+  requireUser, validateCombatOwnership, checkReceipt,
+} from '../../shared/combat/authGuard.ts';
 
 /**
  * Combat Engine — thin HTTP router. All combat logic lives in focused modules
  * under base44/shared/combat/:
+ *  - authGuard.ts    user auth, ownership chain validation, idempotency receipts
  *  - helpers.ts      dice, damage modifiers, conditions, attack rolls, action economy
  *  - persistence.ts  XP awarding + end-of-action CombatLog writes
  *  - startCombat.ts  initiative + encounter scaling + CombatLog creation
  *  - playerAttack.ts weapon/spell attack resolution + off-hand attacks
  *  - enemyTurn.ts    enemy AI turns, mitigation, legendary actions
  *  - turnActions.ts  Action Surge, Grapple, Dodge, Flurry, next_turn, death saves
+ *  - transitions.ts  flee, resolve (de-escalation), collect_loot — authoritative
  *
  * Monk Patient Defense / Step of the Wind / Stunning Strike live in monkActions;
  * racial abilities in racialActions/combatActions; subclass activations in subclassActions.
@@ -23,8 +31,13 @@ import {
 Deno.serve(async (req) => {
   try {
   const base44 = createClientFromRequest(req);
-  const { action, session_id, combat_id, character_id, payload } = await req.json();
-  const ctx = { base44, session_id, combat_id, character_id, payload };
+  const { action, session_id, combat_id, character_id, payload, request_id } = await req.json();
+
+  // ── Authentication (defect #4): all combat actions require a logged-in user ──
+  const { user, error: authError } = await requireUser(base44);
+  if (authError) return authError;
+
+  const ctx = { base44, session_id, combat_id, character_id, payload, user, request_id };
 
   // Authoritative, read-only combat resume. CombatLog records are created by the
   // service role, so browser-scoped entity reads can be invisible under RLS even
@@ -124,6 +137,18 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, spell_detected: true, spell, target_id: targetId });
   };
 
+  // Actions that require full ownership-chain validation + idempotency before
+  // dispatch. These mutate combat state and must not execute twice for a replay.
+  const STATE_ACTIONS = new Set([
+    'start_combat', 'player_attack', 'offhand_attack', 'enemy_turn',
+    'legendary_action', 'action_surge', 'grapple', 'dodge',
+    'flurry_of_blows', 'next_turn', 'death_save',
+    'flee_combat', 'resolve_combat', 'collect_loot',
+  ]);
+
+  // Actions that are read-only (ownership validated inside, no idempotency)
+  const READ_ACTIONS = new Set(['get_combat_state', 'update_combat_history', 'resolve_typed_spell']);
+
   const HANDLERS = {
     get_combat_state: handleGetCombatState,
     update_combat_history: handleUpdateCombatHistory,
@@ -139,10 +164,29 @@ Deno.serve(async (req) => {
     flurry_of_blows: handleFlurryOfBlows,
     next_turn: handleNextTurn,
     death_save: handleDeathSave,
+    flee_combat: handleFleeCombat,
+    resolve_combat: handleResolveCombat,
+    collect_loot: handleCollectLoot,
   };
 
   const handler = HANDLERS[action];
   if (!handler) return Response.json({ error: 'Unknown action' }, { status: 400 });
+
+  // ── Ownership + idempotency pre-check for state-changing actions ──
+  // start_combat validates ownership inside handleStartCombat (it creates the
+  // CombatLog, so the combat_id doesn't exist yet). All other state actions
+  // validate the full chain here and check for idempotent replays.
+  if (STATE_ACTIONS.has(action) && action !== 'start_combat') {
+    const { session, character, combat, error: ownErr } = await validateCombatOwnership(base44,
+      { session_id, combat_id, character_id, user });
+    if (ownErr) return ownErr;
+    // Idempotency: a replayed request returns the stored outcome without re-processing
+    if (combat && request_id) {
+      const prior = checkReceipt(combat.world_state, request_id);
+      if (prior) return Response.json({ ...prior, idempotent_replay: true });
+    }
+  }
+
   return await handler(ctx);
   } catch (error) {
     return Response.json({ error: error.message || 'Combat engine error' }, { status: 500 });

@@ -2,9 +2,15 @@
 // and create the CombatLog record. Extracted verbatim from combatEngine/entry.ts.
 import { statMod, rollD20 } from './helpers.ts';
 import { inferArchetype } from '../monsterAI.ts';
+import { requireUser, characterBelongsToUser } from './authGuard.ts';
 
 export async function handleStartCombat(ctx) {
   const { base44, session_id, payload } = ctx;
+
+  // ── Authentication (defect #4) ──
+  const { user, error: authError } = await requireUser(base44);
+  if (authError) return authError;
+
   let { enemies } = payload;
   const session = await base44.asServiceRole.entities.GameSession.get(session_id);
   if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
@@ -21,6 +27,17 @@ export async function handleStartCombat(ctx) {
   }
 
   const character = await base44.asServiceRole.entities.Character.get(session.character_id);
+  if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
+
+  // ── Ownership validation (defect #4): character must belong to caller ──
+  if (!characterBelongsToUser(character, user)) {
+    return Response.json({ error: 'Character does not belong to the authenticated user' }, { status: 403 });
+  }
+
+  // ── Linkage validation (defect #2): session.character_id must match ──
+  if (session.character_id !== character.id) {
+    return Response.json({ error: 'Session character linkage mismatch' }, { status: 403 });
+  }
 
   // ─── DYNAMIC ENCOUNTER SCALING ──────────────────────────────────────────
   // Keep solo-player encounters balanced and challenging by scaling enemy HP,
@@ -197,8 +214,11 @@ export async function handleStartCombat(ctx) {
     m?.concentration && (!m.expires_at || new Date(m.expires_at).getTime() > Date.now())
   );
 
+  // ── CombatLog linkage (defect #2): include character_id + character_name ──
   const combatLog = await base44.asServiceRole.entities.CombatLog.create({
     session_id,
+    character_id: character.id,
+    character_name: character.name,
     round: 1,
     combatants,
     initiative_order: combatants.map(c => ({ id: c.id, name: c.name, initiative_value: c.initiative_total, initiative: c.initiative_total })),
