@@ -5,6 +5,7 @@
 import {
   statMod, rollD20, rollDice, applyDamageModifiers, hasNoActions,
   SAVEABLE_CONDITIONS, advanceTurn, resetTurnWorldState, rollConcentrationSave,
+  rollDamageFromDice,
 } from './helpers.ts';
 import { awardVictoryXP } from './persistence.ts';
 import { inferArchetype, chooseTactic } from '../monsterAI.ts';
@@ -137,6 +138,7 @@ export async function handleEnemyTurn(ctx) {
     round: combatLog.round,
     cr: currentCombatant.cr,
     nativeAttacks: currentCombatant.num_attacks || 1,
+    hasMultiattack: !!(currentCombatant.has_multiattack || currentCombatant.multiattack),
   });
   const enemyConditions = (currentCombatant.conditions || []).map(c => String(typeof c === 'string' ? c : c?.name || '').toLowerCase().trim());
   const isSilenced = enemyConditions.includes('silenced') || enemyConditions.includes('silence');
@@ -221,16 +223,26 @@ export async function handleEnemyTurn(ctx) {
     if (isCrit) isCritical = true;
 
     if (hit) {
-      anyHit = true;
-      const dMatch = String(currentCombatant.damage_dice || '1d6').replace(/\s+/g, '').match(/^(\d+)d(\d+)(?:([+-])(\d+))?$/i);
-      if (dMatch) {
-        const numDice = isCrit ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1]);
-        const sides = parseInt(dMatch[2]);
-        const embeddedBonus = dMatch[4] ? (dMatch[3] === '-' ? -1 : 1) * parseInt(dMatch[4]) : 0;
-        let dmg = 0;
-        for (let i = 0; i < numDice; i++) dmg += rollDice(sides);
-        dmg += embeddedBonus + (currentCombatant.damage_bonus || 0) + bonusDamage;
-        dmg = Math.max(1, dmg);
+      // ── CENTRALIZED DAMAGE PIPELINE ──────────────────────────────────────
+      // All enemy attack variants (default, soldier multiattack, brute, desperate
+      // fury, legendary, etc.) route through rollDamageFromDice for canonical
+      // damage_dice parsing. The embedded signed modifier in the dice string
+      // (e.g. +2 in '1d6+2') is the creature's ability modifier from its statblock;
+      // adding damage_bonus on top would double-count it. rollDamageFromDice only
+      // adds damageBonus when the dice expression is bare (NdN). tacticBonus
+      // (from AI tactics like reckless) is always additive.
+      const { damage: rawDmg, parsed: dmgParsed } = rollDamageFromDice(
+        currentCombatant.damage_dice || '1d6',
+        { damageBonus: currentCombatant.damage_bonus || 0, tacticBonus: bonusDamage, isCrit }
+      );
+      if (!dmgParsed) {
+        // Unparseable damage_dice — never emit a false successful-hit result.
+        // Log the error so it surfaces in the combat log for debugging, but do
+        // not set anyHit or apply zero damage as if the attack landed.
+        attackLogs.push(`⚠️ ${currentCombatant.name} hits but has unparseable damage_dice ('${currentCombatant.damage_dice}') — no damage applied.`);
+      } else {
+        anyHit = true;
+        const dmg = Math.max(1, rawDmg);
         // Cloud Rune (reaction): redirect the first attack that hits to another
         // creature — another enemy if present, otherwise the attacker itself.
         if (cloudRedirectAvailable) {
@@ -525,28 +537,37 @@ export async function handleLegendaryAction(ctx) {
   const atkRoll = rollD20();
   const atkBonus = legendary.attack_bonus || 5;
   const isCrit = atkRoll === 20;
-  const hit = !(atkRoll === 1) && (isCrit || (atkRoll + atkBonus) >= player.ac);
+  let hit = !(atkRoll === 1) && (isCrit || (atkRoll + atkBonus) >= player.ac);
   let dmg = 0;
+  let dmgParseError = false;
   if (hit) {
-    const dMatch = String(legendary.damage_dice || '2d6').replace(/\s+/g, '').match(/^(\d+)d(\d+)(?:([+-])(\d+))?$/i);
-    const numDice = dMatch ? (isCrit ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1])) : (isCrit ? 4 : 2);
-    const sides = dMatch ? parseInt(dMatch[2]) : 6;
-    const embeddedBonus = dMatch?.[4] ? (dMatch[3] === '-' ? -1 : 1) * parseInt(dMatch[4]) : 0;
-    for (let i = 0; i < numDice; i++) dmg += rollDice(sides);
-    dmg = Math.max(1, dmg + embeddedBonus + (legendary.damage_bonus || 0));
-    // Temp HP absorbs legendary action damage first (PHB p.198)
-    const laCharFull = await base44.asServiceRole.entities.Character.get(player.id);
-    const laTempHP = laCharFull.temp_hp || 0;
-    let laRemainingDmg = dmg;
-    if (laTempHP > 0) {
-      const absorbed = Math.min(laTempHP, laRemainingDmg);
-      laRemainingDmg -= absorbed;
-      await base44.asServiceRole.entities.Character.update(player.id, { temp_hp: laTempHP - absorbed });
+    // Route through the same centralized damage pipeline as enemy_turn.
+    const { damage: rawDmg, parsed: dmgParsed } = rollDamageFromDice(
+      legendary.damage_dice || '2d6',
+      { damageBonus: legendary.damage_bonus || 0, tacticBonus: 0, isCrit }
+    );
+    if (!dmgParsed) {
+      // Unparseable damage — do not emit a false successful-hit result.
+      dmgParseError = true;
+      hit = false;
+    } else {
+      dmg = Math.max(1, rawDmg);
     }
-    if (laRemainingDmg > 0) { // legendary damage is only computed inside `if (hit)`, so dmg>0 here
-      player.hp_current = Math.max(0, player.hp_current - laRemainingDmg);
-      if (player.hp_current === 0) player.is_conscious = false;
-      await base44.asServiceRole.entities.Character.update(player.id, { hp_current: player.hp_current });
+    // Temp HP absorbs legendary action damage first (PHB p.198)
+    if (dmg > 0) {
+      const laCharFull = await base44.asServiceRole.entities.Character.get(player.id);
+      const laTempHP = laCharFull.temp_hp || 0;
+      let laRemainingDmg = dmg;
+      if (laTempHP > 0) {
+        const absorbed = Math.min(laTempHP, laRemainingDmg);
+        laRemainingDmg -= absorbed;
+        await base44.asServiceRole.entities.Character.update(player.id, { temp_hp: laTempHP - absorbed });
+      }
+      if (laRemainingDmg > 0) {
+        player.hp_current = Math.max(0, player.hp_current - laRemainingDmg);
+        if (player.hp_current === 0) player.is_conscious = false;
+        await base44.asServiceRole.entities.Character.update(player.id, { hp_current: player.hp_current });
+      }
     }
   }
 
@@ -554,9 +575,11 @@ export async function handleLegendaryAction(ctx) {
   const logEntry = {
     round: combatLog.round, actor: legendary.name, action: 'legendary_action', target: player.name,
     hit, critical: isCrit, damage: dmg,
-    text: hit
-      ? `✨ LEGENDARY ACTION — ${legendary.name} strikes ${player.name}${isCrit ? ' (CRIT!)' : ''} for ${dmg} damage! (${newBudget} legendary actions left)${player.hp_current === 0 ? ` ${player.name} falls!` : ''}`
-      : `✨ LEGENDARY ACTION — ${legendary.name} strikes at ${player.name} but misses. (${newBudget} legendary actions left)`
+    text: dmgParseError
+      ? `✨ LEGENDARY ACTION — ${legendary.name} strikes ${player.name} but has unparseable damage_dice ('${legendary.damage_dice}') — no damage applied. (${newBudget} legendary actions left)`
+      : hit
+        ? `✨ LEGENDARY ACTION — ${legendary.name} strikes ${player.name}${isCrit ? ' (CRIT!)' : ''} for ${dmg} damage! (${newBudget} legendary actions left)${player.hp_current === 0 ? ` ${player.name} falls!` : ''}`
+        : `✨ LEGENDARY ACTION — ${legendary.name} strikes at ${player.name} but misses. (${newBudget} legendary actions left)`
   };
 
   await base44.asServiceRole.entities.CombatLog.update(combat_id, {

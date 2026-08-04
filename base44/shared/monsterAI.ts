@@ -132,9 +132,22 @@ export const chooseTactic = (archetypeKey, ctx = {}) => {
     if (when.chance != null && !(Math.random() < when.chance)) return false;
     return true;
   };
-  const chosen = (arch.tactics || []).find(t => passes(t.when)) || null;
+  // CR/ability-aware guard: a creature without explicit multiattack capability
+  // (nativeAttacks <= 1 and no explicit hasMultiattack flag) must not use tactics
+  // that grant extra attacks. This prevents a CR 1/4 Skeleton from being labeled
+  // "executes a disciplined multiattack" when it only has one attack. The actual
+  // attack count is already clamped by clampTacticByCR, but the tactic id and
+  // description still propagate to the combat log — filtering here keeps them honest.
+  const nativeAttacks = Math.max(1, Number(ctx.nativeAttacks) || 1);
+  const canMultiattack = nativeAttacks > 1 || !!ctx.hasMultiattack;
+  const canUseTactic = (tactic) => {
+    const effects = tactic.effects || {};
+    if ((effects.numAttacks || 1) > 1 && !canMultiattack) return false;
+    return true;
+  };
+  const chosen = (arch.tactics || []).find(t => passes(t.when) && canUseTactic(t)) || null;
   const effects = chosen ? chosen.effects : (arch.default || {});
-  const bounded = clampTacticByCR(effects, ctx.cr, ctx.nativeAttacks || 1);
+  const bounded = clampTacticByCR(effects, ctx.cr, nativeAttacks);
   return {
     id: chosen ? chosen.id : 'default',
     ...bounded,

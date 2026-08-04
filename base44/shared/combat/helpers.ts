@@ -33,6 +33,50 @@ export const rollDiceStr = (diceStr) => {
   return total;
 };
 
+// ─── CENTRALIZED DAMAGE DICE PARSER (enemy & legendary attack pipeline) ──────
+// Parses damage dice strings in canonical D&D notation: '1d6+2', '2d8', '1d12-1'.
+// Returns { numDice, sides, embeddedBonus } or null if the string is unparseable.
+// The embeddedBonus is the signed modifier baked into the dice expression (e.g.
+// the +2 in '1d6+2' is the creature's ability modifier from its statblock).
+export const parseDamageDice = (diceStr) => {
+  if (!diceStr) return null;
+  const cleaned = String(diceStr).replace(/\s+/g, '');
+  if (!cleaned) return null;
+  const m = cleaned.match(/^(\d+)d(\d+)(?:([+-])(\d+))?$/i);
+  if (!m) return null;
+  const numDice = parseInt(m[1]);
+  const sides = parseInt(m[2]);
+  if (!Number.isFinite(numDice) || !Number.isFinite(sides) || numDice < 1 || sides < 1) return null;
+  const embeddedBonus = m[4] ? (m[3] === '-' ? -1 : 1) * parseInt(m[4]) : 0;
+  return { numDice, sides, embeddedBonus };
+};
+
+// Roll damage from a dice string, applying crit doubling and separate bonuses.
+// CRITICAL double-add fix: if the dice string already includes a signed modifier
+// (e.g. '1d6+2'), the embedded bonus IS the creature's damage_bonus from its
+// statblock — adding damageBonus again would double-count the ability modifier.
+// We only add damageBonus when the dice expression is bare (no embedded modifier).
+// tacticBonus (from AI tactics like reckless) is always added on top.
+// Returns { damage, parsed }. If parsed is false, the dice string was unparseable
+// and the caller must treat it as an error — never emit a false successful hit.
+export const rollDamageFromDice = (diceStr, { damageBonus = 0, tacticBonus = 0, isCrit = false } = {}) => {
+  const parsed = parseDamageDice(diceStr);
+  if (!parsed) return { damage: 0, parsed: false };
+  const { numDice, sides, embeddedBonus } = parsed;
+  const rolledDice = isCrit ? numDice * 2 : numDice;
+  let dmg = 0;
+  for (let i = 0; i < rolledDice; i++) dmg += rollDice(sides);
+  // Apply the embedded modifier from the dice string (e.g. +2 in '1d6+2')
+  dmg += embeddedBonus;
+  // Only add the combatant's damage_bonus when the dice string is bare (NdN).
+  // When the dice string already embeds the modifier, damage_bonus is the same
+  // value and adding both double-counts it.
+  if (embeddedBonus === 0) dmg += (Number(damageBonus) || 0);
+  // Tactic bonuses (reckless, desperate fury, etc.) are always additive
+  dmg += (Number(tacticBonus) || 0);
+  return { damage: dmg, parsed: true };
+};
+
 // Damage Resistance/Vulnerability/Immunity (PHB p.197): immunity → 0,
 // resistance → halved (rounded down), vulnerability → doubled.
 export const normList = (l) => Array.isArray(l) ? l.map(d => String(d || '').toLowerCase().trim()).filter(Boolean) : [];
