@@ -42,10 +42,12 @@ Deno.serve(async (req) => {
   // Authoritative, read-only combat resume. CombatLog records are created by the
   // service role, so browser-scoped entity reads can be invisible under RLS even
   // when the session legitimately belongs to the player.
-  const handleGetCombatState = async ({ base44, session_id, combat_id, payload }) => {
+  const handleGetCombatState = async ({ base44, session_id, combat_id, payload, user }) => {
     if (!session_id) return Response.json({ error: 'session_id is required' }, { status: 400 });
     const session = await base44.asServiceRole.entities.GameSession.get(session_id);
     if (!session) return Response.json({ state: 'missing_session', combat: null }, { status: 404 });
+    const ownership = await validateCombatOwnership(base44, { session_id, character_id: session.character_id, combat_id: combat_id || payload?.combat_id || session.combat_state?.combat_id, user });
+    if (ownership.error) return ownership.error;
     const requestedId = combat_id || payload?.combat_id || session.combat_state?.combat_id;
     const referencedId = session.combat_state?.combat_id || null;
     if (!requestedId) return Response.json({ state: 'none', combat: null, session_in_combat: !!session.in_combat });
@@ -84,8 +86,10 @@ Deno.serve(async (req) => {
   // Spell button. This endpoint is read-only: the returned payload is then sent
   // through player_attack, which owns slot validation, deduction, action economy,
   // concentration, healing, damage, and combat persistence.
-  const handleResolveTypedSpell = async ({ base44, session_id, combat_id, character_id, payload }) => {
+  const handleResolveTypedSpell = async ({ base44, session_id, combat_id, character_id, payload, user }) => {
     if (!session_id || !combat_id || !character_id) return Response.json({ error: 'session_id, combat_id, and character_id are required', invalid: true }, { status: 400 });
+    const ownership = await validateCombatOwnership(base44, { session_id, combat_id, character_id, user });
+    if (ownership.error) return ownership.error;
     const [session, combat, character] = await Promise.all([
       base44.asServiceRole.entities.GameSession.get(session_id),
       base44.asServiceRole.entities.CombatLog.get(combat_id),

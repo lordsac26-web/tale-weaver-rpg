@@ -126,3 +126,28 @@ export const removeConcentrationConditions = (arr) =>
     if (typeof c === 'string') return true;
     return !c?.concentration;
   });
+
+// Deterministic expiry pass for authoritative turn/rest transitions. Legacy
+// values remain readable and untouched because they have no lifecycle metadata.
+export const expireStructuredConditions = (arr, { phase, round = null, now = Date.now(), resting = false } = {}) =>
+  (arr || []).filter((condition) => {
+    if (!condition || typeof condition === 'string') return true;
+    if (resting && condition.duration_type === 'until_rest') return false;
+    if (condition.duration_type === 'timestamp' && condition.expires_at && new Date(condition.expires_at).getTime() <= now) return false;
+    if (condition.duration_type === 'rounds' && Number.isFinite(Number(condition.expires_round)) && Number(round) >= Number(condition.expires_round)) return false;
+    if (condition.duration_type === 'until_turn_start' && phase === 'turn_start') return false;
+    if (condition.duration_type === 'until_turn_end' && phase === 'turn_end') return false;
+    return true;
+  });
+
+// Structured stealth, hidden, concealment, and invisibility states contribute
+// the same named advantage source through the single attack-roll resolver.
+export const getAttackConcealment = (arr) => {
+  const names = new Set(['stealthed', 'hidden', 'concealed', 'invisible']);
+  return (arr || []).filter((condition) => typeof condition === 'object' && condition && names.has(normalizeConditionName(condition.name)));
+};
+
+// Only effects explicitly marked as ending on attack are consumed. This preserves
+// effects such as Greater Invisibility without special-case client logic.
+export const consumeBreakOnAttackConditions = (arr) =>
+  (arr || []).filter((condition) => !(typeof condition === 'object' && condition?.break_on_attack));

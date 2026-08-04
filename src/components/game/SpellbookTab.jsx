@@ -92,11 +92,12 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
   }
 
   // Slot helpers
+  const getUsedSlots = (level) => Number(currentSlots[`level_${level}`] ?? currentSlots[level] ?? 0) || 0;
+
   const getRemainingSlots = (level) => {
     if (level === 0) return Infinity;
     const max = slotMaxArr[level - 1] || 0;
-    const used = currentSlots[`level_${level}`] || 0;
-    return Math.max(0, max - used);
+    return Math.max(0, max - getUsedSlots(level));
   };
 
   const findLowestAvailableSlot = (spellLevel) => {
@@ -142,8 +143,10 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
       } else {
         // Outside an active game this remains an explicit manual slot tracker.
         const slotKey = `level_${slotLevel}`;
-        const newUsed = (currentSlots[slotKey] || 0) + 1;
-        await onUpdateCharacter({ spell_slots: { ...currentSlots, [slotKey]: newUsed } });
+        const legacyKey = String(slotLevel);
+        const { [legacyKey]: ignoredLegacy, ...canonicalSlots } = currentSlots;
+        const newUsed = getUsedSlots(slotLevel) + 1;
+        await onUpdateCharacter({ spell_slots: { ...canonicalSlots, [slotKey]: newUsed } });
       }
       setCastFlash(spellName);
       setTimeout(() => setCastFlash(null), 800);

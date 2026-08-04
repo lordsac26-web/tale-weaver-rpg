@@ -8,6 +8,7 @@ import {
   getActionsPerTurn, resolveActionAndAdvance,
 } from './helpers.ts';
 import { finalizeAndPersistCombat } from './persistence.ts';
+import { addStructuredCondition, buildStructuredCondition, consumeBreakOnAttackConditions, getAttackConcealment } from './conditions.ts';
 
 export async function handlePlayerAttack(ctx) {
   const { base44, session_id, combat_id, character_id, payload } = ctx;
@@ -326,10 +327,10 @@ export async function handlePlayerAttack(ctx) {
         const existing = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
         if (!existing.includes(conditionToApply)) {
           // Store the save DC + ability so the affected creature can re-save each turn.
-          target.conditions = [
-            ...(target.conditions || []),
-            { name: conditionToApply, source: spell.name, save_dc: spellSaveDC, save_ability: spell.save_type, caster: character.name }
-          ];
+          target.conditions = addStructuredCondition(target.conditions, buildStructuredCondition({
+            name: conditionToApply, source: spell.name, target_id: target.id, caster_id: character_id,
+            duration_type: 'save_ends', save_dc: spellSaveDC, save_ability: spell.save_type, save_ends: true,
+          }));
           appliedCondition = conditionToApply;
         }
       }
@@ -358,7 +359,10 @@ export async function handlePlayerAttack(ctx) {
           if (tFailed && conditionToApply && twinTarget.hp_current > 0) {
             const tExisting = (twinTarget.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
             if (!tExisting.includes(conditionToApply)) {
-              twinTarget.conditions = [...(twinTarget.conditions || []), { name: conditionToApply, source: spell.name, save_dc: spellSaveDC, save_ability: spell.save_type, caster: character.name }];
+              twinTarget.conditions = addStructuredCondition(twinTarget.conditions, buildStructuredCondition({
+                name: conditionToApply, source: spell.name, target_id: twinTarget.id, caster_id: character_id,
+                duration_type: 'save_ends', save_dc: spellSaveDC, save_ability: spell.save_type, save_ends: true,
+              }));
             }
           }
           twinText = ` Twinned → ${twinTarget.name}: rolled ${tTotal}, ${tFailed ? 'FAILED' : 'success'}.${tDmg > 0 ? ` ${tDmg} damage.` : ''}${tFailed && conditionToApply ? ` ${conditionToApply.toUpperCase()}!` : ''}`;
@@ -677,13 +681,13 @@ export async function handlePlayerAttack(ctx) {
   // Condition checks — apply RAW condition mechanics (PHB p.290-292)
   const conditions = (character.conditions || []).map(c => c.name || c);
 
-  // INVISIBLE attacker (Firbolg Hidden Step, spells): advantage on the attack;
-  // invisibility ends the moment you attack (PHB p.291).
-  let attackerWasInvisible = false;
-  if (conditions.includes('invisible')) {
-    advSources.push(true);
-    attackerWasInvisible = true;
-  }
+  // Structured concealment supplies a named advantage source at the one central
+  // resolver. Only states explicitly marked break_on_attack are consumed after
+  // the attack. Legacy invisible remains readable but is never silently removed.
+  const concealmentStates = getAttackConcealment(character.conditions);
+  const hasLegacyInvisible = conditions.includes('invisible') && concealmentStates.length === 0;
+  const attackConcealment = [...concealmentStates, ...(hasLegacyInvisible ? [{ name: 'invisible', break_on_attack: false }] : [])];
+  if (attackConcealment.length) advSources.push(true);
   // Kobold Draconic Cry (activated via racialActions): advantage on your attacks this turn
   if (combatLog.world_state?.draconic_cry_active) advSources.push(true);
 
@@ -778,7 +782,8 @@ export async function handlePlayerAttack(ctx) {
   let damageRolls = [];
   let concentrationBrokenSelf = null; // set if this attack broke the player's own concentration
   const isSpellAttack = !!spell;
-  const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, spell_name: spell?.name || null };
+  const advantageSources = attackConcealment.length ? ['Attacking from concealment'] : [];
+  const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, spell_name: spell?.name || null, advantage_sources: advantageSources };
 
   if (hit) {
     // H5 fix: guard non-NdM dice strings (e.g. "1d8+1", "2d6 fire") — extract the
@@ -989,7 +994,7 @@ export async function handlePlayerAttack(ctx) {
     logEntry.damage = damage;
     logEntry.damage_rolls = damageRolls;
     const actionLabel = spell ? `casts ${spell.name} at` : (isCritical ? 'CRITICALLY strikes' : 'hits');
-    logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${stormRuneBonus ? ` ⛈️ Storm Rune guided the strike (+${stormRuneBonus} to hit).` : ''}${fireRuneText}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
+    logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${advantageSources.length ? ' Advantage: attacking from concealment.' : ''}${stormRuneBonus ? ` ⛈️ Storm Rune guided the strike (+${stormRuneBonus} to hit).` : ''}${fireRuneText}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
   } else {
     logEntry.hit = false;
     logEntry.attack_roll = totalAttack;
@@ -997,12 +1002,13 @@ export async function handlePlayerAttack(ctx) {
     logEntry.text = `${character.name} ${missLabel} ${target.name}! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})`;
   }
 
-  // Invisibility ends when you attack — strip it from the character + combatant.
-  if (attackerWasInvisible) {
-    const stripInvis = (arr) => (arr || []).filter(c => (typeof c === 'string' ? c : c?.name) !== 'invisible');
-    await base44.asServiceRole.entities.Character.update(character_id, { conditions: stripInvis(character.conditions) });
+  // Consume only structured concealment states whose canonical rule explicitly
+  // says they end on attack. Greater Invisibility-style effects remain intact.
+  if (attackConcealment.some((condition) => condition.break_on_attack)) {
+    const remainingConditions = consumeBreakOnAttackConditions(character.conditions);
+    await base44.asServiceRole.entities.Character.update(character_id, { conditions: remainingConditions });
     const pcInv = combatants.find(c => c.type === 'player');
-    if (pcInv) pcInv.conditions = stripInvis(pcInv.conditions);
+    if (pcInv) pcInv.conditions = consumeBreakOnAttackConditions(pcInv.conditions);
   }
 
   const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);

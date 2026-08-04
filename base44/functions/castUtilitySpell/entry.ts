@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { requireUser, characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 
 const FULL = [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]];
 const HALF = [[0],[2],[3],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]];
@@ -68,13 +69,16 @@ function concentrationModifier(spell, now) {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const { session_id, character_id, spell_name, action_text, slot_level, cast_token } = await req.json();
+    const { user, error: authError } = await requireUser(base44);
+    if (authError) return authError;
+    const { session_id, character_id, spell_name, action_text, slot_level, cast_token, request_id } = await req.json();
     if (!session_id || !character_id) return Response.json({ error: 'session_id and character_id are required' }, { status: 400 });
 
     const session = await base44.asServiceRole.entities.GameSession.get(session_id);
     if (!session || session.character_id !== character_id) return Response.json({ error: 'Session and character do not match' }, { status: 400 });
     const character = await base44.asServiceRole.entities.Character.get(character_id);
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
+    if (!characterBelongsToUser(character, user)) return Response.json({ error: 'Character does not belong to the authenticated user' }, { status: 403 });
 
     const canonicalName = findKnownSpell(character, action_text, spell_name);
     if (!canonicalName) return Response.json({ success: true, spell_detected: false, spell_slots: character.spell_slots || {}, active_modifiers: character.active_modifiers || [] });
@@ -84,6 +88,10 @@ Deno.serve(async (req) => {
     const spellRows = await base44.asServiceRole.entities.Spell.filter({ name: canonicalName }, '-updated_date', 1);
     const spell = spellRows?.[0];
     if (!spell) return Response.json({ error: `Canonical spell data is missing for ${canonicalName}`, invalid: true }, { status: 404 });
+    const isHostileTargeted = spell.attack_type !== 'healing' && spell.attack_type !== 'utility' && !spell.is_utility;
+    if (isHostileTargeted) {
+      return Response.json({ error: `${canonicalName} requires a valid combat target. Use the combat spell action while an active combat target is available.`, invalid: true, target_required: true }, { status: 400 });
+    }
 
     const conditions = (character.conditions || []).map(c => normalize(typeof c === 'string' ? c : c?.name));
     const components = String(spell.components || 'V').toUpperCase();
@@ -95,7 +103,8 @@ Deno.serve(async (req) => {
     const explicit = Number(slot_level) || Number(String(action_text || '').match(/\b(?:level|lvl|at)\s*(\d+)\b/i)?.[1]) || 0;
     const baseLevel = Math.max(0, Number(spell.level) || 0);
     const selectedLevel = baseLevel === 0 ? 0 : Math.max(baseLevel, explicit || baseLevel);
-    const token = String(cast_token || '').slice(0, 120);
+    const token = String(request_id || cast_token || '').slice(0, 120);
+    if (!token) return Response.json({ error: 'request_id or cast_token is required for idempotent spell casting' }, { status: 400 });
     const abilities = { ...(character.long_rest_abilities || {}) };
     const receipts = Array.isArray(abilities.__typed_spell_casts) ? abilities.__typed_spell_casts : [];
     const prior = token && receipts.find(r => r?.token === token);

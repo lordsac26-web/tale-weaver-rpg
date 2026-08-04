@@ -88,7 +88,12 @@ export default function SpellManagement() {
   const spellAttackBonus = abilityMod + profBonus;
 
   const maxSlots = SPELL_SLOTS_BY_LEVEL[character?.level || 1] || [0, 0, 0, 0, 0, 0, 0, 0, 0];
-  const currentSlots = character?.spell_slots || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 };
+  const currentSlots = character?.spell_slots || {};
+  const usedSlotsFor = (level) => Number(currentSlots[`level_${level}`] ?? currentSlots[level] ?? 0) || 0;
+  const canonicalSlots = () => Object.fromEntries(Array.from({ length: 9 }, (_, idx) => {
+    const level = idx + 1;
+    return [`level_${level}`, usedSlotsFor(level)];
+  }));
 
   const togglePrepared = async (spellName) => {
     const prepared = character.prepared_spells || [];
@@ -103,8 +108,8 @@ export default function SpellManagement() {
   };
 
   const handleUseSpellSlot = async (level) => {
-    if (currentSlots[level] >= maxSlots[level - 1]) return;
-    const newSlots = { ...currentSlots, [level]: (currentSlots[level] || 0) + 1 };
+    if (usedSlotsFor(level) >= maxSlots[level - 1]) return;
+    const newSlots = { ...canonicalSlots(), [`level_${level}`]: usedSlotsFor(level) + 1 };
     setSaving(true);
     await base44.entities.Character.update(characterId, { spell_slots: newSlots });
     setCharacter({ ...character, spell_slots: newSlots });
@@ -112,8 +117,8 @@ export default function SpellManagement() {
   };
 
   const restoreSlot = async (level) => {
-    if (currentSlots[level] <= 0) return;
-    const newSlots = { ...currentSlots, [level]: Math.max(0, currentSlots[level] - 1) };
+    if (usedSlotsFor(level) <= 0) return;
+    const newSlots = { ...canonicalSlots(), [`level_${level}`]: Math.max(0, usedSlotsFor(level) - 1) };
     setSaving(true);
     await base44.entities.Character.update(characterId, { spell_slots: newSlots });
     setCharacter({ ...character, spell_slots: newSlots });
@@ -121,7 +126,7 @@ export default function SpellManagement() {
   };
 
   const restoreAllSlots = async () => {
-    const resetSlots = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 };
+    const resetSlots = Object.fromEntries(Array.from({ length: 9 }, (_, idx) => [`level_${idx + 1}`, 0]));
     setSaving(true);
     await base44.entities.Character.update(characterId, { spell_slots: resetSlots });
     setCharacter({ ...character, spell_slots: resetSlots });
@@ -196,11 +201,12 @@ export default function SpellManagement() {
       {/* Spell Slots */}
       <div className="px-4 py-3 flex-shrink-0"
         style={{ background: 'rgba(25,15,40,0.4)', borderBottom: '1px solid rgba(140,80,220,0.12)' }}>
-        <div className="tavern-section-label mb-2">Spell Slots</div>
+        <div className="tavern-section-label mb-1">Manual Spell Slot Tracker</div>
+        <p className="text-xs mb-2" style={{ color: 'rgba(210,175,120,0.68)' }}>Use Slot and Restore Slot are bookkeeping only; they do not cast spells or resolve mechanics.</p>
         <div className="grid grid-cols-9 gap-1.5">
           {maxSlots.map((max, idx) => {
             const level = idx + 1;
-            const used = currentSlots[level] || 0;
+            const used = usedSlotsFor(level);
             if (max === 0) return <div key={level} />;
             return (
               <div key={level} className="text-center">
@@ -208,6 +214,8 @@ export default function SpellManagement() {
                 <div className="flex flex-col gap-1">
                   {Array.from({ length: max }).map((_, i) => (
                     <button key={i}
+                      aria-label={i < used ? `Restore level ${level} slot` : `Use level ${level} slot`}
+                      title={i < used ? 'Restore Slot — manual bookkeeping only' : 'Use Slot — manual bookkeeping only'}
                       onClick={() => { i < used ? restoreSlot(level) : handleUseSpellSlot(level); }}
                       className="h-4 rounded transition-all"
                       style={{

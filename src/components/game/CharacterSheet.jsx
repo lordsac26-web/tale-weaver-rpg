@@ -360,6 +360,7 @@ function CombatTab({ character, profBonus, isCaster, onUpdate }) {
       {/* Spell Slots */}
       {isCaster && maxSlots.length > 0 && (
         <Section title="Spell Slots" icon="🔮" action={<button onClick={restoreAllSlots} className="text-xs px-2 py-0.5 rounded-md font-fantasy transition-all" style={{ background: 'rgba(40,25,8,0.6)', border: '1px solid rgba(201,169,110,0.2)', color: 'rgba(201,169,110,0.6)' }}>Long Rest</button>}>
+          <p className="text-xs -mt-1" style={{ color: 'rgba(180,140,90,0.45)', fontFamily: 'EB Garamond, serif' }}>Manual tracker only — Use Slot and Restore Slot do not cast or resolve spell mechanics.</p>
           <div className="space-y-2">
             {maxSlots.map((max, levelIdx) => {
               if (!max) return null;
@@ -380,7 +381,8 @@ function CombatTab({ character, profBonus, isCaster, onUpdate }) {
                             background: 'rgba(100,60,180,0.4)', borderColor: 'rgba(160,120,255,0.6)',
                             boxShadow: '0 0 6px rgba(140,80,220,0.3)'
                           }}
-                          title={isUsed ? 'Restore slot' : 'Use slot'} />
+                          aria-label={isUsed ? `Restore ${SLOT_LEVEL_NAMES[levelIdx]} slot` : `Use ${SLOT_LEVEL_NAMES[levelIdx]} slot`}
+                          title={isUsed ? 'Restore Slot — manual bookkeeping only' : 'Use Slot — manual bookkeeping only'} />
                       );
                     })}
                   </div>
