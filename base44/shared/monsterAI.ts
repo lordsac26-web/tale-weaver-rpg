@@ -132,14 +132,12 @@ export const chooseTactic = (archetypeKey, ctx = {}) => {
     if (when.chance != null && !(Math.random() < when.chance)) return false;
     return true;
   };
-  // CR/ability-aware guard: a creature without explicit multiattack capability
-  // (nativeAttacks <= 1 and no explicit hasMultiattack flag) must not use tactics
-  // that grant extra attacks. This prevents a CR 1/4 Skeleton from being labeled
-  // "executes a disciplined multiattack" when it only has one attack. The actual
-  // attack count is already clamped by clampTacticByCR, but the tactic id and
-  // description still propagate to the combat log — filtering here keeps them honest.
+  // The combatant's explicit stat-block attack count is authoritative. Legacy
+  // metadata such as `multiattack: "..."` is descriptive and must never select a
+  // multiattack tactic when num_attacks is one (the CR 1/4 skeleton live path).
+  // Filtering here keeps the tactic id, description, and number of attacks aligned.
   const nativeAttacks = Math.max(1, Number(ctx.nativeAttacks) || 1);
-  const canMultiattack = nativeAttacks > 1 || !!ctx.hasMultiattack;
+  const canMultiattack = nativeAttacks > 1;
   const canUseTactic = (tactic) => {
     const effects = tactic.effects || {};
     if ((effects.numAttacks || 1) > 1 && !canMultiattack) return false;
@@ -152,6 +150,7 @@ export const chooseTactic = (archetypeKey, ctx = {}) => {
     id: chosen ? chosen.id : 'default',
     ...bounded,
     desc: effects.desc || null,
+    damageDice: effects.damage_dice || null,
     archetype: arch.label || archetypeKey,
   };
 };

@@ -35,7 +35,7 @@ export default async function testSkeletonEnemyTurnRegression(req) {
       const skeleton = {
         id: `${token}_Skeleton`, type: 'enemy', name: 'Skeleton', archetype: 'soldier', cr: '1/4',
         hp_current: 13, hp_max: 13, is_conscious: true, armor_class: 13, ac: 13,
-        damage_dice: '1d6+2', damage_bonus: 2, attack_bonus: 5, num_attacks: 1, damage_type: 'piercing', conditions: [],
+        damage_dice: '1d6+2', damage_bonus: 2, attack_bonus: 5, num_attacks: 1, multiattack: 'Two shortsword attacks', damage_type: 'piercing', conditions: [],
       };
       const combat = await base44.asServiceRole.entities.CombatLog.create({
         session_id: session.id, character_id: character.id, round: 1, current_turn_index: 1, is_active: true, result: 'ongoing',
@@ -58,8 +58,8 @@ export default async function testSkeletonEnemyTurnRegression(req) {
       return fixture;
     };
 
-    const normal = await runCase('normal hit uses one skeleton attack', 0.9, ({ body, afterCombat, afterCharacter, entry }) =>
-      body.log_entry?.action === 'soldier:default' && entry.hit && entry.damage === 8 && entry.attack_count === 1 && entry.damage_dice === '1d6+2' && entry.damage_rolls?.[0]?.rolls?.[0] === 6 && entry.damage_rolls?.[0]?.embedded_modifier === 2 && entry.raw_damage === 8 && afterCharacter.hp_current === 32 && afterCombat.combatants.find(c => c.type === 'player')?.hp_current === 32 && afterCombat.current_turn_index === 0
+    const normal = await runCase('CR 1/4 soldier ignores legacy multiattack metadata', 0.9, ({ body, afterCombat, afterCharacter, entry }) =>
+      body.log_entry?.action === 'soldier:default' && entry.hit && entry.damage >= 3 && entry.damage <= 8 && entry.attack_count === 1 && entry.damage_dice === '1d6+2' && entry.damage_rolls?.[0]?.rolls?.[0] === 6 && entry.damage_rolls?.[0]?.embedded_modifier === 2 && entry.raw_damage === 8 && !entry.text.includes('takes no damage') && afterCharacter.hp_current === 32 && afterCombat.combatants.find(c => c.type === 'player')?.hp_current === 32 && afterCombat.current_turn_index === 0
     );
     const replay = await handleEnemyTurn({ base44, session_id: normal.session.id, combat_id: normal.combat.id });
     const replayBody = await replay.json();

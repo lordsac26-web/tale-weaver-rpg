@@ -151,6 +151,9 @@ export async function handleEnemyTurn(ctx) {
   }
   const strategy = `${archetypeKey}:${tactic.id}`;
   const strategyDesc = tactic.desc;
+  // Tactics may supply specialized dice, but a missing tactic value must always
+  // fall back to the combatant's stat block rather than a synthetic zero-damage path.
+  const damageDice = tactic.damageDice || currentCombatant.damage_dice || '1d6';
 
   let attackBonus = (currentCombatant.attack_bonus || 3) + tactic.attackBonus;
   let targetAC = player.ac;
@@ -201,6 +204,7 @@ export async function handleEnemyTurn(ctx) {
   let isCritical = false;
   const attackLogs = [];
   const damageRolls = [];
+  let resolverError = null;
 
   for (let atk = 0; atk < numAttacks; atk++) {
     if (!currentCombatant.is_conscious) break; // felled mid-turn (Cloud Rune self-redirect)
@@ -233,14 +237,13 @@ export async function handleEnemyTurn(ctx) {
       // adds damageBonus when the dice expression is bare (NdN). tacticBonus
       // (from AI tactics like reckless) is always additive.
       const { damage: rawDmg, parsed: dmgParsed, rolls, embeddedBonus, damageBonusApplied, tacticBonusApplied } = rollDamageFromDice(
-        currentCombatant.damage_dice || '1d6',
+        damageDice,
         { damageBonus: currentCombatant.damage_bonus || 0, tacticBonus: bonusDamage, isCrit }
       );
       if (!dmgParsed) {
-        // Unparseable damage_dice — never emit a false successful-hit result.
-        // Log the error so it surfaces in the combat log for debugging, but do
-        // not set anyHit or apply zero damage as if the attack landed.
-        attackLogs.push(`⚠️ ${currentCombatant.name} hits but has unparseable damage_dice ('${currentCombatant.damage_dice}') — no damage applied.`);
+        resolverError = `Confirmed hit could not resolve damage_dice '${damageDice}'.`;
+        attackLogs.push(`⚠️ ${resolverError}`);
+        break;
       } else {
         anyHit = true;
         const dmg = Math.max(1, rawDmg);
@@ -250,7 +253,7 @@ export async function handleEnemyTurn(ctx) {
           attack_total: totalAttack,
           attack_bonus: attackBonus,
           critical: isCrit,
-          dice_expression: currentCombatant.damage_dice || '1d6',
+          dice_expression: damageDice,
           rolls,
           embedded_modifier: embeddedBonus,
           damage_bonus_applied: damageBonusApplied,
@@ -274,6 +277,10 @@ export async function handleEnemyTurn(ctx) {
     } else {
       attackLogs.push(`${currentCombatant.name} misses (${attackRoll}+${attackBonus}=${totalAttack} vs AC ${targetAC})`);
     }
+  }
+
+  if (resolverError) {
+    return Response.json({ error: resolverError, resolver_error: true, hit: true }, { status: 500 });
   }
 
   // === DAMAGE MITIGATION (applied in priority order) ===
@@ -437,13 +444,23 @@ export async function handleEnemyTurn(ctx) {
     totalDamage = finalDamage; // reflects actual damage after temp HP absorption
   }
 
+  const mitigation = attackLogs.filter((entry) => entry.startsWith('['));
+  const mitigationReason = anyHit && totalDamage === 0
+    ? (attackLogs.find((entry) => entry.includes('CLOUD RUNE')) || mitigation.join('; ') || null)
+    : null;
+  if (anyHit && totalDamage === 0 && !mitigationReason) {
+    return Response.json({ error: 'Confirmed hit resolved to zero without a mitigation reason.', resolver_error: true, hit: true }, { status: 500 });
+  }
+
   // Build log entry
   let logText = '';
   if (conditionCleared) logText += `${currentCombatant.name} breaks free of ${conditionCleared}! `;
   if (stoneText) logText += stoneText;
   if (strategyDesc && numAttacks > 0) logText += `[${currentCombatant.name} ${strategyDesc}] `;
   if (anyHit) {
-    logText += attackLogs.join('; ') + (totalDamage > 0 ? `. ${player.name} takes ${totalDamage} total damage! (${player.hp_current}/${player.hp_max} HP)` : `. ${player.name} takes no damage!`);
+    logText += attackLogs.join('; ') + (totalDamage > 0
+      ? `. ${player.name} takes ${totalDamage} total damage! (${player.hp_current}/${player.hp_max} HP)`
+      : `. ${player.name} takes no damage because ${mitigationReason}.`);
     if (instantDeath) logText += ` 💀 The blow is so massive that ${player.name} dies instantly!`;
     else if (!player.is_conscious) logText += ` ${player.name} falls!`;
   } else if (numAttacks === 0) {
@@ -493,10 +510,11 @@ export async function handleEnemyTurn(ctx) {
     critical: isCritical,
     damage: totalDamage,
     attack_count: numAttacks,
-    damage_dice: currentCombatant.damage_dice || '1d6',
+    damage_dice: damageDice,
     damage_rolls: damageRolls,
     raw_damage: rawDamage,
-    mitigation: attackLogs.filter((entry) => entry.startsWith('[')),
+    mitigation,
+    mitigation_reason: mitigationReason,
     ai_strategy: strategyDesc,
     text: logText
   };
