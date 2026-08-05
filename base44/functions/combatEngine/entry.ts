@@ -10,7 +10,7 @@ import {
   handleFleeCombat, handleResolveCombat, handleCollectLoot,
 } from '../../shared/combat/transitions.ts';
 import {
-  requireUser, validateCombatOwnership, checkReceipt,
+  requireUser, validateCombatOwnership, checkReceipt, storeReceipt,
 } from '../../shared/combat/authGuard.ts';
 
 /**
@@ -192,7 +192,24 @@ Deno.serve(async (req) => {
     }
   }
 
-  return await handler(ctx);
+  const response = await handler(ctx);
+  // One router-level receipt layer covers every combat state transition. Individual
+  // handlers may also persist a richer receipt; this only fills a missing receipt
+  // after a successful mutation so a network retry returns the cached outcome.
+  if (STATE_ACTIONS.has(action) && request_id && response.ok) {
+    const body = await response.clone().json();
+    const resolvedCombatId = combat_id || body?.combat_id;
+    if (resolvedCombatId) {
+      const freshCombat = await base44.asServiceRole.entities.CombatLog.get(resolvedCombatId);
+      if (freshCombat && !checkReceipt(freshCombat.world_state, request_id)) {
+        await base44.asServiceRole.entities.CombatLog.update(resolvedCombatId, {
+          world_state: storeReceipt(freshCombat.world_state, request_id, action, body),
+        });
+      }
+    }
+    return Response.json({ ...body, correlation_id: request_id }, { status: response.status });
+  }
+  return response;
   } catch (error) {
     return Response.json({ error: error.message || 'Combat engine error' }, { status: 500 });
   }

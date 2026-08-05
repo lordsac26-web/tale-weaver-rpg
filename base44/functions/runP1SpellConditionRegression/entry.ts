@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { expireStructuredConditions, hasCondition } from '../../shared/combat/conditions.ts';
+import { checkReceipt, storeReceipt } from '../../shared/combat/authGuard.ts';
 import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
 import { runScoutRegressionSuite } from '../../shared/combat/scoutRegression.ts';
 
@@ -218,6 +219,14 @@ export default async function runP1SpellConditionRegression(req) {
       const after = await state.base44.asServiceRole.entities.Character.get(state.character.id);
       const rejected = [400, 403].includes(mismatch.status) && /Session and character do not match|does not belong/i.test(mismatch.body?.error || '');
       return { pass: rejected && after.hp_current === before.hp_current && sameJson(after.spell_slots, before.spell_slots), actual_status: mismatch.status, detail: { response: mismatch.body, hp: [before.hp_current, after.hp_current], slots: after.spell_slots, auth_context: mismatch.ownership } };
+    });
+
+    await runTest('Combat action receipt replay guard', 200, async () => {
+      const requestId = `${state.character.name}_combat_action`;
+      const first = storeReceipt({}, requestId, 'player_attack', { hit: true, damage: 4 });
+      const replay = checkReceipt(first, requestId);
+      const unknown = checkReceipt(first, `${requestId}_other`);
+      return { pass: replay?.hit === true && replay?.damage === 4 && unknown === null, actual_status: 200, detail: { request_id: requestId, replay, unknown } };
     });
 
     await runTest('Existing testScoutRegression result', 200, async () => {
