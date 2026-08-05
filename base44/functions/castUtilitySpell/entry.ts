@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { requireUser, characterBelongsToUser } from '../../shared/combat/authGuard.ts';
+import { addStructuredCondition, buildStructuredCondition } from '../../shared/combat/conditions.ts';
 
 const FULL = [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]];
 const HALF = [[0],[2],[3],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]];
@@ -88,7 +89,10 @@ Deno.serve(async (req) => {
     const spellRows = await base44.asServiceRole.entities.Spell.filter({ name: canonicalName }, '-updated_date', 1);
     const spell = spellRows?.[0];
     if (!spell) return Response.json({ error: `Canonical spell data is missing for ${canonicalName}`, invalid: true }, { status: 404 });
-    const isHostileTargeted = spell.attack_type !== 'healing' && spell.attack_type !== 'utility' && !spell.is_utility;
+    const normalizedSpellName = normalize(canonicalName);
+    const isHealingSpell = spell.attack_type === 'healing' || normalizedSpellName === 'cure wounds';
+    const isUtilitySpell = spell.attack_type === 'utility' || !!spell.is_utility;
+    const isHostileTargeted = !isHealingSpell && !isUtilitySpell;
     if (isHostileTargeted) {
       return Response.json({ error: `${canonicalName} requires a valid combat target. Use the combat spell action while an active combat target is available.`, invalid: true, target_required: true }, { status: 400 });
     }
@@ -133,13 +137,21 @@ Deno.serve(async (req) => {
 
     let activeModifiers = active;
     if (spell.concentration) activeModifiers = [...active.filter(m => !m.concentration), concentrationModifier(spell, now)];
+    const isPassWithoutTrace = normalize(canonicalName) === 'pass without trace';
+    const passWithoutTraceExpiresAt = isPassWithoutTrace ? new Date(now + 60 * 60 * 1000).toISOString() : null;
+    const structuredConditions = isPassWithoutTrace
+      ? addStructuredCondition(character.conditions, buildStructuredCondition({
+          name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id,
+          duration_type: 'timestamp', expires_at: passWithoutTraceExpiresAt, concentration: true,
+        }))
+      : (character.conditions || []);
 
     // Story-mode healing must complete in the same Character update as slot
     // consumption. Narration is downstream and may fail; it never owns HP state.
     let healAmount = 0;
     let hpCurrent = Number(character.hp_current) || 0;
     const selfTarget = /\b(myself|my self|on me|heal me|my wounds)\b/i.test(String(action_text || ''));
-    if (spell.attack_type === 'healing' && selfTarget) {
+    if (isHealingSpell && selfTarget) {
       const dice = String(spell.description || '').match(/(\d+)d(\d+)/i);
       const baseDiceCount = Number(dice?.[1]) || 1;
       const dieSize = Number(dice?.[2]) || 8;
@@ -176,12 +188,24 @@ Deno.serve(async (req) => {
     if (token) abilities.__typed_spell_casts = [...receipts.filter(r => r?.token !== token).slice(-24), { token, spell_name: canonicalName, slot_level: selectedLevel, heal_amount: healAmount, granted_goodberry: grantedGoodberry, at: new Date(now).toISOString() }];
 
     const characterUpdates = { spell_slots: spellSlots, active_modifiers: activeModifiers, long_rest_abilities: abilities };
+    if (isPassWithoutTrace) characterUpdates.conditions = structuredConditions;
     if (healAmount > 0) characterUpdates.hp_current = hpCurrent;
     if (grantedInventory) characterUpdates.inventory = grantedInventory;
     await base44.asServiceRole.entities.Character.update(character_id, characterUpdates);
-    if (session.in_combat && session.combat_state?.combat_id && spell.concentration) {
+    if (session.in_combat && session.combat_state?.combat_id) {
       const combat = await base44.asServiceRole.entities.CombatLog.get(session.combat_state.combat_id);
-      if (combat?.is_active) await base44.asServiceRole.entities.CombatLog.update(combat.id, { world_state: { ...(combat.world_state || {}), concentration_spell: canonicalName, concentration_caster: character.name } });
+      if (combat?.is_active) {
+        const timestamp = new Date(now).toISOString();
+        const combatants = (combat.combatants || []).map((combatant) => combatant.id === character_id
+          ? { ...combatant, hp_current: hpCurrent, conditions: isPassWithoutTrace ? structuredConditions : (combatant.conditions || []) }
+          : combatant);
+        const spellLog = { type: 'spell_cast', spell_name: canonicalName, actor: character.name, target: character.name, round: combat.round || 0, timestamp, request_id: token, heal_amount: healAmount };
+        await base44.asServiceRole.entities.CombatLog.update(combat.id, {
+          combatants,
+          log_entries: [...(combat.log_entries || []), spellLog],
+          world_state: spell.concentration ? { ...(combat.world_state || {}), concentration_spell: canonicalName, concentration_caster: character.name } : (combat.world_state || {}),
+        });
+      }
     }
 
     return Response.json({ success: true, spell_detected: true, already_active: false, spell_name: canonicalName, slot_level: selectedLevel, base_level: baseLevel, used_slots: usedAfter, max_slots: maximum, remaining_slots: Math.max(0, maximum - usedAfter), spell_slots: spellSlots, active_modifiers: activeModifiers, concentration: !!spell.concentration, duration: spell.duration, attack_type: spell.attack_type, components: spell.components, inventory: grantedInventory || character.inventory || [], heal_amount: healAmount, hp_current: hpCurrent });
