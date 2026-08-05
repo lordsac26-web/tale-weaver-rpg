@@ -114,9 +114,10 @@ Deno.serve(async (req) => {
     const explicitLevel = Number(text.match(/\b(?:level|lvl|at)\s*(\d+)\b/i)?.[1]) || 0;
     const selectedLevel = baseLevel === 0 ? 0 : Math.max(baseLevel, explicitLevel || baseLevel);
     const spellKey = normalize(spellName).replace(/ /g, '_');
-    const utilityNames = new Set(['hunters mark','ensnaring strike','pass without trace','silence','detect magic']);
+    const utilityNames = new Set(['ensnaring strike','pass without trace','silence','detect magic']);
     const isHealing = canonical.attack_type === 'healing';
-    const isUtility = canonical.attack_type === 'utility' || utilityNames.has(normalize(spellName)) || (!!canonical.concentration && !canonical.damage_dice && !isHealing);
+    const isHuntersMark = normalize(spellName) === 'hunters mark';
+    const isUtility = !isHuntersMark && (canonical.attack_type === 'utility' || utilityNames.has(normalize(spellName)) || (!!canonical.concentration && !canonical.damage_dice && !isHealing));
     const diceFromText = String(canonical.description || '').match(/(\d+d\d+)/i)?.[1] || null;
     const spell = {
       name: spellName,

@@ -9,6 +9,7 @@ import {
 } from './helpers.ts';
 import { awardVictoryXP } from './persistence.ts';
 import { inferArchetype, chooseTactic } from '../monsterAI.ts';
+import { removeHuntersMark } from './huntersMark.ts';
 
 export async function handleEnemyTurn(ctx) {
   const { base44, session_id, combat_id } = ctx;
@@ -492,9 +493,10 @@ export async function handleEnemyTurn(ctx) {
     if (conc.broken) {
       newWS.concentration_spell = null;
       newWS.concentration_caster = null;
+      newWS.hunters_mark = null;
       if (charFull) {
         await base44.asServiceRole.entities.Character.update(player.id, {
-          active_modifiers: (charFull.active_modifiers || []).filter(m => !m.concentration),
+          active_modifiers: removeHuntersMark((charFull.active_modifiers || []).filter(m => !m.concentration), player.id),
         });
       }
       logText += ` ⚠️ Concentration on ${concentrationSpellCheck} broken! (CON save: ${conc.save} vs DC ${conc.dc})`;

@@ -9,6 +9,7 @@ import {
 } from './helpers.ts';
 import { finalizeAndPersistCombat } from './persistence.ts';
 import { addStructuredCondition, buildStructuredCondition, consumeBreakOnAttackConditions, getAttackConcealment } from './conditions.ts';
+import { findHuntersMark, rollHuntersMarkBonus, removeHuntersMark } from './huntersMark.ts';
 
 export async function handlePlayerAttack(ctx) {
   const { base44, session_id, combat_id, character_id, payload } = ctx;
@@ -72,6 +73,14 @@ export async function handlePlayerAttack(ctx) {
       return Response.json({ error: 'You cannot cast spells while raging (PHB p.48).', invalid: true }, { status: 400 });
     }
     const isSilenced = playerConds.includes('silenced') || playerConds.includes('silence');
+    const isHuntersMark = String(spell.name || '').toLowerCase() === "hunter's mark";
+    if (isHuntersMark && (target.type !== 'enemy' || !target.is_conscious || (target.hp_current ?? target.hp ?? 0) <= 0)) {
+      return Response.json({ error: "Hunter's Mark requires a living hostile target.", invalid: true, target_required: true }, { status: 400 });
+    }
+    const existingHuntersMark = (character.active_modifiers || []).find((modifier) => modifier?.effect === 'hunters_mark' && modifier?.concentration && modifier?.caster_id === character_id);
+    if (isHuntersMark && existingHuntersMark && existingHuntersMark.marked_target_id !== target_id) {
+      return Response.json({ error: "Hunter's Mark is already bound to its original target; target transfer is not supported.", invalid: true }, { status: 409 });
+    }
     const isSubtle = !!(modifiers?.metamagic?.subtle || modifiers?.subtle_spell);
     const components = Array.isArray(spell.components) ? spell.components.join('') : String(spell.components || 'V');
     if (isSilenced && !isSubtle && components.toUpperCase().includes('V')) {
@@ -232,6 +241,29 @@ export async function handlePlayerAttack(ctx) {
       if (spell.requires_concentration) {
         newWorldState2.concentration_spell = spell.name;
         newWorldState2.concentration_caster = character.name;
+      }
+      if (isHuntersMark) {
+        const appliedAt = new Date().toISOString();
+        const huntersMark = {
+          id: `hunters_mark_${character_id}_${target_id}`,
+          source: "Hunter's Mark",
+          spell_name: "Hunter's Mark",
+          effect: 'hunters_mark',
+          caster_id: character_id,
+          marked_target_id: target_id,
+          damage_bonus_dice: '1d6',
+          concentration: true,
+          duration: 'Concentration, up to 1 hour',
+          applied_round: combatLog.round,
+          applied_at: appliedAt,
+        };
+        await base44.asServiceRole.entities.Character.update(character_id, {
+          active_modifiers: [...(character.active_modifiers || []).filter((modifier) => !modifier?.concentration), huntersMark],
+        });
+        newWorldState2.hunters_mark = huntersMark;
+        utilEntry.target_id = target_id;
+        utilEntry.hunters_mark = huntersMark;
+        utilEntry.text = `${character.name} marks ${target.name} with Hunter's Mark.`;
       }
       if ((spell.special_effects || []).includes('pass_without_trace')) {
         const now = Date.now();
@@ -647,6 +679,7 @@ export async function handlePlayerAttack(ctx) {
 
   // Apply active modifiers
   const activeMods = character.active_modifiers || [];
+  const huntersMark = findHuntersMark(activeMods, character_id, target_id);
   for (const mod of activeMods) {
     if (mod.applies_to === 'attack' || mod.applies_to === 'all') {
       attackMod += mod.value;
@@ -780,6 +813,9 @@ export async function handlePlayerAttack(ctx) {
 
   let damage = 0;
   let damageRolls = [];
+  let huntersMarkDamage = 0;
+  let huntersMarkRolls = [];
+  let baseDamage = 0;
   let concentrationBrokenSelf = null; // set if this attack broke the player's own concentration
   const isSpellAttack = !!spell;
   const advantageSources = attackConcealment.length ? ['Attacking from concealment'] : [];
@@ -825,6 +861,14 @@ export async function handlePlayerAttack(ctx) {
         for (let i = 0; i < eNum; i++) eDmg += rollDice(eSides);
         damage += eDmg;
       }
+    }
+
+    baseDamage = damage;
+    if (huntersMark) {
+      const bonus = rollHuntersMarkBonus(huntersMark, isCritical, rollDice);
+      huntersMarkDamage = bonus.damage;
+      huntersMarkRolls = bonus.rolls;
+      damage += huntersMarkDamage;
     }
 
     // Paladin Divine Smite (if toggled and spell slots available)
@@ -993,8 +1037,11 @@ export async function handlePlayerAttack(ctx) {
     logEntry.attack_roll = totalAttack;
     logEntry.damage = damage;
     logEntry.damage_rolls = damageRolls;
+    logEntry.base_damage = baseDamage;
+    logEntry.hunters_mark_bonus = huntersMarkDamage;
+    logEntry.hunters_mark_rolls = huntersMarkRolls;
     const actionLabel = spell ? `casts ${spell.name} at` : (isCritical ? 'CRITICALLY strikes' : 'hits');
-    logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${advantageSources.length ? ' Advantage: attacking from concealment.' : ''}${stormRuneBonus ? ` ⛈️ Storm Rune guided the strike (+${stormRuneBonus} to hit).` : ''}${fireRuneText}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
+    logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage!${huntersMark ? ` Base ${baseDamage} + Hunter's Mark ${huntersMarkDamage} (${huntersMarkRolls.join('+') || 0}) = ${damage}.` : ''} (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${advantageSources.length ? ' Advantage: attacking from concealment.' : ''}${stormRuneBonus ? ` ⛈️ Storm Rune guided the strike (+${stormRuneBonus} to hit).` : ''}${fireRuneText}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
   } else {
     logEntry.hit = false;
     logEntry.attack_roll = totalAttack;
@@ -1074,11 +1121,12 @@ export async function handlePlayerAttack(ctx) {
   if (concentrationBrokenSelf) {
     newWorldState.concentration_spell = null;
     newWorldState.concentration_caster = null;
+    newWorldState.hunters_mark = null;
     const concentrationOwner = updatedCombatants.find(c => c.type === 'player' && c.name === concCaster);
     if (concentrationOwner) {
       const fullOwner = await base44.asServiceRole.entities.Character.get(concentrationOwner.id);
       await base44.asServiceRole.entities.Character.update(concentrationOwner.id, {
-        active_modifiers: (fullOwner.active_modifiers || []).filter(m => !m.concentration),
+        active_modifiers: removeHuntersMark((fullOwner.active_modifiers || []).filter(m => !m.concentration), concentrationOwner.id),
       });
     }
     logEntry.text += ` ⚠️ ${concentrationBrokenSelf}`;

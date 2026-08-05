@@ -65,7 +65,9 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   if (!spell) return respond(404, { error: `Canonical spell data is missing for ${canonicalName}`, invalid: true });
   const normalizedName = normalize(canonicalName);
   const isHealingSpell = spell.attack_type === 'healing' || normalizedName === 'cure wounds';
-  const isUtilitySpell = spell.attack_type === 'utility' || !!spell.is_utility;
+  const isHuntersMark = normalizedName === 'hunters mark';
+  const isUtilitySpell = (spell.attack_type === 'utility' || !!spell.is_utility) && !isHuntersMark;
+  if (isHuntersMark) return respond(400, { error: "Hunter's Mark requires a hostile combat target. Cast it through the combat spell action.", invalid: true, target_required: true });
   if (!isHealingSpell && !isUtilitySpell) return respond(400, { error: `${canonicalName} requires a valid combat target. Use the combat spell action while an active combat target is available.`, invalid: true, target_required: true });
   const conditions = (character.conditions || []).map((condition) => normalize(typeof condition === 'string' ? condition : condition?.name));
   if ((conditions.includes('silenced') || conditions.includes('silence')) && String(spell.components || 'V').toUpperCase().includes('V')) return respond(400, { error: `${character.name} is silenced and cannot cast ${canonicalName}, which requires a verbal component.`, invalid: true });
