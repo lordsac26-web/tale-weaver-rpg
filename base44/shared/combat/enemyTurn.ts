@@ -200,6 +200,7 @@ export async function handleEnemyTurn(ctx) {
   let anyHit = false;
   let isCritical = false;
   const attackLogs = [];
+  const damageRolls = [];
 
   for (let atk = 0; atk < numAttacks; atk++) {
     if (!currentCombatant.is_conscious) break; // felled mid-turn (Cloud Rune self-redirect)
@@ -231,7 +232,7 @@ export async function handleEnemyTurn(ctx) {
       // adding damage_bonus on top would double-count it. rollDamageFromDice only
       // adds damageBonus when the dice expression is bare (NdN). tacticBonus
       // (from AI tactics like reckless) is always additive.
-      const { damage: rawDmg, parsed: dmgParsed } = rollDamageFromDice(
+      const { damage: rawDmg, parsed: dmgParsed, rolls, embeddedBonus, damageBonusApplied, tacticBonusApplied } = rollDamageFromDice(
         currentCombatant.damage_dice || '1d6',
         { damageBonus: currentCombatant.damage_bonus || 0, tacticBonus: bonusDamage, isCrit }
       );
@@ -243,6 +244,19 @@ export async function handleEnemyTurn(ctx) {
       } else {
         anyHit = true;
         const dmg = Math.max(1, rawDmg);
+        damageRolls.push({
+          attack_number: atk + 1,
+          attack_roll: attackRoll,
+          attack_total: totalAttack,
+          attack_bonus: attackBonus,
+          critical: isCrit,
+          dice_expression: currentCombatant.damage_dice || '1d6',
+          rolls,
+          embedded_modifier: embeddedBonus,
+          damage_bonus_applied: damageBonusApplied,
+          tactic_bonus_applied: tacticBonusApplied,
+          raw_damage: dmg,
+        });
         // Cloud Rune (reaction): redirect the first attack that hits to another
         // creature — another enemy if present, otherwise the attacker itself.
         if (cloudRedirectAvailable) {
@@ -275,6 +289,7 @@ export async function handleEnemyTurn(ctx) {
   const charFeatFlags = charFull?._feat_flags || [];
   const playerHasFeat = (name) => charFeats.includes(name) || charFeatFlags.includes(name.toLowerCase().replace(/\s+/g,'_'));
 
+  const rawDamage = totalDamage;
   let finalDamage = totalDamage;
 
   // Heavy Armor Master: -3 nonmagical B/P/S damage (PHB p.167)
@@ -477,6 +492,11 @@ export async function handleEnemyTurn(ctx) {
     hit: anyHit,
     critical: isCritical,
     damage: totalDamage,
+    attack_count: numAttacks,
+    damage_dice: currentCombatant.damage_dice || '1d6',
+    damage_rolls: damageRolls,
+    raw_damage: rawDamage,
+    mitigation: attackLogs.filter((entry) => entry.startsWith('[')),
     ai_strategy: strategyDesc,
     text: logText
   };

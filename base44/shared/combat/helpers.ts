@@ -61,20 +61,15 @@ export const parseDamageDice = (diceStr) => {
 // and the caller must treat it as an error — never emit a false successful hit.
 export const rollDamageFromDice = (diceStr, { damageBonus = 0, tacticBonus = 0, isCrit = false } = {}) => {
   const parsed = parseDamageDice(diceStr);
-  if (!parsed) return { damage: 0, parsed: false };
+  if (!parsed) return { damage: 0, parsed: false, rolls: [] };
   const { numDice, sides, embeddedBonus } = parsed;
   const rolledDice = isCrit ? numDice * 2 : numDice;
-  let dmg = 0;
-  for (let i = 0; i < rolledDice; i++) dmg += rollDice(sides);
-  // Apply the embedded modifier from the dice string (e.g. +2 in '1d6+2')
-  dmg += embeddedBonus;
-  // Only add the combatant's damage_bonus when the dice string is bare (NdN).
-  // When the dice string already embeds the modifier, damage_bonus is the same
-  // value and adding both double-counts it.
-  if (embeddedBonus === 0) dmg += (Number(damageBonus) || 0);
-  // Tactic bonuses (reckless, desperate fury, etc.) are always additive
-  dmg += (Number(tacticBonus) || 0);
-  return { damage: dmg, parsed: true };
+  const rolls = [];
+  for (let i = 0; i < rolledDice; i++) rolls.push(rollDice(sides));
+  const damageBonusApplied = embeddedBonus === 0 ? (Number(damageBonus) || 0) : 0;
+  const tacticBonusApplied = Number(tacticBonus) || 0;
+  const dmg = rolls.reduce((total, roll) => total + roll, 0) + embeddedBonus + damageBonusApplied + tacticBonusApplied;
+  return { damage: dmg, parsed: true, rolls, embeddedBonus, damageBonusApplied, tacticBonusApplied };
 };
 
 // Damage Resistance/Vulnerability/Immunity (PHB p.197): immunity → 0,
