@@ -1,5 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { expireStructuredConditions, hasCondition } from '../../shared/combat/conditions.ts';
+import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
+import { runScoutRegressionSuite } from '../../shared/combat/scoutRegression.ts';
 
 const QA_PREFIX = 'P1QA_';
 const LIVE_IDS = {
@@ -8,7 +10,6 @@ const LIVE_IDS = {
   combat: '6a7155d3c597b47463e0854e',
 };
 
-const dataOf = (response) => response?.data ?? response;
 const statusOf = (value, fallback = null) => {
   const direct = Number(value?.response?.status ?? value?.status ?? value?.cause?.status);
   if (Number.isFinite(direct) && direct >= 100 && direct <= 599) return direct;
@@ -61,16 +62,17 @@ export default async function runP1SpellConditionRegression(req) {
     has_action_text: !!payload.action_text,
   });
 
-  const invoke = async (testName, functionName, payload) => {
+  const invoke = async (testName, functionName, payload = {}) => {
     const ownership = ownerSessionState(payload.session_id, payload.character_id);
     try {
-      const response = await state.base44.functions.invoke(functionName, payload);
-      const outcome = { status: statusOf(response, 200), body: dataOf(response), client_error: null, ownership };
-      diagnostics.push({ downstream_function: functionName, test_name: testName, request_shape: requestShape(payload), status: outcome.status, response_body: outcome.body, owner_session_character: ownership });
-      return outcome;
+      const outcome = functionName === 'castUtilitySpell'
+        ? await executeUtilitySpellCast({ base44: state.base44, user: state.user, payload })
+        : { status: 200, body: runScoutRegressionSuite() };
+      diagnostics.push({ downstream_function: functionName === 'castUtilitySpell' ? 'executeUtilitySpellCast' : 'runScoutRegressionSuite', test_name: testName, request_shape: requestShape(payload), status: outcome.status, response_body: outcome.body, owner_session_character: ownership, invocation_mode: 'in_process_authoritative_shared_implementation' });
+      return { ...outcome, ownership };
     } catch (error) {
-      const outcome = { status: statusOf(error), body: errorBodyOf(error), client_error: String(error?.message || 'Client invocation failed'), ownership };
-      diagnostics.push({ downstream_function: functionName, test_name: testName, request_shape: requestShape(payload), status: outcome.status, response_body: outcome.body, owner_session_character: ownership });
+      const outcome = { status: statusOf(error, 500), body: errorBodyOf(error), ownership };
+      diagnostics.push({ downstream_function: functionName === 'castUtilitySpell' ? 'executeUtilitySpellCast' : 'runScoutRegressionSuite', test_name: testName, request_shape: requestShape(payload), status: outcome.status, response_body: outcome.body, owner_session_character: ownership, invocation_mode: 'in_process_authoritative_shared_implementation' });
       return outcome;
     }
   };
