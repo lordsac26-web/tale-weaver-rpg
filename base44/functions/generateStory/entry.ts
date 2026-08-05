@@ -1,4 +1,5 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -28,7 +29,11 @@ Deno.serve(async (req) => {
     if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
 
     const character = await base44.asServiceRole.entities.Character.get(session.character_id);
-    const charLevel = character?.level || 1;
+    if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
+    if (!characterBelongsToUser(character, user)) {
+      return Response.json({ error: 'Session character does not belong to the authenticated user' }, { status: 403 });
+    }
+    const charLevel = character.level || 1;
 
     // ====================== MONSTER LOADING ======================
     const monsters = await base44.asServiceRole.entities.Monster.list('-created_date', 50);

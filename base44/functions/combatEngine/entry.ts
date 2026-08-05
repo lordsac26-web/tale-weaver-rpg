@@ -65,13 +65,14 @@ Deno.serve(async (req) => {
 
   // Narrow service-role write for completed-combat history. Browser-scoped
   // CombatLog writes can be blocked because combat records are service-created.
-  const handleUpdateCombatHistory = async ({ base44, session_id, combat_id, payload }) => {
+  const handleUpdateCombatHistory = async ({ base44, session_id, combat_id, payload, user }) => {
     if (!session_id || !combat_id) return Response.json({ error: 'session_id and combat_id are required' }, { status: 400 });
-    const [session, combat] = await Promise.all([
-      base44.asServiceRole.entities.GameSession.get(session_id),
-      base44.asServiceRole.entities.CombatLog.get(combat_id),
-    ]);
-    if (!session || !combat || combat.session_id !== session.id) {
+    const session = await base44.asServiceRole.entities.GameSession.get(session_id);
+    if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
+    const ownership = await validateCombatOwnership(base44, { session_id, combat_id, character_id: session.character_id, user });
+    if (ownership.error) return ownership.error;
+    const combat = ownership.combat;
+    if (!combat || combat.session_id !== session.id) {
       return Response.json({ error: 'Combat does not belong to this session' }, { status: 403 });
     }
     const requested = payload?.updates || {};

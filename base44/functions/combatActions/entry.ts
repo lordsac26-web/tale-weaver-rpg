@@ -1,5 +1,6 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { statMod, rollD20, rollDice } from '../../shared/dice.ts';
+import { validateCombatOwnership } from '../../shared/combat/authGuard.ts';
 
 // Combat Actions — racial combat abilities and companion turns extracted from
 // the main combatEngine to keep file sizes manageable. Each action reads/writes
@@ -11,6 +12,8 @@ Deno.serve(async (req) => {
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { action, combat_id, session_id, character_id, payload } = await req.json();
+  const ownership = await validateCombatOwnership(base44, { session_id, combat_id, character_id, user });
+  if (ownership.error) return ownership.error;
 
   const normList = (l) => Array.isArray(l) ? l.map(d => String(d || '').toLowerCase().trim()).filter(Boolean) : [];
   const applyDamageModifiers = (damage, damageType, target = {}) => {

@@ -1133,7 +1133,8 @@ export async function handleOffhandAttack(ctx) {
   // H-X1 fix: off-hand swings go through the SAME centralized resolver as
   // main-hand attacks — advantage/disadvantage cancellation, exhaustion,
   // target-condition advantage, auto-crits, and Halfling Lucky all apply.
-  const offAdvSources = [!!modifiers.advantage];
+  const offConcealment = getAttackConcealment(character.conditions);
+  const offAdvSources = [!!modifiers.advantage, offConcealment.length > 0];
   const offDisSources = [!!modifiers.disadvantage, (character.exhaustion_level || 0) >= 3];
   const offTargetConds = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
   if (['paralyzed', 'stunned', 'unconscious', 'restrained', 'prone', 'blinded'].some(cn => offTargetConds.includes(cn))) {
@@ -1174,8 +1175,8 @@ export async function handleOffhandAttack(ctx) {
     round: combatLog.round, actor: character.name, action: 'offhand_attack', target: target.name,
     hit, critical: isCritical, attack_roll: totalAttack, damage,
     text: hit
-      ? `${character.name} strikes with their off-hand ${offhand.name}${isCritical ? ' (CRIT!)' : ''} for ${damage} damage!${hasTWFStyle ? '' : ' (no ability mod — off-hand)'} (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`
-      : `${character.name}'s off-hand ${offhand.name} misses ${target.name}! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})`
+      ? `${character.name} strikes with their off-hand ${offhand.name}${isCritical ? ' (CRIT!)' : ''} for ${damage} damage!${hasTWFStyle ? '' : ' (no ability mod — off-hand)'} (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${offConcealment.length ? ' Advantage: attacking from concealment.' : ''}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`
+      : `${character.name}'s off-hand ${offhand.name} misses ${target.name}! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${offConcealment.length ? ' Advantage: attacking from concealment.' : ''}`
   };
 
   const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
