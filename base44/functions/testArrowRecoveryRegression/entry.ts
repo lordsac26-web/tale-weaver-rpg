@@ -1,0 +1,65 @@
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { resolveArrowRecovery } from '../../shared/story/arrowRecovery.ts';
+
+const LIVE_IDS = new Set(['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256']);
+
+export default async function testArrowRecoveryRegression(req) {
+  const fixtures = [];
+  const results = [];
+  const cleanup = [];
+  let output = null;
+  try {
+    await req.json();
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (user.role !== 'admin') return Response.json({ error: 'Admin access required' }, { status: 403 });
+
+    const token = `ArrowRecoveryQA_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const character = await base44.entities.Character.create({
+      name: `${token}_Ranger`, race: 'Human', class: 'Ranger', level: 3, hp_max: 24, hp_current: 24,
+      inventory: [{ name: 'Arrows', category: 'Ammunition', quantity: 27, weight: 0.05, description: 'Player stack.' }],
+      long_rest_abilities: {}, is_active: false,
+    });
+    const session = await base44.asServiceRole.entities.GameSession.create({ character_id: character.id, title: token, is_active: false, story_log: [] });
+    fixtures.push({ character: character.id, session: session.id });
+    const outcome = { check: { success: true }, recovery: { type: 'arrows', quantity: 6 } };
+    const requestId = `${token}:recovery`;
+
+    const first = await resolveArrowRecovery({ base44, user, sessionId: session.id, characterId: character.id, requestId, outcome });
+    const afterFirst = await base44.asServiceRole.entities.Character.get(character.id);
+    const arrowsAfterFirst = (afterFirst.inventory || []).filter((item) => item.name === 'Arrows');
+    const afterFirstSession = await base44.asServiceRole.entities.GameSession.get(session.id);
+    results.push({ name: 'successful structured recovery increments existing 27-arrow stack once', pass: first.applied && !first.already_processed && first.recovered_quantity === 6 && first.arrow_count === 33 && arrowsAfterFirst.length === 1 && arrowsAfterFirst[0].quantity === 33 && first.receipt?.token === requestId && (afterFirstSession.world_state?.__story_recovery_receipts || []).some((entry) => entry.token === requestId && entry.quantity === 6 && entry.arrow_count === 33) });
+
+    const replay = await resolveArrowRecovery({ base44, user, sessionId: session.id, characterId: character.id, requestId, outcome });
+    const afterReplay = await base44.asServiceRole.entities.Character.get(character.id);
+    results.push({ name: 'same recovery correlation replays without duplicate arrows', pass: replay.applied && replay.already_processed && replay.recovered_quantity === 6 && (afterReplay.inventory || []).filter((item) => item.name === 'Arrows').length === 1 && (afterReplay.inventory || []).find((item) => item.name === 'Arrows')?.quantity === 33 && (afterReplay.long_rest_abilities?.__arrow_recoveries || []).filter((entry) => entry.token === requestId).length === 1 });
+
+    const failed = await resolveArrowRecovery({ base44, user, sessionId: session.id, characterId: character.id, requestId: `${token}:failed`, outcome: { check: { success: false }, recovery: { type: 'arrows', quantity: 6 } } });
+    const afterFailed = await base44.asServiceRole.entities.Character.get(character.id);
+    results.push({ name: 'failed structured recovery adds zero arrows', pass: !failed.applied && (afterFailed.inventory || []).find((item) => item.name === 'Arrows')?.quantity === 33 });
+
+    const malformed = await resolveArrowRecovery({ base44, user, sessionId: session.id, characterId: character.id, requestId: `${token}:malformed`, outcome: { check: { success: true }, recovery: { type: 'arrows', quantity: -1 } } });
+    const afterMalformed = await base44.asServiceRole.entities.Character.get(character.id);
+    results.push({ name: 'malformed structured quantity is a no-op', pass: !malformed.applied && (afterMalformed.inventory || []).find((item) => item.name === 'Arrows')?.quantity === 33 });
+
+    const passed = results.filter((result) => result.pass).length;
+    output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, live_state: { protected_ids: [...LIVE_IDS], read_or_mutated: false } };
+  } catch (error) {
+    output = { error: error.message || 'Arrow recovery regression failed', results };
+  } finally {
+    const base44 = createClientFromRequest(req);
+    for (const fixture of fixtures.reverse()) {
+      for (const [entity, id] of [['GameSession', fixture.session], ['Character', fixture.character]]) {
+        let deleted = false;
+        let verified_absent = false;
+        try { await base44.asServiceRole.entities[entity].delete(id); deleted = true; } catch {}
+        try { verified_absent = !(await base44.asServiceRole.entities[entity].get(id)); } catch { verified_absent = true; }
+        cleanup.push({ entity, id, deleted, verified_absent });
+      }
+    }
+  }
+  const cleanupPassed = cleanup.every((entry) => entry.deleted && entry.verified_absent);
+  return Response.json({ ...(output || { error: 'Arrow recovery regression produced no output' }), cleanup, cleanup_passed: cleanupPassed }, { status: cleanupPassed && output?.all_pass ? 200 : 500 });
+}

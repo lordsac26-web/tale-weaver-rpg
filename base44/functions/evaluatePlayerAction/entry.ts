@@ -114,7 +114,8 @@ Return a JSON object with these fields only:
 - skill: string (one of: Acrobatics, Animal Handling, Arcana, Athletics, Deception, History, Insight, Intimidation, Investigation, Medicine, Nature, Perception, Performance, Persuasion, Religion, Sleight of Hand, Stealth, Survival) or null
 - dc: integer (5-25 range) or null
 - reasoning: string (1-2 sentences of in-character GM flavor text explaining the ruling)
-- risk_level: string ("low", "medium", "high", or "extreme")`;
+- risk_level: string ("low", "medium", "high", or "extreme")
+- recovery: object or null — only for a genuine arrow-recovery action; use { type: "arrows", quantity: integer 1-20 }. Never infer this from descriptive prose.`;
 
     const result = await base44.integrations.Core.InvokeLLM({
       prompt,
@@ -125,8 +126,9 @@ Return a JSON object with these fields only:
           skill: { type: 'string' },
           dc: { type: 'number' },
           reasoning: { type: 'string' },
-          risk_level: { type: 'string' }
-        },
+          risk_level: { type: 'string' },
+          recovery: { type: 'object', properties: { type: { type: 'string' }, quantity: { type: 'number' } } }
+          },
         required: ['requires_check', 'reasoning', 'risk_level']
       }
     });

@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
+import { resolveArrowRecovery } from '../../shared/story/arrowRecovery.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -23,7 +24,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { session_id, action, choice_index, custom_input } = await req.json();
+    const { session_id, action, choice_index, custom_input, choice_context, request_id } = await req.json();
 
     const session = await base44.asServiceRole.entities.GameSession.get(session_id);
     if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
@@ -155,7 +156,7 @@ ${adultToneInstruction}
 4. How do I make this opening feel fresh and different from previous sessions?
 5. What sensory details and tone will pull the player in?
 
-Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension. Provide exactly 4 meaningful choices in the structured "choices" field ONLY (include skill checks + DCs on 2-3 of them). Set location_update. No combat in the opening scene.
+Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension. Provide exactly 4 meaningful choices in the structured "choices" field ONLY (include skill checks + DCs on 2-3 of them). A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null. Set location_update. No combat in the opening scene.
 
 CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" text itself. The narrative must be pure prose — never include lines like "1. ...", "2. ...", "What do you do?", or any enumerated options. The choices belong solely in the structured choices array.`;
 
@@ -166,11 +167,12 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
           choices: { type: 'array', items: {
             type: 'object',
             properties: {
-              text: { type: 'string' },
-              skill_check: { type: 'string' },
-              dc: { type: 'number' },
-              risk_level: { type: 'string', enum: ['low','medium','high','extreme'] }
-            }
+                           text: { type: 'string' },
+                           skill_check: { type: 'string' },
+                           dc: { type: 'number' },
+                           risk_level: { type: 'string', enum: ['low','medium','high','extreme'] },
+                           recovery: { type: 'object', properties: { type: { type: 'string', enum: ['arrows'] }, quantity: { type: 'number' } } }
+                         }
           }},
           location_update: { type: 'string' },
           quest_trigger: { type: 'string' },
@@ -197,7 +199,7 @@ ${adultToneInstruction}
 5. Should combat be triggered? Only when dramatically justified.
 6. How do environment (season, time, weather) and current conditions influence the scene?
 
-Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely.
+Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null.
 
 CONDITION CONTRACT: condition_update is ONLY for a real mechanical status affecting the PLAYER CHARACTER. Set target to "player" only when the player is actually affected; use "other" for an enemy/NPC effect and "none" when no player condition changes. Never use placeholder labels such as "None", "Normal", or "N/A". Use the remove field when a prior player condition ends. Choose duration "scene", "combat", or "persistent" accurately. Enemy conditions that begin combat belong in that enemy's starting_conditions, never on the player.
 
@@ -209,7 +211,7 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
         type: 'object',
         properties: {
           narrative: { type: 'string' },
-          choices: { type: 'array', items: { type: 'object', properties: { text: {type:'string'}, skill_check:{type:'string'}, dc:{type:'number'}, risk_level:{type:'string', enum:['low','medium','high','extreme']} } } },
+          choices: { type: 'array', items: { type: 'object', properties: { text: {type:'string'}, skill_check:{type:'string'}, dc:{type:'number'}, risk_level:{type:'string', enum:['low','medium','high','extreme']}, recovery:{ type:'object', properties:{ type:{type:'string', enum:['arrows']}, quantity:{type:'number'} } } } } },
           combat_trigger: { type: 'boolean' },
           enemies: { type: 'array', items: { type: 'object', properties: { name:{type:'string'}, hp:{type:'number'}, current_hp:{type:'number'}, starting_conditions:{type:'array', items:{type:'string'}}, ac:{type:'number'}, attack_bonus:{type:'number'}, damage_dice:{type:'string'}, damage_bonus:{type:'number'}, dexterity:{type:'number'}, cr:{type:'number'}, xp:{type:'number'} } } },
           reputation_change: { type: 'number' },
@@ -253,8 +255,17 @@ Write a gripping 1-2 paragraph combat narrative.`;
       };
     }
 
+    // A matching structured recovery receipt returns the original story payload
+    // without calling the narrator or appending a duplicate story entry.
+    const priorStory = action === 'choice' && request_id
+      ? (session.story_log || []).find((entry) => entry?.arrow_recovery?.receipt?.token === String(request_id).slice(0, 120))
+      : null;
+    if (priorStory) {
+      return Response.json({ narrative: priorStory.text, choices: priorStory.choices || [], arrow_recovery: { ...priorStory.arrow_recovery, already_processed: true } });
+    }
+
     // ====================== LLM CALL ======================
-    const result = await base44.integrations.Core.InvokeLLM({
+    let result = await base44.integrations.Core.InvokeLLM({
       prompt,
       response_json_schema: responseSchema,
       temperature: action === 'start' ? 0.85 : 0.73,
@@ -262,6 +273,15 @@ Write a gripping 1-2 paragraph combat narrative.`;
     });
 
     // ====================== POST-PROCESSING ======================
+    // Arrow recovery is allowed only from the structured choice/recovery metadata
+    // passed by the client. Narrative text is never parsed into inventory.
+    const arrowRecovery = action === 'choice'
+      ? await resolveArrowRecovery({ base44, user, sessionId: session_id, characterId: character.id, requestId: request_id, outcome: choice_context })
+      : { applied: false };
+    if (arrowRecovery.applied) {
+      result = { ...result, arrow_recovery: { recovered_quantity: arrowRecovery.recovered_quantity, arrow_count: arrowRecovery.arrow_count, already_processed: !!arrowRecovery.already_processed, receipt: arrowRecovery.receipt } };
+    }
+
     // Authoritatively reconcile the combat flag regardless of whether the LLM
     // returned narrative text: a 'choice' action that does NOT trigger combat must
     // clear in_combat so the client never gets stuck on the combat panel. A
@@ -280,7 +300,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
           action,
           player_choice: custom_input ?? choice_index,
           text: result.narrative,
-          choices: result.choices || []
+          choices: result.choices || [],
+          ...(result.arrow_recovery ? { arrow_recovery: result.arrow_recovery } : {})
         }
       ].slice(-60);
 

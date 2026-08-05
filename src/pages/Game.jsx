@@ -359,11 +359,12 @@ export default function Game() {
       skill: choice.skill_check, dc: choice.dc, raw, allRolls, hadAdvantage, hadDisadvantage,
       advantageSources, modifier, final, success, feedback, character_name: character?.name,
     }]);
-    await runChoiceStory(choice, choiceIndex, success, advantageSources);
+    const requestId = `story-choice:${sessionId}:${session?.story_log?.length || 0}:${choiceIndex}`;
+    await runChoiceStory(choice, choiceIndex, success, advantageSources, requestId);
   };
 
   // Sends the chosen action (and any resolved skill check) to the story engine.
-  const runChoiceStory = async (choice, choiceIndex, skillSuccess, tacticalSources) => {
+  const runChoiceStory = async (choice, choiceIndex, skillSuccess, tacticalSources, requestId) => {
     setStoryLoading(true);
     try {
       const mechanicalCast = await maybeCastStorySpell(choice.text);
@@ -379,6 +380,8 @@ export default function Game() {
         session_id: sessionId,
         action: 'choice',
         choice_index: choiceIndex,
+        request_id: requestId,
+        choice_context: { check: { success: skillSuccess === true }, recovery: choice.recovery || null },
         custom_input: (choice.skill_check
           ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}]`
           : choice.text) + mechanicsContext + tacticalContext,
@@ -387,6 +390,7 @@ export default function Game() {
 
       if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP earned!` }]);
+      if (data.arrow_recovery && !data.arrow_recovery.already_processed) setNarrative(prev => [...prev, { type: 'xp_gain', text: `🏹 Recovered ${data.arrow_recovery.recovered_quantity} arrows (${data.arrow_recovery.arrow_count} total).` }]);
       if (data.hp_change) {
         setNarrative(prev => [...prev, { type: 'xp_gain', text: data.hp_change > 0 ? `❤️ Healed +${data.hp_change} HP` : `💔 Took ${Math.abs(data.hp_change)} damage` }]);
         if (typeof data.hp_current === 'number') setCharacter(prev => prev ? { ...prev, hp_current: data.hp_current } : prev);
@@ -415,7 +419,8 @@ export default function Game() {
 
     // No skill check — go straight to the story.
     if (!choice.skill_check || !choice.dc) {
-      await runChoiceStory(choice, choiceIndex, undefined);
+      const requestId = `story-choice:${sessionId}:${session?.story_log?.length || 0}:${choiceIndex}`;
+      await runChoiceStory(choice, choiceIndex, undefined, [], requestId);
       return;
     }
 
@@ -554,7 +559,7 @@ export default function Game() {
   };
 
   // Continues a custom action's story after its (optional) skill check resolves.
-  const runProposalStory = async (action, checkResult) => {
+  const runProposalStory = async (action, checkResult, outcome, requestId) => {
     setStoryLoading(true);
     try {
       const mechanicalCast = await maybeCastStorySpell(action);
@@ -563,10 +568,11 @@ export default function Game() {
         mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
         mechanicalItem ? ` [MECHANICS: ${mechanicalItem.quantity} ${mechanicalItem.item_name} were authoritatively consumed and restored ${mechanicalItem.heal_amount} HP. Do not narrate a different quantity or apply another mechanical heal.]` : '',
       ].join('');
-      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', custom_input: action + checkResult + mechanicsContext });
+      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', request_id: requestId, choice_context: outcome, custom_input: action + checkResult + mechanicsContext });
       const data = result.data;
       if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);
+      if (data.arrow_recovery && !data.arrow_recovery.already_processed) setNarrative(prev => [...prev, { type: 'xp_gain', text: `🏹 Recovered ${data.arrow_recovery.recovered_quantity} arrows (${data.arrow_recovery.arrow_count} total).` }]);
       if (data.hp_change) {
         setNarrative(prev => [...prev, { type: 'xp_gain', text: data.hp_change > 0 ? `❤️ Healed +${data.hp_change} HP` : `💔 Took ${Math.abs(data.hp_change)} damage` }]);
         if (typeof data.hp_current === 'number') setCharacter(prev => prev ? { ...prev, hp_current: data.hp_current } : prev);
@@ -587,24 +593,25 @@ export default function Game() {
   };
 
   // Records a custom action's skill-check entry, then continues the story.
-  const continueProposalWithRoll = async (action, skill, dc, rollData) => {
+  const continueProposalWithRoll = async (action, skill, dc, recovery, requestId, rollData) => {
     const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, final, success } = rollData;
     const feedback = getSkillFeedback(skill, success, final, dc, raw);
     setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, final, success, feedback, character_name: character?.name }]);
     const checkResult = ` [Skill Check: ${skill} DC${dc} — ${success ? 'SUCCESS' : 'FAILURE'} (rolled ${final}${hadAdvantage ? ', with advantage' : ''}${hadDisadvantage ? ', with disadvantage' : ''}${advantageSources?.length ? `; source: ${advantageSources.join(', ')}` : ''})]`;
-    await runProposalStory(action, checkResult);
+    await runProposalStory(action, checkResult, { check: { success }, recovery: recovery || null }, requestId);
   };
 
   const executeProposedAction = async (proposal) => {
     setPendingProposal(null);
-    const { action, requires_check, skill, dc } = proposal;
+    const { action, requires_check, skill, dc, recovery } = proposal;
+    const requestId = `story-action:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
 
     setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
     setChoices([]);
 
     // No check required — straight to the story.
     if (!requires_check || !skill || !dc) {
-      await runProposalStory(action, '');
+      await runProposalStory(action, '', { check: { success: true }, recovery: recovery || null }, requestId);
       return;
     }
 
@@ -616,12 +623,12 @@ export default function Game() {
       setPendingRoll({
         skill, dc, modifier,
         advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, advantageSources: equipAdv.sources,
-        onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, skill, dc, { ...rollData, advantageSources: equipAdv.sources }); },
+        onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, skill, dc, recovery, requestId, { ...rollData, advantageSources: equipAdv.sources }); },
         onCancel: () => {
           setPendingRoll(null);
           const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
           const final = raw + modifier;
-          continueProposalWithRoll(action, skill, dc, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
+          continueProposalWithRoll(action, skill, dc, recovery, requestId, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
         },
       });
       return;
@@ -630,7 +637,7 @@ export default function Game() {
     // Auto mode.
     const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
     const final = raw + modifier;
-    await continueProposalWithRoll(action, skill, dc, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
+    await continueProposalWithRoll(action, skill, dc, recovery, requestId, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
   };
 
   // ===== Free-text "Act" during combat — DM adjudicates first =====
