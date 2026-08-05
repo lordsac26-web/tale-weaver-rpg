@@ -75,46 +75,6 @@ const AuthenticatedApp = () => {
       <Route path="/NPCManager" element={<LayoutWrapper currentPageName="NPCManager"><NPCManager /></LayoutWrapper>} />
       <Route path="/InventoryPage" element={<LayoutWrapper currentPageName="InventoryPage"><InventoryPage /></LayoutWrapper>} />
       <Route path="/RaceReport" element={<LayoutWrapper currentPageName="RaceReport"><RaceReport /></LayoutWrapper>} />
-      <Route path="/Inventory" element={
-        <LayoutWrapper currentPageName="Inventory">
-          <Inventory />
-        </LayoutWrapper>
-      } />
-      <Route path="/SpellManagement" element={
-        <LayoutWrapper currentPageName="SpellManagement">
-          <SpellManagement />
-        </LayoutWrapper>
-      } />
-      <Route path="/ImageForge" element={
-        <LayoutWrapper currentPageName="ImageForge">
-          <ImageForge />
-        </LayoutWrapper>
-      } />
-      <Route path="/Progression" element={
-        <LayoutWrapper currentPageName="Progression">
-          <Progression />
-        </LayoutWrapper>
-      } />
-      <Route path="/NPCManager" element={
-        <LayoutWrapper currentPageName="NPCManager">
-          <NPCManager />
-        </LayoutWrapper>
-      } />
-      <Route path="/InventoryPage" element={
-        <LayoutWrapper currentPageName="InventoryPage">
-          <InventoryPage />
-        </LayoutWrapper>
-      } />
-      <Route path="/RaceReport" element={
-        <LayoutWrapper currentPageName="RaceReport">
-          <RaceReport />
-        </LayoutWrapper>
-      } />
-      <Route path="/Market" element={
-        <LayoutWrapper currentPageName="Market">
-          <Market />
-        </LayoutWrapper>
-      } />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

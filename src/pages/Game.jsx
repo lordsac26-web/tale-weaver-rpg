@@ -1426,7 +1426,7 @@ export default function Game() {
   };
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: '#0d0a07' }}>
+    <div className="min-h-dvh flex items-center justify-center" style={{ background: '#0d0a07' }}>
       <div className="text-center">
         <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
           style={{ border: '2px solid rgba(201,169,110,0.3)', boxShadow: '0 0 30px rgba(201,169,110,0.1)' }}>
