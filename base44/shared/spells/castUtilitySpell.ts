@@ -53,7 +53,7 @@ function concentrationModifier(spell, now, characterId) {
 }
 
 export async function executeUtilitySpellCast({ base44, user, payload }) {
-  const { session_id, character_id, spell_name, action_text, slot_level, cast_token, request_id } = payload || {};
+  const { session_id, character_id, spell_name, action_text, slot_level, cast_token, request_id, target } = payload || {};
   if (!user) return respond(401, { error: 'Unauthorized' });
   if (!session_id || !character_id) return respond(400, { error: 'session_id and character_id are required' });
   const session = await base44.asServiceRole.entities.GameSession.get(session_id);
@@ -65,7 +65,8 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   if (!canonicalName) return respond(200, { success: true, spell_detected: false, spell_slots: character.spell_slots || {}, active_modifiers: character.active_modifiers || [] });
   const known = [...(character.spells_known || []), ...(character.spells_prepared || [])].some((spell) => normalize(spell) === normalize(canonicalName));
   if (!known) return respond(400, { error: `${character.name} does not know or have ${canonicalName} prepared`, invalid: true });
-  const spell = (await base44.asServiceRole.entities.Spell.filter({ name: canonicalName }, '-updated_date', 1))?.[0];
+  const spellCandidates = await base44.asServiceRole.entities.Spell.filter({ name: canonicalName }, '-updated_date', 50);
+  const spell = spellCandidates.find((candidate) => String(candidate?.attack_type || '').toLowerCase() === 'healing' || (typeof candidate?.description === 'string' && candidate.description.trim())) || spellCandidates[0];
   if (!spell) return respond(404, { error: `Canonical spell data is missing for ${canonicalName}`, invalid: true });
   const normalizedName = normalize(canonicalName);
   const isHealingSpell = spell.attack_type === 'healing' || normalizedName === 'cure wounds';
@@ -112,8 +113,9 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   const structuredConditions = isPassWithoutTrace ? addStructuredCondition(character.conditions, buildStructuredCondition({ name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id, duration_type: 'timestamp', expires_at: expiresAt, concentration: true })) : (character.conditions || []);
   let healAmount = 0;
   let hpCurrent = Number(character.hp_current) || 0;
-  if (isHealingSpell && /\b(myself|my self|on me|heal me|my wounds)\b/i.test(String(action_text || ''))) {
-    const dice = String(spell.description || '').match(/(\d+)d(\d+)/i);
+  const selfHealing = isHealingSpell && (target === 'self' || /\b(myself|my self|on me|heal me|my wounds)\b/i.test(String(action_text || '')));
+  if (selfHealing) {
+    const dice = String(spell.heal_dice || spell.damage_dice || spell.description || '').match(/(\d+)d(\d+)/i);
     const count = (Number(dice?.[1]) || 1) + Math.max(0, selectedLevel - baseLevel);
     const sides = Number(dice?.[2]) || 8;
     const ability = ({ Cleric: 'wisdom', Druid: 'wisdom', Ranger: 'wisdom', Paladin: 'charisma', Bard: 'charisma', Sorcerer: 'charisma', Warlock: 'charisma', Wizard: 'intelligence', Artificer: 'intelligence' })[character.class] || 'wisdom';

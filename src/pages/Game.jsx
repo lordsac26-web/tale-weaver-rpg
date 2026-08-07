@@ -1018,7 +1018,8 @@ export default function Game() {
         character_id: character?.id,
         spell_name: spellName,
         action_text: spellPayload?.attack_type === 'healing' ? `cast ${spellName} on myself` : `cast ${spellName}`,
-        cast_token: `sheet:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`,
+        target: spellPayload?.attack_type === 'healing' ? 'self' : undefined,
+        cast_token: `sheet:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`, 
       });
       const data = result.data;
       if (!data?.success) throw new Error(data?.error || `${spellName} could not be cast.`);
