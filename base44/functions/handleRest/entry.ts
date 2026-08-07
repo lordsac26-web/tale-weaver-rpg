@@ -1,4 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
+import { advanceWorldClock } from '../../shared/story/worldClock.ts';
 
 // Spell slot progression by class
 const SPELL_SLOTS_BY_CLASS = {
@@ -79,16 +81,24 @@ function getBardLevels(character) {
  * Handle Short and Long Rests
  * Restores HP, spell slots, hit dice, and class abilities per D&D 5E rules
  */
-Deno.serve(async (req) => {
+export default async function handleRest(req) {
   try {
   const base44 = createClientFromRequest(req);
-  const { character_id, rest_type, hit_dice_to_spend, had_food_water = true, location_safe = false, action, slot_levels } = await req.json();
+  const user = await base44.auth.me();
+  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  const { character_id, session_id, rest_request_id, rest_type, hit_dice_to_spend, had_food_water = true, location_safe = false, action, slot_levels } = await req.json();
 
-  // Server-authoritative rest execution: all entity access uses the service role so
-  // scheduled/server calls do not depend on a browser auth session.
+  // Server-authoritative rest execution: all entity access uses the service role.
   const dbClient = base44.asServiceRole;
   const character = await dbClient.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
+  if (!characterBelongsToUser(character, user)) return Response.json({ error: 'Character does not belong to the authenticated user' }, { status: 403 });
+  const session = session_id ? await dbClient.entities.GameSession.get(session_id) : null;
+  if (rest_type === 'long' && (!session || session.character_id !== character_id)) return Response.json({ error: 'A matching session is required for a long rest' }, { status: 400 });
+  const receiptToken = String(rest_request_id || '').slice(0, 120);
+  const restReceipts = Array.isArray(session?.world_state?.__rest_receipts) ? session.world_state.__rest_receipts : [];
+  const priorRest = rest_type === 'long' && receiptToken ? restReceipts.find((entry) => entry.token === receiptToken) : null;
+  if (priorRest?.response) return Response.json({ ...priorRest.response, already_processed: true });
 
   // ── ARCANE RECOVERY (Wizard, PHB p.115) ──────────────────────────────────
   // Once per day during a short rest, recover spell slots whose combined level
@@ -372,15 +382,17 @@ Deno.serve(async (req) => {
 
   const updatedChar = await dbClient.entities.Character.get(character_id);
   const healing = updates.hp_current != null ? updates.hp_current - (character.hp_current || 0) : 0;
-  
-  return Response.json({
-    character: updatedChar,
-    healing,
-    rest_type,
-    restorations,
-    narrative: rest_type === 'long' ? restNarrative : undefined
-  });
+  const response = { character: updatedChar, healing, rest_type, restorations, narrative: rest_type === 'long' ? restNarrative : undefined };
+  if (rest_type === 'long' && session) {
+    const completedAt = new Date().toISOString();
+    const clock = advanceWorldClock({ timeOfDay: session.time_of_day, worldState: session.world_state, elapsedHours: 8, completedAt });
+    const receipt = { token: receiptToken || `long-rest:${completedAt}`, response: { ...response, time_of_day: clock.time_of_day }, completed_at: completedAt };
+    clock.world_state.__rest_receipts = [...restReceipts.filter((entry) => entry.token !== receipt.token).slice(-24), receipt];
+    const updatedSession = await dbClient.entities.GameSession.update(session.id, { time_of_day: clock.time_of_day, world_state: clock.world_state });
+    return Response.json({ ...response, time_of_day: updatedSession.time_of_day, session: updatedSession });
+  }
+  return Response.json(response);
   } catch (error) {
     return Response.json({ error: error.message || 'Rest error' }, { status: 500 });
   }
-});
+}

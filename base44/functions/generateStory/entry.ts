@@ -24,15 +24,27 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { session_id, action, choice_index, custom_input, choice_context, request_id } = await req.json();
+    const { session_id, action, choice_index, choice_text, custom_input, choice_context, request_id } = await req.json();
 
-    const session = await base44.asServiceRole.entities.GameSession.get(session_id);
+    let session = await base44.asServiceRole.entities.GameSession.get(session_id);
     if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
 
     const character = await base44.asServiceRole.entities.Character.get(session.character_id);
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
     if (!characterBelongsToUser(character, user)) {
       return Response.json({ error: 'Session character does not belong to the authenticated user' }, { status: 403 });
+    }
+    const storyRequestId = String(request_id || '').slice(0, 120);
+    const selectedChoice = action === 'choice' ? String(choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`).trim() : '';
+    if (action === 'choice' && storyRequestId) {
+      const existing = (session.story_log || []).find((entry) => entry?.request_id === storyRequestId);
+      if (existing?.text) return Response.json({ narrative: existing.text, choices: existing.choices || [], ...(existing.arrow_recovery ? { arrow_recovery: { ...existing.arrow_recovery, already_processed: true } } : {}) });
+      if (!existing) {
+        await base44.asServiceRole.entities.GameSession.update(session_id, {
+          story_log: [...(session.story_log || []), { timestamp: new Date().toISOString(), action: 'choice', request_id: storyRequestId, player_choice: selectedChoice, text: '', choices: [] }].slice(-60),
+        });
+        session = await base44.asServiceRole.entities.GameSession.get(session_id);
+      }
     }
     const charLevel = character.level || 1;
 
@@ -182,9 +194,9 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
       };
     } 
     else if (action === 'choice') {
-      const playerAction = choice_index !== undefined 
-        ? `Player selected choice ${choice_index + 1}` 
-        : `Player custom action: ${custom_input}`;
+      const playerAction = selectedChoice || (choice_index !== undefined
+        ? `Player selected choice ${choice_index + 1}`
+        : `Player custom action: ${custom_input}`);
 
       prompt = `${baseContext}
 PLAYER ACTION: ${playerAction}
@@ -255,15 +267,6 @@ Write a gripping 1-2 paragraph combat narrative.`;
       };
     }
 
-    // A matching structured recovery receipt returns the original story payload
-    // without calling the narrator or appending a duplicate story entry.
-    const priorStory = action === 'choice' && request_id
-      ? (session.story_log || []).find((entry) => entry?.arrow_recovery?.receipt?.token === String(request_id).slice(0, 120))
-      : null;
-    if (priorStory) {
-      return Response.json({ narrative: priorStory.text, choices: priorStory.choices || [], arrow_recovery: { ...priorStory.arrow_recovery, already_processed: true } });
-    }
-
     // ====================== LLM CALL ======================
     let result = await base44.integrations.Core.InvokeLLM({
       prompt,
@@ -293,17 +296,16 @@ Write a gripping 1-2 paragraph combat narrative.`;
     }
 
     if (result.narrative) {
-      const updatedLog = [
-        ...(session.story_log || []),
-        {
-          timestamp: new Date().toISOString(),
-          action,
-          player_choice: custom_input ?? choice_index,
-          text: result.narrative,
-          choices: result.choices || [],
-          ...(result.arrow_recovery ? { arrow_recovery: result.arrow_recovery } : {})
-        }
-      ].slice(-60);
+      const completedEntry = {
+        timestamp: new Date().toISOString(), action,
+        ...(storyRequestId ? { request_id: storyRequestId } : {}),
+        player_choice: action === 'choice' ? selectedChoice : (custom_input ?? choice_index),
+        text: result.narrative, choices: result.choices || [],
+        ...(result.arrow_recovery ? { arrow_recovery: result.arrow_recovery } : {})
+      };
+      const updatedLog = action === 'choice' && storyRequestId
+        ? (session.story_log || []).map((entry) => entry?.request_id === storyRequestId ? completedEntry : entry).slice(-60)
+        : [...(session.story_log || []), completedEntry].slice(-60);
 
       const updateData = { story_log: updatedLog };
 

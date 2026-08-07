@@ -380,6 +380,7 @@ export default function Game() {
         session_id: sessionId,
         action: 'choice',
         choice_index: choiceIndex,
+        choice_text: choice.text,
         request_id: requestId,
         choice_context: { check: { success: skillSuccess === true }, recovery: choice.recovery || null },
         custom_input: (choice.skill_check
@@ -1872,6 +1873,8 @@ export default function Game() {
               const locationSafe = /town|inn|tavern|village|city|camp|home|sanctuary|temple/i.test(session?.current_location || '');
               const result = await base44.functions.invoke('handleRest', {
                 character_id: restCharId,
+                session_id: sessionId,
+                rest_request_id: `rest:${sessionId}:${restType}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
                 rest_type: restType,
                 hit_dice_to_spend: hitDiceToSpend,
                 location_safe: locationSafe,
@@ -1905,6 +1908,7 @@ export default function Game() {
               // campfire animation is still on screen — the dwell timer in RestModal keeps
               // the animation up for ~3s, letting it transition seamlessly into the new HP.
               setCharacter(prev => prev ? { ...prev, ...result.data.character } : result.data.character);
+              if (result.data.session) setSession(result.data.session);
 
               // Build a flavorful rest narration. Long rests come with a backend narrative;
               // short rests get a brief campfire-flavored intro generated here.
