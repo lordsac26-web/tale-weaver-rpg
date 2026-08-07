@@ -8,6 +8,10 @@ const TABLES = { Wizard: FULL, Sorcerer: FULL, Bard: FULL, Cleric: FULL, Druid: 
 const normalize = (value) => String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 const respond = (status, body) => ({ status, body });
 const ordinal = (level) => level === 1 ? '1st' : level === 2 ? '2nd' : level === 3 ? '3rd' : `${level}th`;
+const normalizeSpellSlots = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(([key, used]) => /^level_[1-9]\d*$/.test(key) && Number.isFinite(Number(used)) && Number(used) >= 0).map(([key, used]) => [key, Number(used)]));
+};
 
 function casterContribution(cls, sub, levels) {
   if (['Wizard', 'Sorcerer', 'Bard', 'Cleric', 'Druid'].includes(cls)) return levels;
@@ -38,8 +42,8 @@ function findKnownSpell(character, actionText, requestedName) {
   const action = normalize(actionText);
   return names.sort((a, b) => normalize(b).length - normalize(a).length).find((name) => action.includes(normalize(name))) || null;
 }
-function concentrationModifier(spell, now) {
-  const base = { id: `typed_spell_${normalize(spell.name).replace(/ /g, '_')}_${now}`, source: spell.name, effect: 'spell_concentration', concentration: true, applied_at: new Date(now).toISOString(), duration: spell.duration || 'Concentration' };
+function concentrationModifier(spell, now, characterId) {
+  const base = { id: `typed_spell_${normalize(spell.name).replace(/ /g, '_')}_${now}`, source: spell.name, effect: 'spell_concentration', concentration: true, caster_id: characterId, character_id: characterId, applied_at: new Date(now).toISOString(), duration: spell.duration || 'Concentration' };
   if (normalize(spell.name) === 'pass without trace') return { ...base, effect: 'skill_bonus', skill: 'Stealth', bonus: 10 };
   if (normalize(spell.name) === 'hunters mark') return { ...base, effect: 'hunters_mark', damage_bonus_dice: '1d6' };
   if (normalize(spell.name) === 'ensnaring strike') return { ...base, effect: 'ensnaring_strike_pending' };
@@ -82,14 +86,15 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   const prior = receipts.find((receipt) => receipt?.token === token);
   if (prior) {
     const maximum = maxSlots(character, prior.slot_level);
-    const used = Number((character.spell_slots || {})[`level_${prior.slot_level}`]) || 0;
-    return respond(200, { success: true, spell_detected: true, already_processed: true, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: character.spell_slots || {}, active_modifiers: character.active_modifiers || [], inventory: character.inventory || [], heal_amount: prior.heal_amount || 0, hp_current: character.hp_current });
+    const normalizedSlots = normalizeSpellSlots(character.spell_slots);
+    const used = Number(normalizedSlots[`level_${prior.slot_level}`]) || 0;
+    return respond(200, { success: true, spell_detected: true, already_processed: true, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: normalizedSlots, active_modifiers: character.active_modifiers || [], inventory: character.inventory || [], heal_amount: prior.heal_amount || 0, hp_current: character.hp_current });
   }
   const now = Date.now();
   const active = (character.active_modifiers || []).filter((modifier) => !modifier.expires_at || new Date(modifier.expires_at).getTime() > now);
   const existing = spell.concentration ? active.find((modifier) => normalize(modifier.source) === normalizedName && modifier.concentration) : null;
   if (existing) return respond(200, { success: true, spell_detected: true, already_active: true, spell_name: canonicalName, slot_level: selectedLevel, spell_slots: character.spell_slots || {}, active_modifiers: active });
-  let spellSlots = { ...(character.spell_slots || {}) };
+  let spellSlots = normalizeSpellSlots(character.spell_slots);
   let maximum = 0;
   let usedAfter = 0;
   if (selectedLevel > 0) {
@@ -101,7 +106,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
     usedAfter = used + 1;
   }
   let activeModifiers = active;
-  if (spell.concentration) activeModifiers = [...active.filter((modifier) => !modifier.concentration), concentrationModifier(spell, now)];
+  if (spell.concentration) activeModifiers = [...active.filter((modifier) => !modifier.concentration), concentrationModifier(spell, now, character_id)];
   const isPassWithoutTrace = normalizedName === 'pass without trace';
   const expiresAt = isPassWithoutTrace ? new Date(now + 60 * 60 * 1000).toISOString() : null;
   const structuredConditions = isPassWithoutTrace ? addStructuredCondition(character.conditions, buildStructuredCondition({ name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id, duration_type: 'timestamp', expires_at: expiresAt, concentration: true })) : (character.conditions || []);
@@ -132,6 +137,11 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   if (healAmount > 0) updates.hp_current = hpCurrent;
   if (grantedInventory) updates.inventory = grantedInventory;
   await base44.asServiceRole.entities.Character.update(character_id, updates);
+  if (spell.concentration) {
+    await base44.asServiceRole.entities.GameSession.update(session_id, {
+      world_state: { ...(session.world_state || {}), active_concentration: { spell_name: canonicalName, character_id, caster_id: character_id, duration: spell.duration || 'Concentration', applied_at: new Date(now).toISOString(), request_id: token } },
+    });
+  }
   if (session.in_combat && session.combat_state?.combat_id) {
     const combat = await base44.asServiceRole.entities.CombatLog.get(session.combat_state.combat_id);
     if (combat?.is_active) {

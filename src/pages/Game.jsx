@@ -275,18 +275,18 @@ export default function Game() {
   // Compute skill check modifier from character stats + proficiency.
   // Normalizes AI-generated labels like "STR Athletics" or "Athletics (Strength)"
   // to the canonical skill so the stat and proficiency lookups never miss.
-  const computeSkillModifier = (skillName) => {
-    if (!character) return 0;
+  const computeSkillModifier = (skillName, sourceCharacter = character) => {
+    if (!sourceCharacter) return 0;
     const { skill, stat } = resolveSkillCheck(skillName);
-    const base = stat ? calcStatMod(character[stat]) : 0;
+    const base = stat ? calcStatMod(sourceCharacter[stat]) : 0;
     if (!skill) return base; // raw ability check (no skill proficiency applies)
-    const prof = PROFICIENCY_BY_LEVEL[(character.level || 1) - 1] || 2;
+    const prof = PROFICIENCY_BY_LEVEL[(sourceCharacter.level || 1) - 1] || 2;
     // character.skills stores exact skill name as key, value is 'proficient', 'expert', or true (legacy)
-    const skillVal = (character.skills || {})[skill];
+    const skillVal = (sourceCharacter.skills || {})[skill];
     const isProficient = skillVal === 'proficient' || skillVal === true;
     const isExpert = skillVal === 'expert';
     const now = Date.now();
-    const activeSkillBonus = (character.active_modifiers || [])
+    const activeSkillBonus = (sourceCharacter.active_modifiers || [])
       .filter(m => m?.effect === 'skill_bonus' && canonicalSkillName(m.skill) === skill && (!m.expires_at || new Date(m.expires_at).getTime() > now))
       .reduce((sum, m) => sum + (Number(m.bonus) || 0), 0);
     return base + (isExpert ? prof * 2 : isProficient ? prof : 0) + activeSkillBonus;
@@ -351,23 +351,21 @@ export default function Game() {
 
   // Records the skill-check result entry in the narrative, then continues the
   // story by sending the outcome to the DM. Shared by both auto-roll and manual.
-  const continueChoiceWithRoll = async (choice, choiceIndex, rollData) => {
+  const continueChoiceWithRoll = async (choice, choiceIndex, requestId, preCast, rollData) => {
     const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, final, success } = rollData;
     const feedback = getSkillFeedback(choice.skill_check, success, final, choice.dc, raw);
     setNarrative(prev => [...prev, {
-      type: 'skill_check',
-      skill: choice.skill_check, dc: choice.dc, raw, allRolls, hadAdvantage, hadDisadvantage,
+      type: 'skill_check', skill: choice.skill_check, dc: choice.dc, raw, allRolls, hadAdvantage, hadDisadvantage,
       advantageSources, modifier, final, success, feedback, character_name: character?.name,
     }]);
-    const requestId = `story-choice:${sessionId}:${session?.story_log?.length || 0}:${choiceIndex}`;
-    await runChoiceStory(choice, choiceIndex, success, advantageSources, requestId);
+    await runChoiceStory(choice, choiceIndex, success, advantageSources, requestId, preCast);
   };
 
   // Sends the chosen action (and any resolved skill check) to the story engine.
-  const runChoiceStory = async (choice, choiceIndex, skillSuccess, tacticalSources, requestId) => {
+  const runChoiceStory = async (choice, choiceIndex, skillSuccess, tacticalSources, requestId, preCast = null) => {
     setStoryLoading(true);
     try {
-      const mechanicalCast = await maybeCastStorySpell(choice.text);
+      const mechanicalCast = preCast || await maybeCastStorySpell(choice.text, requestId);
       const mechanicalItem = await maybeUseStoryConsumable(choice.text);
       const mechanicsContext = [
         mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
@@ -418,18 +416,26 @@ export default function Game() {
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
     setChoices([]);
 
+    const requestId = `story-choice:${sessionId}:${session?.story_log?.length || 0}:${choiceIndex}`;
+    let preCast = null;
+    try { preCast = await maybeCastStorySpell(choice.text, requestId); }
+    catch (err) {
+      setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'That spell could not be cast, so the action was not resolved as buffed.'), success: false }]);
+      return;
+    }
+    const checkCharacter = preCast ? { ...character, spell_slots: preCast.spell_slots, active_modifiers: preCast.active_modifiers } : character;
+
     // No skill check — go straight to the story.
     if (!choice.skill_check || !choice.dc) {
-      const requestId = `story-choice:${sessionId}:${session?.story_log?.length || 0}:${choiceIndex}`;
-      await runChoiceStory(choice, choiceIndex, undefined, [], requestId);
+      await runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast);
       return;
     }
 
-    const equipAdv = getEquipmentAdvantage(character?.equipped, canonicalSkillName(choice.skill_check));
+    const equipAdv = getEquipmentAdvantage(checkCharacter?.equipped, canonicalSkillName(choice.skill_check));
     const tacticalAdv = getTacticalAttackContext(choice.text, choice.skill_check);
     const resolvedAdvantage = equipAdv.advantage || tacticalAdv.advantage;
     const resolvedAdvantageSources = [...(equipAdv.sources || []), ...(tacticalAdv.sources || [])];
-    const modifier = computeSkillModifier(choice.skill_check);
+    const modifier = computeSkillModifier(choice.skill_check, checkCharacter);
 
     // Manual mode: open the dice roller pre-configured for this check. The story
     // continues once the player rolls (onResolve). Cancel falls back to auto-roll.
@@ -437,12 +443,12 @@ export default function Game() {
       setPendingRoll({
         skill: choice.skill_check, dc: choice.dc, modifier,
         advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, advantageSources: resolvedAdvantageSources,
-        onResolve: (rollData) => { setPendingRoll(null); continueChoiceWithRoll(choice, choiceIndex, { ...rollData, advantageSources: resolvedAdvantageSources }); },
+        onResolve: (rollData) => { setPendingRoll(null); continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { ...rollData, advantageSources: resolvedAdvantageSources }); },
         onCancel: () => {
           setPendingRoll(null);
           const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(resolvedAdvantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
           const final = raw + modifier;
-          continueChoiceWithRoll(choice, choiceIndex, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: resolvedAdvantageSources, modifier, final, success: resolveCheckSuccess(raw, final, choice.dc) });
+          continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: resolvedAdvantageSources, modifier, final, success: resolveCheckSuccess(raw, final, choice.dc) });
         },
       });
       return;
@@ -451,7 +457,7 @@ export default function Game() {
     // Auto mode: roll immediately.
     const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(resolvedAdvantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
     const final = raw + modifier;
-    await continueChoiceWithRoll(choice, choiceIndex, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: resolvedAdvantageSources, modifier, final, success: resolveCheckSuccess(raw, final, choice.dc) });
+    await continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: resolvedAdvantageSources, modifier, final, success: resolveCheckSuccess(raw, final, choice.dc) });
   };
 
   // Intercept custom input — send to DM for adjudication first
@@ -531,7 +537,7 @@ export default function Game() {
   // Story-mode typed casts use one authoritative backend transaction for spell
   // recognition, canonical level/upcast validation, slot deduction, concentration,
   // and a same-rest idempotency receipt.
-  const maybeCastStorySpell = async (action) => {
+  const maybeCastStorySpell = async (action, requestId) => {
     const spellName = findTypedSpellName(action);
     if (!spellName) return null;
     const result = await base44.functions.invoke('castUtilitySpell', {
@@ -539,7 +545,7 @@ export default function Game() {
       character_id: character?.id,
       spell_name: spellName,
       action_text: action,
-      cast_token: `story:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`,
+      request_id: `story-spell:${requestId}`,
     });
     const data = result.data;
     if (!data?.success || !data?.spell_detected) throw new Error(data?.error || `${spellName} could not be cast.`);
@@ -560,10 +566,10 @@ export default function Game() {
   };
 
   // Continues a custom action's story after its (optional) skill check resolves.
-  const runProposalStory = async (action, checkResult, outcome, requestId) => {
+  const runProposalStory = async (action, checkResult, outcome, requestId, preCast = null) => {
     setStoryLoading(true);
     try {
-      const mechanicalCast = await maybeCastStorySpell(action);
+      const mechanicalCast = preCast || await maybeCastStorySpell(action, requestId);
       const mechanicalItem = await maybeUseStoryConsumable(action);
       const mechanicsContext = [
         mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
@@ -594,12 +600,12 @@ export default function Game() {
   };
 
   // Records a custom action's skill-check entry, then continues the story.
-  const continueProposalWithRoll = async (action, skill, dc, recovery, requestId, rollData) => {
+  const continueProposalWithRoll = async (action, skill, dc, recovery, requestId, preCast, rollData) => {
     const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, final, success } = rollData;
     const feedback = getSkillFeedback(skill, success, final, dc, raw);
     setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, final, success, feedback, character_name: character?.name }]);
     const checkResult = ` [Skill Check: ${skill} DC${dc} — ${success ? 'SUCCESS' : 'FAILURE'} (rolled ${final}${hadAdvantage ? ', with advantage' : ''}${hadDisadvantage ? ', with disadvantage' : ''}${advantageSources?.length ? `; source: ${advantageSources.join(', ')}` : ''})]`;
-    await runProposalStory(action, checkResult, { check: { success }, recovery: recovery || null }, requestId);
+    await runProposalStory(action, checkResult, { check: { success }, recovery: recovery || null }, requestId, preCast);
   };
 
   const executeProposedAction = async (proposal) => {
@@ -609,27 +615,34 @@ export default function Game() {
 
     setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
     setChoices([]);
+    let preCast = null;
+    try { preCast = await maybeCastStorySpell(action, requestId); }
+    catch (err) {
+      setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'That spell could not be cast, so the action was not resolved as buffed.'), success: false }]);
+      return;
+    }
+    const checkCharacter = preCast ? { ...character, spell_slots: preCast.spell_slots, active_modifiers: preCast.active_modifiers } : character;
 
     // No check required — straight to the story.
     if (!requires_check || !skill || !dc) {
-      await runProposalStory(action, '', { check: { success: true }, recovery: recovery || null }, requestId);
+      await runProposalStory(action, '', { check: { success: true }, recovery: recovery || null }, requestId, preCast);
       return;
     }
 
-    const equipAdv = getEquipmentAdvantage(character?.equipped, canonicalSkillName(skill));
-    const modifier = computeSkillModifier(skill);
+    const equipAdv = getEquipmentAdvantage(checkCharacter?.equipped, canonicalSkillName(skill));
+    const modifier = computeSkillModifier(skill, checkCharacter);
 
     // Manual mode: prompt the player to roll the configured dice.
     if (getManualRollEnabled()) {
       setPendingRoll({
         skill, dc, modifier,
         advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, advantageSources: equipAdv.sources,
-        onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, skill, dc, recovery, requestId, { ...rollData, advantageSources: equipAdv.sources }); },
+        onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { ...rollData, advantageSources: equipAdv.sources }); },
         onCancel: () => {
           setPendingRoll(null);
           const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
           const final = raw + modifier;
-          continueProposalWithRoll(action, skill, dc, recovery, requestId, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
+          continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
         },
       });
       return;
@@ -638,7 +651,7 @@ export default function Game() {
     // Auto mode.
     const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
     const final = raw + modifier;
-    await continueProposalWithRoll(action, skill, dc, recovery, requestId, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
+    await continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, final, success: resolveCheckSuccess(raw, final, dc) });
   };
 
   // ===== Free-text "Act" during combat — DM adjudicates first =====
