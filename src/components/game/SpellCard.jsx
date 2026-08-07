@@ -6,7 +6,7 @@ import {
   getCantripDamageDice
 } from './spellData';
 import { SpellTooltip } from './GameTooltip';
-import { useCanonicalSpell } from './contentDetails';
+import { getSpellDisplayFallback, mergeCanonicalDetail, useCanonicalSpell } from './contentDetails';
 
 const ATTACK_ICONS = {
   ranged_spell_attack: '🎯',
@@ -19,8 +19,9 @@ const ATTACK_ICONS = {
 
 export default function SpellCard({ spell, spellName, character, isKnown, isPrepared, onToggleKnown, onTogglePrepared, onCast, canCast, castLabel = 'Cast', castTitle, sourceClass, compact = false }) {
   const [showDetail, setShowDetail] = useState(false);
-  const localDetails = { ...(SPELL_DETAILS[spellName] || {}), ...(spell || {}) };
-  const { detail: details, isLoading: isDetailLoading, isError: isDetailError } = useCanonicalSpell(spellName, localDetails);
+  const localDetails = mergeCanonicalDetail(SPELL_DETAILS[spellName] || {}, spell || {});
+  const { detail: details, isLoading: isDetailLoading, isError: isDetailError } = useCanonicalSpell(spell, localDetails);
+  const displayDescription = details.description || details.effect_summary || getSpellDisplayFallback(details);
   const schoolColor = SCHOOL_COLORS[details.school] || 'text-slate-400';
   const dmgColor = DAMAGE_TYPE_COLORS[details.damage_type] || 'text-amber-300';
   const attackIcon = ATTACK_ICONS[details.attack_type || 'utility'];
@@ -72,6 +73,9 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
               {details.save_type && <span className="text-yellow-400 font-bold">{details.save_type.toUpperCase()} save</span>}
             </div>
           )}
+          {!compact && <p data-testid={`spell-description-${spellName}`} className="text-xs mt-1.5 line-clamp-2 whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
+            {isDetailLoading ? 'Loading spell details…' : displayDescription || (isDetailError ? 'Spell details could not be loaded. Try again.' : 'No information available.')}
+          </p>}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <button onClick={() => setShowDetail(v => !v)} 
@@ -128,7 +132,7 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
             )}
             {isDetailLoading ? <p className="text-xs mb-2" style={{ color: 'rgba(201,169,110,0.55)' }}>Loading spell details…</p> : (
               <p className="text-xs leading-relaxed mb-2 whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
-                {details.description || details.effect_summary || (isDetailError ? 'Spell details could not be loaded.' : 'No information available.')}
+                {displayDescription || (isDetailError ? 'Spell details could not be loaded. Try again.' : 'No information available.')}
               </p>
             )}
             {(details.higher_level_scaling || details.higher_levels) && (
