@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
-import { resolveArrowRecovery } from '../../shared/story/arrowRecovery.ts';
+import { resolveItemRecovery } from '../../shared/story/itemRecovery.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     const selectedChoice = action === 'choice' ? String(choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`).trim() : '';
     if (action === 'choice' && storyRequestId) {
       const existing = (session.story_log || []).find((entry) => entry?.request_id === storyRequestId);
-      if (existing?.text) return Response.json({ narrative: existing.text, choices: existing.choices || [], ...(existing.arrow_recovery ? { arrow_recovery: { ...existing.arrow_recovery, already_processed: true } } : {}) });
+      if (existing?.text) return Response.json({ narrative: existing.text, choices: existing.choices || [], ...(existing.item_recovery ? { item_recovery: { ...existing.item_recovery, already_processed: true } } : {}) });
       if (!existing) {
         await base44.asServiceRole.entities.GameSession.update(session_id, {
           story_log: [...(session.story_log || []), { timestamp: new Date().toISOString(), action: 'choice', request_id: storyRequestId, player_choice: selectedChoice, text: '', choices: [] }].slice(-60),
@@ -168,7 +168,7 @@ ${adultToneInstruction}
 4. How do I make this opening feel fresh and different from previous sessions?
 5. What sensory details and tone will pull the player in?
 
-Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension. Provide exactly 4 meaningful choices in the structured "choices" field ONLY (include skill checks + DCs on 2-3 of them). A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null. Set location_update. No combat in the opening scene.
+Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension. Provide exactly 4 meaningful choices in the structured "choices" field ONLY (include skill checks + DCs on 2-3 of them). A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; a specific tangible item must include {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise recovery must be null. Set location_update. No combat in the opening scene.
 
 CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" text itself. The narrative must be pure prose — never include lines like "1. ...", "2. ...", "What do you do?", or any enumerated options. The choices belong solely in the structured choices array.`;
 
@@ -183,7 +183,7 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
                            skill_check: { type: 'string' },
                            dc: { type: 'number' },
                            risk_level: { type: 'string', enum: ['low','medium','high','extreme'] },
-                           recovery: { type: 'object', properties: { type: { type: 'string', enum: ['arrows'] }, quantity: { type: 'number' } } }
+                           recovery: { type: 'object', properties: { type: { type: 'string', enum: ['arrows', 'item'] }, quantity: { type: 'number' }, item: { type: 'object', properties: { item_id: { type: 'string' }, name: { type: 'string' }, quantity: { type: 'number' }, stackable: { type: 'boolean' }, category: { type: 'string' }, rarity: { type: 'string' }, description: { type: 'string' }, source: { type: 'string' } } } } }
                          }
           }},
           location_update: { type: 'string' },
@@ -211,7 +211,7 @@ ${adultToneInstruction}
 5. Should combat be triggered? Only when dramatically justified.
 6. How do environment (season, time, weather) and current conditions influence the scene?
 
-Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null.
+Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; a specific tangible item must include {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise recovery must be null.
 
 CONDITION CONTRACT: condition_update is ONLY for a real mechanical status affecting the PLAYER CHARACTER. Set target to "player" only when the player is actually affected; use "other" for an enemy/NPC effect and "none" when no player condition changes. Never use placeholder labels such as "None", "Normal", or "N/A". Use the remove field when a prior player condition ends. Choose duration "scene", "combat", or "persistent" accurately. Enemy conditions that begin combat belong in that enemy's starting_conditions, never on the player.
 
@@ -276,13 +276,13 @@ Write a gripping 1-2 paragraph combat narrative.`;
     });
 
     // ====================== POST-PROCESSING ======================
-    // Arrow recovery is allowed only from the structured choice/recovery metadata
-    // passed by the client. Narrative text is never parsed into inventory.
-    const arrowRecovery = action === 'choice'
-      ? await resolveArrowRecovery({ base44, user, sessionId: session_id, characterId: character.id, requestId: request_id, outcome: choice_context })
+    // Inventory rewards are allowed only from structured recovery metadata passed
+    // by the client. Narrative text and generic searches can never grant items.
+    const itemRecovery = action === 'choice'
+      ? await resolveItemRecovery({ base44, user, sessionId: session_id, characterId: character.id, requestId: request_id, outcome: choice_context })
       : { applied: false };
-    if (arrowRecovery.applied) {
-      result = { ...result, arrow_recovery: { recovered_quantity: arrowRecovery.recovered_quantity, arrow_count: arrowRecovery.arrow_count, already_processed: !!arrowRecovery.already_processed, receipt: arrowRecovery.receipt } };
+    if (itemRecovery.applied) {
+      result = { ...result, item_recovery: { ...itemRecovery.item_recovery, already_processed: !!itemRecovery.already_processed } };
     }
 
     // Authoritatively reconcile the combat flag regardless of whether the LLM
@@ -301,7 +301,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
         ...(storyRequestId ? { request_id: storyRequestId } : {}),
         player_choice: action === 'choice' ? selectedChoice : (custom_input ?? choice_index),
         text: result.narrative, choices: result.choices || [],
-        ...(result.arrow_recovery ? { arrow_recovery: result.arrow_recovery } : {})
+        ...(result.item_recovery ? { item_recovery: result.item_recovery } : {})
       };
       const updatedLog = action === 'choice' && storyRequestId
         ? (session.story_log || []).map((entry) => entry?.request_id === storyRequestId ? completedEntry : entry).slice(-60)

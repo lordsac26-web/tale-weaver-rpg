@@ -389,7 +389,7 @@ export default function Game() {
 
       if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP earned!` }]);
-      if (data.arrow_recovery && !data.arrow_recovery.already_processed) setNarrative(prev => [...prev, { type: 'xp_gain', text: `🏹 Recovered ${data.arrow_recovery.recovered_quantity} arrows (${data.arrow_recovery.arrow_count} total).` }]);
+      if (data.item_recovery && !data.item_recovery.already_processed) setNarrative(prev => [...prev, { type: 'xp_gain', text: data.item_recovery.inventory_result === 'already_owned' ? `📦 ${data.item_recovery.item_name} was already secured.` : `📦 Recovered ${data.item_recovery.quantity} ${data.item_recovery.item_name}${data.item_recovery.quantity === 1 ? '' : 's'}.` }]);
       if (data.hp_change) {
         setNarrative(prev => [...prev, { type: 'xp_gain', text: data.hp_change > 0 ? `❤️ Healed +${data.hp_change} HP` : `💔 Took ${Math.abs(data.hp_change)} damage` }]);
         if (typeof data.hp_current === 'number') setCharacter(prev => prev ? { ...prev, hp_current: data.hp_current } : prev);
@@ -579,7 +579,7 @@ export default function Game() {
       const data = result.data;
       if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);
-      if (data.arrow_recovery && !data.arrow_recovery.already_processed) setNarrative(prev => [...prev, { type: 'xp_gain', text: `🏹 Recovered ${data.arrow_recovery.recovered_quantity} arrows (${data.arrow_recovery.arrow_count} total).` }]);
+      if (data.item_recovery && !data.item_recovery.already_processed) setNarrative(prev => [...prev, { type: 'xp_gain', text: data.item_recovery.inventory_result === 'already_owned' ? `📦 ${data.item_recovery.item_name} was already secured.` : `📦 Recovered ${data.item_recovery.quantity} ${data.item_recovery.item_name}${data.item_recovery.quantity === 1 ? '' : 's'}.` }]);
       if (data.hp_change) {
         setNarrative(prev => [...prev, { type: 'xp_gain', text: data.hp_change > 0 ? `❤️ Healed +${data.hp_change} HP` : `💔 Took ${Math.abs(data.hp_change)} damage` }]);
         if (typeof data.hp_current === 'number') setCharacter(prev => prev ? { ...prev, hp_current: data.hp_current } : prev);

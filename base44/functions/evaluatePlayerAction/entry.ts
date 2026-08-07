@@ -115,7 +115,7 @@ Return a JSON object with these fields only:
 - dc: integer (5-25 range) or null
 - reasoning: string (1-2 sentences of in-character GM flavor text explaining the ruling)
 - risk_level: string ("low", "medium", "high", or "extreme")
-- recovery: object or null — only for a genuine arrow-recovery action; use { type: "arrows", quantity: integer 1-20 }. Never infer this from descriptive prose.`;
+- recovery: object or null — only for a genuine structured recovery action. Use { type: "arrows", quantity: integer 1-20 } for arrows, or { type: "item", item: { item_id?, name, quantity, stackable, category, rarity, description, source } } for a specific tangible item that the scene explicitly establishes. Never infer any recovery from descriptive prose, ambiguous mentions, or generic searches.`;
 
     const result = await base44.integrations.Core.InvokeLLM({
       prompt,
@@ -127,7 +127,7 @@ Return a JSON object with these fields only:
           dc: { type: 'number' },
           reasoning: { type: 'string' },
           risk_level: { type: 'string' },
-          recovery: { type: 'object', properties: { type: { type: 'string' }, quantity: { type: 'number' } } }
+          recovery: { type: 'object', properties: { type: { type: 'string', enum: ['arrows', 'item'] }, quantity: { type: 'number' }, item: { type: 'object', properties: { item_id: { type: 'string' }, name: { type: 'string' }, quantity: { type: 'number' }, stackable: { type: 'boolean' }, category: { type: 'string' }, rarity: { type: 'string' }, description: { type: 'string' }, source: { type: 'string' } } } } }
           },
         required: ['requires_check', 'reasoning', 'risk_level']
       }
