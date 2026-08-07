@@ -6,6 +6,7 @@ import {
   getCantripDamageDice
 } from './spellData';
 import { SpellTooltip } from './GameTooltip';
+import { useCanonicalSpell } from './contentDetails';
 
 const ATTACK_ICONS = {
   ranged_spell_attack: '🎯',
@@ -18,7 +19,8 @@ const ATTACK_ICONS = {
 
 export default function SpellCard({ spell, spellName, character, isKnown, isPrepared, onToggleKnown, onTogglePrepared, onCast, canCast, castLabel = 'Cast', castTitle, sourceClass, compact = false }) {
   const [showDetail, setShowDetail] = useState(false);
-  const details = SPELL_DETAILS[spellName] || spell || {};
+  const localDetails = { ...(SPELL_DETAILS[spellName] || {}), ...(spell || {}) };
+  const { detail: details, isLoading: isDetailLoading, isError: isDetailError } = useCanonicalSpell(spellName, localDetails);
   const schoolColor = SCHOOL_COLORS[details.school] || 'text-slate-400';
   const dmgColor = DAMAGE_TYPE_COLORS[details.damage_type] || 'text-amber-300';
   const attackIcon = ATTACK_ICONS[details.attack_type || 'utility'];
@@ -39,7 +41,7 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
         <span className="text-base flex-shrink-0 mt-0.5">{attackIcon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <SpellTooltip name={spellName} spellData={spell} position="top">
+            <SpellTooltip name={spellName} spellData={details} position="top">
               <span className={`text-sm font-fantasy font-medium ${isPrepared ? 'text-glow-gold' : isKnown ? 'text-amber-200' : 'text-slate-300'}`} style={{ color: isPrepared ? '#f0c040' : undefined }}>
                 {spellName}
               </span>
@@ -124,12 +126,14 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
             {details.effect_summary && (
               <p className="text-xs leading-relaxed font-medium mb-2" style={{ color: 'rgba(147,197,253,0.8)' }}>⚡ {details.effect_summary}</p>
             )}
-            <p className="text-xs leading-relaxed mb-2 whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
-              {details.description || 'No description available.'}
-            </p>
-            {details.higher_level_scaling && (
+            {isDetailLoading ? <p className="text-xs mb-2" style={{ color: 'rgba(201,169,110,0.55)' }}>Loading spell details…</p> : (
+              <p className="text-xs leading-relaxed mb-2 whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
+                {details.description || details.effect_summary || (isDetailError ? 'Spell details could not be loaded.' : 'No information available.')}
+              </p>
+            )}
+            {(details.higher_level_scaling || details.higher_levels) && (
               <p className="text-xs italic mb-1" style={{ color: 'rgba(240,192,64,0.7)' }}>
-                <strong>At Higher Levels:</strong> {details.higher_level_scaling}
+                <strong>At Higher Levels:</strong> {details.higher_level_scaling || details.higher_levels}
               </p>
             )}
             <div className="flex flex-wrap gap-2 mt-2 text-xs" style={{ color: 'rgba(180,140,90,0.45)' }}>

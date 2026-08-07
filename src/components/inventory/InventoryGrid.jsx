@@ -7,6 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { hasUsableItemContent, useCanonicalMagicItem } from '@/components/game/contentDetails';
 
 /**
  * Enhanced InventoryGrid with detailed item information,
@@ -208,6 +209,7 @@ export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, on
 
 // Item Details Modal Component
 function ItemDetailsModal({ item, onClose, onEquip, onUse, onSell, onDelete, isEquipped }) {
+  const { detail, isLoading: isDetailLoading } = useCanonicalMagicItem(item);
   const rarityColors = {
     common: '#e8d5b7',
     uncommon: '#86efac',
@@ -248,25 +250,27 @@ function ItemDetailsModal({ item, onClose, onEquip, onUse, onSell, onDelete, isE
               {item.icon || '📦'}
             </div>
             <div className="flex-1">
-              <div className="text-sm capitalize mb-1" style={{ color: 'rgba(180,140,90,0.5)' }}>{item.category}</div>
-              <div className="text-sm" style={{ color: '#86efac' }}>Weight: {item.weight || 0} lb</div>
-              <div className="text-sm" style={{ color: '#fbbf24' }}>Value: {item.value || 0} gp</div>
+              <div className="text-sm capitalize mb-1" style={{ color: 'rgba(180,140,90,0.5)' }}>{detail.category || item.category}</div>
+              <div className="text-sm" style={{ color: '#86efac' }}>Weight: {detail.weight || item.weight || 0} lb</div>
+              <div className="text-sm" style={{ color: '#fbbf24' }}>Value: {detail.value || item.value || 0} gp</div>
             </div>
           </div>
 
           {/* Description */}
           <div className="p-3 rounded-xl" style={{ background: 'rgba(15,10,5,0.6)', border: '1px solid rgba(180,140,90,0.1)' }}>
-            <p className="text-sm leading-relaxed" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
-              {item.description || 'No description available.'}
-            </p>
+            {isDetailLoading ? <p className="text-sm" style={{ color: 'rgba(232,213,183,0.7)' }}>Loading item details…</p> : detail.description ? (
+              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>{detail.description}</p>
+            ) : !hasUsableItemContent(detail) && <p className="text-sm" style={{ color: 'rgba(232,213,183,0.7)' }}>No information available.</p>}
           </div>
 
+          {(detail.damage || detail.damage_dice || detail.armor_class) && <div className="text-sm" style={{ color: 'rgba(232,213,183,0.7)' }}>{detail.damage || detail.damage_dice}{detail.armor_class ? `${detail.damage || detail.damage_dice ? ' · ' : ''}AC ${detail.armor_class}` : ''}</div>}
+
           {/* Properties */}
-          {item.properties && item.properties.length > 0 && (
+          {detail.properties && detail.properties.length > 0 && (
             <div>
               <div className="text-xs mb-2 font-fantasy tracking-widest" style={{ color: 'rgba(180,140,90,0.4)' }}>PROPERTIES</div>
               <div className="flex flex-wrap gap-2">
-                {item.properties.map((prop, idx) => (
+                {detail.properties.map((prop, idx) => (
                   <span key={idx} className="text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(60,40,10,0.6)', color: '#f0c040', border: '1px solid rgba(201,169,110,0.2)' }}>
                     {prop}
                   </span>

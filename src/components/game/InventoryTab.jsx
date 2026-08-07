@@ -8,6 +8,7 @@ import {
 } from './itemData';
 import { motion, AnimatePresence } from 'framer-motion';
 import { resolveItemBonuses } from './itemBonuses';
+import { hasUsableItemContent, useCanonicalMagicItem } from './contentDetails';
 
 const RARITIES = Object.keys(ITEM_RARITY);
 
@@ -152,11 +153,12 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
   const isEquipped = canEquip && Object.entries(equipped).some(([s, i]) => i && s !== 'weapon' && i.name === item.name);
   const isUnidentifiedMagic = item.is_magic && !item.is_identified;
   const isConsumable = isConsumableItem(item);
+  const rowStyle = isEquipped
+    ? { background: 'rgba(10,35,12,0.6)', border: `1px solid ${rarity.border}` }
+    : { background: 'rgba(15,10,5,0.55)', border: '1px solid rgba(180,140,90,0.1)' };
 
   return (
-    <div className="rounded-xl overflow-hidden transition-all"
-      style={isEquipped ? { background: 'rgba(10,35,12,0.6)', border: `1px solid ${rarity.border}` } :
-        { background: 'rgba(15,10,5,0.55)', border: `1px solid rgba(180,140,90,0.1)` }}>
+    <div className="rounded-xl overflow-hidden transition-all" style={rowStyle}>
       <div className="flex items-center gap-2 p-2.5">
         <span className="text-base flex-shrink-0">{CATEGORY_ICONS[item.category] || '📦'}</span>
         <div className="flex-1 min-w-0">

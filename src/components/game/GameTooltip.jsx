@@ -130,9 +130,8 @@ export default function GameTooltip({ content, title, subtitle, icon, position =
 
 /** Tooltip for a spell by name */
 export function SpellTooltip({ name, spellData, children, position = 'top' }) {
-  // Prefer the curated local detail, but fall back to canonical Spell entity data
-  // passed by SpellCard so every valid spell still has a hover description.
-  const spell = SPELL_DETAILS[name] || spellData;
+  // A resolved canonical record from SpellCard takes priority; local data is only a fast fallback.
+  const spell = spellData || SPELL_DETAILS[name];
   if (!spell) return children;
   const desc = resolveDescription(spell, 'No description available.');
   const schoolColor = SCHOOL_COLORS[spell.school] || '';

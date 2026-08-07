@@ -278,7 +278,7 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
                 const canCast = !castingSpell && (spellLvl === 0 || findLowestAvailableSlot(spellLvl) !== null);
                 return (
                   <div key={s.name} className={`transition-all ${castFlash === s.name ? 'crit-flash rounded-xl' : ''}`}>
-                    <SpellCard spellName={s.name} character={spellCardCharacter} isKnown isPrepared
+                    <SpellCard spell={s} spellName={s.name} character={spellCardCharacter} isKnown isPrepared
                       onTogglePrepared={togglePrepared}
                       onCast={spellLvl > 0 ? handleCastSpell : undefined}
                       canCast={canCast}
@@ -296,7 +296,7 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
               spells={knownList} icon={<Star className="w-3 h-3" />}
               colorClass="text-amber-400/70" levelRange={levelRange}
               renderCard={(s) => (
-                <SpellCard key={s.name} spellName={s.name} character={spellCardCharacter}
+                <SpellCard key={s.name} spell={s} spellName={s.name} character={spellCardCharacter}
                   isKnown isPrepared={false}
                   onTogglePrepared={togglePrepared}
                   sourceClass={isMulticlass ? s.sourceClass : undefined} />
@@ -309,7 +309,7 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
               spells={availableList} icon={<BookOpen className="w-3 h-3" />}
               colorClass="text-slate-400" levelRange={levelRange}
               renderCard={(s) => (
-                <SpellCard key={s.name} spellName={s.name} character={spellCardCharacter}
+                <SpellCard key={s.name} spell={s} spellName={s.name} character={spellCardCharacter}
                   isKnown={false} isPrepared={false}
                   onToggleKnown={toggleKnown}
                   sourceClass={isMulticlass ? s.sourceClass : undefined} />
