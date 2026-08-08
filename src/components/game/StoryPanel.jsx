@@ -5,6 +5,7 @@ import SkillCheckResult from './SkillCheckResult';
 import MicButton from './MicButton';
 import { stopAllNarration } from './narrationControl';
 import { stripEmbeddedChoices } from './stripEmbeddedChoices';
+import AskDMDialog from './AskDMDialog';
 import { base44 } from '@/api/base44Client';
  
 const RISK_STYLES = {
@@ -23,8 +24,9 @@ function truncateForNarration(text, maxChars = 800) {
   return lastPeriod > 100 ? slice.slice(0, lastPeriod + 1) : slice;
 }
  
-export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit }) {
+export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit, sessionId }) {
   const endRef = useRef(null);
+  const [showAskDM, setShowAskDM] = useState(false);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [isNarrating, setIsNarrating] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -584,6 +586,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
               />
             </div>
             <MicButton value={customInput} onTranscript={setCustomInput} disabled={loading} />
+            <button onClick={() => setShowAskDM(true)} className="px-3 py-2.5 rounded-xl text-xs flex-shrink-0" style={{ border: '1px solid rgba(110,150,220,0.35)', color: 'rgba(185,210,255,0.9)', background: 'rgba(20,35,65,0.5)' }}>Ask the DM</button>
             <button onClick={onCustomSubmit} disabled={!customInput.trim()}
               className="px-5 py-2.5 rounded-xl text-sm btn-fantasy disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
               style={{ fontSize: '0.85rem', letterSpacing: '0.05em', minHeight: '2.75rem' }}>
@@ -592,6 +595,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
           </div>
         </div>
       </div>
+      {showAskDM && <AskDMDialog sessionId={sessionId} onClose={() => setShowAskDM(false)} />}
     </div>
   );
 }
