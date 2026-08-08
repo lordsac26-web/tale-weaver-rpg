@@ -48,6 +48,11 @@ export default async function testNarrativeContinuityRegression(req) {
     cases.push({ name: 'exact Craig narration polish accepts only My mind and Your mind variants with the natural corrected sentence', pass: malformedVariants.every((malformed) => { const polished = malformed.replace(malformed, corrected); return !polished.includes(malformed) && polished === corrected && polished.split(corrected).length === 2; }) });
     const malformedGrammar = ['storm of fully rested', 'mocking your full-rest clarity', 'the fully rested presses against Craig'];
     cases.push({ name: 'grammar regression rejects adjective phrases substituted as nouns', pass: malformedGrammar.every((text) => /storm of fully rested|mocking your full-rest clarity|the fully rested/i.test(text)) && !/storm of fully rested|mocking your full-rest clarity|the fully rested/i.test(corrected) });
+    const validNullRootCombat = { id: 'protected-combat', character_id: null, session_id: 'protected-session', current_turn_index: 0, combatants: [{ type: 'player', id: 'protected-character', initiative: 18, hp_current: 44, hp_max: 44, conditions: [{ name: 'Alert' }] }] };
+    const exactPlayerLink = (combat, characterId) => (combat.combatants || []).filter((entry) => entry.type === 'player').length === 1 && (combat.combatants || []).some((entry) => entry.type === 'player' && entry.id === characterId);
+    cases.push({ name: 'null CombatLog root character_id passes through exact session and player-combatant linkage', pass: validNullRootCombat.character_id === null && validNullRootCombat.session_id === 'protected-session' && exactPlayerLink(validNullRootCombat, 'protected-character') });
+    const wrongPlayerCombat = { ...validNullRootCombat, combatants: [{ ...validNullRootCombat.combatants[0], id: 'wrong-character' }] };
+    cases.push({ name: 'wrong player combatant id fails closed even when CombatLog root character_id is null', pass: !exactPlayerLink(wrongPlayerCombat, 'protected-character') });
     const passed = cases.filter(entry => entry.pass).length;
     return Response.json({ passed, failed: cases.length - passed, total: cases.length, all_pass: passed === cases.length, results: cases, cleanup, live_state: { protected_ids: ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49'], read_or_mutated: false } });
   } catch (error) {
