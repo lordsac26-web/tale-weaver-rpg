@@ -1014,13 +1014,9 @@ export default function Game() {
       return succeeded;
     }
     try {
-      const hpBefore = character?.hp_current;
       const data = await castSheetSpell({ sessionId, characterId: character?.id, spellName, spellPayload });
-      setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, ...(typeof data.hp_current === 'number' ? { hp_current: data.hp_current } : {}), ...(data.inventory ? { inventory: data.inventory } : {}) } : prev);
-      const castMessage = spellPayload?.attack_type === 'healing'
-        ? `Healed ${data.heal_amount} HP (${hpBefore} → ${data.hp_current}); level-${data.slot_level} slot consumed.`
-        : `${spellName} cast; level-${data.slot_level} slot consumed.`;
-      setNarrative(prev => [...prev, { type: 'roll_result', text: castMessage, success: true }]);
+      await loadState();
+      setNarrative(prev => [...prev, { type: 'roll_result', text: `Cure Wounds rolled ${data.roll_total}; HP ${data.hp_before} → ${data.hp_after}; level-${data.slot_level} slot consumed.`, success: true }]);
       setShowCharSheet(false);
       return true;
     } catch (err) {

@@ -4,7 +4,7 @@ export async function castSheetSpell({ sessionId, characterId, spellName, spellP
   const isHealing = spellPayload?.attack_type === 'healing';
   if (!isHealing) throw new Error(`${spellName} needs a combat target and cannot be cast from this sheet.`);
 
-  const requestId = `sheet:${sessionId || 'character'}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+  const requestId = crypto.randomUUID();
   const result = await base44.functions.invoke('castCharacterSheetHealing', {
     session_id: sessionId || undefined,
     character_id: characterId,

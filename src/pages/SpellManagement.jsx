@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Sparkles, Circle, CheckCircle2, Loader2, Book, Zap, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
+import { updateBookkeepingSlot, resetBookkeepingSlots } from '@/lib/slotBookkeeping';
 
 const SPELL_SLOTS_BY_LEVEL = {
   1: [2, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -109,7 +110,7 @@ export default function SpellManagement() {
 
   const handleUseSpellSlot = async (level) => {
     if (usedSlotsFor(level) >= maxSlots[level - 1]) return;
-    const newSlots = { ...canonicalSlots(), [`level_${level}`]: usedSlotsFor(level) + 1 };
+    const newSlots = updateBookkeepingSlot({ slots: canonicalSlots(), level, maxSlots: maxSlots[level - 1], usedSlots: usedSlotsFor(level), slotIndex: maxSlots[level - 1] - usedSlotsFor(level) - 1 });
     setSaving(true);
     await base44.entities.Character.update(characterId, { spell_slots: newSlots });
     setCharacter({ ...character, spell_slots: newSlots });
@@ -118,7 +119,7 @@ export default function SpellManagement() {
 
   const restoreSlot = async (level) => {
     if (usedSlotsFor(level) <= 0) return;
-    const newSlots = { ...canonicalSlots(), [`level_${level}`]: Math.max(0, usedSlotsFor(level) - 1) };
+    const newSlots = updateBookkeepingSlot({ slots: canonicalSlots(), level, maxSlots: maxSlots[level - 1], usedSlots: usedSlotsFor(level), operation: 'restore' });
     setSaving(true);
     await base44.entities.Character.update(characterId, { spell_slots: newSlots });
     setCharacter({ ...character, spell_slots: newSlots });
@@ -126,7 +127,7 @@ export default function SpellManagement() {
   };
 
   const restoreAllSlots = async () => {
-    const resetSlots = Object.fromEntries(Array.from({ length: 9 }, (_, idx) => [`level_${idx + 1}`, 0]));
+    const resetSlots = resetBookkeepingSlots();
     setSaving(true);
     await base44.entities.Character.update(characterId, { spell_slots: resetSlots });
     setCharacter({ ...character, spell_slots: resetSlots });
@@ -222,7 +223,7 @@ export default function SpellManagement() {
                         background: i < used ? 'rgba(30,15,50,0.6)' : 'rgba(140,80,220,0.5)',
                         border: `1px solid ${i < used ? 'rgba(100,60,180,0.3)' : 'rgba(192,132,252,0.6)'}`,
                         boxShadow: i >= used ? '0 0 8px rgba(192,132,252,0.3)' : 'none',
-                      }} />
+                      }}>{i < used ? 'Restore Slot' : 'Use Slot'}</button>
                   ))}
                 </div>
                 <div className="text-xs mt-1 font-fantasy" style={{ color: used > 0 ? 'rgba(205,170,120,0.8)' : '#c084fc' }}>

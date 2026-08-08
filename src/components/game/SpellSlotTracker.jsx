@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Zap, RotateCcw, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getMulticlassSpellSlots, getSpellcastingEntries } from './multiclassUtils';
+import { updateBookkeepingSlot, resetBookkeepingSlots } from '@/lib/slotBookkeeping';
 import {
   Tooltip,
   TooltipContent,
@@ -32,12 +33,11 @@ export default function SpellSlotTracker({ character, onUpdateSlots, compact = f
     const usedSlots = currentSlots[levelKey] || 0;
     const remainingSlots = maxSlots - usedSlots;
     
-    const newUsed = slotIndex < remainingSlots ? usedSlots + 1 : Math.max(0, usedSlots - 1);
-    onUpdateSlots({ ...currentSlots, [levelKey]: newUsed });
+    onUpdateSlots(updateBookkeepingSlot({ slots: currentSlots, level, maxSlots, usedSlots, slotIndex }));
   };
 
   const restoreAllSlots = () => {
-    onUpdateSlots({});
+    onUpdateSlots(resetBookkeepingSlots({}));
   };
 
   // Warlock: All slots recover on short rest
@@ -153,17 +153,15 @@ export default function SpellSlotTracker({ character, onUpdateSlots, compact = f
                               borderColor: 'rgba(100,60,160,0.25)',
                               boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)',
                             }}>
-                            {isAvailable && (
-                              <Zap className="w-3 h-3 mx-auto" style={{ color: '#dfc8ff' }} />
-                            )}
+                            <span className="text-[9px] font-fantasy leading-none">{isAvailable ? 'Use Slot' : 'Restore Slot'}</span>
                           </motion.button>
                         </TooltipTrigger>
                         <TooltipContent style={{ background: 'rgba(10,5,2,0.95)', border: '1px solid rgba(180,140,90,0.2)', color: '#e8d5b7' }}>
                           <p className="font-fantasy text-xs">
-                            {isAvailable ? `Available slot ${slotIdx + 1}` : `Used slot ${slotIdx + 1} (click to recover)`}
+                            {isAvailable ? 'Use Slot (bookkeeping only)' : 'Restore Slot (bookkeeping only)'}
                           </p>
                           <p className="text-xs mt-1" style={{ color: 'rgba(232,213,183,0.6)' }}>
-                            Level {level} spell slot
+                            Bookkeeping only — does not resolve spell mechanics.
                           </p>
                         </TooltipContent>
                       </Tooltip>

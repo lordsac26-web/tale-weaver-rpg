@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import InventoryTab from './InventoryTab';
 import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_MAP, CONDITIONS, getRacialAbilities } from './gameData';
 import { base44 } from '@/api/base44Client';
+import { updateBookkeepingSlot, resetBookkeepingSlots } from '@/lib/slotBookkeeping';
 import SpellbookTab from './SpellbookTab';
 import { SkillTooltip, FeatureTooltip, ConditionTooltip } from './GameTooltip';
 import SkillProficiencyRow from './SkillProficiencyRow';
@@ -309,12 +310,11 @@ function CombatTab({ character, profBonus, isCaster, onUpdate }) {
   const toggleSlot = (level, slotIdx) => {
     const levelKey = `level_${level + 1}`;
     const current = usedSlots[levelKey] || 0;
-    const newUsed = slotIdx < current ? slotIdx : slotIdx + 1;
-    onUpdate({ spell_slots: { ...usedSlots, [levelKey]: Math.min(newUsed, maxSlots[level]) } });
+    onUpdate({ spell_slots: updateBookkeepingSlot({ slots: usedSlots, level: level + 1, maxSlots: maxSlots[level], usedSlots: current, slotIndex: slotIdx, orientation: 'usedFirst' }) });
   };
  
   const restoreAllSlots = () => {
-    onUpdate({ spell_slots: {} });
+    onUpdate({ spell_slots: resetBookkeepingSlots({}) });
   };
  
   const equippedSlots = Object.entries(EQUIP_SLOT_META).filter(([slot]) => equipped[slot]);
@@ -382,7 +382,7 @@ function CombatTab({ character, profBonus, isCaster, onUpdate }) {
                             boxShadow: '0 0 6px rgba(140,80,220,0.3)'
                           }}
                           aria-label={isUsed ? `Restore ${SLOT_LEVEL_NAMES[levelIdx]} slot` : `Use ${SLOT_LEVEL_NAMES[levelIdx]} slot`}
-                          title={isUsed ? 'Restore Slot — manual bookkeeping only' : 'Use Slot — manual bookkeeping only'} />
+                          title={isUsed ? 'Restore Slot — Bookkeeping only — does not resolve spell mechanics.' : 'Use Slot — Bookkeeping only — does not resolve spell mechanics.'}>{isUsed ? 'Restore Slot' : 'Use Slot'}</button>
                       );
                     })}
                   </div>

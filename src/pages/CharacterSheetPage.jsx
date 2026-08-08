@@ -103,14 +103,11 @@ export default function CharacterSheetPage() {
   };
 
   const handleSheetCast = async (spellName, spellPayload) => {
-    const hpBefore = character.hp_current;
     try {
       const data = await castSheetSpell({ sessionId, characterId: character.id, spellName, spellPayload });
-      setCharacter(prev => ({ ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, hp_current: data.hp_current, inventory: data.inventory || prev.inventory }));
-      const message = spellPayload?.attack_type === 'healing'
-        ? `Healed ${data.heal_amount} HP (${hpBefore} → ${data.hp_current}); level-${data.slot_level} slot consumed.`
-        : `${spellName} cast; level-${data.slot_level} slot consumed.`;
-      setCastStatus({ success: true, message });
+      const chars = await base44.entities.Character.filter({ id: character.id });
+      if (chars[0]) setCharacter(chars[0]);
+      setCastStatus({ success: true, message: `Cure Wounds rolled ${data.roll_total}; HP ${data.hp_before} → ${data.hp_after}; level-${data.slot_level} slot consumed.` });
       return true;
     } catch (error) {
       setCastStatus({ success: false, message: error.message });
