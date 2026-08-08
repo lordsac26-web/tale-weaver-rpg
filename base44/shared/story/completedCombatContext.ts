@@ -62,8 +62,16 @@ export function findDeadCombatantContradictions(narrative, context) {
   return contradictions;
 }
 
+const safeNarrativeName = (name, index) => {
+  const cleaned = String(name || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  return cleaned || `Defeated enemy ${index + 1}`;
+};
+
 export function factualAftermathFallback(context) {
-  const dead = context?.defeated_enemies || [];
-  const names = dead.map(entry => entry.name).join(' and ') || 'the fallen enemies';
-  return `The battlefield is still. ${names} ${dead.length === 1 ? 'lies' : 'lie'} motionless at 0 HP, unable to act or speak. With the threat ended, attention turns to the living witnesses and the consequences of the fight.`;
+  const dead = Array.isArray(context?.defeated_enemies) ? context.defeated_enemies : [];
+  const bodyFacts = dead.map((entry, index) => `${safeNarrativeName(entry.name, index)} is dead and motionless at 0 HP.`);
+  const summary = bodyFacts.length
+    ? bodyFacts.join(' ')
+    : 'The battlefield is still; no defeated enemy is recorded.';
+  return `${summary} The living magistrate and witnesses can now address the player’s next action.`;
 }

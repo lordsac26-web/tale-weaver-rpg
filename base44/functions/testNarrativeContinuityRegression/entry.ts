@@ -34,7 +34,7 @@ export default async function testNarrativeContinuityRegression(req) {
       ['unconscious living NPC is not treated as dead', 'A stabilized witness breathes shallowly nearby.', false],
     ].map(([name, narrative, shouldReject]) => ({ name, pass: (findDeadCombatantContradictions(narrative, context).length > 0) === shouldReject }));
     const fallback = factualAftermathFallback(context);
-    cases.push({ name: 'fail-closed fallback keeps both agents motionless', pass: findDeadCombatantContradictions(fallback, context).length === 0 && /motionless/.test(fallback) });
+    cases.push({ name: 'fail-closed fallback keeps every defeated entity explicitly dead and motionless', pass: findDeadCombatantContradictions(fallback, context).length === 0 && context.defeated_enemies.every(entry => fallback.includes(`${entry.name} is dead and motionless at 0 HP.`)) });
     cases.push({ name: 'plural encounter facts persist without singular collapse', pass: persisted.world_state?.last_completed_combat?.defeated_enemies?.length === 3 && persisted.world_state.last_completed_combat.defeated_enemies.every(entry => entry.hp === 0 && entry.can_act === false) });
     const passed = cases.filter(entry => entry.pass).length;
     return Response.json({ passed, failed: cases.length - passed, total: cases.length, all_pass: passed === cases.length, results: cases, cleanup, live_state: { protected_ids: ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49'], read_or_mutated: false } });
