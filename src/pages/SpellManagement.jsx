@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Sparkles, Circle, CheckCircle2, Loader2, Book, Zap, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { calcStatMod, PROFICIENCY_BY_LEVEL } from '@/components/game/gameData';
 import { updateBookkeepingSlot, resetBookkeepingSlots } from '@/lib/slotBookkeeping';
+import { enrichSpellList, useCanonicalSpellCatalog } from '@/components/game/contentDetails';
 
 const SPELL_SLOTS_BY_LEVEL = {
   1: [2, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -64,6 +65,8 @@ export default function SpellManagement() {
   const [filterLevel, setFilterLevel] = useState('all');
   const [filterSchool, setFilterSchool] = useState('all');
   const [showPreparedOnly, setShowPreparedOnly] = useState(false);
+  const { spells: canonicalSpells, isLoading: isCanonicalSpellsLoading } = useCanonicalSpellCatalog();
+  const enrichedSpells = useMemo(() => enrichSpellList(spells, canonicalSpells), [spells, canonicalSpells]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -76,7 +79,7 @@ export default function SpellManagement() {
 
     // Load all known spells
     const knownSpells = char.spells_known || [];
-    const allSpells = await base44.entities.Spell.list('-level', 500);
+    const allSpells = await base44.entities.Spell.list('-level', 1000);
     const characterSpells = allSpells.filter(s => knownSpells.includes(s.name));
     setSpells(characterSpells);
     setLoading(false);
@@ -134,7 +137,7 @@ export default function SpellManagement() {
     setSaving(false);
   };
 
-  const filteredSpells = spells.filter(s => {
+  const filteredSpells = enrichedSpells.filter(s => {
     const matchLevel = filterLevel === 'all' || s.level === parseInt(filterLevel);
     const matchSchool = filterSchool === 'all' || s.school === filterSchool;
     const matchPrepared = !showPreparedOnly || (character?.prepared_spells || []).includes(s.name);
@@ -148,9 +151,9 @@ export default function SpellManagement() {
     spellsByLevel[lvl].push(s);
   });
 
-  const schools = [...new Set(spells.map(s => s.school).filter(Boolean))];
+  const schools = [...new Set(enrichedSpells.map(s => s.school).filter(Boolean))];
 
-  if (loading) return (
+  if (loading || isCanonicalSpellsLoading) return (
     <div className="min-h-screen flex items-center justify-center parchment-bg">
       <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#c9a96e' }} />
     </div>
@@ -324,11 +327,9 @@ export default function SpellManagement() {
                             <div className="text-xs mt-0.5" style={{ color: 'rgba(210,175,120,0.85)' }}>
                               {spell.school} · {spell.casting_time}
                             </div>
-                            {spell.description && (
-                              <p className="text-xs mt-1 line-clamp-2" style={{ color: 'rgba(220,190,140,0.7)', fontFamily: 'EB Garamond, serif' }}>
-                                {spell.description}
-                              </p>
-                            )}
+                            <p className="text-xs mt-1 leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'rgba(220,190,140,0.7)', fontFamily: 'EB Garamond, serif' }}>
+                              {spell.description || `No rules description is available for ${spell.name}.`}
+                            </p>
                           </div>
                         </div>
                       </motion.div>

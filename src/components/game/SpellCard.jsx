@@ -6,7 +6,7 @@ import {
   getCantripDamageDice
 } from './spellData';
 import { SpellTooltip } from './GameTooltip';
-import { getSpellDisplayFallback, mergeCanonicalDetail, useCanonicalSpell } from './contentDetails';
+import { getSpellDescriptionFallback, mergeCanonicalDetail, useCanonicalSpell } from './contentDetails';
 import SpellInfoPane from './SpellInfoPane';
 
 const ATTACK_ICONS = {
@@ -22,7 +22,7 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
   const [showDetail, setShowDetail] = useState(false);
   const localDetails = mergeCanonicalDetail(SPELL_DETAILS[spellName] || {}, spell || {});
   const { detail: details, isLoading: isDetailLoading, isError: isDetailError } = useCanonicalSpell(spell, localDetails);
-  const displayDescription = details.description || details.effect_summary || getSpellDisplayFallback(details);
+  const displayDescription = details.description || details.effect_summary || getSpellDescriptionFallback(details);
   const schoolColor = SCHOOL_COLORS[details.school] || 'text-slate-400';
   const dmgColor = DAMAGE_TYPE_COLORS[details.damage_type] || 'text-amber-300';
   const attackIcon = ATTACK_ICONS[details.attack_type || 'utility'];
@@ -70,7 +70,7 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
               {details.save_type && <span className="text-yellow-400 font-bold">{details.save_type.toUpperCase()} save</span>}
             </div>
           )}
-          {!compact && <p data-testid={`spell-description-${spellName}`} className="text-xs mt-1.5 line-clamp-2 whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
+          {!compact && <p data-testid={`spell-description-${spellName}`} className="text-xs mt-1.5 leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
             {isDetailLoading ? 'Loading spell details…' : displayDescription || (isDetailError ? 'Spell details could not be loaded. Try again.' : 'No information available.')}
           </p>}
         </div>

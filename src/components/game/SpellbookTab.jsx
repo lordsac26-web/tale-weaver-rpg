@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import SpellSlotTracker from './SpellSlotTracker';
 import SpellCard from './SpellCard';
 import { SPELL_DETAILS } from './spellData';
+import { enrichSpellList, useCanonicalSpellCatalog } from './contentDetails';
 import {
   getCombinedSpellListWithSource,
   getMulticlassSpellSlots,
@@ -61,12 +62,14 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
 
   // Combined spell list with source class tags
   const allAvailableSpells = useMemo(() => character ? getCombinedSpellListWithSource(character) : [], [character]);
+  const { spells: canonicalSpells, isLoading: isCanonicalSpellsLoading } = useCanonicalSpellCatalog();
+  const enrichedAvailableSpells = useMemo(() => enrichSpellList(allAvailableSpells, canonicalSpells), [allAvailableSpells, canonicalSpells]);
 
   // Unique source classes for the filter dropdown
   const sourceClasses = useMemo(() => {
-    const set = new Set(allAvailableSpells.map(s => s.sourceClass));
+    const set = new Set(enrichedAvailableSpells.map(s => s.sourceClass));
     return [...set];
-  }, [allAvailableSpells]);
+  }, [enrichedAvailableSpells]);
 
   const isMulticlass = sourceClasses.length > 1;
   const spellCardCharacter = character ? { ...character, level: totalLevel } : null;
@@ -74,9 +77,9 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
   // Build source lookup for known/prepared spells (must be before early returns)
   const spellSourceMap = useMemo(() => {
     const map = {};
-    allAvailableSpells.forEach(s => { if (!map[s.name]) map[s.name] = s.sourceClass; });
+    enrichedAvailableSpells.forEach(s => { if (!map[s.name]) map[s.name] = s.sourceClass; });
     return map;
-  }, [allAvailableSpells]);
+  }, [enrichedAvailableSpells]);
 
   if (!character) return null;
 
@@ -162,9 +165,9 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
     return true;
   };
 
-  const preparedList = allAvailableSpells.filter(s => preparedSpells.has(s.name) && filterSpell(s));
-  const knownList = allAvailableSpells.filter(s => knownSpells.has(s.name) && !preparedSpells.has(s.name) && filterSpell(s));
-  const availableList = allAvailableSpells.filter(s => !knownSpells.has(s.name) && filterSpell(s));
+  const preparedList = enrichedAvailableSpells.filter(s => preparedSpells.has(s.name) && filterSpell(s));
+  const knownList = enrichedAvailableSpells.filter(s => knownSpells.has(s.name) && !preparedSpells.has(s.name) && filterSpell(s));
+  const availableList = enrichedAvailableSpells.filter(s => !knownSpells.has(s.name) && filterSpell(s));
 
   // Level range for rendering
   const levelRange = [];
@@ -260,6 +263,7 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
       {/* Spell Lists */}
       {activeSection !== 'slots' && (
         <div className="space-y-3">
+          {isCanonicalSpellsLoading ? <SpellCardsLoading /> : <>
           {activeSection === 'prepared' && (
             <SpellLevelGroups
               spells={preparedList} icon={<CheckCircle className="w-3 h-3" />}
@@ -308,6 +312,7 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
               emptyMsg="No additional spells available for your filters."
             />
           )}
+          </>}
         </div>
       )}
     </div>
@@ -376,6 +381,10 @@ function RestButton({ label, restType, character, onUpdateCharacter, style, icon
       {label}
     </button>
   );
+}
+
+function SpellCardsLoading() {
+  return <div className="space-y-2" aria-label="Loading spell details">{[0, 1, 2].map((index) => <div key={index} className="h-24 rounded-xl animate-pulse bg-amber-100/5 border border-amber-100/10" />)}</div>;
 }
 
 function SpellLevelGroups({ spells, icon, colorClass, levelRange, slotMaxArr, getRemainingSlots, renderCard, emptyMsg }) {
