@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { advanceWorldClock } from '../../shared/story/worldClock.ts';
+import { matchPostRestPwtResidue } from '../../shared/story/postRestRepairMatcher.ts';
 
 const LIVE_IDS = new Set(['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256']);
 
@@ -48,6 +49,15 @@ export default async function testLongRestRegression(req) {
     results.push({ name: 'Long rest expires pre-rest Pass without Trace, restores used level-two slot, and retains Alert', pass: retained.length === 1 && retained[0].name === 'Alert' && active.length === 1 && active[0].name === 'Alert' && Object.keys({}).length === 0 });
     results.push({ name: 'Rested state forbids fatigue prose and excludes expired historical spell badges', pass: !/fatigue|tired|weary|ragged|sleepless/i.test('Craig is rested and alert.') && !retained.some(entry => entry.name === 'Pass without Trace') });
     results.push({ name: 'Stale pre-rest client payload is rejected by receipt version guard and active combat snapshot remains byte-identical', pass: session.world_state.clock_hour === 17 && JSON.stringify({ combat_id: 'fixture-combat', current_turn_index: 2 }) === JSON.stringify({ combat_id: 'fixture-combat', current_turn_index: 2 }) });
+    const repairExpected = { condition_id: 'cond_pass_without_trace_1786201357801_7itvpo', modifier_id: 'typed_spell_pass_without_trace_1786201357801', request_id: 'reconcile-pwt-patrol-20260808T0952ET', applied_at: '2026-08-08T15:02:37.801Z' };
+    await base44.asServiceRole.entities.Character.update(character.id, { conditions: [{ id: repairExpected.condition_id, name: 'pass without trace', display_name: 'Pass Without Trace', source: 'Pass Without Trace', applied_at: repairExpected.applied_at, concentration: true }], active_modifiers: [{ id: repairExpected.modifier_id, source: 'Pass Without Trace', effect: 'skill_bonus', skill: 'Stealth', bonus: 10, applied_at: repairExpected.applied_at }] });
+    await base44.asServiceRole.entities.GameSession.update(session.id, { world_state: { ...session.world_state, active_concentration: { spell_name: 'Pass Without Trace', request_id: repairExpected.request_id, applied_at: repairExpected.applied_at }, last_spell_cast: { spell_name: 'pass without trace', request_id: repairExpected.request_id, applied_at: repairExpected.applied_at } } });
+    const repairCharacter = await base44.asServiceRole.entities.Character.get(character.id);
+    const repairSession = await base44.asServiceRole.entities.GameSession.get(session.id);
+    const repairFixture = matchPostRestPwtResidue({ conditions: repairCharacter.conditions, modifiers: repairCharacter.active_modifiers, worldState: repairSession.world_state, expected: repairExpected });
+    results.push({ name: 'repair matcher recognizes exact mixed-case post-rest PWT residue identities', pass: repairFixture.matched && repairFixture.condition?.id === repairExpected.condition_id && repairFixture.modifier?.id === repairExpected.modifier_id });
+    const nearMiss = matchPostRestPwtResidue({ conditions: [{ id: repairExpected.condition_id, name: 'Bless', applied_at: repairExpected.applied_at }], modifiers: [{ id: repairExpected.modifier_id, source: 'Bless', effect: 'skill_bonus', skill: 'Stealth', bonus: 10, applied_at: repairExpected.applied_at }], worldState: { active_concentration: { spell_name: 'Bless', request_id: repairExpected.request_id, applied_at: repairExpected.applied_at } }, expected: repairExpected });
+    results.push({ name: 'repair matcher rejects unrelated spell residue without selecting it for removal', pass: !nearMiss.matched && !nearMiss.condition && !nearMiss.modifier });
     const passed = results.filter((result) => result.pass).length;
     output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, protected_live_state: { ids: [...LIVE_IDS], read_or_mutated: false } };
   } catch (error) {
