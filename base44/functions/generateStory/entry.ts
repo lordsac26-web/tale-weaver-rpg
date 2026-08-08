@@ -3,6 +3,7 @@ import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 import { resolveItemRecovery } from '../../shared/story/itemRecovery.ts';
 import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
 import { reconcileSessionCombat } from '../../shared/combat/sessionCombatState.ts';
+import { factualAftermathFallback, findDeadCombatantContradictions, readCompletedCombatContext } from '../../shared/story/completedCombatContext.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -39,8 +40,8 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Session character does not belong to the authenticated user' }, { status: 403 });
     }
     const storyRequestId = String(request_id || '').slice(0, 120);
-    const completedCombat = choice_context?.completed_combat && typeof choice_context.completed_combat === 'object'
-      ? choice_context.completed_combat : null;
+    const completedCombat = await readCompletedCombatContext(base44, session) || (choice_context?.completed_combat && typeof choice_context.completed_combat === 'object'
+      ? choice_context.completed_combat : null);
     const selectedChoice = action === 'choice' ? String(choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`).trim() : '';
     let authoritativeSpellCast = null;
     if (action === 'choice' && storyRequestId) {
@@ -172,7 +173,7 @@ JOURNAL NOTES: ${journalSummary}
 RECENT EVENTS: ${recentLog}
 ${gameDataContext}
 ${authoritativeSpellCast ? `AUTHORITATIVE SPELL RESULT: ${authoritativeSpellCast.spell_name} ${authoritativeSpellCast.already_processed ? 'was already processed; do not repeat it.' : `was cast at level ${authoritativeSpellCast.slot_level}.`} ${authoritativeSpellCast.concentration ? 'Concentration is active.' : ''} ${String(authoritativeSpellCast.spell_name || '').toLowerCase() === 'pass without trace' ? '+10 Stealth is active for the spell duration; narrate these facts exactly and do not deduct another slot.' : 'Do not deduct another slot or invent a different mechanical outcome.'}` : ''}
-${completedCombat ? `COMPLETED COMBAT CONTEXT: Combat ${completedCombat.combat_id} ended in ${completedCombat.result}. Dead enemies: ${(completedCombat.dead_enemies || []).map((enemy) => enemy.name || enemy.id).join(', ') || 'all listed enemies'}. This is aftermath narration only: combat_trigger MUST be false, enemies MUST be [], and no dead enemy may escape or re-engage.` : ''}
+${completedCombat ? `COMPLETED COMBAT CONTEXT: Combat ${completedCombat.combat_id} ended in ${completedCombat.result}. Dead enemies: ${(completedCombat.defeated_enemies || completedCombat.dead_enemies || []).map((enemy) => enemy.name || enemy.id).join(', ') || 'all listed enemies'}. This is aftermath narration only: combat_trigger MUST be false, enemies MUST be [], and no dead enemy may escape or re-engage.` : ''}
       `;
 
     if (action === 'start') {
@@ -286,12 +287,20 @@ Write a gripping 1-2 paragraph combat narrative.`;
     }
 
     // ====================== LLM CALL ======================
-    let result = await base44.integrations.Core.InvokeLLM({
-      prompt,
+    const generateNarrative = (nextPrompt) => base44.integrations.Core.InvokeLLM({
+      prompt: nextPrompt,
       response_json_schema: responseSchema,
       temperature: action === 'start' ? 0.85 : 0.73,
       max_tokens: 1400
     });
+    let result = await generateNarrative(prompt);
+    const contradictions = completedCombat ? findDeadCombatantContradictions(result?.narrative, completedCombat) : [];
+    if (contradictions.length) {
+      result = await generateNarrative(`${prompt}\n\nCONTINUITY CORRECTION: The prior candidate falsely gave agency to defeated enemies: ${contradictions.map(item => `${item.name} (${item.action})`).join(', ')}. Rewrite the narration with every defeated enemy motionless and unable to act, speak, flee, struggle, or trigger combat.`);
+      if (findDeadCombatantContradictions(result?.narrative, completedCombat).length) {
+        result = { ...result, narrative: factualAftermathFallback(completedCombat), combat_trigger: false, enemies: [], choices: [] };
+      }
+    }
 
     // ====================== POST-PROCESSING ======================
     // Inventory rewards are allowed only from structured recovery metadata passed

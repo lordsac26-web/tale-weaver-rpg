@@ -1188,7 +1188,7 @@ export default function Game() {
         session_id: sessionId,
         action: 'choice',
         request_id: `victory-aftermath:${completedCombatId}`,
-        choice_context: { completed_combat: { combat_id: completedCombatId, result: finalCombat?.result, dead_enemies: finalEnemies.filter(e => Number(e.hp_current ?? e.hp ?? 0) <= 0 || e.is_conscious === false).map(e => ({ id: e.id, name: e.name })) } },
+        choice_context: { completed_combat: { combat_id: completedCombatId, result: finalCombat?.result, defeated_enemies: finalEnemies.filter(e => Number(e.hp_current ?? e.hp ?? 0) <= 0 || e.is_conscious === false).map(e => ({ entity_id: e.id, name: e.name, hp: 0, is_conscious: false, status: 'dead', can_act: false })) } },
         custom_input: `${combatFacts} The combat has ended in victory and the player has finished searching the defeated enemies. Narrate the immediate aftermath, preserve current HP and depleted resources, and provide the next meaningful choices. Do not award duplicate combat XP, do not generate additional automatic loot, and do not immediately start another combat.`
       });
       if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
