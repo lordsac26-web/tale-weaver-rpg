@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { buildCompletedCombatContext, factualAftermathFallback, findDeadCombatantContradictions, persistCompletedCombatContext } from '../../shared/story/completedCombatContext.ts';
+import { hasPostRestResidualNarration, repairPostRestNarration } from '../../shared/story/postRestResiduals.ts';
 
 export default async function testNarrativeContinuityRegression(req) {
   const cleanup = [];
@@ -39,6 +40,9 @@ export default async function testNarrativeContinuityRegression(req) {
     const fatigueText = 'Craig’s mind is a storm of fatigue and frustration; his eyes struggle to track the foe due to exhaustion, his weary bones leave him ragged. The goblin still guards the bridge.';
     const repairedText = fatigueText.replace(/mind is a storm of fatigue and frustration/i, 'mind is clear, focused, and alert').replace(/eyes struggle to track/ig, 'eyes keenly track').replace(/due to exhaustion/ig, 'with renewed focus').replace(/weary bones/ig, 'rested limbs').replace(/ragged/ig, 'steady and refreshed');
     cases.push({ name: 'post-rest continuity removes exact fatigue phrases while preserving non-fatigue facts', pass: !/storm of fatigue|due to exhaustion|weary bones|ragged/i.test(repairedText) && repairedText.includes('The goblin still guards the bridge.') });
+    const semanticText = 'Craig advances with a weary mind, experiencing exhaustion as lingering remnants of your magic mask his movements. The goblin still guards the bridge.';
+    const semanticRepair = repairPostRestNarration(semanticText);
+    cases.push({ name: 'semantic post-rest repair removes weary mind, exhaustion, and lingering magic while preserving scene facts', pass: !hasPostRestResidualNarration(semanticRepair.text) && semanticRepair.text.includes('The goblin still guards the bridge.') && semanticRepair.replacements.length > 0 });
     const passed = cases.filter(entry => entry.pass).length;
     return Response.json({ passed, failed: cases.length - passed, total: cases.length, all_pass: passed === cases.length, results: cases, cleanup, live_state: { protected_ids: ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49'], read_or_mutated: false } });
   } catch (error) {

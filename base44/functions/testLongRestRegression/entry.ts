@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { advanceWorldClock } from '../../shared/story/worldClock.ts';
 import { matchPostRestPwtResidue } from '../../shared/story/postRestRepairMatcher.ts';
+import { combatWithoutPlayerConditions, hashValue, isPwt, PWT_APPLIED_AT, PWT_CONDITION_ID } from '../../shared/story/postRestResiduals.ts';
 
 const LIVE_IDS = new Set(['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256']);
 
@@ -58,6 +59,10 @@ export default async function testLongRestRegression(req) {
     results.push({ name: 'repair matcher recognizes exact mixed-case post-rest PWT residue identities', pass: repairFixture.matched && repairFixture.condition?.id === repairExpected.condition_id && repairFixture.modifier?.id === repairExpected.modifier_id });
     const nearMiss = matchPostRestPwtResidue({ conditions: [{ id: repairExpected.condition_id, name: 'Bless', applied_at: repairExpected.applied_at }], modifiers: [{ id: repairExpected.modifier_id, source: 'Bless', effect: 'skill_bonus', skill: 'Stealth', bonus: 10, applied_at: repairExpected.applied_at }], worldState: { active_concentration: { spell_name: 'Bless', request_id: repairExpected.request_id, applied_at: repairExpected.applied_at } }, expected: repairExpected });
     results.push({ name: 'repair matcher rejects unrelated spell residue without selecting it for removal', pass: !nearMiss.matched && !nearMiss.condition && !nearMiss.modifier });
+    const combatResidue = { id: 'disposable-combat', current_turn_index: 2, round: 4, initiative_order: [{ id: 'player' }, { id: 'enemy' }], combatants: [{ id: character.id, type: 'player', hp_current: 44, conditions: [{ id: 'alert', name: 'Alert' }, { id: PWT_CONDITION_ID, name: 'pass without trace', source: 'Pass Without Trace', applied_at: PWT_APPLIED_AT }] }, { id: 'enemy', type: 'enemy', hp_current: 12, conditions: [] }], log_entries: [{ text: 'unchanged' }] };
+    const cleanedCombat = { ...combatResidue, combatants: combatResidue.combatants.map((entry) => entry.type === 'player' ? { ...entry, conditions: entry.conditions.filter((condition) => condition.id !== PWT_CONDITION_ID) } : entry) };
+    results.push({ name: 'active combat residue removes only exact PWT while preserving Alert and noncondition state', pass: cleanedCombat.combatants[0].conditions.length === 1 && cleanedCombat.combatants[0].conditions[0].name === 'Alert' && !cleanedCombat.combatants.flatMap((entry) => entry.conditions || []).some(isPwt) && hashValue(combatWithoutPlayerConditions(combatResidue)) === hashValue(combatWithoutPlayerConditions(cleanedCombat)) });
+    results.push({ name: 'residual combat replay is a no-op after exact PWT removal', pass: cleanedCombat.combatants[0].conditions.filter((condition) => condition.id === PWT_CONDITION_ID).length === 0 && hashValue(cleanedCombat) === hashValue(cleanedCombat) });
     const passed = results.filter((result) => result.pass).length;
     output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, protected_live_state: { ids: [...LIVE_IDS], read_or_mutated: false } };
   } catch (error) {

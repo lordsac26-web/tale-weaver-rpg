@@ -4,6 +4,7 @@ import { resolveItemRecovery } from '../../shared/story/itemRecovery.ts';
 import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
 import { reconcileSessionCombat } from '../../shared/combat/sessionCombatState.ts';
 import { factualAftermathFallback, findDeadCombatantContradictions, readCompletedCombatContext } from '../../shared/story/completedCombatContext.ts';
+import { isPwt, repairPostRestNarration } from '../../shared/story/postRestResiduals.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -296,6 +297,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
       max_tokens: 1400
     });
     let result = await generateNarrative(prompt);
+    const postRestNoMagic = Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested && !isPwt((character.conditions || []).find(isPwt)) && !isPwt(session.world_state?.active_concentration);
+    if (postRestNoMagic && result?.narrative) result = { ...result, narrative: repairPostRestNarration(result.narrative).text };
     const contradictions = completedCombat ? findDeadCombatantContradictions(result?.narrative, completedCombat) : [];
     if (contradictions.length) {
       result = await generateNarrative(`${prompt}\n\nCONTINUITY CORRECTION: The prior candidate falsely gave agency to defeated enemies: ${contradictions.map(item => `${item.name} (${item.action})`).join(', ')}. Rewrite the narration with every defeated enemy motionless and unable to act, speak, flee, struggle, or trigger combat.`);
