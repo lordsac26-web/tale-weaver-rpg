@@ -7,6 +7,7 @@ import {
 } from './spellData';
 import { SpellTooltip } from './GameTooltip';
 import { getSpellDisplayFallback, mergeCanonicalDetail, useCanonicalSpell } from './contentDetails';
+import SpellInfoPane from './SpellInfoPane';
 
 const ATTACK_ICONS = {
   ranged_spell_attack: '🎯',
@@ -42,11 +43,7 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
         <span className="text-base flex-shrink-0 mt-0.5">{attackIcon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <SpellTooltip name={spellName} spellData={details} position="top">
-              <span className={`text-sm font-fantasy font-medium ${isPrepared ? 'text-glow-gold' : isKnown ? 'text-amber-200' : 'text-slate-300'}`} style={{ color: isPrepared ? '#f0c040' : undefined }}>
-                {spellName}
-              </span>
-            </SpellTooltip>
+            <button onClick={() => setShowDetail(true)} className={`text-sm font-fantasy font-medium text-left ${isPrepared ? 'text-glow-gold' : isKnown ? 'text-amber-200' : 'text-slate-300'}`} style={{ color: isPrepared ? '#f0c040' : undefined }}>{spellName}</button>
             {isPrepared && <span className="px-1.5 py-0.5 rounded-full text-xs badge-gold">READY</span>}
             {sourceClass && (
               <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(60,90,140,0.3)', border: '1px solid rgba(100,140,200,0.25)', color: 'rgba(147,197,253,0.8)' }}>
@@ -78,8 +75,8 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
           </p>}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button onClick={() => setShowDetail(v => !v)} 
-            className="p-1 rounded transition-colors" 
+          <button onClick={() => setShowDetail(true)} aria-label={`View ${spellName} details`}
+            className="min-w-9 min-h-9 grid place-items-center rounded transition-colors" 
             style={{ color: 'rgba(180,140,90,0.4)' }}
             onMouseEnter={e => e.currentTarget.style.color = '#c9a96e'}
             onMouseLeave={e => e.currentTarget.style.color = 'rgba(180,140,90,0.4)'}>
@@ -119,39 +116,7 @@ export default function SpellCard({ spell, spellName, character, isKnown, isPrep
         </div>
       </div>
 
-      <AnimatePresence>
-        {showDetail && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden px-4 pb-3 pt-2"
-            style={{ borderTop: '1px solid rgba(180,140,90,0.1)', background: 'rgba(8,5,2,0.5)' }}>
-            {details.visual_summary && (
-              <p className="text-xs leading-relaxed italic mb-2" style={{ color: 'rgba(192,132,252,0.75)' }}>✨ {details.visual_summary}</p>
-            )}
-            {details.effect_summary && (
-              <p className="text-xs leading-relaxed font-medium mb-2" style={{ color: 'rgba(147,197,253,0.8)' }}>⚡ {details.effect_summary}</p>
-            )}
-            {isDetailLoading ? <p className="text-xs mb-2" style={{ color: 'rgba(201,169,110,0.55)' }}>Loading spell details…</p> : (
-              <p className="text-xs leading-relaxed mb-2 whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
-                {displayDescription || (isDetailError ? 'Spell details could not be loaded. Try again.' : 'No information available.')}
-              </p>
-            )}
-            {(details.higher_level_scaling || details.higher_levels) && (
-              <p className="text-xs italic mb-1" style={{ color: 'rgba(240,192,64,0.7)' }}>
-                <strong>At Higher Levels:</strong> {details.higher_level_scaling || details.higher_levels}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2 mt-2 text-xs" style={{ color: 'rgba(180,140,90,0.45)' }}>
-              {details.components && <span>Components: {details.components}</span>}
-              {details.duration && <span>Duration: {details.duration}</span>}
-            </div>
-            {details.conditions_caused && details.conditions_caused.length > 0 && (
-              <p className="text-xs mt-2 px-2 py-1 rounded" style={{ background: 'rgba(80,5,5,0.3)', border: '1px solid rgba(180,30,30,0.2)', color: '#fca5a5' }}>
-                <strong>Conditions:</strong> {details.conditions_caused.join(', ')}
-              </p>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {showDetail && <SpellInfoPane spell={details} spellName={spellName} isKnown={isKnown} isPrepared={isPrepared} onClose={() => setShowDetail(false)} />}
     </div>
   );
 }

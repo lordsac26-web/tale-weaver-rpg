@@ -6,6 +6,7 @@ import {
   getCantripDamageDice, getEldritchBlastBeams
 } from './spellData';
 import { SpellTooltip } from './GameTooltip';
+import SpellInfoPane from './SpellInfoPane';
 import {
   getMulticlassSpellSlots,
   getPrimarySpellcastingEntry,
@@ -163,7 +164,7 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
                       const isSelected = selectedSpell === name;
                       const canCast    = level === 0 || remaining > 0;
                       const dmgColor   = DAMAGE_TYPE_COLORS?.[details?.damage_type] || 'text-amber-300';
-                      const isDetailOpen = showDetail === name;
+                      const isDetailOpen = false;
 
                       // Fix #11: Show scaled cantrip dice for current character level
                       const displayDice = level === 0
@@ -201,9 +202,7 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
                                     : '🎯'}
                                 </span>
                                 <SpellTooltip name={name} position="right">
-                                  <span className={`text-xs font-medium truncate ${isSelected ? 'text-purple-200' : 'text-slate-300'}`}>
-                                    {name}
-                                  </span>
+                                  <span onClick={(event) => { event.stopPropagation(); setShowDetail(name); }} className={`text-xs font-medium truncate cursor-pointer ${isSelected ? 'text-purple-200' : 'text-slate-300'}`} role="button" tabIndex={0}>{name}</span>
                                 </SpellTooltip>
                                 {/* Fix #12: Bonus action badge */}
                                 {isBonusAction && (
@@ -230,8 +229,9 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
                                   </span>
                                 )}
                                 <button
-                                  onClick={e => { e.stopPropagation(); setShowDetail(isDetailOpen ? null : name); }}
-                                  className="p-0.5 text-slate-600 hover:text-slate-300">
+                                  onClick={e => { e.stopPropagation(); setShowDetail(name); }}
+                                  aria-label={`View ${name} details`}
+                                  className="min-w-9 min-h-9 grid place-items-center text-slate-600 hover:text-slate-300">
                                   <Info className="w-3 h-3" />
                                 </button>
                               </div>
@@ -273,6 +273,7 @@ export default function CombatSpellSelector({ character, onSelectSpell, selected
           </div>
         );
       })}
+      {showDetail && <SpellInfoPane spell={SPELL_DETAILS[showDetail]} spellName={showDetail} isKnown onClose={() => setShowDetail(null)} />}
     </div>
   );
 }
