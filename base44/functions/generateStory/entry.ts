@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 import { resolveItemRecovery } from '../../shared/story/itemRecovery.ts';
+import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -36,6 +37,16 @@ Deno.serve(async (req) => {
     }
     const storyRequestId = String(request_id || '').slice(0, 120);
     const selectedChoice = action === 'choice' ? String(choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`).trim() : '';
+    let authoritativeSpellCast = null;
+    if (action === 'choice' && storyRequestId) {
+      const castOutcome = await executeUtilitySpellCast({
+        base44,
+        user,
+        payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId },
+      });
+      if (castOutcome.status >= 400) return Response.json(castOutcome.body, { status: castOutcome.status });
+      if (castOutcome.body?.spell_detected) authoritativeSpellCast = castOutcome.body;
+    }
     if (action === 'choice' && storyRequestId) {
       const existing = (session.story_log || []).find((entry) => entry?.request_id === storyRequestId);
       if (existing?.text) return Response.json({ narrative: existing.text, choices: existing.choices || [], ...(existing.item_recovery ? { item_recovery: { ...existing.item_recovery, already_processed: true } } : {}) });
@@ -155,7 +166,8 @@ CAMPAIGN MEMORY: ${campaignMemory}
 JOURNAL NOTES: ${journalSummary}
 RECENT EVENTS: ${recentLog}
 ${gameDataContext}
-`;
+${authoritativeSpellCast ? `AUTHORITATIVE SPELL RESULT: ${authoritativeSpellCast.spell_name} ${authoritativeSpellCast.already_processed ? 'was already processed; do not repeat it.' : `was cast at level ${authoritativeSpellCast.slot_level}.`} ${authoritativeSpellCast.concentration ? 'Concentration is active.' : ''} ${String(authoritativeSpellCast.spell_name || '').toLowerCase() === 'pass without trace' ? '+10 Stealth is active for the spell duration; narrate these facts exactly and do not deduct another slot.' : 'Do not deduct another slot or invent a different mechanical outcome.'}` : ''}
+      `;
 
     if (action === 'start') {
       prompt = `${baseContext}

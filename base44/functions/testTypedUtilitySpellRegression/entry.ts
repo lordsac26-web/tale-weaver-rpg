@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
+import { resolveKnownTypedSpell } from '../../shared/spells/typedSpellParser.ts';
 
 const LIVE_IDS = new Set(['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256']);
 const stealthBonus = (character) => (character.active_modifiers || []).filter((modifier) => modifier.effect === 'skill_bonus' && modifier.skill === 'Stealth').reduce((total, modifier) => total + (Number(modifier.bonus) || 0), 0);
@@ -23,22 +24,32 @@ export default async function testTypedUtilitySpellRegression(req) {
       return { character, session };
     };
 
-    const valid = await createFixture('valid');
+    const valid = await createFixture('exact-canonical');
     const requestId = `${token}:cast-and-stealth`;
-    const cast = await executeUtilitySpellCast({ base44, user, payload: { session_id: valid.session.id, character_id: valid.character.id, spell_name: 'Pass without Trace', action_text: 'Cast Pass without Trace, then attempt Stealth to reach the ridge.', request_id: requestId } });
+    const exactAction = 'cast Pass without Trace, then attempt Stealth to reach the ridge.';
+    const cast = await executeUtilitySpellCast({ base44, user, payload: { session_id: valid.session.id, character_id: valid.character.id, action_text: exactAction, request_id: requestId } });
     const afterCast = await base44.asServiceRole.entities.Character.get(valid.character.id);
     const afterSession = await base44.asServiceRole.entities.GameSession.get(valid.session.id);
     const finalStealth = 1 + stealthBonus(afterCast);
-    results.push({ name: 'free-text Pass without Trace spends one level-2 slot and commits structured +10 before dependent failed Stealth', pass: cast.status === 200 && cast.body?.success && afterCast.spell_slots?.level_2 === 1 && stealthBonus(afterCast) === 10 && (afterCast.conditions || []).some((condition) => condition.name === 'pass without trace' && condition.concentration && condition.caster_id === valid.character.id) && afterSession.world_state?.active_concentration?.spell_name === 'Pass without Trace' && finalStealth === 11 && finalStealth < 12 && stealthBonus(afterCast) === 10 });
+    const pwtCondition = (afterCast.conditions || []).find((condition) => condition.name === 'pass without trace');
+    const pwtModifier = (afterCast.active_modifiers || []).find((modifier) => modifier.effect === 'skill_bonus' && modifier.skill === 'Stealth');
+    results.push({ name: 'route parser resolves exact canonical Pass without Trace and commits one level-2 slot, concentration, +10 Stealth, timestamp condition, and session state', pass: resolveKnownTypedSpell(afterCast, exactAction) === 'Pass without Trace' && cast.status === 200 && cast.body?.success && afterCast.spell_slots?.level_2 === 1 && stealthBonus(afterCast) === 10 && pwtModifier?.concentration === true && !!pwtModifier?.expires_at && pwtCondition?.concentration === true && !!pwtCondition?.expires_at && afterSession.world_state?.active_concentration?.spell_name === 'Pass without Trace' && finalStealth === 11 && finalStealth < 12 });
 
     const replay = await executeUtilitySpellCast({ base44, user, payload: { session_id: valid.session.id, character_id: valid.character.id, spell_name: 'Pass without Trace', action_text: 'Cast Pass without Trace, then attempt Stealth to reach the ridge.', request_id: requestId } });
     const afterReplay = await base44.asServiceRole.entities.Character.get(valid.character.id);
     results.push({ name: 'same action id replays without a second slot spend or modifier', pass: replay.body?.already_processed === true && afterReplay.spell_slots?.level_2 === 1 && stealthBonus(afterReplay) === 10 && (afterReplay.active_modifiers || []).filter((modifier) => modifier.effect === 'skill_bonus' && modifier.skill === 'Stealth').length === 1 });
 
+    const article = await createFixture('optional-article');
+    const articleAction = 'I use pass without a trace to slip past the sentries.';
+    const articleCast = await executeUtilitySpellCast({ base44, user, payload: { session_id: article.session.id, character_id: article.character.id, action_text: articleAction, request_id: `${token}:optional-article` } });
+    const articleAfter = await base44.asServiceRole.entities.Character.get(article.character.id);
+    const articleSession = await base44.asServiceRole.entities.GameSession.get(article.session.id);
+    results.push({ name: 'route parser accepts cast/use optional-article Pass without a Trace alias once and synchronizes session concentration', pass: resolveKnownTypedSpell(articleAfter, articleAction) === 'Pass without Trace' && articleCast.status === 200 && articleCast.body?.success && articleAfter.spell_slots?.level_2 === 1 && stealthBonus(articleAfter) === 10 && (articleAfter.conditions || []).filter((condition) => condition.name === 'pass without trace').length === 1 && articleSession.world_state?.active_concentration?.spell_name === 'Pass without Trace' });
+
     const noSlot = await createFixture('no-slot', 3);
     const rejected = await executeUtilitySpellCast({ base44, user, payload: { session_id: noSlot.session.id, character_id: noSlot.character.id, spell_name: 'Pass without Trace', action_text: 'Cast Pass without Trace then hide.', request_id: `${token}:no-slot` } });
     const afterRejected = await base44.asServiceRole.entities.Character.get(noSlot.character.id);
-    results.push({ name: 'no level-2 slot rejects the cast and never buffs dependent action', pass: rejected.status === 400 && rejected.body?.invalid === true && afterRejected.spell_slots?.level_2 === undefined && stealthBonus(afterRejected) === 0 });
+    results.push({ name: 'resolver 4xx produces no successful narration or state mutation when no level-2 slot remains', pass: rejected.status === 400 && rejected.body?.invalid === true && rejected.body?.narrative === undefined && afterRejected.spell_slots?.level_2 === undefined && stealthBonus(afterRejected) === 0 && (afterRejected.conditions || []).length === 0 });
 
     const control = await executeUtilitySpellCast({ base44, user, payload: { session_id: valid.session.id, character_id: valid.character.id, action_text: 'Scout the ridge quietly.', request_id: `${token}:control` } });
     results.push({ name: 'non-spell free text remains a non-cast control', pass: control.status === 200 && control.body?.spell_detected === false });

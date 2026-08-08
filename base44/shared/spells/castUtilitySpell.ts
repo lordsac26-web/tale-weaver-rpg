@@ -1,11 +1,12 @@
 import { characterBelongsToUser } from '../combat/authGuard.ts';
 import { addStructuredCondition, buildStructuredCondition } from '../combat/conditions.ts';
+import { normalizeSpellText, resolveKnownTypedSpell } from './typedSpellParser.ts';
 
 const FULL = [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]];
 const HALF = [[0],[2],[3],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]];
 const WARLOCK_PACT = [1,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,4,4,4,4];
 const TABLES = { Wizard: FULL, Sorcerer: FULL, Bard: FULL, Cleric: FULL, Druid: FULL, Paladin: HALF, Ranger: HALF, Artificer: HALF };
-const normalize = (value) => String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const normalize = normalizeSpellText;
 const respond = (status, body) => ({ status, body });
 const ordinal = (level) => level === 1 ? '1st' : level === 2 ? '2nd' : level === 3 ? '3rd' : `${level}th`;
 const normalizeSpellSlots = (value) => {
@@ -36,14 +37,10 @@ function maxSlots(character, slotLevel) {
   return (((TABLES[character.class] || [])[level - 1]) || [])[index] || 0;
 }
 function findKnownSpell(character, actionText, requestedName) {
-  const names = [...new Set([...(character.spells_prepared || []), ...(character.spells_known || [])].filter(Boolean))];
-  if (requestedName) return names.find((name) => normalize(name) === normalize(requestedName)) || null;
-  if (!/\b(cast|casting|invoke|invoking|use|using|channel|channeling)\b/i.test(String(actionText || ''))) return null;
-  const action = normalize(actionText);
-  return names.sort((a, b) => normalize(b).length - normalize(a).length).find((name) => action.includes(normalize(name))) || null;
+  return resolveKnownTypedSpell(character, actionText, requestedName);
 }
-function concentrationModifier(spell, now, characterId) {
-  const base = { id: `typed_spell_${normalize(spell.name).replace(/ /g, '_')}_${now}`, source: spell.name, effect: 'spell_concentration', concentration: true, caster_id: characterId, character_id: characterId, applied_at: new Date(now).toISOString(), duration: spell.duration || 'Concentration' };
+function concentrationModifier(spell, now, characterId, expiresAt = null) {
+  const base = { id: `typed_spell_${normalize(spell.name).replace(/ /g, '_')}_${now}`, source: spell.name, effect: 'spell_concentration', concentration: true, caster_id: characterId, character_id: characterId, applied_at: new Date(now).toISOString(), duration: spell.duration || 'Concentration', ...(expiresAt ? { expires_at: expiresAt } : {}) };
   if (normalize(spell.name) === 'pass without trace') return { ...base, effect: 'skill_bonus', skill: 'Stealth', bonus: 10 };
   if (normalize(spell.name) === 'hunters mark') return { ...base, effect: 'hunters_mark', damage_bonus_dice: '1d6' };
   if (normalize(spell.name) === 'ensnaring strike') return { ...base, effect: 'ensnaring_strike_pending' };
@@ -90,7 +87,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
     const maximum = maxSlots(character, prior.slot_level);
     const normalizedSlots = normalizeSpellSlots(character.spell_slots);
     const used = Number(normalizedSlots[`level_${prior.slot_level}`]) || 0;
-    return respond(200, { success: true, spell_detected: true, already_processed: true, receipt_id: prior.receipt_id || token, request_id: token, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: normalizedSlots, active_modifiers: character.active_modifiers || [], inventory: character.inventory || [], heal_amount: prior.heal_amount || 0, roll_expression: prior.roll_expression || null, roll_total: Number(prior.roll_total ?? prior.heal_amount ?? 0), hp_before: Number(prior.hp_before ?? character.hp_current), hp_after: Number(prior.hp_after ?? character.hp_current), hp_current: character.hp_current, hp_max: character.hp_max });
+    return respond(200, { success: true, spell_detected: true, already_processed: true, receipt_id: prior.receipt_id || token, request_id: token, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: normalizedSlots, active_modifiers: character.active_modifiers || [], concentration: !!spell.concentration, duration: spell.duration, inventory: character.inventory || [], heal_amount: prior.heal_amount || 0, roll_expression: prior.roll_expression || null, roll_total: Number(prior.roll_total ?? prior.heal_amount ?? 0), hp_before: Number(prior.hp_before ?? character.hp_current), hp_after: Number(prior.hp_after ?? character.hp_current), hp_current: character.hp_current, hp_max: character.hp_max });
   }
   const now = Date.now();
   const active = (character.active_modifiers || []).filter((modifier) => !modifier.expires_at || new Date(modifier.expires_at).getTime() > now);
@@ -107,10 +104,10 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
     spellSlots = { ...spellSlots, [key]: used + 1 };
     usedAfter = used + 1;
   }
-  let activeModifiers = active;
-  if (spell.concentration) activeModifiers = [...active.filter((modifier) => !modifier.concentration), concentrationModifier(spell, now, character_id)];
   const isPassWithoutTrace = normalizedName === 'pass without trace';
   const expiresAt = isPassWithoutTrace ? new Date(now + 60 * 60 * 1000).toISOString() : null;
+  let activeModifiers = active;
+  if (spell.concentration) activeModifiers = [...active.filter((modifier) => !modifier.concentration), concentrationModifier(spell, now, character_id, expiresAt)];
   const structuredConditions = isPassWithoutTrace ? addStructuredCondition(character.conditions, buildStructuredCondition({ name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id, duration_type: 'timestamp', expires_at: expiresAt, concentration: true })) : (character.conditions || []);
   let healAmount = 0;
   const hpBefore = Number(character.hp_current) || 0;

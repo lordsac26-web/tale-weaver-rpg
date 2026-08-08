@@ -539,28 +539,27 @@ export default function Game() {
   // recognition, canonical level/upcast validation, slot deduction, concentration,
   // and a same-rest idempotency receipt.
   const maybeCastStorySpell = async (action, requestId) => {
-    const spellName = findTypedSpellName(action);
-    if (!spellName) return null;
+    if (!/\b(cast|casting|use|using|invoke|invoking|channel|channeling)\b/i.test(action || '')) return null;
     const result = await base44.functions.invoke('castUtilitySpell', {
       session_id: sessionId,
       character_id: character?.id,
-      spell_name: spellName,
       action_text: action,
-      request_id: `story-spell:${requestId}`,
+      request_id: requestId,
     });
     const data = result.data;
-    if (!data?.success || !data?.spell_detected) throw new Error(data?.error || `${spellName} could not be cast.`);
+    if (!data?.success) throw new Error(data?.error || 'That spell could not be cast.');
+    if (!data.spell_detected) return null;
     setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, ...(typeof data.hp_current === 'number' ? { hp_current: data.hp_current } : {}), ...(data.inventory ? { inventory: data.inventory } : {}) } : prev);
-    const slotText = data.slot_level > 0 && Number.isFinite(data.remaining_slots)
-      ? ` ${data.remaining_slots}/${data.max_slots} level-${data.slot_level} slots remain.`
-      : '';
+    const isPassWithoutTrace = String(data.spell_name || '').toLowerCase() === 'pass without trace';
     setNarrative(prev => [...prev, {
       type: 'roll_result',
       text: data.already_processed
         ? `${data.spell_name} was already recorded; no additional spell slot was used.`
         : data.already_active
           ? `${data.spell_name} is already active; no additional spell slot was used.`
-          : `${data.spell_name} cast.${data.heal_amount > 0 ? ` Restored ${data.heal_amount} HP.` : ''}${slotText}`,
+          : isPassWithoutTrace
+            ? `Pass without Trace cast: level-2 slot consumed. Concentration is active; +10 Stealth for ${data.duration || 'up to 1 hour'}.`
+            : `${data.spell_name} cast.${data.heal_amount > 0 ? ` Restored ${data.heal_amount} HP.` : ''}`,
       success: true,
     }]);
     return data;
