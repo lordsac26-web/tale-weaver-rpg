@@ -7,6 +7,8 @@ export default async function testStorySessionSyncRegression(req) {
   const results = [];
   let fixture = null;
   let output = null;
+  let stage = 'fixture_setup';
+  const downstream = [];
   try {
     await req.json();
     const base44 = createClientFromRequest(req);
@@ -19,7 +21,9 @@ export default async function testStorySessionSyncRegression(req) {
     fixture = { character: character.id, session: session.id };
 
     const restRequest = `${token}:long-rest`;
+    stage = 'handleRest';
     const rest = await base44.asServiceRole.functions.invoke('handleRest', { character_id: character.id, session_id: session.id, rest_type: 'long', rest_request_id: restRequest, location_safe: true });
+    downstream.push({ stage, function: 'handleRest', status: rest.status || null, has_auth_context: !!user });
     const afterRest = await base44.asServiceRole.entities.GameSession.get(session.id);
     const restReplay = await base44.asServiceRole.functions.invoke('handleRest', { character_id: character.id, session_id: session.id, rest_type: 'long', rest_request_id: restRequest, location_safe: true });
     const afterRestReplay = await base44.asServiceRole.entities.GameSession.get(session.id);
@@ -43,9 +47,9 @@ export default async function testStorySessionSyncRegression(req) {
     results.push({ name: 'story request replays do not duplicate entries', pass: firstReplay.data?.narrative === first.data?.narrative && secondReplay.data?.narrative === second.data?.narrative && entries.length === 2 });
 
     const passed = results.filter((result) => result.pass).length;
-    output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, live_state: { protected_ids: [...LIVE_IDS], read_or_mutated: false } };
+    output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, downstream, live_state: { protected_ids: [...LIVE_IDS], read_or_mutated: false } };
   } catch (error) {
-    output = { error: error.message || 'Story/session regression failed', results };
+    output = { error: error.message || 'Story/session regression failed', stage, downstream, results };
   } finally {
     if (fixture) {
       const base44 = createClientFromRequest(req);

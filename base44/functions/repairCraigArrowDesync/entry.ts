@@ -21,11 +21,15 @@ export default async function repairCraigArrowDesync(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     if (user.role !== 'admin') return Response.json({ error: 'Admin access required' }, { status: 403 });
     const body = await req.json();
-    if (body?.repair_id !== repairId || body?.character_id !== ids.character || body?.session_id !== ids.session || body?.combat_id !== ids.combat) return Response.json({ error: 'Exact protected identifiers are required.' }, { status: 400 });
+    const exactIds = body?.repair_id === repairId && body?.character_id === ids.character && body?.session_id === ids.session && body?.combat_id === ids.combat;
+    const oneTimeApproved = body?.one_time_repair_token === 'craig-arrow-six-20260808-v1' && Number(body?.expected_baseline) === 8 && Number(body?.expected_qualifying_attacks) === 2 && Number(body?.expected_current_arrows) === 6;
+    if (!exactIds) return Response.json({ error: 'Exact protected identifiers are required.' }, { status: 400 });
+    if (!oneTimeApproved) return Response.json({ error: 'Exact one-time repair contract is required.', writes: 0 }, { status: 403 });
+    const receiptKey = `${repairId}:${await hash(body.one_time_repair_token)}`;
     const db = base44.asServiceRole;
     const [character, session, combat] = await Promise.all([db.entities.Character.get(ids.character), db.entities.GameSession.get(ids.session), db.entities.CombatLog.get(ids.combat)]);
     if (!character || !session || !combat) return Response.json({ error: 'Protected records are missing.' }, { status: 409 });
-    const receipt = character.long_rest_abilities?.__arrow_desync_repairs?.[repairId];
+    const receipt = character.long_rest_abilities?.__arrow_desync_repairs?.[receiptKey];
     if (receipt) return Response.json({ success: true, already_processed: true, writes: 0, repair_id: repairId, current_arrow_count: (character.inventory || []).filter(ammoName).reduce((total, item) => total + quantity(item), 0), receipt });
     const inventory = Array.isArray(character.inventory) ? character.inventory : [];
     const arrowRows = inventory.map((item, index) => ({ item, index })).filter(({ item }) => ammoName(item));
@@ -43,7 +47,7 @@ export default async function repairCraigArrowDesync(req) {
       const recovery = entry?.recovery || entry?.arrow_recovery || entry?.structured_recovery;
       return recovery?.success === true && /arrow|ammo/i.test(String(recovery?.type || recovery?.item || recovery?.name || ''));
     });
-    const ownerOverride = body?.owner_approved_verified_qa_baseline_override === true && Number(body?.verified_qa_baseline) === 8 && Number(body?.expected_qualifying_attacks) === 2 && Number(body?.expected_current_arrows) === 6;
+    const ownerOverride = oneTimeApproved;
     const guards = {
       exact_zero_shell_shape: arrowRows.length === 2 && zeroShells.length === 2 && positiveAliases.length === 0,
       exact_baseline_evidence: ownerOverride,
@@ -60,7 +64,7 @@ export default async function repairCraigArrowDesync(req) {
     const firstIndex = zeroShells[0].index;
     const secondIndex = zeroShells[1].index;
     const nextInventory = inventory.flatMap((item, index) => index === firstIndex ? [{ ...shell, name: 'Arrows', category: 'Ammunition', weight: 1, cost: 1, cost_unit: 'gp', rarity: 'common', quantity: 6, unit: 'arrow', stack_semantics: 'individual' }] : index === secondIndex ? [] : [item]);
-    const nextAbilities = { ...(character.long_rest_abilities || {}), __arrow_desync_repairs: { ...(character.long_rest_abilities?.__arrow_desync_repairs || {}), [repairId]: { completed_at: new Date().toISOString(), before_arrow_rows: arrowRows.map(({ item }) => item), after_arrow_row: nextInventory.find((item) => item.name === 'Arrows'), inferred_transition: '8 -> 2 fired shots -> 6' } } };
+    const nextAbilities = { ...(character.long_rest_abilities || {}), __arrow_desync_repairs: { ...(character.long_rest_abilities?.__arrow_desync_repairs || {}), [receiptKey]: { completed_at: new Date().toISOString(), repair_id: repairId, token_hash: receiptKey.split(':').at(-1), before_arrow_rows: arrowRows.map(({ item }) => item), after_arrow_row: nextInventory.find((item) => item.name === 'Arrows'), inferred_transition: '8 -> 2 fired shots -> 6' } } };
     await db.entities.Character.update(ids.character, { inventory: nextInventory, long_rest_abilities: nextAbilities });
     const [afterCharacter, afterSession, afterCombat] = await Promise.all([db.entities.Character.get(ids.character), db.entities.GameSession.get(ids.session), db.entities.CombatLog.get(ids.combat)]);
     const afterArrows = (afterCharacter.inventory || []).filter(ammoName);

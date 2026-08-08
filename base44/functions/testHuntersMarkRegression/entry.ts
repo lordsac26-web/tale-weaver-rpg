@@ -17,6 +17,8 @@ export default async function testHuntersMarkRegression(req) {
   const results = [];
   const cleanup = [];
   let output = null;
+  let stage = 'fixture_setup';
+  let downstream = [];
   try {
     await req.json();
     const base44 = createClientFromRequest(req);
@@ -89,17 +91,20 @@ export default async function testHuntersMarkRegression(req) {
     results.push({ name: 'concentration break removes Character and CombatLog mark state', pass: !(afterBreakCharacter.active_modifiers || []).some((modifier) => modifier.effect === 'hunters_mark') && !afterBreakCombat.world_state?.hunters_mark && !afterBreakCombat.world_state?.concentration_spell && afterBreakCharacter.hp_current === 29 && afterBreakCombat.combatants.find((combatant) => combatant.id === concentration.character.id)?.hp_current === 29, detail: { character_hp: afterBreakCharacter.hp_current, modifiers: afterBreakCharacter.active_modifiers, world_state: afterBreakCombat.world_state, snapshot_hp: afterBreakCombat.combatants.find((combatant) => combatant.id === concentration.character.id)?.hp_current, log: afterBreakCombat.log_entries.at(-1) } });
 
     const replay = await createFixture('replay');
+    stage = 'combatEngine_replay';
     const first = await base44.asServiceRole.functions.invoke('combatEngine', { action: 'player_attack', session_id: replay.session.id, combat_id: replay.combat.id, character_id: replay.character.id, request_id: 'hunters-mark-replay', payload: { target_id: replay.ritualMaster.id, spell: hunterSpell } });
+    downstream.push({ stage, function: 'combatEngine', status: first.status || null, has_auth_context: !!user });
     const second = await base44.asServiceRole.functions.invoke('combatEngine', { action: 'player_attack', session_id: replay.session.id, combat_id: replay.combat.id, character_id: replay.character.id, request_id: 'hunters-mark-replay', payload: { target_id: replay.ritualMaster.id, spell: hunterSpell } });
+    downstream.push({ stage, function: 'combatEngine', status: second.status || null, has_auth_context: !!user });
     const replayCharacter = await base44.asServiceRole.entities.Character.get(replay.character.id);
     const firstData = first.data || first;
     const secondData = second.data || second;
     results.push({ name: 'router replay does not spend a second slot or duplicate mark', pass: firstData?.log_entry?.hunters_mark && secondData?.idempotent_replay === true && replayCharacter.spell_slots?.level_1 === 1 && (replayCharacter.active_modifiers || []).filter((modifier) => modifier.effect === 'hunters_mark').length === 1 });
 
     const passed = results.filter((result) => result.pass).length;
-    output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, live_state: { protected_ids: [...LIVE_IDS], read_or_mutated: false } };
+    output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, downstream, live_state: { protected_ids: [...LIVE_IDS], read_or_mutated: false } };
   } catch (error) {
-    output = { error: error.message || 'Hunter’s Mark regression failed', results };
+    output = { error: error.message || 'Hunter’s Mark regression failed', stage, downstream, results };
   } finally {
     const base44 = createClientFromRequest(req);
     for (const fixture of fixtures.reverse()) {
