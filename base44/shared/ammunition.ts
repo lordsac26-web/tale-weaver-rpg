@@ -32,20 +32,15 @@ export function normalizeAmmoInventory(inventory) {
   const indexes = new Map();
   for (const item of Array.isArray(inventory) ? inventory : []) {
     const canonical = canonicalAmmoName(item?.name);
-    if (!canonical) {
-      output.push(item);
-      continue;
-    }
+    if (!canonical) { output.push(item); continue; }
     const quantity = Math.max(0, Number(item.quantity) || 0);
     const existingIndex = indexes.get(canonical);
     if (existingIndex === undefined) {
       indexes.set(canonical, output.length);
-      output.push({ ...item, name: canonical, category: 'Ammunition', stackable: true, quantity });
-    } else {
-      output[existingIndex] = { ...output[existingIndex], quantity: output[existingIndex].quantity + quantity };
-    }
+      output.push({ ...item, name: canonical, category: 'Ammunition', stackable: true, unit: canonical === 'Arrows' ? 'arrow' : undefined, stack_semantics: 'individual', quantity });
+    } else output[existingIndex] = { ...output[existingIndex], quantity: output[existingIndex].quantity + quantity };
   }
-  return output;
+  return output.filter((item) => !canonicalAmmoName(item?.name) || Math.max(0, Number(item.quantity) || 0) > 0);
 }
 
 export function addAmmunition(inventory, item, packageQuantity = 1) {

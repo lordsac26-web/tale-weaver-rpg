@@ -13,10 +13,10 @@ export function normalizeAmmoForDisplay(inventory = []) {
     const index = indexes.get(name);
     if (index === undefined) {
       indexes.set(name, result.length);
-      result.push({ ...item, name, category: 'Ammunition', stackable: true, quantity, __sourceIndices: [sourceIndex] });
+      result.push({ ...item, name, category: 'Ammunition', stackable: true, unit: name === 'Arrows' ? 'arrow' : undefined, stack_semantics: 'individual', quantity, __sourceIndices: [sourceIndex] });
     } else result[index] = { ...result[index], quantity: result[index].quantity + quantity, __sourceIndices: [...result[index].__sourceIndices, sourceIndex] };
   });
-  return result;
+  return result.filter((item) => !canonical(item?.name) || item.quantity > 0);
 }
 
 export function addAmmoAtAcquisition(inventory = [], item, packageQuantity = 1) {

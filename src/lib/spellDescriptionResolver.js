@@ -35,7 +35,7 @@ export function selectCanonicalSpell(source, candidates = []) {
 export function enrichSpell(source, candidates = []) {
   const sourceItem = sourceObject(source);
   const canonical = selectCanonicalSpell(sourceItem, candidates);
-  const description = text(sourceItem.description) || text(canonical?.description) || text(canonical?.raw_data?.desc) || text(sourceItem.raw_data?.desc) || text(sourceItem.desc) || '';
+  const description = text(canonical?.description) || text(canonical?.raw_data?.desc) || text(canonical?.desc) || text(sourceItem.description) || text(sourceItem.raw_data?.desc) || text(sourceItem.desc) || '';
   return { ...sourceItem, ...(canonical || {}), name: canonical?.name || sourceItem.name || '', description, canonical_spell: canonical };
 }
 

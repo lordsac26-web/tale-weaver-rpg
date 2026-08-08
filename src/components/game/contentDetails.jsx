@@ -37,7 +37,7 @@ export function mergeCanonicalDetail(fallback = {}, canonical = null) {
 }
 
 export function useCanonicalSpellCatalog() {
-  const query = useQuery({ queryKey: ['canonical-spell-catalog'], queryFn: () => base44.entities.Spell.list('name', 1000), staleTime: 5 * 60 * 1000 });
+  const query = useQuery({ queryKey: ['canonical-spell-catalog'], queryFn: () => base44.entities.Spell.list('name', 1000), staleTime: 0, refetchOnMount: 'always' });
   return { ...query, spells: query.data || [] };
 }
 

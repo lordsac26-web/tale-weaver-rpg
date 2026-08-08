@@ -935,10 +935,8 @@ export default function Game() {
     // Spell casts also refresh Character before Extra Attack can return early, so
     // the HUD reflects the deducted slot immediately rather than one turn later.
     await reloadCombat(combatId);
-    if (isSpell) {
-      const freshSpellChars = await base44.entities.Character.filter({ id: character?.id });
-      if (freshSpellChars[0]) setCharacter(prev => ({ ...prev, ...freshSpellChars[0] }));
-    }
+    const freshAttackChars = await base44.entities.Character.filter({ id: character?.id });
+    if (freshAttackChars[0]) setCharacter(prev => ({ ...prev, ...freshAttackChars[0] }));
 
     if (data.actions_remaining > 0 && !data.combat_ended) {
       setNarrative(prev => [...prev, {
