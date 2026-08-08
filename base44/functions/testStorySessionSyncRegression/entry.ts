@@ -19,23 +19,23 @@ export default async function testStorySessionSyncRegression(req) {
     fixture = { character: character.id, session: session.id };
 
     const restRequest = `${token}:long-rest`;
-    const rest = await base44.functions.invoke('handleRest', { character_id: character.id, session_id: session.id, rest_type: 'long', rest_request_id: restRequest, location_safe: true });
+    const rest = await base44.asServiceRole.functions.invoke('handleRest', { character_id: character.id, session_id: session.id, rest_type: 'long', rest_request_id: restRequest, location_safe: true });
     const afterRest = await base44.asServiceRole.entities.GameSession.get(session.id);
-    const restReplay = await base44.functions.invoke('handleRest', { character_id: character.id, session_id: session.id, rest_type: 'long', rest_request_id: restRequest, location_safe: true });
+    const restReplay = await base44.asServiceRole.functions.invoke('handleRest', { character_id: character.id, session_id: session.id, rest_type: 'long', rest_request_id: restRequest, location_safe: true });
     const afterRestReplay = await base44.asServiceRole.entities.GameSession.get(session.id);
     results.push({ name: 'dusk long rest advances to midnight, persists after reload, and replay does not advance twice', pass: rest.data?.time_of_day === 'Midnight' && afterRest.time_of_day === 'Midnight' && afterRest.world_state?.elapsed_hours === 12 && afterRest.world_state?.last_rest_duration_hours === 8 && restReplay.data?.already_processed === true && afterRestReplay.time_of_day === 'Midnight' && afterRestReplay.world_state?.elapsed_hours === 12 });
 
     const firstText = 'Scout the immediate area for any signs of residual scouts or patrols left by the Circle.';
     const firstId = `${token}:survival`;
-    const first = await base44.functions.invoke('generateStory', { session_id: session.id, action: 'choice', request_id: firstId, choice_text: firstText, custom_input: firstText, choice_context: { check: { success: true } } });
+    const first = await base44.asServiceRole.functions.invoke('generateStory', { session_id: session.id, action: 'choice', request_id: firstId, choice_text: firstText, custom_input: firstText, choice_context: { check: { success: true } } });
     const afterFirst = await base44.asServiceRole.entities.GameSession.get(session.id);
-    const firstReplay = await base44.functions.invoke('generateStory', { session_id: session.id, action: 'choice', request_id: firstId, choice_text: firstText, custom_input: firstText, choice_context: { check: { success: true } } });
+    const firstReplay = await base44.asServiceRole.functions.invoke('generateStory', { session_id: session.id, action: 'choice', request_id: firstId, choice_text: firstText, custom_input: firstText, choice_context: { check: { success: true } } });
 
     const secondText = 'Scout the immediate perimeter to ensure no lingering cultists witnessed your escape.';
     const secondId = `${token}:perimeter`;
-    const second = await base44.functions.invoke('generateStory', { session_id: session.id, action: 'choice', request_id: secondId, choice_text: secondText, custom_input: secondText, choice_context: { check: { success: true } } });
+    const second = await base44.asServiceRole.functions.invoke('generateStory', { session_id: session.id, action: 'choice', request_id: secondId, choice_text: secondText, custom_input: secondText, choice_context: { check: { success: true } } });
     const afterSecond = await base44.asServiceRole.entities.GameSession.get(session.id);
-    const secondReplay = await base44.functions.invoke('generateStory', { session_id: session.id, action: 'choice', request_id: secondId, choice_text: secondText, custom_input: secondText, choice_context: { check: { success: true } } });
+    const secondReplay = await base44.asServiceRole.functions.invoke('generateStory', { session_id: session.id, action: 'choice', request_id: secondId, choice_text: secondText, custom_input: secondText, choice_context: { check: { success: true } } });
     const entries = (afterSecond.story_log || []).filter((entry) => entry?.request_id === firstId || entry?.request_id === secondId);
     const firstEntry = entries.find((entry) => entry.request_id === firstId);
     const secondEntry = entries.find((entry) => entry.request_id === secondId);
