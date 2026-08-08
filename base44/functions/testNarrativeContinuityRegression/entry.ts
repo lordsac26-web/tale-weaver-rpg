@@ -72,6 +72,12 @@ export default async function testNarrativeContinuityRegression(req) {
     cases.push({ name: 'negative continuity rejects storm phrase and current fatigue claims', pass: /storm of fully rested|\b(?:fatigue|fatigued|weary|ragged|sleepless|spent|exhaustion)\b/i.test('A storm of fully rested thoughts leaves Craig weary with fatigue.') });
     const failedPostconditions = Object.entries({ replacement_count_exactly_one: false, corrected_sentence_once: false }).filter(([, pass]) => !pass).map(([name]) => ({ name }));
     cases.push({ name: 'post-write failure fixture returns named failed_postconditions', pass: failedPostconditions.map((entry) => entry.name).join(',') === 'replacement_count_exactly_one,corrected_sentence_once' });
+    const lingeringMagicFrom = 'Your boots fall with the soft, practiced rhythm of a predator, each movement masked by the lingering remnants of your magic.';
+    const lingeringMagicTo = 'Your boots fall with the soft, practiced rhythm of a predator, each movement guided by hard-earned skill and sharpened awareness.';
+    const activeMasking = /(?:boots|movements?).{0,90}\b(?:masked|concealed|hidden)\b.{0,90}\b(?:magic|pass without trace)\b|\b(?:magic|pass without trace)\b.{0,90}\b(?:masks?|conceals?|hides?)\b.{0,90}\b(?:boots|movements?)\b/i;
+    cases.push({ name: 'exact lingering-magic live-shaped sentence is rejected when PWT concentration is inactive', pass: activeMasking.test(lingeringMagicFrom) && lingeringMagicFrom.includes('lingering remnants of your magic') });
+    cases.push({ name: 'lingering-magic repair requires the exact grounded replacement sentence', pass: lingeringMagicFrom.replace(lingeringMagicFrom, lingeringMagicTo) === lingeringMagicTo && lingeringMagicTo.split(lingeringMagicTo).length === 2 && !activeMasking.test(lingeringMagicTo) });
+    cases.push({ name: 'historical magic activity is allowed when it makes no current concealment claim', pass: !activeMasking.test('Earlier, Pass without Trace had been active during the approach; it has since faded.') });
     const passed = cases.filter(entry => entry.pass).length;
     return Response.json({ passed, failed: cases.length - passed, total: cases.length, all_pass: passed === cases.length, results: cases, cleanup, live_state: { protected_ids: ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49'], read_or_mutated: false } });
   } catch (error) {
