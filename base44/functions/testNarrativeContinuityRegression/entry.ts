@@ -43,6 +43,12 @@ export default async function testNarrativeContinuityRegression(req) {
     const semanticText = 'Craig advances with a weary mind, experiencing exhaustion as lingering remnants of your magic mask his movements. The goblin still guards the bridge.';
     const semanticRepair = repairPostRestNarration(semanticText);
     cases.push({ name: 'semantic post-rest repair removes weary mind, exhaustion, and lingering magic while preserving scene facts', pass: !hasPostRestResidualNarration(semanticRepair.text) && semanticRepair.text.includes('The goblin still guards the bridge.') && semanticRepair.replacements.length > 0 });
+    const malformed = 'Your mind, however, is a storm of fully rested and frustration; the cryptic scrawls and shifting hierarchies of the Obsidian Circle refuse to coalesce into a coherent map of their true influence.';
+    const corrected = 'Though fully rested and alert, frustration mounts as the cryptic scrawls and shifting hierarchies of the Obsidian Circle refuse to coalesce into a coherent map of their true influence.';
+    const polished = malformed.replace(malformed, corrected);
+    cases.push({ name: 'exact Craig narration polish requires the natural corrected sentence', pass: !polished.includes(malformed) && polished === corrected && polished.split(corrected).length === 2 });
+    const malformedGrammar = ['storm of fully rested', 'mocking your full-rest clarity', 'the fully rested presses against Craig'];
+    cases.push({ name: 'grammar regression rejects adjective phrases substituted as nouns', pass: malformedGrammar.every((text) => /storm of fully rested|mocking your full-rest clarity|the fully rested/i.test(text)) && !/storm of fully rested|mocking your full-rest clarity|the fully rested/i.test(corrected) });
     const passed = cases.filter(entry => entry.pass).length;
     return Response.json({ passed, failed: cases.length - passed, total: cases.length, all_pass: passed === cases.length, results: cases, cleanup, live_state: { protected_ids: ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49'], read_or_mutated: false } });
   } catch (error) {
