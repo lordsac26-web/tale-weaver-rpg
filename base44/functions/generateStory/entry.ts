@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       const castOutcome = await executeUtilitySpellCast({
         base44,
         user,
-        payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId },
+        payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: `${storyRequestId}:intent:0` },
       });
       if (castOutcome.status >= 400) return Response.json(castOutcome.body, { status: castOutcome.status });
       if (castOutcome.body?.spell_detected) authoritativeSpellCast = castOutcome.body;

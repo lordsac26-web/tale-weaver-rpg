@@ -534,7 +534,7 @@ export default function Game() {
       session_id: sessionId,
       character_id: character?.id,
       action_text: action,
-      request_id: requestId,
+      request_id: `${requestId}:intent:0`,
     });
     const data = result.data;
     if (!data?.success) throw new Error(data?.error || 'That spell could not be cast.');
@@ -548,7 +548,7 @@ export default function Game() {
         : data.already_active
           ? `${data.spell_name} is already active; no additional spell slot was used.`
           : isPassWithoutTrace
-            ? `Pass without Trace cast: level-2 slot consumed. Concentration is active; +10 Stealth for ${data.duration || 'up to 1 hour'}.`
+            ? `Pass without Trace — level 2 slot used (${data.remaining_slots} remaining); +10 Stealth, concentration ${data.duration || 'up to 1 hour'}.`
             : `${data.spell_name} cast.${data.heal_amount > 0 ? ` Restored ${data.heal_amount} HP.` : ''}`,
       success: true,
     }]);
