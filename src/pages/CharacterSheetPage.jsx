@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
+import { castSheetSpell } from '@/lib/sheetSpellCast';
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { ChevronLeft, Save, Edit2, Check, X, RefreshCw, Scroll, Printer, Download, Loader2 } from 'lucide-react';
@@ -79,6 +80,7 @@ export default function CharacterSheetPage() {
   const [saveStatus, setSaveStatus] = useState(null); // 'saving' | 'saved' | null
   const [tab, setTab] = useState('stats');
   const [exporting, setExporting] = useState(false);
+  const [castStatus, setCastStatus] = useState(null);
   const sheetRef = useRef(null);
 
   useEffect(() => {
@@ -98,6 +100,22 @@ export default function CharacterSheetPage() {
     await base44.entities.Character.update(character.id, updates);
     setSaveStatus('saved');
     setTimeout(() => setSaveStatus(null), 1800);
+  };
+
+  const handleSheetCast = async (spellName, spellPayload) => {
+    const hpBefore = character.hp_current;
+    try {
+      const data = await castSheetSpell({ sessionId, characterId: character.id, spellName, spellPayload });
+      setCharacter(prev => ({ ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, hp_current: data.hp_current, inventory: data.inventory || prev.inventory }));
+      const message = spellPayload?.attack_type === 'healing'
+        ? `Healed ${data.heal_amount} HP (${hpBefore} → ${data.hp_current}); level-${data.slot_level} slot consumed.`
+        : `${spellName} cast; level-${data.slot_level} slot consumed.`;
+      setCastStatus({ success: true, message });
+      return true;
+    } catch (error) {
+      setCastStatus({ success: false, message: error.message });
+      return false;
+    }
   };
 
   const handlePrint = () => {
@@ -396,9 +414,12 @@ export default function CharacterSheetPage() {
               <div className="p-5"><InventoryTab character={character} onUpdate={handleUpdate} /></div>
             )}
 
-            {/* SPELLS */}
+            {/* SPELLS — session-linked sheets cast authoritatively; standalone sheets expose bookkeeping-only Use Slot controls. */}
             {tab === 'spells' && (
-              <div className="p-5"><SpellbookTab character={character} onUpdateCharacter={handleUpdate} /></div>
+              <div className="p-5 space-y-3">
+                {castStatus && <div className="text-sm rounded-lg px-3 py-2" style={{ color: castStatus.success ? '#bbf7d0' : '#fecaca', background: castStatus.success ? 'rgba(20,80,40,0.35)' : 'rgba(100,20,20,0.35)' }}>{castStatus.message}</div>}
+                <SpellbookTab character={character} onUpdateCharacter={handleUpdate} onCastSpell={sessionId ? handleSheetCast : undefined} />
+              </div>
             )}
 
             {/* MULTICLASS */}

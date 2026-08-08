@@ -139,11 +139,14 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   if (healAmount > 0) updates.hp_current = hpCurrent;
   if (grantedInventory) updates.inventory = grantedInventory;
   await base44.asServiceRole.entities.Character.update(character_id, updates);
+  const sessionWorldState = {
+    ...(session.world_state || {}),
+    last_spell_cast: { spell_name: canonicalName, character_id, slot_level: selectedLevel, heal_amount: healAmount, request_id: token, at: new Date(now).toISOString() },
+  };
   if (spell.concentration) {
-    await base44.asServiceRole.entities.GameSession.update(session_id, {
-      world_state: { ...(session.world_state || {}), active_concentration: { spell_name: canonicalName, character_id, caster_id: character_id, duration: spell.duration || 'Concentration', applied_at: new Date(now).toISOString(), request_id: token } },
-    });
+    sessionWorldState.active_concentration = { spell_name: canonicalName, character_id, caster_id: character_id, duration: spell.duration || 'Concentration', applied_at: new Date(now).toISOString(), request_id: token };
   }
+  await base44.asServiceRole.entities.GameSession.update(session_id, { world_state: sessionWorldState });
   if (session.in_combat && session.combat_state?.combat_id) {
     const combat = await base44.asServiceRole.entities.CombatLog.get(session.combat_state.combat_id);
     if (combat?.is_active) {

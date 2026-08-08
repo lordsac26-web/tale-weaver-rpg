@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
+import { castSheetSpell } from '@/lib/sheetSpellCast';
 
 import { useNavigate } from 'react-router-dom';
 import { User, Loader2, ChevronLeft, Swords } from 'lucide-react';
@@ -1013,18 +1014,13 @@ export default function Game() {
       return succeeded;
     }
     try {
-      const result = await base44.functions.invoke('castUtilitySpell', {
-        session_id: sessionId,
-        character_id: character?.id,
-        spell_name: spellName,
-        action_text: spellPayload?.attack_type === 'healing' ? `cast ${spellName} on myself` : `cast ${spellName}`,
-        target: spellPayload?.attack_type === 'healing' ? 'self' : undefined,
-        cast_token: `sheet:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`, 
-      });
-      const data = result.data;
-      if (!data?.success) throw new Error(data?.error || `${spellName} could not be cast.`);
+      const hpBefore = character?.hp_current;
+      const data = await castSheetSpell({ sessionId, characterId: character?.id, spellName, spellPayload });
       setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, ...(typeof data.hp_current === 'number' ? { hp_current: data.hp_current } : {}), ...(data.inventory ? { inventory: data.inventory } : {}) } : prev);
-      setNarrative(prev => [...prev, { type: 'roll_result', text: `${spellName} cast.${data.heal_amount > 0 ? ` Restored ${data.heal_amount} HP.` : ''}`, success: true }]);
+      const castMessage = spellPayload?.attack_type === 'healing'
+        ? `Healed ${data.heal_amount} HP (${hpBefore} → ${data.hp_current}); level-${data.slot_level} slot consumed.`
+        : `${spellName} cast; level-${data.slot_level} slot consumed.`;
+      setNarrative(prev => [...prev, { type: 'roll_result', text: castMessage, success: true }]);
       setShowCharSheet(false);
       return true;
     } catch (err) {

@@ -16,8 +16,8 @@ export default async function testTypedUtilitySpellRegression(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     if (user.role !== 'admin') return Response.json({ error: 'Admin access required' }, { status: 403 });
     const token = `TypedUtilityQA_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const createFixture = async (label, level = 5) => {
-      const character = await base44.entities.Character.create({ name: `${token}_${label}`, race: 'Human', class: 'Ranger', level, dexterity: 10, hp_max: 30, hp_current: 30, spell_slots: {}, spells_known: ['Pass without Trace'], spells_prepared: ['Pass without Trace'], active_modifiers: [], conditions: [], long_rest_abilities: {}, inventory: [], is_active: false });
+    const createFixture = async (label, level = 5, overrides = {}) => {
+      const character = await base44.entities.Character.create({ name: `${token}_${label}`, race: 'Human', class: 'Ranger', level, dexterity: 10, wisdom: 16, hp_max: 30, hp_current: 30, spell_slots: {}, spells_known: ['Pass without Trace'], spells_prepared: ['Pass without Trace'], active_modifiers: [], conditions: [], long_rest_abilities: {}, inventory: [], is_active: false, ...overrides });
       const session = await base44.asServiceRole.entities.GameSession.create({ character_id: character.id, title: `${token}_${label}`, world_state: {}, story_log: [], is_active: false });
       fixtures.push({ character: character.id, session: session.id });
       return { character, session };
@@ -42,6 +42,20 @@ export default async function testTypedUtilitySpellRegression(req) {
 
     const control = await executeUtilitySpellCast({ base44, user, payload: { session_id: valid.session.id, character_id: valid.character.id, action_text: 'Scout the ridge quietly.', request_id: `${token}:control` } });
     results.push({ name: 'non-spell free text remains a non-cast control', pass: control.status === 200 && control.body?.spell_detected === false });
+
+    const sheetFixture = await createFixture('sheet-cure', 5, { hp_max: 44, hp_current: 26, spell_slots: { level_1: 0 }, spells_known: ['Cure Wounds'], spells_prepared: ['Cure Wounds'] });
+    const sheetPayload = { session_id: sheetFixture.session.id, character_id: sheetFixture.character.id, spell_name: 'Cure Wounds', slot_level: 1, target: 'self', action_text: 'cast Cure Wounds on myself', cast_token: `${token}:sheet-cure` };
+    const sheetCast = await executeUtilitySpellCast({ base44, user, payload: sheetPayload });
+    const sheetAfter = await base44.asServiceRole.entities.Character.get(sheetFixture.character.id);
+    const sheetSession = await base44.asServiceRole.entities.GameSession.get(sheetFixture.session.id);
+    const sheetReplay = await executeUtilitySpellCast({ base44, user, payload: sheetPayload });
+    const sheetAfterReplay = await base44.asServiceRole.entities.Character.get(sheetFixture.character.id);
+    results.push({ name: 'sheet Cast flow heals, consumes exactly one slot, records receipt and session cast state, and replays safely', pass: sheetCast.status === 200 && sheetCast.body?.heal_amount > 0 && sheetAfter.hp_current > 26 && sheetAfter.spell_slots?.level_1 === 1 && (sheetAfter.long_rest_abilities?.__typed_spell_casts || []).some((receipt) => receipt.token === sheetPayload.cast_token) && sheetSession.world_state?.last_spell_cast?.request_id === sheetPayload.cast_token && sheetReplay.body?.already_processed === true && sheetAfterReplay.hp_current === sheetAfter.hp_current && sheetAfterReplay.spell_slots?.level_1 === 1 });
+
+    const beforeNoSession = await base44.asServiceRole.entities.Character.get(sheetFixture.character.id);
+    const noSession = await executeUtilitySpellCast({ base44, user, payload: { character_id: sheetFixture.character.id, spell_name: 'Cure Wounds', target: 'self', action_text: 'cast Cure Wounds on myself', cast_token: `${token}:no-session` } });
+    const afterNoSession = await base44.asServiceRole.entities.Character.get(sheetFixture.character.id);
+    results.push({ name: 'sessionless Cast rejects before any slot or HP mutation', pass: noSession.status === 400 && afterNoSession.hp_current === beforeNoSession.hp_current && afterNoSession.spell_slots?.level_1 === beforeNoSession.spell_slots?.level_1 });
     const passed = results.filter((result) => result.pass).length;
     output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, live_state: { protected_ids: [...LIVE_IDS], read_or_mutated: false } };
   } catch (error) {
