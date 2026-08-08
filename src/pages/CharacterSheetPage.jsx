@@ -418,7 +418,7 @@ export default function CharacterSheetPage() {
             {tab === 'spells' && (
               <div className="p-5 space-y-3">
                 {castStatus && <div className="text-sm rounded-lg px-3 py-2" style={{ color: castStatus.success ? '#bbf7d0' : '#fecaca', background: castStatus.success ? 'rgba(20,80,40,0.35)' : 'rgba(100,20,20,0.35)' }}>{castStatus.message}</div>}
-                <SpellbookTab character={character} onUpdateCharacter={handleUpdate} onCastSpell={sessionId ? handleSheetCast : undefined} />
+                <SpellbookTab character={character} onUpdateCharacter={handleUpdate} onCastSpell={handleSheetCast} />
               </div>
             )}
 

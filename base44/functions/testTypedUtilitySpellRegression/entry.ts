@@ -53,9 +53,9 @@ export default async function testTypedUtilitySpellRegression(req) {
     results.push({ name: 'sheet Cast flow heals, consumes exactly one slot, records receipt and session cast state, and replays safely', pass: sheetCast.status === 200 && sheetCast.body?.heal_amount > 0 && sheetAfter.hp_current > 26 && sheetAfter.spell_slots?.level_1 === 1 && (sheetAfter.long_rest_abilities?.__typed_spell_casts || []).some((receipt) => receipt.token === sheetPayload.cast_token) && sheetSession.world_state?.last_spell_cast?.request_id === sheetPayload.cast_token && sheetReplay.body?.already_processed === true && sheetAfterReplay.hp_current === sheetAfter.hp_current && sheetAfterReplay.spell_slots?.level_1 === 1 });
 
     const beforeNoSession = await base44.asServiceRole.entities.Character.get(sheetFixture.character.id);
-    const noSession = await executeUtilitySpellCast({ base44, user, payload: { character_id: sheetFixture.character.id, spell_name: 'Cure Wounds', target: 'self', action_text: 'cast Cure Wounds on myself', cast_token: `${token}:no-session` } });
+    const noSession = await executeUtilitySpellCast({ base44, user, payload: { character_id: sheetFixture.character.id, spell_name: 'Cure Wounds', slot_level: 1, target: 'self', require_healing: true, request_id: `${token}:no-session`, action_text: 'cast Cure Wounds on myself' } });
     const afterNoSession = await base44.asServiceRole.entities.Character.get(sheetFixture.character.id);
-    results.push({ name: 'sessionless Cast rejects before any slot or HP mutation', pass: noSession.status === 400 && afterNoSession.hp_current === beforeNoSession.hp_current && afterNoSession.spell_slots?.level_1 === beforeNoSession.spell_slots?.level_1 });
+    results.push({ name: 'sessionless sheet cast remains authoritative with receipt, healing, and exactly one additional slot', pass: noSession.status === 200 && noSession.body?.receipt_id && noSession.body?.roll_total > 0 && afterNoSession.hp_current > beforeNoSession.hp_current && afterNoSession.spell_slots?.level_1 === beforeNoSession.spell_slots?.level_1 + 1 });
     const passed = results.filter((result) => result.pass).length;
     output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, live_state: { protected_ids: [...LIVE_IDS], read_or_mutated: false } };
   } catch (error) {

@@ -137,17 +137,9 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
     if (slotLevel === null) return;
     setCastingSpell(spellName);
     try {
-      if (onCastSpell) {
-        const succeeded = await onCastSpell(spellName, { ...details, name: spellName, slot_level: slotLevel, base_level: spellLevel });
-        if (!succeeded) return;
-      } else {
-        // Outside an active game this remains an explicit manual slot tracker.
-        const slotKey = `level_${slotLevel}`;
-        const legacyKey = String(slotLevel);
-        const { [legacyKey]: ignoredLegacy, ...canonicalSlots } = currentSlots;
-        const newUsed = getUsedSlots(slotLevel) + 1;
-        await onUpdateCharacter({ spell_slots: { ...canonicalSlots, [slotKey]: newUsed } });
-      }
+      if (!onCastSpell) return;
+      const succeeded = await onCastSpell(spellName, { ...details, name: spellName, slot_level: slotLevel, base_level: spellLevel });
+      if (!succeeded) return;
       setCastFlash(spellName);
       setTimeout(() => setCastFlash(null), 800);
     } finally {
@@ -280,10 +272,9 @@ export default function SpellbookTab({ character, onUpdateCharacter, onCastSpell
                   <div key={s.name} className={`transition-all ${castFlash === s.name ? 'crit-flash rounded-xl' : ''}`}>
                     <SpellCard spell={s} spellName={s.name} character={spellCardCharacter} isKnown isPrepared
                       onTogglePrepared={togglePrepared}
-                      onCast={spellLvl > 0 ? handleCastSpell : undefined}
+                      onCast={onCastSpell && spellLvl > 0 ? handleCastSpell : undefined}
                       canCast={canCast}
-                      castLabel={onCastSpell ? 'Cast' : 'Use Slot'}
-                      castTitle={onCastSpell ? undefined : 'Manual bookkeeping only — does not resolve spell mechanics'}
+                      castLabel="Cast"
                       sourceClass={isMulticlass ? s.sourceClass : undefined} />
                   </div>
                 );

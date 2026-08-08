@@ -53,11 +53,11 @@ function concentrationModifier(spell, now, characterId) {
 }
 
 export async function executeUtilitySpellCast({ base44, user, payload }) {
-  const { session_id, character_id, spell_name, action_text, slot_level, cast_token, request_id, target } = payload || {};
+  const { session_id, character_id, spell_name, action_text, slot_level, cast_token, request_id, target, require_healing } = payload || {};
   if (!user) return respond(401, { error: 'Unauthorized' });
-  if (!session_id || !character_id) return respond(400, { error: 'session_id and character_id are required' });
-  const session = await base44.asServiceRole.entities.GameSession.get(session_id);
-  if (!session || session.character_id !== character_id) return respond(400, { error: 'Session and character do not match' });
+  if (!character_id) return respond(400, { error: 'character_id is required' });
+  const session = session_id ? await base44.asServiceRole.entities.GameSession.get(session_id) : null;
+  if (session_id && (!session || session.character_id !== character_id)) return respond(400, { error: 'Session and character do not match' });
   const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return respond(404, { error: 'Character not found' });
   if (!characterBelongsToUser(character, user)) return respond(403, { error: 'Character does not belong to the authenticated user' });
@@ -70,6 +70,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   if (!spell) return respond(404, { error: `Canonical spell data is missing for ${canonicalName}`, invalid: true });
   const normalizedName = normalize(canonicalName);
   const isHealingSpell = spell.attack_type === 'healing' || normalizedName === 'cure wounds';
+  if (require_healing && !isHealingSpell) return respond(400, { error: `${canonicalName} is not a self-healing spell supported by the character sheet.`, invalid: true });
   const isHuntersMark = normalizedName === 'hunters mark';
   const isUtilitySpell = (spell.attack_type === 'utility' || !!spell.is_utility) && !isHuntersMark;
   if (isHuntersMark) return respond(400, { error: "Hunter's Mark requires a hostile combat target. Cast it through the combat spell action.", invalid: true, target_required: true });
@@ -89,7 +90,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
     const maximum = maxSlots(character, prior.slot_level);
     const normalizedSlots = normalizeSpellSlots(character.spell_slots);
     const used = Number(normalizedSlots[`level_${prior.slot_level}`]) || 0;
-    return respond(200, { success: true, spell_detected: true, already_processed: true, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: normalizedSlots, active_modifiers: character.active_modifiers || [], inventory: character.inventory || [], heal_amount: prior.heal_amount || 0, hp_current: character.hp_current });
+    return respond(200, { success: true, spell_detected: true, already_processed: true, receipt_id: prior.receipt_id || token, request_id: token, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: normalizedSlots, active_modifiers: character.active_modifiers || [], inventory: character.inventory || [], heal_amount: prior.heal_amount || 0, roll_expression: prior.roll_expression || null, roll_total: Number(prior.roll_total ?? prior.heal_amount ?? 0), hp_before: Number(prior.hp_before ?? character.hp_current), hp_after: Number(prior.hp_after ?? character.hp_current), hp_current: character.hp_current, hp_max: character.hp_max });
   }
   const now = Date.now();
   const active = (character.active_modifiers || []).filter((modifier) => !modifier.expires_at || new Date(modifier.expires_at).getTime() > now);
@@ -112,15 +113,21 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   const expiresAt = isPassWithoutTrace ? new Date(now + 60 * 60 * 1000).toISOString() : null;
   const structuredConditions = isPassWithoutTrace ? addStructuredCondition(character.conditions, buildStructuredCondition({ name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id, duration_type: 'timestamp', expires_at: expiresAt, concentration: true })) : (character.conditions || []);
   let healAmount = 0;
-  let hpCurrent = Number(character.hp_current) || 0;
-  const selfHealing = isHealingSpell && (target === 'self' || /\b(myself|my self|on me|heal me|my wounds)\b/i.test(String(action_text || '')));
+  const hpBefore = Number(character.hp_current) || 0;
+  let hpCurrent = hpBefore;
+  let rollExpression = null;
+  let rollTotal = 0;
+  const selfHealing = isHealingSpell && (require_healing || target === 'self' || /\b(myself|my self|on me|heal me|my wounds)\b/i.test(String(action_text || '')));
   if (selfHealing) {
     const dice = String(spell.heal_dice || spell.damage_dice || spell.description || '').match(/(\d+)d(\d+)/i);
     const count = (Number(dice?.[1]) || 1) + Math.max(0, selectedLevel - baseLevel);
     const sides = Number(dice?.[2]) || 8;
     const ability = ({ Cleric: 'wisdom', Druid: 'wisdom', Ranger: 'wisdom', Paladin: 'charisma', Bard: 'charisma', Sorcerer: 'charisma', Warlock: 'charisma', Wizard: 'intelligence', Artificer: 'intelligence' })[character.class] || 'wisdom';
-    for (let index = 0; index < count; index++) healAmount += Math.floor(Math.random() * sides) + 1;
-    healAmount = Math.max(0, healAmount + Math.floor(((Number(character[ability]) || 10) - 10) / 2));
+    for (let index = 0; index < count; index++) rollTotal += Math.floor(Math.random() * sides) + 1;
+    const abilityModifier = Math.floor(((Number(character[ability]) || 10) - 10) / 2);
+    rollExpression = `${count}d${sides}${abilityModifier >= 0 ? '+' : ''}${abilityModifier}`;
+    healAmount = Math.max(0, rollTotal + abilityModifier);
+    rollTotal = healAmount;
     hpCurrent = Math.min(Number(character.hp_max) || hpCurrent, hpCurrent + healAmount);
   }
   let grantedInventory = null;
@@ -133,26 +140,28 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
     else inventory.push({ name: 'Goodberry', category: 'Consumable', quantity: 10, description: 'A transmuted berry that restores 1 Hit Point when eaten and provides enough nourishment to sustain a creature for one day. Expires 24 hours after casting.', expires_at: expires });
     grantedInventory = inventory;
   }
-  abilities.__typed_spell_casts = [...receipts.filter((receipt) => receipt?.token !== token).slice(-24), { token, spell_name: canonicalName, slot_level: selectedLevel, heal_amount: healAmount, granted_goodberry: grantedGoodberry, at: new Date(now).toISOString() }];
+  abilities.__typed_spell_casts = [...receipts.filter((receipt) => receipt?.token !== token).slice(-24), { token, receipt_id: token, spell_name: canonicalName, slot_level: selectedLevel, heal_amount: healAmount, roll_expression: rollExpression, roll_total: rollTotal, hp_before: hpBefore, hp_after: hpCurrent, granted_goodberry: grantedGoodberry, at: new Date(now).toISOString() }];
   const updates = { spell_slots: spellSlots, active_modifiers: activeModifiers, long_rest_abilities: abilities };
   if (isPassWithoutTrace) updates.conditions = structuredConditions;
   if (healAmount > 0) updates.hp_current = hpCurrent;
   if (grantedInventory) updates.inventory = grantedInventory;
   await base44.asServiceRole.entities.Character.update(character_id, updates);
-  const sessionWorldState = {
-    ...(session.world_state || {}),
-    last_spell_cast: { spell_name: canonicalName, character_id, slot_level: selectedLevel, heal_amount: healAmount, request_id: token, at: new Date(now).toISOString() },
-  };
-  if (spell.concentration) {
-    sessionWorldState.active_concentration = { spell_name: canonicalName, character_id, caster_id: character_id, duration: spell.duration || 'Concentration', applied_at: new Date(now).toISOString(), request_id: token };
+  if (session) {
+    const sessionWorldState = {
+      ...(session.world_state || {}),
+      last_spell_cast: { spell_name: canonicalName, character_id, slot_level: selectedLevel, heal_amount: healAmount, request_id: token, at: new Date(now).toISOString() },
+    };
+    if (spell.concentration) {
+      sessionWorldState.active_concentration = { spell_name: canonicalName, character_id, caster_id: character_id, duration: spell.duration || 'Concentration', applied_at: new Date(now).toISOString(), request_id: token };
+    }
+    await base44.asServiceRole.entities.GameSession.update(session_id, { world_state: sessionWorldState });
   }
-  await base44.asServiceRole.entities.GameSession.update(session_id, { world_state: sessionWorldState });
-  if (session.in_combat && session.combat_state?.combat_id) {
+  if (session?.in_combat && session.combat_state?.combat_id) {
     const combat = await base44.asServiceRole.entities.CombatLog.get(session.combat_state.combat_id);
     if (combat?.is_active) {
       const combatants = (combat.combatants || []).map((combatant) => combatant.id === character_id ? { ...combatant, hp_current: hpCurrent, conditions: isPassWithoutTrace ? structuredConditions : (combatant.conditions || []) } : combatant);
       await base44.asServiceRole.entities.CombatLog.update(combat.id, { combatants, log_entries: [...(combat.log_entries || []), { type: 'spell_cast', spell_name: canonicalName, actor: character.name, target: character.name, round: combat.round || 0, timestamp: new Date(now).toISOString(), request_id: token, heal_amount: healAmount }], world_state: spell.concentration ? { ...(combat.world_state || {}), concentration_spell: canonicalName, concentration_caster: character.name } : (combat.world_state || {}) });
     }
   }
-  return respond(200, { success: true, spell_detected: true, already_active: false, spell_name: canonicalName, slot_level: selectedLevel, base_level: baseLevel, used_slots: usedAfter, max_slots: maximum, remaining_slots: Math.max(0, maximum - usedAfter), spell_slots: spellSlots, active_modifiers: activeModifiers, concentration: !!spell.concentration, duration: spell.duration, attack_type: spell.attack_type, components: spell.components, inventory: grantedInventory || character.inventory || [], heal_amount: healAmount, hp_current: hpCurrent });
+  return respond(200, { success: true, spell_detected: true, already_active: false, receipt_id: token, request_id: token, spell_name: canonicalName, slot_level: selectedLevel, base_level: baseLevel, used_slots: usedAfter, max_slots: maximum, remaining_slots: Math.max(0, maximum - usedAfter), spell_slots: spellSlots, active_modifiers: activeModifiers, concentration: !!spell.concentration, duration: spell.duration, attack_type: spell.attack_type, components: spell.components, inventory: grantedInventory || character.inventory || [], heal_amount: healAmount, roll_expression: rollExpression, roll_total: rollTotal, hp_before: hpBefore, hp_after: hpCurrent, hp_current: hpCurrent, hp_max: character.hp_max });
 }
