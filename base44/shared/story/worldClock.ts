@@ -1,31 +1,47 @@
-const PERIODS = [
-  { name: 'Night', hour: 0 },
-  { name: 'Dawn', hour: 5 },
-  { name: 'Morning', hour: 8 },
-  { name: 'Midday', hour: 11 },
-  { name: 'Afternoon', hour: 14 },
-  { name: 'Dusk', hour: 17 },
-  { name: 'Evening', hour: 20 },
-];
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-const normalizePeriod = (value) => PERIODS.find((period) => period.name.toLowerCase() === String(value || '').toLowerCase()) || PERIODS[2];
+export const getPeriodForHour = (hour) => {
+  const value = ((Number(hour) % 24) + 24) % 24;
+  if (value < 5) return 'Midnight';
+  if (value < 8) return 'Dawn';
+  if (value < 12) return 'Morning';
+  if (value < 17) return 'Afternoon';
+  if (value < 20) return 'Dusk';
+  return 'Night';
+};
+
+export const formatWorldTime = (hour) => {
+  const value = ((Number(hour) % 24) + 24) % 24;
+  const suffix = value >= 12 ? 'PM' : 'AM';
+  const displayHour = value % 12 || 12;
+  return `${displayHour}:00 ${suffix}`;
+};
+
+const legacyHour = (timeOfDay) => ({ Dawn: 5, Morning: 8, Midday: 12, Afternoon: 14, Dusk: 17, Evening: 20, Night: 21, Midnight: 0 })[String(timeOfDay || '')] ?? 8;
+
+export const getClockHour = ({ timeOfDay, worldState }) => {
+  const stored = Number(worldState?.clock_hour);
+  return Number.isInteger(stored) && stored >= 0 && stored < 24 ? stored : legacyHour(timeOfDay);
+};
+
+export const elapsedHoursForRest = ({ intent = 'long_rest_8h', startHour }) => {
+  if (intent !== 'sleep_until_dawn') return 8;
+  const toNextDawn = (5 - startHour + 24) % 24;
+  return toNextDawn >= 8 ? toNextDawn : toNextDawn + 24;
+};
 
 export const advanceWorldClock = ({ timeOfDay, worldState, elapsedHours = 8, completedAt = new Date().toISOString() }) => {
-  const current = normalizePeriod(timeOfDay);
-  const priorElapsed = Number(worldState?.elapsed_hours || 0);
-  const nextHour = (current.hour + Number(elapsedHours || 0)) % 24;
-  const next = [...PERIODS].reverse().find((period) => period.hour <= nextHour) || PERIODS[0];
+  const beforeHour = getClockHour({ timeOfDay, worldState });
+  const hours = Math.max(0, Number(elapsedHours) || 0);
+  const afterHour = (beforeHour + hours) % 24;
+  const dayRollover = Math.floor((beforeHour + hours) / 24);
+  const priorDay = Number(worldState?.day ?? worldState?.date_day ?? 0) || 0;
   const baseTimestamp = Date.parse(worldState?.world_clock_timestamp || completedAt);
-  const timestamp = new Date((Number.isFinite(baseTimestamp) ? baseTimestamp : Date.now()) + Number(elapsedHours || 0) * 60 * 60 * 1000).toISOString();
+  const timestamp = new Date((Number.isFinite(baseTimestamp) ? baseTimestamp : Date.now()) + hours * 60 * 60 * 1000).toISOString();
+  const period = getPeriodForHour(afterHour);
   return {
-    time_of_day: next.name,
-    world_state: {
-      ...(worldState || {}),
-      clock_hour: nextHour,
-      elapsed_hours: priorElapsed + Number(elapsedHours || 0),
-      world_clock_timestamp: timestamp,
-      last_rest_completed_at: completedAt,
-      last_rest_duration_hours: Number(elapsedHours || 0),
-    },
+    time_of_day: period,
+    clock: { before_hour: beforeHour, after_hour: afterHour, elapsed_hours: hours, day_rollover: dayRollover, period, before_label: `${formatWorldTime(beforeHour)} — ${getPeriodForHour(beforeHour)}`, after_label: `${formatWorldTime(afterHour)} — ${period}`, world_clock_timestamp: timestamp },
+    world_state: { ...(worldState || {}), clock_hour: afterHour, day: priorDay + dayRollover, elapsed_hours: (Number(worldState?.elapsed_hours) || 0) + hours, world_clock_timestamp: timestamp, last_rest_completed_at: completedAt, last_rest_duration_hours: hours, last_rest_before_hour: beforeHour, last_rest_after_hour: afterHour, last_rest_day_rollover: dayRollover, last_rest_period: period },
   };
 };

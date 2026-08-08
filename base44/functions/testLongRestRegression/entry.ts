@@ -31,7 +31,9 @@ export default async function testLongRestRegression(req) {
     });
 
     const clock = advanceWorldClock({ timeOfDay: 'Dusk', worldState: session.world_state, elapsedHours: 8, completedAt: '2026-01-03T17:00:00.000Z' });
-    results.push({ name: 'Dusk plus eight hours resolves to hour one Night', pass: clock.world_state.clock_hour === 1 && clock.time_of_day === 'Night' && clock.world_state.elapsed_hours === 8 });
+    results.push({ name: 'Dusk plus eight hours resolves to hour one with exact Midnight display', pass: clock.world_state.clock_hour === 1 && clock.time_of_day === 'Midnight' && clock.clock.after_label === '1:00 AM — Midnight' && clock.world_state.elapsed_hours === 8 });
+    const dawnClock = advanceWorldClock({ timeOfDay: 'Dusk', worldState: session.world_state, elapsedHours: 12, completedAt: '2026-01-03T17:00:00.000Z' });
+    results.push({ name: 'sleep-until-dawn advances to the next dawn only after eight elapsed hours', pass: dawnClock.world_state.clock_hour === 5 && dawnClock.clock.elapsed_hours === 12 && dawnClock.clock.day_rollover === 1 && dawnClock.time_of_day === 'Dawn' });
     results.push({ name: 'Fixture is owner-attributed and excludes protected live IDs', pass: character.created_by_id === user.id && !LIVE_IDS.has(character.id) && !LIVE_IDS.has(session.id) });
     results.push({ name: 'Long-rest fixture carries restoration inputs', pass: character.hp_current === 29 && character.spell_slots.level_1 === 3 && character.spell_slots.level_2 === 2 && character.hit_dice_remaining === 0 && character.arcane_recovery_used === true });
     results.push({ name: 'Persistent, timed, concentration, inventory, ammo, and XP fixtures are isolated', pass: character.conditions.length === 3 && character.active_modifiers[0].concentration === true && character.inventory[0].quantity === 20 && character.xp === 75 });

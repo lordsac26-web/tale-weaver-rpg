@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
-import { advanceWorldClock } from '../../shared/story/worldClock.ts';
+import { advanceWorldClock, elapsedHoursForRest, getClockHour } from '../../shared/story/worldClock.ts';
 
 // Spell slot progression by class
 const SPELL_SLOTS_BY_CLASS = {
@@ -86,7 +86,7 @@ export default async function handleRest(req) {
   const base44 = createClientFromRequest(req);
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  const { character_id, session_id, rest_request_id, rest_type, hit_dice_to_spend, had_food_water = true, location_safe = false, action, slot_levels } = await req.json();
+  const { character_id, session_id, rest_request_id, rest_type, rest_intent = 'long_rest_8h', hit_dice_to_spend, had_food_water = true, location_safe = false, action, slot_levels } = await req.json();
 
   // Server-authoritative rest execution: all entity access uses the service role.
   const dbClient = base44.asServiceRole;
@@ -102,6 +102,10 @@ export default async function handleRest(req) {
   const restReceipts = Array.isArray(session?.world_state?.__rest_receipts) ? session.world_state.__rest_receipts : [];
   const priorRest = rest_type === 'long' && receiptToken ? restReceipts.find((entry) => entry.token === receiptToken) : null;
   if (priorRest?.response) return Response.json({ ...priorRest.response, already_processed: true });
+  if (rest_type === 'long' && !['long_rest_8h', 'sleep_until_dawn'].includes(rest_intent)) return Response.json({ error: 'Invalid long-rest intent' }, { status: 400 });
+  const restStartHour = session ? getClockHour({ timeOfDay: session.time_of_day, worldState: session.world_state }) : null;
+  const restElapsedHours = rest_type === 'long' ? elapsedHoursForRest({ intent: rest_intent, startHour: restStartHour }) : 0;
+  const restClock = rest_type === 'long' && session ? advanceWorldClock({ timeOfDay: session.time_of_day, worldState: session.world_state, elapsedHours: restElapsedHours }) : null;
 
   // ── ARCANE RECOVERY (Wizard, PHB p.115) ──────────────────────────────────
   // Once per day during a short rest, recover spell slots whose combined level
@@ -319,9 +323,11 @@ export default async function handleRest(req) {
       const key = name.toLowerCase();
       const duration = typeof condition === 'object' ? String(condition?.duration || '').toLowerCase() : '';
       const clearsOnLongRest = typeof condition === 'object' && condition?.clears_on_long_rest === true;
-      const isExhausted = key === 'exhausted' || key === 'exhaustion';
+             const expiresAt = typeof condition === 'object' ? Date.parse(condition?.expires_at || '') : NaN;
+             const expiredByGameClock = Number.isFinite(expiresAt) && expiresAt <= Date.parse(restClock?.clock?.world_clock_timestamp || '');
+             const isExhausted = key === 'exhausted' || key === 'exhaustion';
       const temporaryDuration = ['scene', 'combat', 'rest', 'short_rest', 'long_rest'].includes(duration);
-      const shouldClear = clearsOnLongRest || temporaryDuration || (isExhausted && had_food_water);
+      const shouldClear = expiredByGameClock || clearsOnLongRest || temporaryDuration || (isExhausted && had_food_water);
       if (shouldClear && !(isExhausted && !had_food_water)) {
         if (name) clearedConditions.push(name);
         return false;
@@ -364,7 +370,8 @@ export default async function handleRest(req) {
 
     updates.death_saves_success = 0;
     updates.death_saves_failure = 0;
-    const nonConcentrationModifiers = (character.active_modifiers || []).filter(m => !m.concentration);
+    const restClockTime = Date.parse(restClock?.clock?.world_clock_timestamp || '');
+    const nonConcentrationModifiers = (character.active_modifiers || []).filter(m => !m.concentration && !(Number.isFinite(Date.parse(m?.expires_at || '')) && Date.parse(m.expires_at) <= restClockTime));
     if (nonConcentrationModifiers.length !== (character.active_modifiers || []).length) {
       restorations.push('Concentration ended');
     }
@@ -388,11 +395,12 @@ export default async function handleRest(req) {
   const response = { character: updatedChar, healing, rest_type, restorations, narrative: rest_type === 'long' ? restNarrative : undefined };
   if (rest_type === 'long' && session) {
     const completedAt = new Date().toISOString();
-    const clock = advanceWorldClock({ timeOfDay: session.time_of_day, worldState: session.world_state, elapsedHours: 8, completedAt });
-    const receipt = { token: receiptToken || `long-rest:${completedAt}`, response: { ...response, time_of_day: clock.time_of_day }, completed_at: completedAt };
+    const clock = advanceWorldClock({ timeOfDay: session.time_of_day, worldState: session.world_state, elapsedHours: restElapsedHours, completedAt });
+    const clockResult = { intent: rest_intent, ...clock.clock };
+    const receipt = { token: receiptToken || `long-rest:${completedAt}`, response: { ...response, time_of_day: clock.time_of_day, clock: clockResult }, completed_at: completedAt };
     clock.world_state.__rest_receipts = [...restReceipts.filter((entry) => entry.token !== receipt.token).slice(-24), receipt];
     const updatedSession = await dbClient.entities.GameSession.update(session.id, { time_of_day: clock.time_of_day, world_state: clock.world_state });
-    return Response.json({ ...response, time_of_day: updatedSession.time_of_day, session: updatedSession });
+    return Response.json({ ...response, time_of_day: updatedSession.time_of_day, clock: clockResult, session: updatedSession });
   }
   return Response.json(response);
   } catch (error) {

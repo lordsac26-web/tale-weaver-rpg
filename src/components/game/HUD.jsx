@@ -22,6 +22,9 @@ export default function HUD({ character, session }) {
   const totalSlotsUsed = Object.keys(currentSlots).reduce((sum, key) => sum + (currentSlots[key] || 0), 0);
   const totalSlotsMax = slotMaxArr.reduce((sum, val) => sum + val, 0);
   const CONDITION_PLACEHOLDERS = new Set(['', 'none', 'normal', 'no condition', 'no conditions', 'n/a', 'null', 'undefined']);
+  const clockHour = Number.isInteger(Number(session?.world_state?.clock_hour)) ? Number(session.world_state.clock_hour) : null;
+  const clockPeriod = clockHour == null ? session?.time_of_day : (clockHour < 5 ? 'Midnight' : clockHour < 8 ? 'Dawn' : clockHour < 12 ? 'Morning' : clockHour < 17 ? 'Afternoon' : clockHour < 20 ? 'Dusk' : 'Night');
+  const clockLabel = clockHour == null ? `${session?.time_of_day || 'Unknown time'}` : `${clockHour % 12 || 12}:00 ${clockHour >= 12 ? 'PM' : 'AM'} — ${clockPeriod}`;
   const visibleConditions = (character.conditions || []).filter(cond => {
     const name = String(typeof cond === 'string' ? cond : cond?.name || '').trim().toLowerCase();
     return !CONDITION_PLACEHOLDERS.has(name);
@@ -132,7 +135,7 @@ export default function HUD({ character, session }) {
             </span>
             <span className="flex items-center gap-1.5">
               <Clock className="w-3 h-3" />
-              <span className="italic">{session.time_of_day}, {session.season}</span>
+              <span className="italic">{clockLabel}, {session.season}</span>
             </span>
           </div>
         )}

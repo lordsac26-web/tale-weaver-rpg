@@ -1874,6 +1874,7 @@ export default function Game() {
                 session_id: sessionId,
                 rest_request_id: `rest:${sessionId}:${restType}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
                 rest_type: restType,
+                rest_intent: restType === 'long' ? 'long_rest_8h' : undefined,
                 hit_dice_to_spend: hitDiceToSpend,
                 location_safe: locationSafe,
               });
@@ -1931,10 +1932,13 @@ export default function Game() {
               const detailLine = (result.data.restorations || []).length > 0
                 ? ` ${result.data.restorations.join(', ')}.`
                 : '';
+              const timeLine = result.data.clock
+                ? ` ${result.data.clock.elapsed_hours} hours passed: ${result.data.clock.before_label} → ${result.data.clock.after_label}${result.data.clock.day_rollover ? ' (next day)' : ''}.`
+                : '';
 
               setNarrative(prev => [...prev, {
                 type: 'narration',
-                text: `${icon} ${intro} ${hpLine}${detailLine}`.trim()
+                text: `${icon} ${intro} ${hpLine}${detailLine}${timeLine}`.trim()
               }]);
               setShowRestModal(false);
               await loadState();
