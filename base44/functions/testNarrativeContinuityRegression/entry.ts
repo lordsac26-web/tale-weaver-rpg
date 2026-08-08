@@ -78,13 +78,18 @@ export default async function testNarrativeContinuityRegression(req) {
     cases.push({ name: 'exact lingering-magic live-shaped sentence is rejected when PWT concentration is inactive', pass: activeMasking.test(lingeringMagicFrom) && lingeringMagicFrom.includes('lingering remnants of your magic') });
     cases.push({ name: 'lingering-magic repair requires the exact grounded replacement sentence', pass: lingeringMagicFrom.replace(lingeringMagicFrom, lingeringMagicTo) === lingeringMagicTo && lingeringMagicTo.split(lingeringMagicTo).length === 2 && !activeMasking.test(lingeringMagicTo) });
     cases.push({ name: 'historical magic activity is allowed when it makes no current concealment claim', pass: !activeMasking.test('Earlier, Pass without Trace had been active during the approach; it has since faded.') });
-    const indexedStoryLog = Array.from({ length: 61 }, (_, index) => ({ timestamp: `entry-${index}`, action: 'choice', choices: [{ text: `Choice ${index}` }], text: `Unchanged entry ${index}.` }));
-    indexedStoryLog[59] = { timestamp: 'target', action: 'choice', player_choice: 'Proceed', choices: [{ text: 'Watch the door', dc: 14, risk_level: 'medium' }], text: `${corrected} ${lingeringMagicFrom}` };
-    indexedStoryLog[60] = { timestamp: 'last', action: 'choice', choices: [], text: 'Different last entry and derived display text.' };
-    const targetIndex = 59;
+    const indexedStoryLog = Array.from({ length: 60 }, (_, index) => ({ timestamp: `entry-${index}`, action: 'choice', choices: [{ text: `Choice ${index}` }], text: `Unchanged entry ${index}.` }));
+    indexedStoryLog[58] = { timestamp: 'target', action: 'choice', player_choice: 'Proceed', choices: [{ text: 'Watch the door', dc: 14, risk_level: 'medium' }], text: lingeringMagicFrom };
+    indexedStoryLog[59] = { timestamp: 'wolf-encounter', action: 'combat', choices: [], text: `${corrected} The wolves close in.` };
+    const scanTargets = (storyLog) => storyLog.flatMap((entry, index) => { const occurrenceCountWithinText = String(entry.text || '').split(lingeringMagicFrom).length - 1; return occurrenceCountWithinText ? [{ index, occurrenceCountWithinText }] : []; });
+    const matches = scanTargets(indexedStoryLog);
+    const targetIndex = matches.length === 1 && matches[0].occurrenceCountWithinText === 1 ? matches[0].index : -1;
     const indexedClone = indexedStoryLog.map((entry, index) => index === targetIndex ? { ...entry, text: entry.text.replace(lingeringMagicFrom, lingeringMagicTo) } : entry);
-    cases.push({ name: 'lingering-magic repair targets story_log[59].text rather than the different last entry or derived field', pass: indexedClone[59].text.includes(lingeringMagicTo) && indexedClone[60].text === indexedStoryLog[60].text && indexedClone[59].text !== indexedStoryLog[59].text });
-    cases.push({ name: 'indexed repair preserves every other story log entry and target metadata byte-identically', pass: indexedClone.every((entry, index) => index === 59 || JSON.stringify(entry) === JSON.stringify(indexedStoryLog[index])) && JSON.stringify({ ...indexedClone[59], text: undefined }) === JSON.stringify({ ...indexedStoryLog[59], text: undefined }) });
+    cases.push({ name: 'global scanner resolves target story_log[58].text and leaves later index59 wolf encounter untouched', pass: targetIndex === 58 && indexedClone[58].text === lingeringMagicTo && JSON.stringify(indexedClone[59]) === JSON.stringify(indexedStoryLog[59]) });
+    cases.push({ name: 'indexed repair preserves every other story log entry and target metadata byte-identically', pass: indexedClone.every((entry, index) => index === 58 || JSON.stringify(entry) === JSON.stringify(indexedStoryLog[index])) && JSON.stringify({ ...indexedClone[58], text: undefined }) === JSON.stringify({ ...indexedStoryLog[58], text: undefined }) });
+    const duplicateStoryLog = [...indexedStoryLog, { timestamp: 'duplicate', choices: [], text: lingeringMagicFrom }];
+    const duplicateMatches = scanTargets(duplicateStoryLog);
+    cases.push({ name: 'duplicate target sentences across entries fail closed instead of selecting either entry', pass: duplicateMatches.length === 2 && duplicateMatches.reduce((total, match) => total + match.occurrenceCountWithinText, 0) === 2 });
     const passed = cases.filter(entry => entry.pass).length;
     return Response.json({ passed, failed: cases.length - passed, total: cases.length, all_pass: passed === cases.length, results: cases, cleanup, live_state: { protected_ids: ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49'], read_or_mutated: false } });
   } catch (error) {
