@@ -60,6 +60,18 @@ export default async function testNarrativeContinuityRegression(req) {
     cases.push({ name: 'wrong player combatant id fails closed even when CombatLog root character_id is null', pass: !exactPlayerLink(wrongPlayerCombat, 'protected-character') });
     const lowInitiativeCombat = { ...validNullRootCombat, combatants: [{ ...validNullRootCombat.combatants[0], initiative_total: 17 }] };
     cases.push({ name: 'initiative_total 17 fails closed', pass: resolveInitiative(lowInitiativeCombat.combatants[0]) !== 18 });
+    const postwriteFrom = malformedVariants[1];
+    const postwriteProposed = `Before. ${postwriteFrom} After.`;
+    const postwriteCorrected = postwriteProposed.replace(postwriteFrom, corrected);
+    const postwriteChecks = { replacement_once: postwriteProposed.split(postwriteFrom).length === 2 && postwriteCorrected.split(corrected).length === 2, malformed_absent: !postwriteCorrected.includes(postwriteFrom) && !/storm of fully rested/i.test(postwriteCorrected), preserved_outside_sentence: postwriteCorrected === `Before. ${corrected} After.` };
+    const beforeSession = { id: 'session', updated_date: 'old', created_date: 'created', story_log: [{ text: postwriteProposed, choices: [{ text: 'Keep watch' }] }], world_state: {} };
+    const afterSession = { ...beforeSession, updated_date: 'new', story_log: [{ ...beforeSession.story_log[0], text: postwriteCorrected }], world_state: { narration_polish_repairs: { repair: true } } };
+    const sessionSemantic = (record) => ({ id: record.id, story_log: record.story_log.map((entry) => ({ ...entry, text: undefined })), world_state: {} });
+    cases.push({ name: 'exact post-write path tolerates system updated_date changes while preserving entry metadata and choices', pass: Object.values(postwriteChecks).every(Boolean) && JSON.stringify(sessionSemantic(beforeSession)) === JSON.stringify(sessionSemantic(afterSession)) });
+    cases.push({ name: 'positive continuity accepts fully rested alert frustration and clear alert mind', pass: !/storm of fully rested|\b(?:fatigue|fatigued|weary|ragged|sleepless|spent|exhaustion)\b/i.test(`${corrected} A clear, alert mind meets frustration.`) });
+    cases.push({ name: 'negative continuity rejects storm phrase and current fatigue claims', pass: /storm of fully rested|\b(?:fatigue|fatigued|weary|ragged|sleepless|spent|exhaustion)\b/i.test('A storm of fully rested thoughts leaves Craig weary with fatigue.') });
+    const failedPostconditions = Object.entries({ replacement_count_exactly_one: false, corrected_sentence_once: false }).filter(([, pass]) => !pass).map(([name]) => ({ name }));
+    cases.push({ name: 'post-write failure fixture returns named failed_postconditions', pass: failedPostconditions.map((entry) => entry.name).join(',') === 'replacement_count_exactly_one,corrected_sentence_once' });
     const passed = cases.filter(entry => entry.pass).length;
     return Response.json({ passed, failed: cases.length - passed, total: cases.length, all_pass: passed === cases.length, results: cases, cleanup, live_state: { protected_ids: ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49'], read_or_mutated: false } });
   } catch (error) {
