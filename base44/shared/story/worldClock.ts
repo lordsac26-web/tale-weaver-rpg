@@ -17,7 +17,7 @@ export const formatWorldTime = (hour) => {
   return `${displayHour}:00 ${suffix}`;
 };
 
-const legacyHour = (timeOfDay) => ({ Dawn: 5, Morning: 8, Midday: 12, Afternoon: 14, Dusk: 17, Evening: 20, Night: 21, Midnight: 0 })[String(timeOfDay || '')] ?? 8;
+const legacyHour = (timeOfDay) => ({ Midnight: 0, Dawn: 6, Morning: 9, Midday: 12, Afternoon: 14, Dusk: 18, Evening: 21, Night: 21 })[String(timeOfDay || '')] ?? 9;
 
 export const getClockHour = ({ timeOfDay, worldState }) => {
   const stored = Number(worldState?.clock_hour);
@@ -36,12 +36,13 @@ export const advanceWorldClock = ({ timeOfDay, worldState, elapsedHours = 8, com
   const afterHour = (beforeHour + hours) % 24;
   const dayRollover = Math.floor((beforeHour + hours) / 24);
   const priorDay = Number(worldState?.day ?? worldState?.date_day ?? 0) || 0;
+  const afterDay = priorDay + dayRollover;
   const baseTimestamp = Date.parse(worldState?.world_clock_timestamp || completedAt);
   const timestamp = new Date((Number.isFinite(baseTimestamp) ? baseTimestamp : Date.now()) + hours * 60 * 60 * 1000).toISOString();
   const period = getPeriodForHour(afterHour);
   return {
     time_of_day: period,
-    clock: { before_hour: beforeHour, after_hour: afterHour, elapsed_hours: hours, day_rollover: dayRollover, period, before_label: `${formatWorldTime(beforeHour)} — ${getPeriodForHour(beforeHour)}`, after_label: `${formatWorldTime(afterHour)} — ${period}`, world_clock_timestamp: timestamp },
+    clock: { before_hour: beforeHour, after_hour: afterHour, elapsed_hours: hours, before_day: priorDay, after_day: afterDay, day_rollover: dayRollover, before_period: getPeriodForHour(beforeHour), after_period: period, period, before_label: `${formatWorldTime(beforeHour)} — ${getPeriodForHour(beforeHour)}`, after_label: `${formatWorldTime(afterHour)} — ${period}`, world_clock_timestamp: timestamp },
     world_state: { ...(worldState || {}), clock_hour: afterHour, day: priorDay + dayRollover, elapsed_hours: (Number(worldState?.elapsed_hours) || 0) + hours, world_clock_timestamp: timestamp, last_rest_completed_at: completedAt, last_rest_duration_hours: hours, last_rest_before_hour: beforeHour, last_rest_after_hour: afterHour, last_rest_day_rollover: dayRollover, last_rest_period: period },
   };
 };

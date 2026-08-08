@@ -37,6 +37,10 @@ export default async function testLongRestRegression(req) {
     results.push({ name: 'Fixture is owner-attributed and excludes protected live IDs', pass: character.created_by_id === user.id && !LIVE_IDS.has(character.id) && !LIVE_IDS.has(session.id) });
     results.push({ name: 'Long-rest fixture carries restoration inputs', pass: character.hp_current === 29 && character.spell_slots.level_1 === 3 && character.spell_slots.level_2 === 2 && character.hit_dice_remaining === 0 && character.arcane_recovery_used === true });
     results.push({ name: 'Persistent, timed, concentration, inventory, ammo, and XP fixtures are isolated', pass: character.conditions.length === 3 && character.active_modifiers[0].concentration === true && character.inventory[0].quantity === 20 && character.xp === 75 });
+    const midnightClock = advanceWorldClock({ timeOfDay: 'Midnight', worldState: { elapsed_hours: 0, day: 3 }, elapsedHours: 8, completedAt: '2026-01-03T00:00:00.000Z' });
+    results.push({ name: 'Legacy Midnight normalizes to hour zero and eight-hour rest reaches Morning with one rollover', pass: midnightClock.clock.before_hour === 0 && midnightClock.clock.after_hour === 8 && midnightClock.time_of_day === 'Morning' && midnightClock.clock.before_day === 3 && midnightClock.clock.after_day === 3 && midnightClock.clock.day_rollover === 0 });
+    const staleExactWins = advanceWorldClock({ timeOfDay: 'Dusk', worldState: { clock_hour: 0, day: 1 }, elapsedHours: 8, completedAt: '2026-01-01T00:00:00.000Z' });
+    results.push({ name: 'Exact stored clock hour wins over stale top-level period', pass: staleExactWins.clock.before_hour === 0 && staleExactWins.clock.after_hour === 8 && staleExactWins.time_of_day === 'Morning' });
     const passed = results.filter((result) => result.pass).length;
     output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, protected_live_state: { ids: [...LIVE_IDS], read_or_mutated: false } };
   } catch (error) {
