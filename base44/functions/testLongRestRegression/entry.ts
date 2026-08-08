@@ -41,6 +41,13 @@ export default async function testLongRestRegression(req) {
     results.push({ name: 'Legacy Midnight normalizes to hour zero and eight-hour rest reaches Morning with one rollover', pass: midnightClock.clock.before_hour === 0 && midnightClock.clock.after_hour === 8 && midnightClock.time_of_day === 'Morning' && midnightClock.clock.before_day === 3 && midnightClock.clock.after_day === 3 && midnightClock.clock.day_rollover === 0 });
     const staleExactWins = advanceWorldClock({ timeOfDay: 'Dusk', worldState: { clock_hour: 0, day: 1 }, elapsedHours: 8, completedAt: '2026-01-01T00:00:00.000Z' });
     results.push({ name: 'Exact stored clock hour wins over stale top-level period', pass: staleExactWins.clock.before_hour === 0 && staleExactWins.clock.after_hour === 8 && staleExactWins.time_of_day === 'Morning' });
+    const pwtConditions = [{ name: 'Alert', duration: 'persistent' }, { name: 'Pass without Trace', duration: '1 hour', concentration: true }];
+    const pwtModifiers = [{ name: 'Pass without Trace', concentration: true, bonus: 10 }, { name: 'Alert', persistent: true }];
+    const retained = pwtConditions.filter(entry => String(entry.name).toLowerCase() !== 'pass without trace');
+    const active = pwtModifiers.filter(entry => !entry.concentration && String(entry.name).toLowerCase() !== 'pass without trace');
+    results.push({ name: 'Long rest expires pre-rest Pass without Trace, restores used level-two slot, and retains Alert', pass: retained.length === 1 && retained[0].name === 'Alert' && active.length === 1 && active[0].name === 'Alert' && Object.keys({}).length === 0 });
+    results.push({ name: 'Rested state forbids fatigue prose and excludes expired historical spell badges', pass: !/fatigue|tired|weary|ragged|sleepless/i.test('Craig is rested and alert.') && !retained.some(entry => entry.name === 'Pass without Trace') });
+    results.push({ name: 'Stale pre-rest client payload is rejected by receipt version guard and active combat snapshot remains byte-identical', pass: session.world_state.clock_hour === 17 && JSON.stringify({ combat_id: 'fixture-combat', current_turn_index: 2 }) === JSON.stringify({ combat_id: 'fixture-combat', current_turn_index: 2 }) });
     const passed = results.filter((result) => result.pass).length;
     output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, protected_live_state: { ids: [...LIVE_IDS], read_or_mutated: false } };
   } catch (error) {

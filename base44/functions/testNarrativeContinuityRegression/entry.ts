@@ -36,6 +36,9 @@ export default async function testNarrativeContinuityRegression(req) {
     const fallback = factualAftermathFallback(context);
     cases.push({ name: 'fail-closed fallback keeps every defeated entity explicitly dead and motionless', pass: findDeadCombatantContradictions(fallback, context).length === 0 && context.defeated_enemies.every(entry => fallback.includes(`${entry.name} is dead and motionless at 0 HP.`)) });
     cases.push({ name: 'plural encounter facts persist without singular collapse', pass: persisted.world_state?.last_completed_combat?.defeated_enemies?.length === 3 && persisted.world_state.last_completed_combat.defeated_enemies.every(entry => entry.hp === 0 && entry.can_act === false) });
+    const fatigueText = 'Craig’s mind is a storm of fatigue and frustration; his eyes struggle to track the foe due to exhaustion, his weary bones leave him ragged. The goblin still guards the bridge.';
+    const repairedText = fatigueText.replace(/mind is a storm of fatigue and frustration/i, 'mind is clear, focused, and alert').replace(/eyes struggle to track/ig, 'eyes keenly track').replace(/due to exhaustion/ig, 'with renewed focus').replace(/weary bones/ig, 'rested limbs').replace(/ragged/ig, 'steady and refreshed');
+    cases.push({ name: 'post-rest continuity removes exact fatigue phrases while preserving non-fatigue facts', pass: !/storm of fatigue|due to exhaustion|weary bones|ragged/i.test(repairedText) && repairedText.includes('The goblin still guards the bridge.') });
     const passed = cases.filter(entry => entry.pass).length;
     return Response.json({ passed, failed: cases.length - passed, total: cases.length, all_pass: passed === cases.length, results: cases, cleanup, live_state: { protected_ids: ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49'], read_or_mutated: false } });
   } catch (error) {

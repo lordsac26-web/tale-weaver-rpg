@@ -327,7 +327,8 @@ export default async function handleRest(req) {
              const expiredByGameClock = Number.isFinite(expiresAt) && expiresAt <= Date.parse(restClock?.clock?.world_clock_timestamp || '');
              const isExhausted = key === 'exhausted' || key === 'exhaustion';
       const temporaryDuration = ['scene', 'combat', 'rest', 'short_rest', 'long_rest'].includes(duration);
-      const shouldClear = expiredByGameClock || clearsOnLongRest || temporaryDuration || (isExhausted && had_food_water);
+      const isPassWithoutTrace = key === 'pass without trace';
+       const shouldClear = expiredByGameClock || clearsOnLongRest || temporaryDuration || isPassWithoutTrace || (isExhausted && had_food_water);
       if (shouldClear && !(isExhausted && !had_food_water)) {
         if (name) clearedConditions.push(name);
         return false;
@@ -371,7 +372,7 @@ export default async function handleRest(req) {
     updates.death_saves_success = 0;
     updates.death_saves_failure = 0;
     const restClockTime = Date.parse(restClock?.clock?.world_clock_timestamp || '');
-    const nonConcentrationModifiers = (character.active_modifiers || []).filter(m => !m.concentration && !(Number.isFinite(Date.parse(m?.expires_at || '')) && Date.parse(m.expires_at) <= restClockTime));
+    const nonConcentrationModifiers = (character.active_modifiers || []).filter(m => !m.concentration && String(m?.name || '').toLowerCase() !== 'pass without trace' && !(m?.effect === 'skill_bonus' && String(m?.skill || '').toLowerCase() === 'stealth' && Number(m?.bonus) === 10) && !(Number.isFinite(Date.parse(m?.expires_at || '')) && Date.parse(m.expires_at) <= restClockTime));
     if (nonConcentrationModifiers.length !== (character.active_modifiers || []).length) {
       restorations.push('Concentration ended');
     }
@@ -399,7 +400,11 @@ export default async function handleRest(req) {
     const clockResult = { intent: rest_intent, ...clock.clock };
     const receipt = { token: receiptToken || `long-rest:${completedAt}`, response: { ...response, time_of_day: clock.time_of_day, clock: clockResult }, completed_at: completedAt };
     clock.world_state.__rest_receipts = [...restReceipts.filter((entry) => entry.token !== receipt.token).slice(-24), receipt];
-    const updatedSession = await dbClient.entities.GameSession.update(session.id, { time_of_day: clock.time_of_day, world_state: clock.world_state });
+    clock.world_state.active_concentration = null;
+     clock.world_state.post_rest_continuity = { rested: true, exhausted: Number(updatedChar.exhaustion_level || 0) === 0, completed_at: completedAt, clock_hour: clock.clock.after_hour, period: clock.clock.after_period, expired_effects: clearedConditions.filter(name => String(name).toLowerCase() === 'pass without trace') };
+     clock.world_state.active_concentration = null;
+     clock.world_state.last_rest_receipt_version = receipt.token;
+     const updatedSession = await dbClient.entities.GameSession.update(session.id, { time_of_day: clock.time_of_day, world_state: clock.world_state });
     return Response.json({ ...response, time_of_day: updatedSession.time_of_day, clock: clockResult, session: updatedSession });
   }
   return Response.json(response);
