@@ -1,12 +1,11 @@
 const PERIODS = [
-  { name: 'Midnight', hour: 0 },
+  { name: 'Night', hour: 0 },
   { name: 'Dawn', hour: 5 },
   { name: 'Morning', hour: 8 },
   { name: 'Midday', hour: 11 },
   { name: 'Afternoon', hour: 14 },
   { name: 'Dusk', hour: 17 },
   { name: 'Evening', hour: 20 },
-  { name: 'Night', hour: 23 },
 ];
 
 const normalizePeriod = (value) => PERIODS.find((period) => period.name.toLowerCase() === String(value || '').toLowerCase()) || PERIODS[2];

@@ -94,7 +94,10 @@ export default async function handleRest(req) {
   if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
   if (!characterBelongsToUser(character, user)) return Response.json({ error: 'Character does not belong to the authenticated user' }, { status: 403 });
   const session = session_id ? await dbClient.entities.GameSession.get(session_id) : null;
-  if (rest_type === 'long' && (!session || session.character_id !== character_id)) return Response.json({ error: 'A matching session is required for a long rest' }, { status: 400 });
+  if (!['short', 'long'].includes(rest_type)) return Response.json({ error: 'Rest type must be short or long' }, { status: 400 });
+  if (session && session.character_id !== character_id) return Response.json({ error: 'Session does not belong to this character' }, { status: 400 });
+  if (session?.in_combat) return Response.json({ error: 'Cannot rest while combat is active' }, { status: 400 });
+  if (rest_type === 'long' && !session) return Response.json({ error: 'A matching session is required for a long rest' }, { status: 400 });
   const receiptToken = String(rest_request_id || '').slice(0, 120);
   const restReceipts = Array.isArray(session?.world_state?.__rest_receipts) ? session.world_state.__rest_receipts : [];
   const priorRest = rest_type === 'long' && receiptToken ? restReceipts.find((entry) => entry.token === receiptToken) : null;
