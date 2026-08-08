@@ -21,7 +21,7 @@ export default async function testArrowRecoveryRegression(req) {
     const afterSurprise = consumeAmmunition(acquired, 'Arrows');
     const afterCombat = consumeAmmunition(afterSurprise.inventory, 'Arrows');
     const aliases = normalizeAmmoInventory([{ name: 'Arrows', quantity: 0 }, { name: ' arrows (20) ', quantity: 18 }, { name: 'Bolts', quantity: 3 }]);
-    results.push({ name: 'package acquisition expands once, arrows consume one unit per successful shot, aliases aggregate, and bolts do not satisfy a bow', pass: availableAmmo(acquired, 'Arrows') === 20 && afterSurprise.ok && afterSurprise.remaining === 19 && afterCombat.ok && afterCombat.remaining === 18 && availableAmmo(aliases, 'Arrows') === 18 && availableAmmo(aliases, 'Bolts') === 3 });
+    results.push({ name: 'package acquisition expands once, each attempted ranged shot consumes one arrow regardless of hit or miss, aliases aggregate, and bolts do not satisfy a bow', pass: availableAmmo(acquired, 'Arrows') === 20 && afterSurprise.ok && afterSurprise.remaining === 19 && afterCombat.ok && afterCombat.remaining === 18 && availableAmmo(aliases, 'Arrows') === 18 && availableAmmo(aliases, 'Bolts') === 3 });
     const character = await base44.entities.Character.create({
       name: `${token}_Ranger`, race: 'Human', class: 'Ranger', level: 3, hp_max: 24, hp_current: 24,
       inventory: [{ name: 'Arrows', category: 'Ammunition', quantity: 27, weight: 0.05, description: 'Player stack.' }],
@@ -45,13 +45,14 @@ export default async function testArrowRecoveryRegression(req) {
     const zeroAlias = consumeAmmunition([{ name: 'Arrows (20)', quantity: 0 }, { name: 'Arrows', quantity: 1 }], 'Arrows');
     results.push({ name: 'zero alias is ignored when a positive canonical stack exists', pass: zeroAlias.ok && zeroAlias.remaining === 0 && availableAmmo(zeroAlias.inventory, 'Arrows') === 0 });
     const liveShape = [{ name: 'Torch', quantity: 2 }, { name: 'Arrows (20)', category: 'Ammunition', weight: 1, cost: 1, cost_unit: 'gp', rarity: 'common', quantity: 0 }, { name: 'Rope', quantity: 1 }, { name: 'Arrows (20)', category: 'Ammunition', weight: 1, cost: 1, cost_unit: 'gp', rarity: 'common', quantity: 0 }];
-    const canonicalRepair = (items, approved, attackCount, recoveryCount) => !approved || attackCount !== 1 || recoveryCount !== 0 ? null : items.flatMap((item, index) => index === 1 ? [{ ...item, name: 'Arrows', quantity: 7, unit: 'arrow', stack_semantics: 'individual' }] : index === 3 ? [] : [item]);
-    const repaired = canonicalRepair(liveShape, true, 1, 0);
-    results.push({ name: 'two zero Arrows (20) shells with approved 8-to-one-shot evidence reconcile to one individual 7-arrow stack', pass: repaired?.filter((item) => item.name === 'Arrows').length === 1 && repaired?.find((item) => item.name === 'Arrows')?.quantity === 7 });
-    results.push({ name: 'missing or false owner override fails closed', pass: canonicalRepair(liveShape, false, 1, 0) === null });
-    results.push({ name: 'duplicate player weapon attacks fail closed', pass: canonicalRepair(liveShape, true, 2, 0) === null });
-    results.push({ name: 'later arrow recovery ambiguity fails closed', pass: canonicalRepair(liveShape, true, 1, 1) === null });
-    results.push({ name: 'repair preserves non-arrow items byte-identically and replay writes zero', pass: JSON.stringify(repaired?.filter((item) => item.name !== 'Arrows')) === JSON.stringify(liveShape.filter((item) => !/^Arrows/.test(item.name))) && repaired?.find((item) => item.name === 'Arrows')?.quantity === 7 });
+    const canonicalRepair = (items, approved, attackCount, recoveryCount) => !approved || attackCount !== 2 || recoveryCount !== 0 ? null : items.flatMap((item, index) => index === 1 ? [{ ...item, name: 'Arrows', quantity: 6, unit: 'arrow', stack_semantics: 'individual' }] : index === 3 ? [] : [item]);
+    const repaired = canonicalRepair(liveShape, true, 2, 0);
+    results.push({ name: 'two zero Arrows (20) shells with approved baseline 8 and exact hit plus miss reconcile to one individual 6-arrow stack', pass: repaired?.filter((item) => item.name === 'Arrows').length === 1 && repaired?.find((item) => item.name === 'Arrows')?.quantity === 6 });
+    results.push({ name: 'false owner override fails closed', pass: canonicalRepair(liveShape, false, 2, 0) === null });
+    results.push({ name: 'three qualifying weapon attacks fail closed', pass: canonicalRepair(liveShape, true, 3, 0) === null });
+    results.push({ name: 'two hits consume two arrows just as hit plus miss does', pass: canonicalRepair(liveShape, true, 2, 0)?.find((item) => item.name === 'Arrows')?.quantity === 6 });
+    results.push({ name: 'later arrow recovery ambiguity fails closed', pass: canonicalRepair(liveShape, true, 2, 1) === null });
+    results.push({ name: 'repair preserves non-arrow items byte-identically and replay consumes zero extra arrows', pass: JSON.stringify(repaired?.filter((item) => item.name !== 'Arrows')) === JSON.stringify(liveShape.filter((item) => !/^Arrows/.test(item.name))) && repaired?.find((item) => item.name === 'Arrows')?.quantity === 6 });
 
     const failed = await resolveArrowRecovery({ base44, user, sessionId: session.id, characterId: character.id, requestId: `${token}:failed`, outcome: { check: { success: false }, recovery: { type: 'arrows', quantity: 6 } } });
     const afterFailed = await base44.asServiceRole.entities.Character.get(character.id);
