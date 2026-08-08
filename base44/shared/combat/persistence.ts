@@ -1,6 +1,7 @@
 // Combat persistence helpers — XP awarding and end-of-action CombatLog writes.
 // Extracted verbatim from combatEngine/entry.ts; base44 client + character id are
 // passed explicitly instead of captured from the request closure.
+import { completeCombatSession } from './sessionCombatState.ts';
 
 export const awardVictoryXP = async (base44, cid, combatantsArr, cid_char) => {
   const freshLog = await base44.asServiceRole.entities.CombatLog.get(cid);
@@ -22,8 +23,13 @@ export const finalizeAndPersistCombat = async (base44, character_id, cid, sid, u
     world_state: worldState, is_active: result === 'ongoing', result, ...extraFields
   });
   if (result !== 'ongoing') {
-    await base44.asServiceRole.entities.GameSession.update(sid, { in_combat: false, combat_state: {} });
-    if (result === 'victory') await awardVictoryXP(base44, cid, updatedCombatants, character_id);
+    if (result === 'victory') {
+      const handoff = await completeCombatSession(base44, sid, cid);
+      if (!handoff.completed) throw new Error('Victory handoff could not verify the completed combat record.');
+      await awardVictoryXP(base44, cid, handoff.combat.combatants || updatedCombatants, character_id);
+    } else {
+      await base44.asServiceRole.entities.GameSession.update(sid, { in_combat: false, combat_state: {} });
+    }
   }
   return result;
 };

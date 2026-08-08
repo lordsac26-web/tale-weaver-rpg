@@ -106,26 +106,16 @@ export default function Game() {
   }, [readCombatState]);
 
   const resolveSessionCombat = useCallback(async (sessionRecord) => {
-    if (!sessionRecord?.in_combat || !sessionRecord?.combat_state?.combat_id) {
-      return { session: sessionRecord, combat: null, recovered: false, error: null };
+    if (!sessionRecord?.in_combat) return { session: sessionRecord, combat: null, recovered: false, error: null };
+    const combatId = String(sessionRecord.combat_state?.combat_id || '').trim();
+    if (combatId) {
+      const activeCombat = await readActiveCombat(combatId);
+      if (activeCombat) return { session: sessionRecord, combat: activeCombat, recovered: false, error: null };
     }
-    const combatId = sessionRecord.combat_state.combat_id;
-    const activeCombat = await readActiveCombat(combatId);
-    if (activeCombat) return { session: sessionRecord, combat: activeCombat, recovered: false, error: null };
-
-    const authoritative = await readCombatState(combatId);
-    if (authoritative.state === 'completed') {
-      const repaired = { ...sessionRecord, in_combat: false, combat_state: {} };
-      await base44.entities.GameSession.update(sessionId, { in_combat: false, combat_state: {} });
-      return { session: repaired, combat: null, recovered: true, error: null };
-    }
-    return {
-      session: sessionRecord,
-      combat: null,
-      recovered: false,
-      error: 'The combat record is temporarily unavailable. Retry synchronization before taking another action.',
-    };
-  }, [readActiveCombat, readCombatState, sessionId]);
+    const result = await base44.functions.invoke('combatEngine', { action: 'reconcile_session_combat', session_id: sessionId, payload: {} });
+    const repaired = result.data?.session || { ...sessionRecord, in_combat: false, combat_state: {} };
+    return { session: repaired, combat: null, recovered: !!result.data?.reconciled, error: result.data?.valid ? 'Combat synchronization is still pending.' : null };
+  }, [readActiveCombat, sessionId]);
 
   const loadState = useCallback(async () => {
     if (!sessionId) { navigate('/Home'); return; }
@@ -1197,6 +1187,8 @@ export default function Game() {
       const storyResult = await base44.functions.invoke('generateStory', {
         session_id: sessionId,
         action: 'choice',
+        request_id: `victory-aftermath:${completedCombatId}`,
+        choice_context: { completed_combat: { combat_id: completedCombatId, result: finalCombat?.result, dead_enemies: finalEnemies.filter(e => Number(e.hp_current ?? e.hp ?? 0) <= 0 || e.is_conscious === false).map(e => ({ id: e.id, name: e.name })) } },
         custom_input: `${combatFacts} The combat has ended in victory and the player has finished searching the defeated enemies. Narrate the immediate aftermath, preserve current HP and depleted resources, and provide the next meaningful choices. Do not award duplicate combat XP, do not generate additional automatic loot, and do not immediately start another combat.`
       });
       if (storyResult.data?.narrative) setNarrative(prev => [...prev, { type: 'narration', text: storyResult.data.narrative }]);
@@ -1450,8 +1442,9 @@ export default function Game() {
     </div>
   );
 
-  const inCombat = !!(session?.in_combat && combat);
-  const combatPending = !!(session?.in_combat && !combat && !combatSyncError);
+  const validCombatId = String(session?.combat_state?.combat_id || '').trim();
+  const inCombat = !!(session?.in_combat && validCombatId && combat);
+  const combatPending = !!(session?.in_combat && validCombatId && !combat && !combatSyncError);
 
   return (
     <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>

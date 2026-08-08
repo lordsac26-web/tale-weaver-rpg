@@ -12,6 +12,7 @@ import {
 import {
   requireUser, validateCombatOwnership, checkReceipt, storeReceipt,
 } from '../../shared/combat/authGuard.ts';
+import { reconcileSessionCombat } from '../../shared/combat/sessionCombatState.ts';
 
 /**
  * Combat Engine — thin HTTP router. All combat logic lives in focused modules
@@ -42,6 +43,13 @@ Deno.serve(async (req) => {
   // Authoritative, read-only combat resume. CombatLog records are created by the
   // service role, so browser-scoped entity reads can be invisible under RLS even
   // when the session legitimately belongs to the player.
+  const handleReconcileSessionCombat = async ({ base44, session_id }) => {
+    if (!session_id) return Response.json({ error: 'session_id is required' }, { status: 400 });
+    const result = await reconcileSessionCombat(base44, session_id);
+    if (!result.session) return Response.json({ error: 'Session not found' }, { status: 404 });
+    return Response.json({ session: result.session, valid: result.valid, reconciled: result.reconciled, reason: result.reason, combat_id: result.combat?.id || null });
+  };
+
   const handleGetCombatState = async ({ base44, session_id, combat_id, payload, user }) => {
     if (!session_id) return Response.json({ error: 'session_id is required' }, { status: 400 });
     const session = await base44.asServiceRole.entities.GameSession.get(session_id);
@@ -153,9 +161,10 @@ Deno.serve(async (req) => {
   ]);
 
   // Actions that are read-only (ownership validated inside, no idempotency)
-  const READ_ACTIONS = new Set(['get_combat_state', 'update_combat_history', 'resolve_typed_spell']);
+  const READ_ACTIONS = new Set(['reconcile_session_combat', 'get_combat_state', 'update_combat_history', 'resolve_typed_spell']);
 
   const HANDLERS = {
+    reconcile_session_combat: handleReconcileSessionCombat,
     get_combat_state: handleGetCombatState,
     update_combat_history: handleUpdateCombatHistory,
     resolve_typed_spell: handleResolveTypedSpell,

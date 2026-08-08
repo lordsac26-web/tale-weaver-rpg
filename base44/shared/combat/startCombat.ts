@@ -3,6 +3,7 @@
 import { statMod, rollD20 } from './helpers.ts';
 import { inferArchetype } from '../monsterAI.ts';
 import { requireUser, characterBelongsToUser } from './authGuard.ts';
+import { reconcileSessionCombat } from './sessionCombatState.ts';
 
 export async function handleStartCombat(ctx) {
   const { base44, session_id, payload } = ctx;
@@ -12,18 +13,13 @@ export async function handleStartCombat(ctx) {
   if (authError) return authError;
 
   let { enemies } = payload;
-  const session = await base44.asServiceRole.entities.GameSession.get(session_id);
+  const reconciled = await reconcileSessionCombat(base44, session_id);
+  const session = reconciled.session;
   if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
-
-  // Idempotency: a delayed/repeated story callback must resume the existing live
-  // encounter instead of creating another active CombatLog for the same session.
-  if (session.in_combat && session.combat_state?.combat_id) {
-    try {
-      const existing = await base44.asServiceRole.entities.CombatLog.get(session.combat_state.combat_id);
-      if (existing?.is_active) {
-        return Response.json({ combat_id: existing.id, combatants: existing.combatants || [], initiative_order: existing.initiative_order || [], resumed: true });
-      }
-    } catch { /* stale reference; create a fresh encounter below */ }
+  if (reconciled.valid && reconciled.combat) return Response.json({ combat_id: reconciled.combat.id, combatants: reconciled.combat.combatants || [], initiative_order: reconciled.combat.initiative_order || [], resumed: true });
+  const requestedCombatId = String(payload?.combat_id || payload?.trigger_combat_id || '').trim();
+  if (requestedCombatId && reconciled.combat?.id === requestedCombatId && !reconciled.combat.is_active) {
+    return Response.json({ combat_id: requestedCombatId, result: reconciled.combat.result, completed: true, no_start: true });
   }
 
   const character = await base44.asServiceRole.entities.Character.get(session.character_id);
@@ -215,7 +211,9 @@ export async function handleStartCombat(ctx) {
   );
 
   // ── CombatLog linkage (defect #2): include character_id + character_name ──
-  const combatLog = await base44.asServiceRole.entities.CombatLog.create({
+  let combatLog;
+  try {
+    combatLog = await base44.asServiceRole.entities.CombatLog.create({
     session_id,
     character_id: character.id,
     character_name: character.name,
@@ -227,9 +225,12 @@ export async function handleStartCombat(ctx) {
     is_active: true,
     result: 'ongoing',
     world_state: { actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, concentration_spell: activeConcentration?.source || null, concentration_caster: activeConcentration ? character.name : null }
-  });
-
-  await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: combatLog.id } });
+    });
+    await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: combatLog.id } });
+  } catch (error) {
+    await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false, combat_state: {} });
+    throw error;
+  }
 
   return Response.json({ combat_id: combatLog.id, combatants, initiative_order: combatants });
 }

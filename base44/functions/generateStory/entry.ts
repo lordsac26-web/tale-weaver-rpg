@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 import { resolveItemRecovery } from '../../shared/story/itemRecovery.ts';
 import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
+import { reconcileSessionCombat } from '../../shared/combat/sessionCombatState.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -29,6 +30,8 @@ Deno.serve(async (req) => {
 
     let session = await base44.asServiceRole.entities.GameSession.get(session_id);
     if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
+    const combatState = await reconcileSessionCombat(base44, session_id);
+    session = combatState.session;
 
     const character = await base44.asServiceRole.entities.Character.get(session.character_id);
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
@@ -36,6 +39,8 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Session character does not belong to the authenticated user' }, { status: 403 });
     }
     const storyRequestId = String(request_id || '').slice(0, 120);
+    const completedCombat = choice_context?.completed_combat && typeof choice_context.completed_combat === 'object'
+      ? choice_context.completed_combat : null;
     const selectedChoice = action === 'choice' ? String(choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`).trim() : '';
     let authoritativeSpellCast = null;
     if (action === 'choice' && storyRequestId) {
@@ -167,6 +172,7 @@ JOURNAL NOTES: ${journalSummary}
 RECENT EVENTS: ${recentLog}
 ${gameDataContext}
 ${authoritativeSpellCast ? `AUTHORITATIVE SPELL RESULT: ${authoritativeSpellCast.spell_name} ${authoritativeSpellCast.already_processed ? 'was already processed; do not repeat it.' : `was cast at level ${authoritativeSpellCast.slot_level}.`} ${authoritativeSpellCast.concentration ? 'Concentration is active.' : ''} ${String(authoritativeSpellCast.spell_name || '').toLowerCase() === 'pass without trace' ? '+10 Stealth is active for the spell duration; narrate these facts exactly and do not deduct another slot.' : 'Do not deduct another slot or invent a different mechanical outcome.'}` : ''}
+${completedCombat ? `COMPLETED COMBAT CONTEXT: Combat ${completedCombat.combat_id} ended in ${completedCombat.result}. Dead enemies: ${(completedCombat.dead_enemies || []).map((enemy) => enemy.name || enemy.id).join(', ') || 'all listed enemies'}. This is aftermath narration only: combat_trigger MUST be false, enemies MUST be [], and no dead enemy may escape or re-engage.` : ''}
       `;
 
     if (action === 'start') {
@@ -297,14 +303,11 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...result, item_recovery: { ...itemRecovery.item_recovery, already_processed: !!itemRecovery.already_processed } };
     }
 
-    // Authoritatively reconcile the combat flag regardless of whether the LLM
-    // returned narrative text: a 'choice' action that does NOT trigger combat must
-    // clear in_combat so the client never gets stuck on the combat panel. A
-    // combat_trigger sets it true. This runs even when result.narrative is empty.
-    if (action === 'choice') {
-      await base44.asServiceRole.entities.GameSession.update(session_id, {
-        in_combat: !!result.combat_trigger,
-      });
+    // Story narration never owns combat linkage. Only startCombat may link a live
+    // CombatLog, and invalid legacy linkage is reconciled to story mode above.
+    if (completedCombat) {
+      result.combat_trigger = false;
+      result.enemies = [];
     }
 
     if (result.narrative) {
@@ -361,8 +364,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
       if (action === 'start' && result.opening_signature) updateData.opening_signature = result.opening_signature;
       if (result.reputation_change) updateData.reputation = (session.reputation || 0) + result.reputation_change;
       if (result.plot_flag) updateData.plot_flags = { ...(session.plot_flags || {}), [result.plot_flag]: true };
-      if (result.combat_trigger) updateData.in_combat = true;
-      else if (action === 'choice') updateData.in_combat = false;
+      // Combat linkage is intentionally omitted here. Story writes must never
+      // revive a stale in_combat flag or create an empty combat state.
 
       // Quest handling
       if (result.quest_update) {
