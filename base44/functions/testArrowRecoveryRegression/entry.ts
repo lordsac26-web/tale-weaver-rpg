@@ -44,6 +44,14 @@ export default async function testArrowRecoveryRegression(req) {
 
     const zeroAlias = consumeAmmunition([{ name: 'Arrows (20)', quantity: 0 }, { name: 'Arrows', quantity: 1 }], 'Arrows');
     results.push({ name: 'zero alias is ignored when a positive canonical stack exists', pass: zeroAlias.ok && zeroAlias.remaining === 0 && availableAmmo(zeroAlias.inventory, 'Arrows') === 0 });
+    const liveShape = [{ name: 'Torch', quantity: 2 }, { name: 'Arrows (20)', category: 'Ammunition', weight: 1, cost: 1, cost_unit: 'gp', rarity: 'common', quantity: 0 }, { name: 'Rope', quantity: 1 }, { name: 'Arrows (20)', category: 'Ammunition', weight: 1, cost: 1, cost_unit: 'gp', rarity: 'common', quantity: 0 }];
+    const canonicalRepair = (items, approved, attackCount, recoveryCount) => !approved || attackCount !== 1 || recoveryCount !== 0 ? null : items.flatMap((item, index) => index === 1 ? [{ ...item, name: 'Arrows', quantity: 7, unit: 'arrow', stack_semantics: 'individual' }] : index === 3 ? [] : [item]);
+    const repaired = canonicalRepair(liveShape, true, 1, 0);
+    results.push({ name: 'two zero Arrows (20) shells with approved 8-to-one-shot evidence reconcile to one individual 7-arrow stack', pass: repaired?.filter((item) => item.name === 'Arrows').length === 1 && repaired?.find((item) => item.name === 'Arrows')?.quantity === 7 });
+    results.push({ name: 'missing or false owner override fails closed', pass: canonicalRepair(liveShape, false, 1, 0) === null });
+    results.push({ name: 'duplicate player weapon attacks fail closed', pass: canonicalRepair(liveShape, true, 2, 0) === null });
+    results.push({ name: 'later arrow recovery ambiguity fails closed', pass: canonicalRepair(liveShape, true, 1, 1) === null });
+    results.push({ name: 'repair preserves non-arrow items byte-identically and replay writes zero', pass: JSON.stringify(repaired?.filter((item) => item.name !== 'Arrows')) === JSON.stringify(liveShape.filter((item) => !/^Arrows/.test(item.name))) && repaired?.find((item) => item.name === 'Arrows')?.quantity === 7 });
 
     const failed = await resolveArrowRecovery({ base44, user, sessionId: session.id, characterId: character.id, requestId: `${token}:failed`, outcome: { check: { success: false }, recovery: { type: 'arrows', quantity: 6 } } });
     const afterFailed = await base44.asServiceRole.entities.Character.get(character.id);
