@@ -1,4 +1,5 @@
 import { characterBelongsToUser } from '../combat/authGuard.ts';
+import { addAmmunition, canonicalAmmoName, normalizeAmmoInventory } from '../ammunition.ts';
 
 const RECEIPTS_KEY = '__story_item_recoveries';
 const MAX_QUANTITY = 999;
@@ -38,7 +39,16 @@ export async function resolveItemRecovery({ base44, user, sessionId, characterId
   const prior = receipts.find((receipt) => receipt?.token === token);
   if (prior) return { applied: true, already_processed: true, item_recovery: prior, receipt: prior, inventory: character.inventory || [] };
 
-  const inventory = Array.isArray(character.inventory) ? [...character.inventory] : [];
+  const inventory = normalizeAmmoInventory(character.inventory || []);
+  if (canonicalAmmoName(recovery.name)) {
+    const nextInventory = addAmmunition(inventory, recovery, recovery.quantity);
+    const receipt = { token, item_name: canonicalAmmoName(recovery.name), item_id: recovery.item_id || null, quantity: recovery.quantity, unique: false, inventory_result: 'incremented_stack', at: new Date().toISOString() };
+    abilities[receiptKey] = [...receipts.filter((entry) => entry?.token !== token).slice(-48), receipt];
+    await base44.asServiceRole.entities.Character.update(characterId, { inventory: nextInventory, long_rest_abilities: abilities });
+    const worldState = { ...(session.world_state || {}), __story_recovery_receipts: [...(Array.isArray(session.world_state?.__story_recovery_receipts) ? session.world_state.__story_recovery_receipts : []).filter((entry) => entry?.token !== token).slice(-48), receipt] };
+    await base44.asServiceRole.entities.GameSession.update(sessionId, { world_state: worldState });
+    return { applied: true, already_processed: false, item_recovery: receipt, receipt, inventory: nextInventory };
+  }
   const identity = identityOf(recovery);
   const matchingIndexes = inventory.map((item, index) => identityOf(item) === identity ? index : -1).filter((index) => index >= 0);
   let inventory_result = 'added_unique';

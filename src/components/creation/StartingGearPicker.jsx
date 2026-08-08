@@ -6,6 +6,7 @@ import {
   EQUIPMENT_PACKS
 } from '@/components/game/standardItems';
 import { SRD_MAGIC_ITEMS } from '@/components/game/itemData';
+import { addAmmoAtAcquisition } from '@/lib/ammunition';
 
 const BUDGET_DEFAULT = 150; // default starting gold budget for custom gear
 const MAGIC_CATEGORY = { key: 'magic', label: 'Magic Items', icon: '✨' };
@@ -58,7 +59,10 @@ export default function StartingGearPicker({ character, classGold, onUpdateInven
   };
 
   const confirmSelection = () => {
-    onUpdateInventory(cart);
+    const inventory = cart.reduce((items, item) => item.category === 'Ammunition'
+      ? addAmmoAtAcquisition(items, item, item.quantity || 1)
+      : [...items, item], []);
+    onUpdateInventory(inventory);
     onUpdateGold(Math.floor(remaining));
   };
 

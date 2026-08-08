@@ -9,6 +9,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { resolveItemBonuses } from './itemBonuses';
 import { hasUsableItemContent, useCanonicalMagicItem } from './contentDetails';
+import { normalizeAmmoForDisplay } from '@/lib/ammunition';
 
 const RARITIES = Object.keys(ITEM_RARITY);
 
@@ -253,7 +254,7 @@ export default function InventoryTab({ character, onUpdate, onIdentify, sessionI
   const [equipped, setEquipped] = useState(character.equipped || {});
   const [consumableModal, setConsumableModal] = useState(null); // { item, index }
 
-  const inventory = character.inventory || [];
+  const inventory = normalizeAmmoForDisplay(character.inventory || []);
 
   const handleAddItem = (item) => {
     const newInventory = [...inventory, item];
@@ -449,7 +450,7 @@ export default function InventoryTab({ character, onUpdate, onIdentify, sessionI
       ) : (
         <div className="space-y-1.5">
            {sorted.map((item, i) => {
-             const origIndex = inventory.indexOf(item);
+             const origIndex = item.__sourceIndices?.[0] ?? inventory.indexOf(item);
              return (
                <ItemRow key={i} item={item} origIndex={origIndex}
                  equipped={equipped} onEquip={handleEquipItem} onRemove={handleRemoveItem}

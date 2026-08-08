@@ -10,6 +10,7 @@ import {
 import { finalizeAndPersistCombat } from './persistence.ts';
 import { addStructuredCondition, buildStructuredCondition, consumeBreakOnAttackConditions, getAttackConcealment } from './conditions.ts';
 import { findHuntersMark, rollHuntersMarkBonus, removeHuntersMark } from './huntersMark.ts';
+import { ammoForWeapon, consumeAmmunition } from '../ammunition.ts';
 
 export async function handlePlayerAttack(ctx) {
   const { base44, session_id, combat_id, character_id, payload } = ctx;
@@ -520,22 +521,10 @@ export async function handlePlayerAttack(ctx) {
       return Response.json({ error: `${weapon.name} has the Loading property — it can only be fired once per turn.`, invalid: true }, { status: 400 });
     }
     if (isRanged && usesAmmo) {
-      const AMMO_FOR = {
-        'longbow': 'arrow', 'shortbow': 'arrow',
-        'light crossbow': 'bolt', 'heavy crossbow': 'bolt', 'hand crossbow': 'bolt',
-        'sling': 'bullet',
-      };
-      const ammoKeyword = AMMO_FOR[(weapon.name || '').toLowerCase()] || 'arrow';
-      const inv = character.inventory || [];
-      const ammoIdx = inv.findIndex(it =>
-        (it.name || '').toLowerCase().includes(ammoKeyword) && (it.quantity ?? 1) > 0
-      );
-      if (ammoIdx === -1) {
-        return Response.json({ error: `Out of ammunition (${ammoKeyword}s). Restock before firing.`, invalid: true }, { status: 400 });
-      }
-      // Decrement one unit of ammunition
-      const newInv = inv.map((it, i) => i === ammoIdx ? { ...it, quantity: Math.max(0, (it.quantity ?? 1) - 1) } : it);
-      await base44.asServiceRole.entities.Character.update(character_id, { inventory: newInv });
+      const ammoName = ammoForWeapon(weapon.name) || 'Arrows';
+      const ammo = consumeAmmunition(character.inventory || [], ammoName);
+      if (!ammo.ok) return Response.json({ error: `Out of ammunition (${ammoName}). Restock before firing.`, invalid: true }, { status: 400 });
+      await base44.asServiceRole.entities.Character.update(character_id, { inventory: ammo.inventory });
     }
     const isFinesse = (weapon.properties || []).includes('finesse');
     const strMod = statMod(character.strength);

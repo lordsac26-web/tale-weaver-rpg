@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { resolveArrowRecovery } from '../../shared/story/arrowRecovery.ts';
+import { addAmmunition, availableAmmo, consumeAmmunition, normalizeAmmoInventory } from '../../shared/ammunition.ts';
 
 const LIVE_IDS = new Set(['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256']);
 
@@ -16,6 +17,11 @@ export default async function testArrowRecoveryRegression(req) {
     if (user.role !== 'admin') return Response.json({ error: 'Admin access required' }, { status: 403 });
 
     const token = `ArrowRecoveryQA_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const acquired = addAmmunition([], { name: 'Arrows (20)', category: 'Ammunition' }, 1);
+    const afterSurprise = consumeAmmunition(acquired, 'Arrows');
+    const afterCombat = consumeAmmunition(afterSurprise.inventory, 'Arrows');
+    const aliases = normalizeAmmoInventory([{ name: 'Arrows', quantity: 0 }, { name: ' arrows (20) ', quantity: 18 }, { name: 'Bolts', quantity: 3 }]);
+    results.push({ name: 'package acquisition expands once, arrows consume one unit per successful shot, aliases aggregate, and bolts do not satisfy a bow', pass: availableAmmo(acquired, 'Arrows') === 20 && afterSurprise.ok && afterSurprise.remaining === 19 && afterCombat.ok && afterCombat.remaining === 18 && availableAmmo(aliases, 'Arrows') === 18 && availableAmmo(aliases, 'Bolts') === 3 });
     const character = await base44.entities.Character.create({
       name: `${token}_Ranger`, race: 'Human', class: 'Ranger', level: 3, hp_max: 24, hp_current: 24,
       inventory: [{ name: 'Arrows', category: 'Ammunition', quantity: 27, weight: 0.05, description: 'Player stack.' }],
@@ -35,6 +41,9 @@ export default async function testArrowRecoveryRegression(req) {
     const replay = await resolveArrowRecovery({ base44, user, sessionId: session.id, characterId: character.id, requestId, outcome });
     const afterReplay = await base44.asServiceRole.entities.Character.get(character.id);
     results.push({ name: 'same recovery correlation replays without duplicate arrows', pass: replay.applied && replay.already_processed && replay.recovered_quantity === 6 && (afterReplay.inventory || []).filter((item) => item.name === 'Arrows').length === 1 && (afterReplay.inventory || []).find((item) => item.name === 'Arrows')?.quantity === 33 && (afterReplay.long_rest_abilities?.__arrow_recoveries || []).filter((entry) => entry.token === requestId).length === 1 });
+
+    const zeroAlias = consumeAmmunition([{ name: 'Arrows (20)', quantity: 0 }, { name: 'Arrows', quantity: 1 }], 'Arrows');
+    results.push({ name: 'zero alias is ignored when a positive canonical stack exists', pass: zeroAlias.ok && zeroAlias.remaining === 0 && availableAmmo(zeroAlias.inventory, 'Arrows') === 0 });
 
     const failed = await resolveArrowRecovery({ base44, user, sessionId: session.id, characterId: character.id, requestId: `${token}:failed`, outcome: { check: { success: false }, recovery: { type: 'arrows', quantity: 6 } } });
     const afterFailed = await base44.asServiceRole.entities.Character.get(character.id);

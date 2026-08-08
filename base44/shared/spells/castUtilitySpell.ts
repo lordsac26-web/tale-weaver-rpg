@@ -108,7 +108,12 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   const expiresAt = isPassWithoutTrace ? new Date(now + 60 * 60 * 1000).toISOString() : null;
   let activeModifiers = active;
   if (spell.concentration) activeModifiers = [...active.filter((modifier) => !modifier.concentration), concentrationModifier(spell, now, character_id, expiresAt)];
-  const structuredConditions = isPassWithoutTrace ? addStructuredCondition(character.conditions, buildStructuredCondition({ name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id, duration_type: 'timestamp', expires_at: expiresAt, concentration: true })) : (character.conditions || []);
+  const isSilence = normalizedName === 'silence';
+  const structuredConditions = isPassWithoutTrace
+    ? addStructuredCondition(character.conditions, buildStructuredCondition({ name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id, duration_type: 'timestamp', expires_at: expiresAt, concentration: true }))
+    : isSilence
+      ? (character.conditions || []).filter((condition) => normalize(typeof condition === 'string' ? condition : condition?.name) !== 'pass without trace')
+      : (character.conditions || []);
   let healAmount = 0;
   const hpBefore = Number(character.hp_current) || 0;
   let hpCurrent = hpBefore;
@@ -139,7 +144,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   }
   abilities.__typed_spell_casts = [...receipts.filter((receipt) => receipt?.token !== token).slice(-24), { token, receipt_id: token, spell_name: canonicalName, slot_level: selectedLevel, heal_amount: healAmount, roll_expression: rollExpression, roll_total: rollTotal, hp_before: hpBefore, hp_after: hpCurrent, granted_goodberry: grantedGoodberry, at: new Date(now).toISOString() }];
   const updates = { spell_slots: spellSlots, active_modifiers: activeModifiers, long_rest_abilities: abilities };
-  if (isPassWithoutTrace) updates.conditions = structuredConditions;
+  if (isPassWithoutTrace || isSilence) updates.conditions = structuredConditions;
   if (healAmount > 0) updates.hp_current = hpCurrent;
   if (grantedInventory) updates.inventory = grantedInventory;
   await base44.asServiceRole.entities.Character.update(character_id, updates);
@@ -156,7 +161,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   if (session?.in_combat && session.combat_state?.combat_id) {
     const combat = await base44.asServiceRole.entities.CombatLog.get(session.combat_state.combat_id);
     if (combat?.is_active) {
-      const combatants = (combat.combatants || []).map((combatant) => combatant.id === character_id ? { ...combatant, hp_current: hpCurrent, conditions: isPassWithoutTrace ? structuredConditions : (combatant.conditions || []) } : combatant);
+      const combatants = (combat.combatants || []).map((combatant) => combatant.id === character_id ? { ...combatant, hp_current: hpCurrent, conditions: (isPassWithoutTrace || isSilence) ? structuredConditions : (combatant.conditions || []) } : combatant);
       await base44.asServiceRole.entities.CombatLog.update(combat.id, { combatants, log_entries: [...(combat.log_entries || []), { type: 'spell_cast', spell_name: canonicalName, actor: character.name, target: character.name, round: combat.round || 0, timestamp: new Date(now).toISOString(), request_id: token, heal_amount: healAmount }], world_state: spell.concentration ? { ...(combat.world_state || {}), concentration_spell: canonicalName, concentration_caster: character.name } : (combat.world_state || {}) });
     }
   }

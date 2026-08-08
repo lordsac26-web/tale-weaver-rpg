@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingCart, Coins, TrendingUp, TrendingDown, Package } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { addAmmoAtAcquisition } from '@/lib/ammunition';
 
 export default function VendorShop({ vendor, character, onClose, onTransaction }) {
   const [selectedItem, setSelectedItem] = useState(null);
@@ -19,7 +20,7 @@ export default function VendorShop({ vendor, character, onClose, onTransaction }
 
     setProcessing(true);
     const newGold = playerGold - item.price;
-    const newInventory = [...playerInventory, { ...item, quantity: 1 }];
+    const newInventory = addAmmoAtAcquisition(playerInventory, item, 1);
 
     await base44.entities.Character.update(character.id, {
       gold: newGold,
