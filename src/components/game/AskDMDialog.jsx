@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Loader2, MessageCircleQuestion, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
-export default function AskDMDialog({ sessionId, onClose }) {
+export default function AskDMDialog({ sessionId, characterId, combatId, onClose }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [error, setError] = useState('');
@@ -11,7 +11,7 @@ export default function AskDMDialog({ sessionId, onClose }) {
     if (!question.trim() || loading) return;
     setLoading(true); setError('');
     try {
-      const result = await base44.functions.invoke('askDungeonMaster', { session_id: sessionId, question: question.trim(), request_id: `ask-dm:${sessionId}:${question.trim().slice(0, 80)}` });
+      const result = await base44.functions.invoke('askDungeonMaster', { session_id: sessionId, character_id: characterId, combat_id: combatId || undefined, question: question.trim(), request_id: `ask-dm:${sessionId}:${question.trim().slice(0, 80)}` });
       setAnswer(result.data?.answer || 'The DM has no clarification to add.');
     } catch (err) { setError(err?.response?.data?.error || err?.message || 'Unable to reach the DM.'); }
     finally { setLoading(false); }

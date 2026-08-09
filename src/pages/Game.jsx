@@ -29,6 +29,7 @@ import LevelUpToast from '@/components/game/LevelUpToast';
 import LevelUpModal from '@/components/game/LevelUpModal';
 import { canLevelUp } from '@/components/game/levelUpUtils';
 import SkillCheckRollModal from '@/components/game/SkillCheckRollModal';
+import AskDMDialog from '@/components/game/AskDMDialog';
 import { getManualRollEnabled } from '@/components/game/rollPreferences';
 import { resolveSkillCheck, canonicalSkillName } from '@/components/game/skillCheckResolver';
 
@@ -71,6 +72,7 @@ export default function Game() {
   const [showDeathModal, setShowDeathModal] = useState(false);
   const [showDeathSaves, setShowDeathSaves] = useState(false);
   const [showRestModal, setShowRestModal] = useState(false);
+  const [showAskDM, setShowAskDM] = useState(false);
   const [mainViewTab, setMainViewTab] = useState('story');
   const [combatViewTab, setCombatViewTab] = useState('combat'); // 'story' | 'combat' | 'journal' — for mobile
   const [combatSyncError, setCombatSyncError] = useState(null);
@@ -1473,7 +1475,10 @@ export default function Game() {
           </div>
         )}
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => setShowAskDM(true)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-fantasy flex-shrink-0" style={{ background: 'rgba(25,45,80,0.7)', border: '1px solid rgba(120,160,220,0.5)', color: '#bfdbfe' }} title="Out of character clarification only — does not advance the story">
+            Ask the DM
+          </button>
           <GameToolbar
             sessionId={sessionId}
             characterId={character?.id}
@@ -1490,6 +1495,8 @@ export default function Game() {
           />
         </div>
       </div>
+
+      {showAskDM && <AskDMDialog sessionId={sessionId} characterId={character?.id} combatId={inCombat ? validCombatId : null} onClose={() => setShowAskDM(false)} />}
 
       {/* Main Game Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
