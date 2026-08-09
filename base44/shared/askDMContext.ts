@@ -1,24 +1,27 @@
-import { characterBelongsToUser } from './combat/authGuard.ts';
-
 const idPattern = /^[a-f0-9]{24}$/i;
-const invalid = () => Response.json({ error: 'Invalid Ask the DM request.' }, { status: 400 });
+const invalid = () => Response.json({ error: 'Invalid Ask the DM request.' }, { status: 403 });
+const rejected = (authorizationStage) => ({ error: invalid(), authorizationStage });
+const safeGet = async (entity, id) => { try { return await entity.get(id); } catch { return null; } };
 const text = (value, max = 500) => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '';
 const names = (value) => Array.isArray(value) ? value.map((entry) => text(typeof entry === 'string' ? entry : entry?.name, 100)).filter(Boolean) : [];
 
-export async function buildAskDMContext(base44, user, input) {
+export async function buildAskDMContext(base44, input) {
   const sessionId = text(input?.session_id, 30);
   const characterId = text(input?.character_id, 30);
   const requestedCombatId = text(input?.combat_id, 30);
-  if (!idPattern.test(sessionId) || !idPattern.test(characterId) || (requestedCombatId && !idPattern.test(requestedCombatId))) return { error: invalid() };
-  const [session, character] = await Promise.all([base44.asServiceRole.entities.GameSession.get(sessionId), base44.asServiceRole.entities.Character.get(characterId)]);
-  if (!session || !character || session.character_id !== character.id || !characterBelongsToUser(character, user)) return { error: invalid() };
+  if (!idPattern.test(sessionId) || !idPattern.test(characterId) || (requestedCombatId && !idPattern.test(requestedCombatId))) return rejected('malformed_id');
+  const [session, character] = await Promise.all([safeGet(base44.asServiceRole.entities.GameSession, sessionId), safeGet(base44.asServiceRole.entities.Character, characterId)]);
+  if (!session) return rejected('session_missing');
+  if (!character) return rejected('character_missing');
+  if (session.character_id !== character.id) return rejected('session_character_mismatch');
   const linkedCombatId = text(session.combat_state?.combat_id, 30);
-  if (requestedCombatId && requestedCombatId !== linkedCombatId) return { error: invalid() };
+  const requiresCombat = Boolean(requestedCombatId || session.in_combat);
+  if (requiresCombat && (!linkedCombatId || !idPattern.test(linkedCombatId) || (requestedCombatId && requestedCombatId !== linkedCombatId))) return rejected('combat_mismatch');
   let combat = null;
   if (linkedCombatId) {
-    if (!idPattern.test(linkedCombatId)) return { error: invalid() };
-    combat = await base44.asServiceRole.entities.CombatLog.get(linkedCombatId);
-    if (!combat || combat.session_id !== session.id || (combat.character_id && combat.character_id !== character.id)) return { error: invalid() };
+    combat = await safeGet(base44.asServiceRole.entities.CombatLog, linkedCombatId);
+    const playerLinksCharacter = (combat?.combatants || []).filter((entry) => entry?.type === 'player').length === 1 && (combat?.combatants || []).some((entry) => entry?.type === 'player' && entry?.id === character.id);
+    if (!combat || combat.session_id !== session.id || (combat.character_id ? combat.character_id !== character.id : !playerLinksCharacter)) return rejected('combat_mismatch');
   }
   const visibleCombatants = (combat?.combatants || []).filter((entry) => entry?.type === 'player' || entry?.is_conscious !== false).map((entry) => ({ name: text(entry?.name, 100) || 'Unknown combatant', status: entry?.is_conscious === false ? 'defeated' : 'active' })).filter((entry) => entry.name);
   const playerVisibleContext = {
@@ -31,7 +34,7 @@ export async function buildAskDMContext(base44, user, input) {
     combat: combat ? { round: Number.isFinite(Number(combat.round)) ? Number(combat.round) : null, visible_combatants: visibleCombatants } : null,
   };
   const supportingKeys = Object.entries(playerVisibleContext).filter(([, value]) => Array.isArray(value) ? value.length : value && typeof value === 'object' ? true : Boolean(value)).map(([key]) => key);
-  return { error: null, playerVisibleContext, supportingKeys };
+  return { error: null, authorizationStage: 'accepted', playerVisibleContext, supportingKeys };
 }
 
 export function answerAskDMQuestion(question, playerVisibleContext) {

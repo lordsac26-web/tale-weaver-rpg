@@ -4,12 +4,11 @@ import { answerAskDMQuestion, buildAskDMContext } from '../../shared/askDMContex
 export default async function askDungeonMaster(req) {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Not authorized.' }, { status: 401 });
+    if (!(await base44.auth.isAuthenticated())) return Response.json({ error: 'Invalid Ask the DM request.' }, { status: 403 });
     const input = await req.json();
     const question = String(input?.question || '').trim();
     if (!question || question.length > 600) return Response.json({ error: 'Ask a concise clarification question.' }, { status: 400 });
-    const context = await buildAskDMContext(base44, user, input);
+    const context = await buildAskDMContext(base44, input);
     if (context.error) return context.error;
     const result = answerAskDMQuestion(question, context.playerVisibleContext);
     return Response.json({ ...result, request_id: String(input?.request_id || '').slice(0, 120), read_only: true });
