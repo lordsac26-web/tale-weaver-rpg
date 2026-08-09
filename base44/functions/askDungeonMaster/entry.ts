@@ -1,17 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { answerAskDMQuestion, buildAskDMContext } from '../../shared/askDMContext.ts';
+import { executeAskDungeonMasterPayload } from '../../shared/askDungeonMasterCore.ts';
 
 export default async function askDungeonMaster(req) {
   try {
-    const base44 = createClientFromRequest(req);
-    if (!(await base44.auth.isAuthenticated())) return Response.json({ error: 'Invalid Ask the DM request.' }, { status: 403 });
-    const input = await req.json();
-    const question = String(input?.question || '').trim();
-    if (!question || question.length > 600) return Response.json({ error: 'Ask a concise clarification question.' }, { status: 400 });
-    const context = await buildAskDMContext(base44, input);
-    if (context.error) return context.error;
-    const result = answerAskDMQuestion(question, context.playerVisibleContext);
-    return Response.json({ ...result, request_id: String(input?.request_id || '').slice(0, 120), read_only: true });
+    const outcome = await executeAskDungeonMasterPayload(createClientFromRequest(req), await req.json());
+    return Response.json(outcome.body, { status: outcome.status });
   } catch {
     return Response.json({ error: 'Unable to provide that clarification.' }, { status: 500 });
   }

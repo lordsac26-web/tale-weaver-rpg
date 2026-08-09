@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { buildAskDMContext } from '../../shared/askDMContext.ts';
+import { executeAskDungeonMasterCore, executeAskDungeonMasterPayload } from '../../shared/askDungeonMasterCore.ts';
 
 const protectedIds = ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49', '6a77463582a26b50018110ea'];
 const semantic = (record) => JSON.stringify(record);
@@ -29,9 +29,8 @@ export default async function testAskDMRegression(req) {
 
     const ask = async (question, extra = {}) => {
       const payload = { session_id: session.id, character_id: character.id, question, request_id: `${token}:${question.slice(0, 32)}`, ...extra };
-      const authorization = await buildAskDMContext(base44, payload);
-      try { const response = await base44.functions.invoke('askDungeonMaster', payload); return { status: 200, body: response.data, authorization_stage: authorization.authorizationStage || null }; }
-      catch (error) { return { status: error?.response?.status || 500, body: error?.response?.data || { error: error.message }, authorization_stage: authorization.authorizationStage || null }; }
+      const outcome = await executeAskDungeonMasterCore(base44, payload);
+      return { status: outcome.status, body: outcome.body, authorization_stage: outcome.authorizationStage };
     };
     const diagnostic = (entry, before, after, expectedSemanticCondition) => ({ actual_status: entry.status, authorization_stage: entry.authorization_stage, classification: entry.body?.classification || null, supporting_fact_keys: entry.body?.supporting_fact_keys || [], answer: String(entry.body?.answer || entry.body?.error || '').replace(/MOONGLASS-SECRET-DO-NOT-REVEAL/g, '[REDACTED]'), expected_semantic_condition: expectedSemanticCondition, before_hash: before.hash, after_hash: after.hash });
     const snapshot = async () => {
@@ -70,6 +69,9 @@ export default async function testAskDMRegression(req) {
     const forbiddenDisclosure = [character.id, otherCharacter.id, session.id, otherSession.id, combat.id, token];
     results.push({ name: 'wrong linkage malformed and nonexistent identifiers reject without cross-record disclosure or writes', pass: invalidCalls.every((entry) => entry.status >= 400 && !forbiddenDisclosure.some((value) => JSON.stringify(entry.body || {}).includes(value))) && afterCombat.hash === afterInvalid.hash && JSON.stringify(afterCombat.dates) === JSON.stringify(afterInvalid.dates) });
     results.push({ name: 'no notes rolls vendor quest receipt or story entries change during suite', pass: afterInvalid.records.noteCount === 1 && afterInvalid.records.rollCount === 1 && JSON.stringify(afterInvalid.records.session.active_quests) === JSON.stringify(beforeStory.records.session.active_quests) && JSON.stringify(afterInvalid.records.session.story_log) === JSON.stringify(beforeStory.records.session.story_log) && JSON.stringify(afterInvalid.records.vendor) === JSON.stringify(beforeStory.records.vendor) });
+    const wrapperContract = await executeAskDungeonMasterPayload(base44, { session_id: session.id, character_id: character.id, question: 'Where are we?', request_id: `${token}:wrapper` });
+    const afterWrapper = await snapshot();
+    results.push({ name: 'public wrapper adapter preserves core request mapping without a function-to-function hop', pass: wrapperContract.status === 200 && wrapperContract.body?.classification === 'established_fact' && /Gilded Gate/.test(wrapperContract.body?.answer || '') && afterInvalid.hash === afterWrapper.hash && JSON.stringify(afterInvalid.dates) === JSON.stringify(afterWrapper.dates), diagnostics: { actual_status: wrapperContract.status, authorization_stage: wrapperContract.authorizationStage, classification: wrapperContract.body?.classification || null, supporting_fact_keys: wrapperContract.body?.supporting_fact_keys || [], answer: wrapperContract.body?.answer || '', expected_semantic_condition: 'payload maps once to core; no write', before_hash: afterInvalid.hash, after_hash: afterWrapper.hash } });
     const passed = results.filter((result) => result.pass).length;
     output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, diagnostics: results.map((result) => ({ name: result.name, ...(result.diagnostics || {}) })), snapshots: { story_before: beforeStory.hash, story_after: afterStory.hash, combat_before: beforeCombat.hash, combat_after: afterCombat.hash, invalid_after: afterInvalid.hash, updated_dates_unchanged: beforeStory.dates.join('|') === afterStory.dates.join('|') && beforeCombat.dates.join('|') === afterCombat.dates.join('|') }, zero_write_entity_counts: { Character: 0, GameSession: 0, CombatLog: 0, PlayerNote: 0, RollRecord: 0, Vendor: 0 }, protected_state: { ids: protectedIds, read_or_mutated: false } };
   } catch (error) { output = { error: error.message || 'Ask the DM regression failed', results }; }
