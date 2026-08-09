@@ -13,6 +13,7 @@ import {
   requireUser, validateCombatOwnership, checkReceipt, storeReceipt,
 } from '../../shared/combat/authGuard.ts';
 import { reconcileSessionCombat } from '../../shared/combat/sessionCombatState.ts';
+import { executePlayerAttackCore } from '../../shared/combat/playerAttackCore.ts';
 
 /**
  * Combat Engine — thin HTTP router. All combat logic lives in focused modules
@@ -202,6 +203,10 @@ Deno.serve(async (req) => {
     }
   }
 
+  if (action === 'player_attack') {
+    const result = await executePlayerAttackCore({ base44, sessionId: session_id, combatId: combat_id, characterId: character_id, payload, requestId, handler: handlePlayerAttack, ownerId: user.id });
+    return Response.json(result.body, { status: result.status });
+  }
   const response = await handler(ctx);
   // One router-level receipt layer covers every combat state transition. Individual
   // handlers may also persist a richer receipt; this only fills a missing receipt

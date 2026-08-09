@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { handlePlayerAttack } from '../../shared/combat/playerAttack.ts';
 import { handleEnemyTurn } from '../../shared/combat/enemyTurn.ts';
+import { executePlayerAttackCore } from '../../shared/combat/playerAttackCore.ts';
 
 const QA_PREFIX = 'HuntersMarkQA_';
 const LIVE_IDS = new Set(['6a73a9e70fee7edcbc907703', '6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256']);
@@ -91,15 +92,16 @@ export default async function testHuntersMarkRegression(req) {
     results.push({ name: 'concentration break removes Character and CombatLog mark state', pass: !(afterBreakCharacter.active_modifiers || []).some((modifier) => modifier.effect === 'hunters_mark') && !afterBreakCombat.world_state?.hunters_mark && !afterBreakCombat.world_state?.concentration_spell && afterBreakCharacter.hp_current === 29 && afterBreakCombat.combatants.find((combatant) => combatant.id === concentration.character.id)?.hp_current === 29, detail: { character_hp: afterBreakCharacter.hp_current, modifiers: afterBreakCharacter.active_modifiers, world_state: afterBreakCombat.world_state, snapshot_hp: afterBreakCombat.combatants.find((combatant) => combatant.id === concentration.character.id)?.hp_current, log: afterBreakCombat.log_entries.at(-1) } });
 
     const replay = await createFixture('replay');
-    stage = 'combatEngine_replay';
-    const first = await base44.asServiceRole.functions.invoke('combatEngine', { action: 'player_attack', session_id: replay.session.id, combat_id: replay.combat.id, character_id: replay.character.id, request_id: 'hunters-mark-replay', payload: { target_id: replay.ritualMaster.id, spell: hunterSpell } });
-    downstream.push({ stage, function: 'combatEngine', status: first.status || null, has_auth_context: !!user });
-    const second = await base44.asServiceRole.functions.invoke('combatEngine', { action: 'player_attack', session_id: replay.session.id, combat_id: replay.combat.id, character_id: replay.character.id, request_id: 'hunters-mark-replay', payload: { target_id: replay.ritualMaster.id, spell: hunterSpell } });
-    downstream.push({ stage, function: 'combatEngine', status: second.status || null, has_auth_context: !!user });
+    stage = 'playerAttackCore_replay';
+    const coreArgs = { base44, sessionId: replay.session.id, combatId: replay.combat.id, characterId: replay.character.id, ownerId: user.id, payload: { target_id: replay.ritualMaster.id, spell: hunterSpell }, requestId: 'hunters-mark-replay', handler: handlePlayerAttack };
+    const firstData = await executePlayerAttackCore(coreArgs);
+    downstream.push({ stage, core: 'executePlayerAttackCore', status: firstData.status });
+    const beforeReplayCombat = await base44.asServiceRole.entities.CombatLog.get(replay.combat.id);
+    const secondData = await executePlayerAttackCore(coreArgs);
+    const afterReplayCombat = await base44.asServiceRole.entities.CombatLog.get(replay.combat.id);
+    downstream.push({ stage, core: 'executePlayerAttackCore', status: secondData.status });
     const replayCharacter = await base44.asServiceRole.entities.Character.get(replay.character.id);
-    const firstData = first.data || first;
-    const secondData = second.data || second;
-    results.push({ name: 'router replay does not spend a second slot or duplicate mark', pass: firstData?.log_entry?.hunters_mark && secondData?.idempotent_replay === true && replayCharacter.spell_slots?.level_1 === 1 && (replayCharacter.active_modifiers || []).filter((modifier) => modifier.effect === 'hunters_mark').length === 1 });
+    results.push({ name: 'shared-core replay does not spend a second slot or duplicate mark', pass: firstData.body?.log_entry?.hunters_mark && secondData.body?.idempotent_replay === true && replayCharacter.spell_slots?.level_1 === 1 && (replayCharacter.active_modifiers || []).filter((modifier) => modifier.effect === 'hunters_mark').length === 1 && JSON.stringify(beforeReplayCombat.log_entries) === JSON.stringify(afterReplayCombat.log_entries) });
 
     const passed = results.filter((result) => result.pass).length;
     output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, downstream, live_state: { protected_ids: [...LIVE_IDS], read_or_mutated: false } };
