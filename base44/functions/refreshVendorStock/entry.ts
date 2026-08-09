@@ -1,4 +1,5 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { eligibleCatalogItems, iconForItem } from '../../shared/vendorEconomy.ts';
 
 // Vendor type → item categories they carry + slot counts
 const VENDOR_CONFIG = {
@@ -90,41 +91,22 @@ Deno.serve(async (req) => {
       const rotateSlots = config.rotateSlots;
       const baseSlots = config.baseSlots;
 
-      // Filter pool to matching categories
-      const eligibleItems = allItems.filter(item =>
-        item.vendor_types?.includes(vendor.type) ||
-        (item.vendor_types?.length === 0) ||
-        vendorCategories.includes(item.category)
-      );
+      // Canonical eligibility is shared with the paged catalog endpoint.
+      const eligibleItems = eligibleCatalogItems(vendor, allItems);
 
       if (eligibleItems.length === 0) {
         results.push({ vendor: vendor.name, skipped: true, reason: 'no eligible items' });
         continue;
       }
 
-      // Separate always-stocked from rotating
-      const alwaysStocked = eligibleItems.filter(i => i.is_always_stocked);
-      const rotatable = eligibleItems.filter(i => !i.is_always_stocked && i.is_rotating !== false);
-
-      // Build new rotating items
-      const newRotatingItems = pickItems(rotatable, Math.min(rotateSlots + baseSlots - alwaysStocked.length, rotatable.length), vendor.type);
-
-      // Combine and format into vendor items array
-      const allForVendor = [
-        ...alwaysStocked.map(item => ({
-          name: item.name, category: item.category, rarity: item.rarity,
-          base_price: item.base_price, stock: item.rarity === 'legendary' ? 1 : item.rarity === 'rare' ? 1 : item.rarity === 'uncommon' ? 2 : 5,
-          weight: item.weight || 1, description: item.description || '', effect: item.effect || '',
-          icon: item.icon || '📦', is_magic: item.is_magic || false,
-        })),
-        ...newRotatingItems.map(item => ({
-          name: item.name, category: item.category, rarity: item.rarity,
-          base_price: item.base_price,
-          stock: item.rarity === 'legendary' ? 1 : item.rarity === 'rare' ? 1 : item.rarity === 'uncommon' ? Math.floor(Math.random() * 2) + 1 : Math.floor(Math.random() * 5) + 2,
-          weight: item.weight || 1, description: item.description || '', effect: item.effect || '',
-          icon: item.icon || '📦', is_magic: item.is_magic || false,
-        })),
-      ];
+      // Every eligible catalog record is stocked; the client reaches it through
+      // pagination instead of a hidden rotating-slot truncation.
+      const allForVendor = eligibleItems.map(item => ({
+        name: item.name, category: item.category, rarity: item.rarity, base_price: item.base_price,
+        stock: item.rarity === 'legendary' ? 1 : item.rarity === 'rare' ? 1 : item.rarity === 'uncommon' ? 2 : 5,
+        weight: item.weight || 1, description: item.description || '', effect: item.effect || '',
+        icon: iconForItem(item), is_magic: item.is_magic || false, stackable: item.category === 'Ammunition',
+      }));
 
       await base44.asServiceRole.entities.Vendor.update(vendor.id, {
         items: allForVendor,

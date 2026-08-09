@@ -34,9 +34,11 @@ export default function Market() {
     enabled: !!sessionId,
   });
 
-  const handleTransaction = async (updates) => {
-    await base44.entities.Character.update(characterId, updates);
-    queryClient.invalidateQueries({ queryKey: ['character', characterId] });
+  const handleTransaction = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['character', characterId] }),
+      queryClient.invalidateQueries({ queryKey: ['vendors'] }),
+    ]);
   };
 
   if (vendorsLoading || charLoading) {
@@ -116,6 +118,7 @@ export default function Market() {
           <VendorShop
             vendor={selectedVendor}
             character={character}
+            sessionId={sessionId}
             onClose={() => setSelectedVendor(null)}
             onTransaction={handleTransaction}
           />

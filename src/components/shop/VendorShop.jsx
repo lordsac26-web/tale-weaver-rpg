@@ -1,61 +1,47 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShoppingCart, Coins, TrendingUp, TrendingDown, Package } from 'lucide-react';
+import { X, ShoppingCart, Coins, TrendingUp, TrendingDown, Package, Search } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { addAmmoAtAcquisition } from '@/lib/ammunition';
 
-export default function VendorShop({ vendor, character, onClose, onTransaction }) {
+
+export default function VendorShop({ vendor, character, sessionId, onClose, onTransaction }) {
   const [selectedItem, setSelectedItem] = useState(null);
-  const [mode, setMode] = useState('buy'); // 'buy' | 'sell'
+  const [selectedQuote, setSelectedQuote] = useState(null);
+  const [mode, setMode] = useState('buy');
   const [processing, setProcessing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
 
   const playerGold = character.gold || 0;
   const playerInventory = character.inventory || [];
 
-  const handleBuy = async (item) => {
-    if (playerGold < item.price) {
-      alert('Not enough gold!');
-      return;
-    }
-
-    setProcessing(true);
-    const newGold = playerGold - item.price;
-    const newInventory = addAmmoAtAcquisition(playerInventory, item, 1);
-
-    await base44.entities.Character.update(character.id, {
-      gold: newGold,
-      inventory: newInventory,
-    });
-
-    onTransaction({ gold: newGold, inventory: newInventory });
-    setSelectedItem(null);
-    setProcessing(false);
+  const selectItem = async (item) => {
+    setSelectedItem(item);
+    setSelectedQuote(null);
+    const direction = mode === 'buy' ? 'buy_from_vendor' : 'sell_to_vendor';
+    const response = await base44.functions.invoke('vendorTrade', { action: 'quote', vendor_id: vendor.id, character_id: character.id, item_name: item.name, direction });
+    setSelectedQuote(response.data?.quote || null);
   };
 
-  const handleSell = async (item) => {
-    // H3 fix: sell ONE unit at a time — decrement quantity and only remove the
-    // inventory row when it reaches 0. (Previously the entire stack was deleted
-    // for a single unit's payout.)
-    const unitPrice = Math.floor((item.base_price || item.price || 10) * 0.5);
-
+  const handleTrade = async () => {
+    if (!selectedItem || !selectedQuote || !sessionId) return;
     setProcessing(true);
-    const qty = item.quantity ?? 1;
-    const newGold = playerGold + unitPrice;
-    const newInventory = qty > 1
-      ? playerInventory.map(i => i === item ? { ...i, quantity: qty - 1 } : i)
-      : playerInventory.filter(i => i !== item);
-
-    await base44.entities.Character.update(character.id, {
-      gold: newGold,
-      inventory: newInventory,
-    });
-
-    onTransaction({ gold: newGold, inventory: newInventory });
-    setSelectedItem(null);
+    const direction = mode === 'buy' ? 'buy_from_vendor' : 'sell_to_vendor';
+    const response = await base44.functions.invoke('vendorTrade', { vendor_id: vendor.id, character_id: character.id, session_id: sessionId, item_name: selectedItem.name, direction, quantity: 1, quote_id: selectedQuote.quote_id, request_id: `${vendor.id}-${Date.now()}-${Math.random().toString(36).slice(2)}` });
+    if (response.data?.success) {
+      await onTransaction();
+      setSelectedItem(null);
+      setSelectedQuote(null);
+    }
     setProcessing(false);
   };
 
   const vendorItems = vendor.items || [];
+  const activeItems = mode === 'buy' ? vendorItems : playerInventory;
+  const filteredItems = activeItems.filter((item) => `${item.name} ${item.category || ''} ${item.rarity || ''}`.toLowerCase().includes(search.toLowerCase()));
+  const pageSize = 18;
+  const visibleItems = filteredItems.slice(page * pageSize, (page + 1) * pageSize);
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -136,7 +122,13 @@ export default function VendorShop({ vendor, character, onClose, onTransaction }
           </button>
         </div>
 
-        {/* Items Grid */}
+        {/* Searchable, paged trade catalog */}
+        <div className="px-5 pt-3 flex-shrink-0" style={{ background: 'rgba(8,5,2,0.8)' }}>
+          <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: 'rgba(0,0,0,0.28)', border: '1px solid rgba(180,140,90,0.18)' }}>
+            <Search className="w-4 h-4" style={{ color: 'rgba(201,169,110,0.45)' }} />
+            <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search items" className="flex-1 bg-transparent text-sm outline-none" style={{ color: '#e8d5b7' }} />
+          </div>
+        </div>
         <div className="flex-1 overflow-y-auto p-5 min-h-0" style={{ background: 'rgba(8,5,2,0.8)' }}>
           {mode === 'buy' ? (
             vendorItems.length === 0 ? (
@@ -146,13 +138,13 @@ export default function VendorShop({ vendor, character, onClose, onTransaction }
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {vendorItems.map((item, idx) => (
+                {visibleItems.map((item, idx) => (
                   <ItemCard
                     key={idx}
                     item={item}
                     mode="buy"
                     playerGold={playerGold}
-                    onClick={() => setSelectedItem(item)}
+                    onClick={() => selectItem(item)}
                   />
                 ))}
               </div>
@@ -165,18 +157,26 @@ export default function VendorShop({ vendor, character, onClose, onTransaction }
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {playerInventory.map((item, idx) => (
+                {visibleItems.map((item, idx) => (
                   <ItemCard
                     key={idx}
                     item={item}
                     mode="sell"
-                    onClick={() => setSelectedItem(item)}
+                    onClick={() => selectItem(item)}
                   />
                 ))}
               </div>
             )
           )}
         </div>
+
+        {filteredItems.length > pageSize && (
+          <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ background: 'rgba(8,5,2,0.92)', borderTop: '1px solid rgba(180,140,90,0.12)' }}>
+            <button onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0} className="text-xs disabled:opacity-30" style={{ color: '#f0c040' }}>Previous</button>
+            <span className="text-xs" style={{ color: 'rgba(201,169,110,0.55)' }}>Page {page + 1} of {totalPages}</span>
+            <button onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))} disabled={page >= totalPages - 1} className="text-xs disabled:opacity-30" style={{ color: '#f0c040' }}>Next</button>
+          </div>
+        )}
 
         {/* Item Detail Modal */}
         <AnimatePresence>
@@ -220,7 +220,7 @@ export default function VendorShop({ vendor, character, onClose, onTransaction }
                   </span>
                   <div className="flex items-center gap-1.5 font-fantasy font-bold text-lg" style={{ color: '#fbbf24' }}>
                     <Coins className="w-4 h-4" />
-                    {mode === 'buy' ? selectedItem.price : Math.floor((selectedItem.base_price || selectedItem.price || 10) * 0.5)} gp
+                    {selectedQuote?.status === 'ok' ? selectedQuote.unit_display : 'Loading quote…'}
                   </div>
                 </div>
 
@@ -231,8 +231,8 @@ export default function VendorShop({ vendor, character, onClose, onTransaction }
                     Cancel
                   </button>
                   <button
-                    onClick={() => mode === 'buy' ? handleBuy(selectedItem) : handleSell(selectedItem)}
-                    disabled={processing || (mode === 'buy' && playerGold < selectedItem.price)}
+                    onClick={handleTrade}
+                    disabled={processing || !selectedQuote || selectedQuote.status !== 'ok' || !sessionId}
                     className="flex-1 py-2 rounded-lg text-sm font-fantasy btn-fantasy disabled:opacity-50">
                     {processing ? 'Processing...' : mode === 'buy' ? 'Buy' : 'Sell'}
                   </button>
@@ -247,8 +247,7 @@ export default function VendorShop({ vendor, character, onClose, onTransaction }
 }
 
 function ItemCard({ item, mode, playerGold, onClick }) {
-  const price = mode === 'buy' ? item.price : Math.floor((item.base_price || item.price || 10) * 0.5);
-  const canAfford = mode === 'sell' || playerGold >= price;
+  const canAfford = true;
 
   return (
     <button
@@ -273,7 +272,7 @@ function ItemCard({ item, mode, playerGold, onClick }) {
       </div>
       <div className="flex items-center gap-1 text-xs" style={{ color: '#fbbf24' }}>
         <Coins className="w-3 h-3" />
-        {price} gp
+        Quote on selection
       </div>
     </button>
   );
