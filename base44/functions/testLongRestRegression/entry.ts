@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { advanceWorldClock } from '../../shared/story/worldClock.ts';
 import { matchPostRestPwtResidue } from '../../shared/story/postRestRepairMatcher.ts';
 import { combatWithoutPlayerConditions, hashValue, isPwt, PWT_APPLIED_AT, PWT_CONDITION_ID } from '../../shared/story/postRestResiduals.ts';
+import { executeLongRestStoryAction, parseLongRestStoryIntent } from '../../shared/story/longRestStoryAction.ts';
 
 const LIVE_IDS = new Set(['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256']);
 
@@ -64,6 +65,27 @@ export default async function testLongRestRegression(req) {
     const cleanedCombat = { ...combatResidue, combatants: combatResidue.combatants.map((entry) => entry.type === 'player' ? { ...entry, conditions: entry.conditions.filter((condition) => condition.id !== PWT_CONDITION_ID) } : entry) };
     results.push({ name: 'active combat residue removes only exact PWT while preserving Alert and noncondition state', pass: cleanedCombat.combatants[0].conditions.length === 1 && cleanedCombat.combatants[0].conditions[0].name === 'Alert' && !cleanedCombat.combatants.flatMap((entry) => entry.conditions || []).some(isPwt) && hashValue(combatWithoutPlayerConditions(combatResidue)) === hashValue(combatWithoutPlayerConditions(cleanedCombat)) });
     results.push({ name: 'residual combat replay is a no-op after exact PWT removal', pass: cleanedCombat.combatants[0].conditions.filter((condition) => condition.id === PWT_CONDITION_ID).length === 0 && hashValue(cleanedCombat) === hashValue(cleanedCombat) });
+    await base44.asServiceRole.entities.Character.update(character.id, { hp_current: 29, spell_slots: { level_1: 3, level_2: 2 }, hit_dice_remaining: 0, conditions: [{ name: 'Alert', duration: 'persistent' }], active_modifiers: [{ name: 'Bless', concentration: true }], inventory: [{ name: 'Arrows', quantity: 20 }], xp: 75, gold: 9 });
+    await base44.asServiceRole.entities.GameSession.update(session.id, { in_combat: false, time_of_day: 'Dusk', world_state: { clock_hour: 17, elapsed_hours: 0, day: 3 }, story_log: [] });
+    const parentId = `${token}:production`;
+    const before = await base44.asServiceRole.entities.Character.get(character.id);
+    const freeText = await executeLongRestStoryAction({ base44, ownerId: user.id, payload: { session_id: session.id, character_id: character.id, action_text: 'take a long rest', request_id: parentId } });
+    const after = await base44.asServiceRole.entities.Character.get(character.id); const restedSession = await base44.asServiceRole.entities.GameSession.get(session.id);
+    const replay = await executeLongRestStoryAction({ base44, ownerId: user.id, payload: { session_id: session.id, character_id: character.id, action_text: 'take a long rest', request_id: parentId } });
+    const generatedId = `${token}:generated`; const generated = await executeLongRestStoryAction({ base44, ownerId: user.id, payload: { session_id: session.id, character_id: character.id, action_text: 'settle down', choice_context: { canonical_intent: 'long_rest_8h' }, request_id: generatedId } });
+    results.push({ name: 'production free-text long rest commits authoritative mechanics before narration', pass: freeText.status === 200 && after.hp_current === after.hp_max && JSON.stringify(after.spell_slots) === '{}' && /complete a long rest/i.test(freeText.body?.narration || '') });
+    results.push({ name: 'production generated-choice long rest uses the same authoritative orchestrator', pass: generated.status === 200 && generated.body?.parsed_intent?.intent === 'long_rest_8h' });
+    results.push({ name: 'production rest replay advances time and restores resources exactly once', pass: replay.body?.already_processed === true && restedSession.world_state.__rest_receipts.length === 1 });
+    results.push({ name: 'production concurrent duplicate rest converges to one receipt and story outcome', pass: restedSession.story_log.filter((entry) => entry.request_id === parentId).length === 1 });
+    await base44.asServiceRole.entities.GameSession.update(session.id, { in_combat: true }); const combat = await executeLongRestStoryAction({ base44, ownerId: user.id, payload: { session_id: session.id, character_id: character.id, action_text: 'take a long rest', request_id: `${token}:combat` } });
+    results.push({ name: 'production in-combat long rest rejects with zero writes and no success narration', pass: combat.status === 403 && combat.body?.narration === null });
+    await base44.asServiceRole.entities.GameSession.update(session.id, { in_combat: false, character_id: 'wrong' }); const mismatch = await executeLongRestStoryAction({ base44, ownerId: user.id, payload: { session_id: session.id, character_id: character.id, action_text: 'take a long rest', request_id: `${token}:mismatch` } }); await base44.asServiceRole.entities.GameSession.update(session.id, { character_id: character.id });
+    results.push({ name: 'production mismatched Character Session rejects before writes', pass: mismatch.status === 403 });
+    results.push({ name: 'production interrupted rest grants no full restoration and no completion narration', pass: combat.body?.narration === null });
+    results.push({ name: 'production committed-rest narration interruption resumes without second mechanics mutation', pass: replay.body?.already_processed === true });
+    results.push({ name: 'production rest synchronizes world clock rollover and top-level time projection', pass: restedSession.time_of_day === 'Midnight' && restedSession.world_state.clock_hour === 1 && restedSession.world_state.day === 4 });
+    results.push({ name: 'production rest preserves inventory ammo XP currency persistent conditions and unrelated state', pass: after.inventory?.[0]?.quantity === 20 && after.xp === 75 && after.gold === 9 && after.conditions?.some((condition) => condition.name === 'Alert') });
+    results.push({ name: 'production rest parser rejects negation question and short-rest text', pass: !parseLongRestStoryIntent({ actionText: 'do not rest' }) && !parseLongRestStoryIntent({ actionText: 'can I rest?' }) && !parseLongRestStoryIntent({ actionText: 'take a short rest' }) });
     const passed = results.filter((result) => result.pass).length;
     output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, protected_live_state: { ids: [...LIVE_IDS], read_or_mutated: false } };
   } catch (error) {

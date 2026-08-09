@@ -6,6 +6,7 @@ import { reconcileSessionCombat } from '../../shared/combat/sessionCombatState.t
 import { factualAftermathFallback, findDeadCombatantContradictions, readCompletedCombatContext } from '../../shared/story/completedCombatContext.ts';
 import { isPwt, repairPostRestNarration } from '../../shared/story/postRestResiduals.ts';
 import { executePwtCompoundAction } from '../../shared/story/compoundPwtAction.ts';
+import { executeLongRestStoryAction } from '../../shared/story/longRestStoryAction.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -46,6 +47,8 @@ Deno.serve(async (req) => {
       ? choice_context.completed_combat : null);
     const selectedChoice = action === 'choice' ? String(choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`).trim() : '';
     if (action === 'choice' && storyRequestId) {
+      const longRest = await executeLongRestStoryAction({ base44, ownerId: user.id, payload: { session_id, character_id: character.id, action_text: selectedChoice, choice_context, request_id: storyRequestId } });
+      if (longRest.body?.handled) return Response.json({ narrative: longRest.body.narration, choices: [], long_rest: longRest.body }, { status: longRest.status });
       const compound = await executePwtCompoundAction({ base44, user, payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId, skill_dc: choice_context?.skill_dc } });
       if (compound.body?.handled) {
         if (compound.status >= 400) return Response.json(compound.body, { status: compound.status });
