@@ -59,13 +59,13 @@ export const parseDamageDice = (diceStr) => {
 // tacticBonus (from AI tactics like reckless) is always added on top.
 // Returns { damage, parsed }. If parsed is false, the dice string was unparseable
 // and the caller must treat it as an error — never emit a false successful hit.
-export const rollDamageFromDice = (diceStr, { damageBonus = 0, tacticBonus = 0, isCrit = false } = {}) => {
+export const rollDamageFromDice = (diceStr, { damageBonus = 0, tacticBonus = 0, isCrit = false, rollDie = rollDice } = {}) => {
   const parsed = parseDamageDice(diceStr);
   if (!parsed) return { damage: 0, parsed: false, rolls: [] };
   const { numDice, sides, embeddedBonus } = parsed;
   const rolledDice = isCrit ? numDice * 2 : numDice;
   const rolls = [];
-  for (let i = 0; i < rolledDice; i++) rolls.push(rollDice(sides));
+  for (let i = 0; i < rolledDice; i++) rolls.push(rollDie(sides));
   const damageBonusApplied = embeddedBonus === 0 ? (Number(damageBonus) || 0) : 0;
   const tacticBonusApplied = Number(tacticBonus) || 0;
   const dmg = rolls.reduce((total, roll) => total + roll, 0) + embeddedBonus + damageBonusApplied + tacticBonusApplied;
@@ -155,15 +155,15 @@ export const resolveAttackRoll = ({ advSources = [], disSources = [], forceCrit 
 };
 
 // ─── CONCENTRATION SAVE (PHB p.203) ──────────────────────────────────────────
-export const rollConcentrationSave = (charFull, damage) => {
+export const rollConcentrationSave = (charFull, damage, roll = rollD20) => {
   const dc = Math.max(10, Math.floor(damage / 2));
   const hasWarCaster = (charFull?.feats || []).includes('War Caster') ||
     (charFull?._feat_flags || []).includes('war_caster');
   const conProf = charFull?.saving_throws?.constitution ? (charFull?.proficiency_bonus || 2) : 0;
   const auraBonus = (charFull?.class === 'Paladin' && (charFull?.level || 1) >= 6)
     ? Math.max(1, statMod(charFull?.charisma || 10)) : 0;
-  const cr1 = rollD20();
-  const cr2 = hasWarCaster ? rollD20() : cr1;
+  const cr1 = roll();
+  const cr2 = hasWarCaster ? roll() : cr1;
   const save = Math.max(cr1, cr2) + statMod(charFull?.constitution || 10) + conProf + auraBonus;
   return { broken: save < dc, save, dc };
 };

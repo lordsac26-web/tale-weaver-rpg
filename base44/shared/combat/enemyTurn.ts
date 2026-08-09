@@ -8,11 +8,15 @@ import {
   rollDamageFromDice,
 } from './helpers.ts';
 import { awardVictoryXP } from './persistence.ts';
-import { inferArchetype, chooseTactic } from '../monsterAI.ts';
+import { inferArchetype, chooseTactic, clampTacticByCR } from '../monsterAI.ts';
 import { removeHuntersMark } from './huntersMark.ts';
 
 export async function handleEnemyTurn(ctx) {
   const { base44, session_id, combat_id } = ctx;
+  const internal = ctx.internal || {};
+  const d20 = internal.rollD20 || rollD20;
+  const rollDie = internal.rollDamage || rollDice;
+  const tacticChooser = internal.chooseTactic || chooseTactic;
   const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
   const combatants = [...combatLog.combatants];
 
@@ -133,7 +137,7 @@ export async function handleEnemyTurn(ctx) {
   // Re-infer every turn so legacy records that persisted the generic "brute"
   // fallback on obvious casters self-heal without a data migration.
   const archetypeKey = inferArchetype(currentCombatant);
-  let tactic = chooseTactic(archetypeKey, {
+  let tactic = tacticChooser(archetypeKey, {
     selfHpPct: enemyHpPct,
     playerHpPct,
     round: combatLog.round,
@@ -141,6 +145,8 @@ export async function handleEnemyTurn(ctx) {
     nativeAttacks: currentCombatant.num_attacks || 1,
     hasMultiattack: !!(currentCombatant.has_multiattack || currentCombatant.multiattack),
   });
+  const boundedTactic = clampTacticByCR(tactic, currentCombatant.cr, currentCombatant.num_attacks || 1);
+  tactic = { ...tactic, ...boundedTactic };
   const enemyConditions = (currentCombatant.conditions || []).map(c => String(typeof c === 'string' ? c : c?.name || '').toLowerCase().trim());
   const isSilenced = enemyConditions.includes('silenced') || enemyConditions.includes('silence');
   if (isSilenced && archetypeKey === 'spellcaster') {
@@ -209,11 +215,11 @@ export async function handleEnemyTurn(ctx) {
 
   for (let atk = 0; atk < numAttacks; atk++) {
     if (!currentCombatant.is_conscious) break; // felled mid-turn (Cloud Rune self-redirect)
-    const roll1 = rollD20();
+    const roll1 = d20();
     // Advantage (reckless barbarian) and disadvantage (dodging) cancel per PHB p.173
     const hasAdv = playerReckless && !(playerDodging || playerInvisible);
     const hasDis = (playerDodging || playerInvisible) && !playerReckless;
-    const attackRoll = hasAdv ? Math.max(roll1, rollD20()) : hasDis ? Math.min(roll1, rollD20()) : roll1;
+    const attackRoll = hasAdv ? Math.max(roll1, d20()) : hasDis ? Math.min(roll1, d20()) : roll1;
     let totalAttack = attackRoll + attackBonus;
     const isCrit = attackRoll === 20;
     const isFumble = attackRoll === 1;
@@ -239,7 +245,7 @@ export async function handleEnemyTurn(ctx) {
       // (from AI tactics like reckless) is always additive.
       const { damage: rawDmg, parsed: dmgParsed, rolls, embeddedBonus, damageBonusApplied, tacticBonusApplied } = rollDamageFromDice(
         damageDice,
-        { damageBonus: currentCombatant.damage_bonus || 0, tacticBonus: bonusDamage, isCrit }
+        { damageBonus: currentCombatant.damage_bonus || 0, tacticBonus: bonusDamage, isCrit, rollDie }
       );
       if (!dmgParsed) {
         resolverError = `Confirmed hit could not resolve damage_dice '${damageDice}'.`;
@@ -489,7 +495,7 @@ export async function handleEnemyTurn(ctx) {
   }
   const concentrationSpellCheck = combatLog.world_state?.concentration_spell;
   if (concentrationSpellCheck && finalDamage > 0) {
-    const conc = rollConcentrationSave(charFull, finalDamage);
+    const conc = rollConcentrationSave(charFull, finalDamage, d20);
     if (conc.broken) {
       newWS.concentration_spell = null;
       newWS.concentration_caster = null;
