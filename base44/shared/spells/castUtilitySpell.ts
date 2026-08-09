@@ -40,7 +40,7 @@ function findKnownSpell(character, actionText, requestedName) {
   return resolveKnownTypedSpell(character, actionText, requestedName);
 }
 function concentrationModifier(spell, now, characterId, expiresAt = null) {
-  const base = { id: `typed_spell_${normalize(spell.name).replace(/ /g, '_')}_${now}`, source: spell.name, effect: 'spell_concentration', concentration: true, caster_id: characterId, character_id: characterId, applied_at: new Date(now).toISOString(), duration: spell.duration || 'Concentration', ...(expiresAt ? { expires_at: expiresAt } : {}) };
+  const base = { id: `typed_spell_${normalize(spell.name).replace(/ /g, '_')}_${now}`, source: spell.name, effect: 'spell_concentration', concentration: true, caster_id: characterId, character_id: characterId, target_id: characterId, scope: 'self', applied_at: new Date(now).toISOString(), duration: spell.duration || 'Concentration', expiration_rule: expiresAt ? 'timestamp' : 'concentration', ...(expiresAt ? { expires_at: expiresAt } : {}) };
   if (normalize(spell.name) === 'pass without trace') return { ...base, effect: 'skill_bonus', skill: 'Stealth', bonus: 10 };
   if (normalize(spell.name) === 'hunters mark') return { ...base, effect: 'hunters_mark', damage_bonus_dice: '1d6' };
   if (normalize(spell.name) === 'ensnaring strike') return { ...base, effect: 'ensnaring_strike_pending' };
@@ -154,7 +154,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
       last_spell_cast: { spell_name: canonicalName, character_id, slot_level: selectedLevel, heal_amount: healAmount, request_id: token, at: new Date(now).toISOString() },
     };
     if (spell.concentration) {
-      sessionWorldState.active_concentration = { spell_name: canonicalName, character_id, caster_id: character_id, duration: spell.duration || 'Concentration', applied_at: new Date(now).toISOString(), request_id: token };
+      sessionWorldState.active_concentration = { spell_name: canonicalName, character_id, caster_id: character_id, target_id: character_id, scope: 'self', duration: spell.duration || 'Concentration', applied_at: new Date(now).toISOString(), expires_at: expiresAt, expiration_rule: expiresAt ? 'timestamp' : 'concentration', concentration: true, request_id: token };
     }
     await base44.asServiceRole.entities.GameSession.update(session_id, { world_state: sessionWorldState });
   }

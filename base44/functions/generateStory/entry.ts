@@ -5,6 +5,7 @@ import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts
 import { reconcileSessionCombat } from '../../shared/combat/sessionCombatState.ts';
 import { factualAftermathFallback, findDeadCombatantContradictions, readCompletedCombatContext } from '../../shared/story/completedCombatContext.ts';
 import { isPwt, repairPostRestNarration } from '../../shared/story/postRestResiduals.ts';
+import { executePwtCompoundAction } from '../../shared/story/compoundPwtAction.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -44,6 +45,18 @@ Deno.serve(async (req) => {
     const completedCombat = await readCompletedCombatContext(base44, session) || (choice_context?.completed_combat && typeof choice_context.completed_combat === 'object'
       ? choice_context.completed_combat : null);
     const selectedChoice = action === 'choice' ? String(choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`).trim() : '';
+    if (action === 'choice' && storyRequestId) {
+      const compound = await executePwtCompoundAction({ base44, user, payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId, skill_dc: choice_context?.skill_dc } });
+      if (compound.body?.handled) {
+        if (compound.status >= 400) return Response.json(compound.body, { status: compound.status });
+        const freshSession = await base44.asServiceRole.entities.GameSession.get(session_id);
+        const existing = (freshSession?.story_log || []).find((entry) => entry?.request_id === storyRequestId);
+        if (existing?.text) return Response.json({ narrative: existing.text, choices: existing.choices || [], compound_action: compound.body, already_processed: true });
+        const entry = { timestamp: new Date().toISOString(), action: 'choice', request_id: storyRequestId, player_choice: selectedChoice, text: compound.body.narration, choices: [], compound_action: { child_ids: compound.body.child_ids, plan: compound.body.plan, skill: compound.body.skill } };
+        await base44.asServiceRole.entities.GameSession.update(session_id, { story_log: [...(freshSession?.story_log || []), entry].slice(-60) });
+        return Response.json({ narrative: compound.body.narration, choices: [], compound_action: compound.body });
+      }
+    }
     let authoritativeSpellCast = null;
     if (action === 'choice' && storyRequestId) {
       const castOutcome = await executeUtilitySpellCast({

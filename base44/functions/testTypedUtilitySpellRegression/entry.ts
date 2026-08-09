@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
 import { resolveKnownTypedSpell } from '../../shared/spells/typedSpellParser.ts';
+import { executePwtCompoundAction, parsePwtCompoundIntent } from '../../shared/story/compoundPwtAction.ts';
 
 const LIVE_IDS = new Set(['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256']);
 const stealthBonus = (character) => (character.active_modifiers || []).filter((modifier) => modifier.effect === 'skill_bonus' && modifier.skill === 'Stealth').reduce((total, modifier) => total + (Number(modifier.bonus) || 0), 0);
@@ -67,6 +68,38 @@ export default async function testTypedUtilitySpellRegression(req) {
     const noSession = await executeUtilitySpellCast({ base44, user, payload: { character_id: sheetFixture.character.id, spell_name: 'Cure Wounds', slot_level: 1, target: 'self', require_healing: true, request_id: `${token}:no-session`, action_text: 'cast Cure Wounds on myself' } });
     const afterNoSession = await base44.asServiceRole.entities.Character.get(sheetFixture.character.id);
     results.push({ name: 'sessionless sheet cast remains authoritative with receipt, healing, and exactly one additional slot', pass: noSession.status === 200 && noSession.body?.receipt_id && noSession.body?.roll_total > 0 && afterNoSession.hp_current > beforeNoSession.hp_current && afterNoSession.spell_slots?.level_1 === beforeNoSession.spell_slots?.level_1 + 1 });
+    const compoundRun = async (label, action_text, request_id, overrides = {}) => {
+      const fixture = await createFixture(label, overrides.level || 5, overrides.character || {});
+      const beforeCharacter = await base44.asServiceRole.entities.Character.get(fixture.character.id);
+      const beforeSession = await base44.asServiceRole.entities.GameSession.get(fixture.session.id);
+      const outcome = await executePwtCompoundAction({ base44, user, payload: { session_id: overrides.session_id || fixture.session.id, character_id: fixture.character.id, action_text, request_id, skill_dc: overrides.skill_dc } });
+      const afterCharacter = await base44.asServiceRole.entities.Character.get(fixture.character.id);
+      const afterSession = await base44.asServiceRole.entities.GameSession.get(fixture.session.id);
+      return { fixture, beforeCharacter, beforeSession, outcome, afterCharacter, afterSession };
+    };
+    const compoundModifierCount = (character) => (character.active_modifiers || []).filter((m) => m.effect === 'skill_bonus' && m.skill === 'Stealth' && m.source === 'Pass without Trace').length;
+    const freeTextCompound = await compoundRun('compound-free-text', 'cast Pass without Trace, then hide', `${token}:compound-free`);
+    results.push({ name: 'compound free-text PWT then Hide commits cast before Stealth and applies +10 once', pass: JSON.stringify(parsePwtCompoundIntent('cast Pass without Trace, then hide')?.steps) === JSON.stringify([{ type: 'cast', spell_name: 'Pass without Trace' }, { type: 'skill', skill: 'Stealth', action: 'Hide' }]) && freeTextCompound.outcome.status === 200 && freeTextCompound.outcome.body?.cast?.request_id?.endsWith(':cast:0') && freeTextCompound.outcome.body?.skill?.id?.endsWith(':skill:1') && freeTextCompound.afterCharacter.spell_slots?.level_2 === 1 && compoundModifierCount(freeTextCompound.afterCharacter) === 1 && freeTextCompound.outcome.body?.skill?.breakdown?.bonus === 10 && freeTextCompound.outcome.body?.skill?.total === freeTextCompound.outcome.body.skill.raw + freeTextCompound.outcome.body.skill.breakdown.total });
+    const generatedCompound = await compoundRun('compound-choice', 'I cast Pass without a Trace and hide', `${token}:compound-choice`);
+    results.push({ name: 'compound generated-choice PWT then Hide uses the same ordered core', pass: JSON.stringify(parsePwtCompoundIntent('use Pass without Trace before sneaking')?.steps) === JSON.stringify([{ type: 'cast', spell_name: 'Pass without Trace' }, { type: 'skill', skill: 'Stealth', action: 'Hide' }]) && generatedCompound.outcome.status === 200 && generatedCompound.outcome.body?.plan?.[1]?.skill === 'Stealth' && generatedCompound.outcome.body?.skill?.breakdown?.bonus === 10 });
+    const replayCompound = await executePwtCompoundAction({ base44, user, payload: { session_id: freeTextCompound.fixture.session.id, character_id: freeTextCompound.fixture.character.id, action_text: 'cast Pass without Trace, then hide', request_id: `${token}:compound-free` } });
+    const replayCharacter = await base44.asServiceRole.entities.Character.get(freeTextCompound.fixture.character.id);
+    const replaySession = await base44.asServiceRole.entities.GameSession.get(freeTextCompound.fixture.session.id);
+    results.push({ name: 'compound parent replay spends no second slot and creates no second roll or story entry', pass: replayCompound.body?.already_processed === true && replayCharacter.spell_slots?.level_2 === 1 && compoundModifierCount(replayCharacter) === 1 && (replaySession.world_state?.__compound_action_receipts || []).length === 1 });
+    const noSlotCompound = await compoundRun('compound-no-slot', 'cast Pass without Trace, then hide', `${token}:compound-no-slot`, { level: 3 });
+    results.push({ name: 'compound no-slot rejection has zero partial writes and no successful narration', pass: noSlotCompound.outcome.status === 400 && noSlotCompound.afterCharacter.spell_slots?.level_2 === undefined && compoundModifierCount(noSlotCompound.afterCharacter) === 0 && (noSlotCompound.afterSession.world_state?.__compound_action_receipts || []).length === 0 && !noSlotCompound.outcome.body?.narration });
+    const failedHideCompound = await compoundRun('compound-failed-hide', 'use Pass without Trace before sneaking', `${token}:compound-failed`, { skill_dc: 100 });
+    results.push({ name: 'compound successful cast plus failed Hide retains spell and narrates failure', pass: failedHideCompound.outcome.status === 200 && failedHideCompound.afterCharacter.spell_slots?.level_2 === 1 && compoundModifierCount(failedHideCompound.afterCharacter) === 1 && failedHideCompound.outcome.body?.skill?.success === false && /fails/.test(failedHideCompound.outcome.body?.narration || '') });
+    const resumeCompound = await compoundRun('compound-resume', 'cast Pass without Trace, then hide', `${token}:compound-resume`);
+    const resumeReplay = await executePwtCompoundAction({ base44, user, payload: { session_id: resumeCompound.fixture.session.id, character_id: resumeCompound.fixture.character.id, action_text: 'cast Pass without Trace, then hide', request_id: `${token}:compound-resume` } });
+    results.push({ name: 'compound recoverable skill interruption resumes on replay without second cast', pass: resumeCompound.outcome.status === 200 && resumeReplay.body?.already_processed === true && resumeReplay.body?.cast?.already_processed === true && resumeReplay.body?.skill?.id?.endsWith(':skill:1') });
+    const concentrationCompound = await compoundRun('compound-concentration', 'cast Pass without Trace, then hide', `${token}:compound-concentration`);
+    const secondConcentration = await executePwtCompoundAction({ base44, user, payload: { session_id: concentrationCompound.fixture.session.id, character_id: concentrationCompound.fixture.character.id, action_text: 'cast Pass without Trace, then hide', request_id: `${token}:compound-concentration-new` } });
+    const concentrationAfter = await base44.asServiceRole.entities.Character.get(concentrationCompound.fixture.character.id);
+    results.push({ name: 'compound concentration behavior does not stack the +10 modifier', pass: secondConcentration.status === 200 && compoundModifierCount(concentrationAfter) === 1 && stealthBonus(concentrationAfter) === 10 });
+    const wrongLinkCompound = await compoundRun('compound-wrong-link', 'cast Pass without Trace, then hide', `${token}:compound-wrong-link`, { session_id: article.session.id });
+    results.push({ name: 'compound wrong Character Session linkage rejects before writes', pass: wrongLinkCompound.outcome.status === 400 && wrongLinkCompound.afterCharacter.spell_slots?.level_2 === undefined && compoundModifierCount(wrongLinkCompound.afterCharacter) === 0 });
+    results.push({ name: 'compound plain non-spell Hide remains a non-cast control', pass: parsePwtCompoundIntent('hide behind the wall') === null });
     const passed = results.filter((result) => result.pass).length;
     output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, live_state: { protected_ids: [...LIVE_IDS], read_or_mutated: false } };
   } catch (error) {
