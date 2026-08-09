@@ -2,22 +2,24 @@
 // Extracted from combatEngine/entry.ts to keep that file under the size limit.
 // Archetype → prioritized tactic list. Edit AI_ARCHETYPES to tune monster behavior.
 export const parseCR = (cr) => {
-  if (typeof cr === 'number') return Number.isFinite(cr) ? cr : 1;
+  if (typeof cr === 'number') return Number.isFinite(cr) && cr >= 0 ? cr : 0;
   if (typeof cr === 'string') {
-    const value = cr.trim();
-    if (value.includes('/')) {
-      const [num, den] = value.split('/').map(Number);
-      if (Number.isFinite(num) && Number.isFinite(den) && den !== 0) return num / den;
+    const value = cr.trim().toLowerCase().replace(/^cr\s*/, '');
+    if (/^\d+\s*\/\s*\d+$/.test(value)) {
+      const [num, den] = value.split('/').map(part => Number(part.trim()));
+      if (Number.isFinite(num) && Number.isFinite(den) && den > 0) return num / den;
     }
-    const parsed = Number.parseFloat(value);
-    if (Number.isFinite(parsed)) return parsed;
+    if (/^\d+(?:\.\d+)?$/.test(value)) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+    }
   }
-  return 1;
+  return 0;
 };
 
 export const clampTacticByCR = (effects = {}, cr, nativeAttacks = 1) => {
   const numericCR = parseCR(cr);
-  let maxAttacks = Math.max(1, Number(nativeAttacks) || 1);
+  let maxAttacks = numericCR < 1 ? 1 : Math.max(1, Number(nativeAttacks) || 1);
   let maxAttackBonus = 1;
   let maxBonusDamage = 1;
   if (numericCR >= 10) {
@@ -137,7 +139,7 @@ export const chooseTactic = (archetypeKey, ctx = {}) => {
   // multiattack tactic when num_attacks is one (the CR 1/4 skeleton live path).
   // Filtering here keeps the tactic id, description, and number of attacks aligned.
   const nativeAttacks = Math.max(1, Number(ctx.nativeAttacks) || 1);
-  const canMultiattack = nativeAttacks > 1;
+  const canMultiattack = parseCR(ctx.cr) >= 1 && nativeAttacks > 1;
   const canUseTactic = (tactic) => {
     const effects = tactic.effects || {};
     if ((effects.numAttacks || 1) > 1 && !canMultiattack) return false;
