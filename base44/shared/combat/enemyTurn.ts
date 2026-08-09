@@ -145,8 +145,12 @@ export async function handleEnemyTurn(ctx) {
     nativeAttacks: currentCombatant.num_attacks || 1,
     hasMultiattack: !!(currentCombatant.has_multiattack || currentCombatant.multiattack),
   });
+  const requestedAttackCount = Math.max(1, Number(tactic.numAttacks) || 1);
   const boundedTactic = clampTacticByCR(tactic, currentCombatant.cr, currentCombatant.num_attacks || 1);
   tactic = { ...tactic, ...boundedTactic };
+  if (boundedTactic.numAttacks === 1 && requestedAttackCount > 1) {
+    tactic = { ...tactic, id: 'default', desc: 'attacks!' };
+  }
   const enemyConditions = (currentCombatant.conditions || []).map(c => String(typeof c === 'string' ? c : c?.name || '').toLowerCase().trim());
   const isSilenced = enemyConditions.includes('silenced') || enemyConditions.includes('silence');
   if (isSilenced && archetypeKey === 'spellcaster') {
