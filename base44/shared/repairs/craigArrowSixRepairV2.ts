@@ -22,7 +22,7 @@ export async function applyScopedArrowSixRepair({ db, scope = ids }) {
   const recoveries = (combat.log_entries || []).filter((entry) => { const recovery = entry?.recovery || entry?.arrow_recovery || entry?.structured_recovery; return recovery?.success === true && /arrow|ammo/i.test(String(recovery?.type || recovery?.item || recovery?.name || '')); });
   const guards = {
     exact_inventory: rows.length === 2 && zeroShells.length === 2 && rows.every(({ item }) => quantity(item) === 0) && nonArrow.length === 13,
-    protected_links: session.character_id === scope.character && combat.session_id === scope.session && combat.character_id === scope.character && player?.id === scope.character,
+    protected_links: session.id === scope.session && session.character_id === scope.character && session.in_combat === true && session.combat_state?.combat_id === scope.combat && combat.session_id === scope.session && (combat.character_id == null || combat.character_id === scope.character) && (combat.combatants || []).filter((entry) => entry?.type === 'player').length === 1 && player?.id === scope.character,
     protected_combat: combat.is_active === true && Number(combat.current_turn_index) === 0 && Number(player?.hp_current) === 44 && Number(character.hp_current) === 44,
     exact_attacks: attacks.length === 2 && exactHit.length === 1 && exactMiss.length === 1,
     no_successful_recovery: recoveries.length === 0,
