@@ -1,6 +1,7 @@
 import { characterBelongsToUser } from '../combat/authGuard.ts';
 import { addStructuredCondition, buildStructuredCondition } from '../combat/conditions.ts';
 import { normalizeSpellText, resolveKnownTypedSpell } from './typedSpellParser.ts';
+import { conditionIdentityKey, isPassWithoutTraceIdentity, preferStructuredCondition } from './conditionIdentity.js';
 
 const FULL = [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]];
 const HALF = [[0],[2],[3],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]];
@@ -92,12 +93,12 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
     return respond(200, { success: true, spell_detected: true, already_processed: true, receipt_id: prior.receipt_id || token, request_id: token, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: normalizedSlots, active_modifiers: character.active_modifiers || [], concentration: !!spell.concentration, duration: spell.duration, inventory: character.inventory || [], heal_amount: prior.heal_amount || 0, roll_expression: prior.roll_expression || null, roll_total: Number(prior.roll_total ?? prior.heal_amount ?? 0), hp_before: Number(prior.hp_before ?? character.hp_current), hp_after: Number(prior.hp_after ?? character.hp_current), hp_current: character.hp_current, hp_max: character.hp_max });
   }
   const now = Date.now();
-  const active = (character.active_modifiers || []).filter((modifier) => !modifier.expires_at || new Date(modifier.expires_at).getTime() > now);
-  const existing = spell.concentration ? active.find((modifier) => normalize(modifier.source) === normalizedName && modifier.concentration) : null;
-  const structured = (character.conditions || []).find((condition) => normalize(condition?.name) === normalizedName && condition?.concentration === true && (!condition.expires_at || new Date(condition.expires_at).getTime() > now));
   const concentration = session?.world_state?.active_concentration;
-  const slotReceipt = receipts.find((receipt) => normalize(receipt?.spell_name) === normalizedName && receipt?.token === concentration?.request_id);
-  const coherentExisting = existing && structured && concentration && slotReceipt
+  const sessionKeepsConcentration = spell.concentration && normalize(concentration?.spell_name) === normalizedName && concentration?.concentration === true && concentration?.target_id === character_id;
+  const active = (character.active_modifiers || []).filter((modifier) => !modifier.expires_at || new Date(modifier.expires_at).getTime() > now || (sessionKeepsConcentration && normalize(modifier.source) === normalizedName && modifier.concentration === true));
+  const existing = spell.concentration ? (character.active_modifiers || []).find((modifier) => normalize(modifier.source) === normalizedName && modifier.concentration) : null;
+  const structured = preferStructuredCondition(character.conditions, canonicalName);
+  const coherentExisting = existing && structured && concentration
     && existing.target_id === character_id && structured.target_id === character_id && concentration.target_id === character_id
     && existing.expires_at === structured.expires_at && existing.expires_at === concentration.expires_at
     && normalize(concentration.spell_name) === normalizedName && concentration.concentration === true;
@@ -119,7 +120,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   if (spell.concentration) activeModifiers = [...active.filter((modifier) => !modifier.concentration), concentrationModifier(spell, now, character_id, expiresAt)];
   const isSilence = normalizedName === 'silence';
   const structuredConditions = isPassWithoutTrace
-    ? addStructuredCondition(character.conditions, buildStructuredCondition({ name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id, duration_type: 'timestamp', expires_at: expiresAt, concentration: true }))
+    ? addStructuredCondition((character.conditions || []).filter((condition) => !isPassWithoutTraceIdentity(condition)), buildStructuredCondition({ name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id, duration_type: 'timestamp', expires_at: expiresAt, concentration: true }))
     : isSilence
       ? (character.conditions || []).filter((condition) => normalize(typeof condition === 'string' ? condition : condition?.name) !== 'pass without trace')
       : (character.conditions || []);

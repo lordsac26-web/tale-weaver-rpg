@@ -1,5 +1,6 @@
 import React from 'react';
 import { getConditionEffect, conditionKey } from './conditionEffects';
+import { deriveConditionBadges } from '../../../base44/shared/spells/conditionIdentity';
 import {
   Tooltip,
   TooltipContent,
@@ -11,8 +12,8 @@ import {
  * Displays a creature's active conditions as badges with detailed tooltips
  * describing the mechanical effect. Enhanced version with proper tooltip UI.
  */
-export default function ConditionBadges({ conditions = [], max = null, size = 'sm' }) {
-  const list = (conditions || []).filter(Boolean);
+export default function ConditionBadges({ conditions = [], modifiers = [], max = null, size = 'sm' }) {
+  const list = deriveConditionBadges(conditions, modifiers).filter(Boolean);
   if (list.length === 0) return null;
 
   const shown = max ? list.slice(0, max) : list;

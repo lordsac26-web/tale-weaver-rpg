@@ -125,7 +125,7 @@ export const CONDITION_EFFECTS = {
 
 /** Normalize a condition entry (string or {name}) to its lowercase key. */
 export function conditionKey(cond) {
-  return String(typeof cond === 'string' ? cond : cond?.name || '').toLowerCase().trim();
+  return String(typeof cond === 'string' ? cond : cond?.display_name || cond?.name || cond?.source || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 /** Return the effect definition for a condition, or null. */
