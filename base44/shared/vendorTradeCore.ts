@@ -7,7 +7,7 @@ const stockItem = (vendor, itemName) => (vendor.items || []).find((item) => norm
 const inventoryItem = (character, itemName) => (character.inventory || []).find((item) => normal(item.name) === normal(itemName));
 
 function addInventory(inventory, item, quantity) {
-  if (item.category === 'Ammunition') return addAmmunition(inventory || [], item, quantity);
+  if (String(item.category || '').toLowerCase() === 'ammunition') return addAmmunition(inventory || [], item, quantity);
   const copy = [...(inventory || [])]; const index = copy.findIndex((entry) => entry.stackable && item.stackable && normal(entry.name) === normal(item.name) && entry.category === item.category);
   if (index >= 0) copy[index] = { ...copy[index], quantity: (Number(copy[index].quantity) || 1) + quantity };
   else copy.push({ ...item, quantity, stackable: !!item.stackable });
@@ -16,7 +16,7 @@ function addInventory(inventory, item, quantity) {
 function removeInventory(inventory, itemName, quantity) {
   const copy = [...(inventory || [])]; const index = copy.findIndex((item) => normal(item.name) === normal(itemName));
   if (index < 0) return null;
-  const available = Number(copy[index].quantity) || 1;
+  const available = copy[index].quantity == null ? 1 : Math.max(0, Number(copy[index].quantity) || 0);
   if (available < quantity) return null;
   if (available === quantity) copy.splice(index, 1); else copy[index] = { ...copy[index], quantity: available - quantity };
   return copy;

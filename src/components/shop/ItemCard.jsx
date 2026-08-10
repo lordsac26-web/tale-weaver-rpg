@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, Coins, ShoppingCart } from 'lucide-react';
 import { RARITY_META, ITEM_CATEGORY_ICONS } from './vendorData';
+import { formatInventoryItemName } from '@/lib/ammunition';
 
 export default function ItemCard({ item, vendorType, character, onBuy, mode = 'buy' }) {
   const [expanded, setExpanded] = useState(false);
@@ -11,6 +12,7 @@ export default function ItemCard({ item, vendorType, character, onBuy, mode = 'b
   const canAfford = (character?.gold || 0) >= item.base_price;
   const inStock = item.stock > 0;
   const canBuy = canAfford && inStock && mode === 'buy';
+  const canSell = mode === 'sell' && (item.quantity ?? 1) > 0;
 
   const handleBuy = async () => {
     if (!canBuy) return;
@@ -46,7 +48,7 @@ export default function ItemCard({ item, vendorType, character, onBuy, mode = 'b
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
             <span className="text-sm font-medium" style={{ color: rarity.color, fontFamily: 'EB Garamond, serif' }}>
-              {item.name}
+              {mode === 'sell' ? formatInventoryItemName(item) : item.name}
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded font-fantasy"
               style={{ background: `${rarity.border}40`, border: `1px solid ${rarity.border}`, color: rarity.color, fontSize: '0.58rem' }}>
@@ -96,8 +98,8 @@ export default function ItemCard({ item, vendorType, character, onBuy, mode = 'b
               </button>
             )}
             {mode === 'sell' && (
-              <button onClick={handleSell}
-                className="mt-1 flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-fantasy text-xs transition-all"
+              <button onClick={handleSell} disabled={!canSell}
+                className="mt-1 flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-fantasy text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: 'rgba(10,40,15,0.7)', border: '1px solid rgba(40,160,80,0.35)', color: '#86efac' }}>
                 Sell
               </button>

@@ -9,7 +9,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { resolveItemBonuses } from './itemBonuses';
 import { hasUsableItemContent, useCanonicalMagicItem } from './contentDetails';
-import { normalizeAmmoForDisplay } from '@/lib/ammunition';
+import { addInventoryItemAtAcquisition, formatInventoryItemName, normalizeAmmoForDisplay } from '@/lib/ammunition';
 
 const RARITIES = Object.keys(ITEM_RARITY);
 
@@ -164,8 +164,8 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
         <span className="text-base flex-shrink-0">{CATEGORY_ICONS[item.category] || '📦'}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-medium" style={{ color: rarity.color, fontFamily: 'EB Garamond, serif' }}>{item.name}</span>
-            {item.quantity > 1 && <span className="text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>×{item.quantity}</span>}
+            <span className="text-sm font-medium" style={{ color: rarity.color, fontFamily: 'EB Garamond, serif' }}>{formatInventoryItemName(item)}</span>
+            {!formatInventoryItemName(item).includes('remaining') && item.quantity > 1 && <span className="text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>×{item.quantity}</span>}
             <RarityBadge rarity={item.rarity || 'common'} />
             {item.requires_attunement && <span className="text-xs px-1 py-0.5 rounded" style={{ background: 'rgba(60,20,80,0.5)', border: '1px solid rgba(160,80,220,0.3)', color: '#c4b5fd', fontSize: '0.58rem' }}>Attune</span>}
             {isEquipped && <span className="text-xs px-1.5 py-0.5 rounded-full badge-green">Equipped</span>}
@@ -257,7 +257,7 @@ export default function InventoryTab({ character, onUpdate, onIdentify, sessionI
   const inventory = normalizeAmmoForDisplay(character.inventory || []);
 
   const handleAddItem = (item) => {
-    const newInventory = [...inventory, item];
+    const newInventory = addInventoryItemAtAcquisition(inventory, item);
     onUpdate({ inventory: newInventory });
     setShowAddForm(false);
   };
@@ -367,7 +367,7 @@ export default function InventoryTab({ character, onUpdate, onIdentify, sessionI
       return 0;
     });
 
-  const totalWeight = inventory.reduce((t, it) => t + ((it.weight || 0) * (it.quantity || 1)), 0);
+  const totalWeight = inventory.reduce((t, it) => t + ((it.weight || 0) * (it.quantity ?? 1)), 0);
   const magicCount = inventory.filter(it => it.is_magic || it.rarity !== 'common').length;
   const carryCapacity = (character.strength || 10) * 15;
   const encumbranceLevel = totalWeight > carryCapacity ? 'heavy'

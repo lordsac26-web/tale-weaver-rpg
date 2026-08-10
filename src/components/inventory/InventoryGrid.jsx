@@ -8,6 +8,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { hasUsableItemContent, useCanonicalMagicItem } from '@/components/game/contentDetails';
+import { canonicalAmmoName, formatInventoryItemName, formatWeaponProperty } from '@/lib/ammunition';
 
 /**
  * Enhanced InventoryGrid with detailed item information,
@@ -29,7 +30,7 @@ export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, on
   const getTotalWeight = () => {
     return items.reduce((total, item) => {
       const itemWeight = parseFloat(item.weight) || 0;
-      const quantity = item.quantity || 1;
+      const quantity = item.quantity ?? 1;
       return total + (itemWeight * quantity);
     }, 0);
   };
@@ -37,7 +38,7 @@ export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, on
   const getTotalValue = () => {
     return items.reduce((total, item) => {
       const itemValue = parseFloat(item.value) || 0;
-      const quantity = item.quantity || 1;
+      const quantity = item.quantity ?? 1;
       return total + (itemValue * quantity);
     }, 0);
   };
@@ -85,6 +86,7 @@ export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, on
           {items.map((item, idx) => {
             const rarityStyle = getItemRarityStyle(item.rarity);
             const equipped = isEquipped(item);
+            const depletedAmmo = !!canonicalAmmoName(item.name) && (Number(item.quantity) || 0) === 0;
             
             return (
               <motion.div
@@ -108,9 +110,9 @@ export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, on
                       <div className="h-full flex flex-col items-center justify-center text-center">
                         <div className="text-2xl mb-1">{item.icon || '📦'}</div>
                         <div className="text-xs font-fantasy font-medium truncate w-full" style={{ color: rarityStyle.text }}>
-                          {item.name}
+                          {formatInventoryItemName(item)}
                         </div>
-                        {item.quantity > 1 && (
+                        {!canonicalAmmoName(item.name) && item.quantity > 1 && (
                           <div className="text-xs mt-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(60,40,10,0.8)', color: '#f0c040' }}>
                             ×{item.quantity}
                           </div>
@@ -158,8 +160,8 @@ export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, on
                     </button>
                   )}
                   {onUse && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onUse(item); }}
+                    <button disabled={depletedAmmo}
+                      onClick={(e) => { e.stopPropagation(); if (!depletedAmmo) onUse(item); }}
                       className="p-1.5 rounded-lg bg-blue-600/80 hover:bg-blue-600 transition-colors"
                       title="Use"
                     >
@@ -167,8 +169,8 @@ export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, on
                     </button>
                   )}
                   {onSell && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onSell(item); }}
+                    <button disabled={depletedAmmo}
+                      onClick={(e) => { e.stopPropagation(); if (!depletedAmmo) onSell(item); }}
                       className="p-1.5 rounded-lg bg-yellow-600/80 hover:bg-yellow-600 transition-colors"
                       title="Sell"
                     >
@@ -272,7 +274,7 @@ function ItemDetailsModal({ item, onClose, onEquip, onUse, onSell, onDelete, isE
               <div className="flex flex-wrap gap-2">
                 {detail.properties.map((prop, idx) => (
                   <span key={idx} className="text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(60,40,10,0.6)', color: '#f0c040', border: '1px solid rgba(201,169,110,0.2)' }}>
-                    {prop}
+                    {formatWeaponProperty(prop)}
                   </span>
                 ))}
               </div>

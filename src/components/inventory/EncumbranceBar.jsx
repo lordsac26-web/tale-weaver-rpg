@@ -5,7 +5,7 @@ import GameTooltip from '@/components/game/GameTooltip';
 
 export default function EncumbranceBar({ character }) {
   const inventory = character.inventory || [];
-  const totalWeight = inventory.reduce((t, it) => t + ((it.weight || 0) * (it.quantity || 1)), 0);
+  const totalWeight = inventory.reduce((t, it) => t + ((it.weight || 0) * (it.quantity ?? 1)), 0);
   const capacity = (character.strength || 10) * 15;
   const percentage = Math.min(100, (totalWeight / capacity) * 100);
 

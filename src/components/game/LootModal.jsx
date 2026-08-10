@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Coins, Gift, Sparkles, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { addInventoryItemAtAcquisition } from '@/lib/ammunition';
 
 /**
  * LootModal - Collect loot from defeated enemies with
@@ -64,7 +65,7 @@ export default function LootModal({ enemies = [], character, onClose, onCollect 
       gold: (character.gold || 0) + loot.gold,
       silver: (character.silver || 0) + loot.silver,
       copper: (character.copper || 0) + loot.copper,
-      inventory: [...(character.inventory || []), ...selectedItems],
+      inventory: selectedItems.reduce((inventory, item) => addInventoryItemAtAcquisition(inventory, item), character.inventory || []),
     };
 
     try {

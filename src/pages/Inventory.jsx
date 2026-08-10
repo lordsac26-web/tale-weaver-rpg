@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { ChevronLeft, Sword, Shield, Package, Sparkles, Droplet, Weight, Coins, Search, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { canonicalAmmoName, formatInventoryItemName } from '@/lib/ammunition';
 
 const CATEGORY_CONFIG = {
   weapon: { icon: Sword, label: 'Weapons', color: '#fca5a5' },
@@ -48,7 +49,7 @@ export default function Inventory() {
   };
 
   const calcCarryCapacity = (str) => (str || 10) * 15;
-  const calcTotalWeight = (inventory) => (inventory || []).reduce((sum, item) => sum + ((item.weight || 0) * (item.quantity || 1)), 0);
+  const calcTotalWeight = (inventory) => (inventory || []).reduce((sum, item) => sum + ((item.weight || 0) * (item.quantity ?? 1)), 0);
 
   const equipItem = async (item) => {
     if (!character) return;
@@ -266,7 +267,7 @@ export default function Inventory() {
                     {item ? (
                       <div>
                         <p className="font-fantasy font-semibold text-sm mb-1" style={{ color: '#e8d5b7' }}>
-                          {item.name}
+                          {formatInventoryItemName(item)}
                         </p>
                         {item.damage_dice && (
                           <p className="text-xs" style={{ color: 'rgba(252,165,165,0.7)' }}>
@@ -404,10 +405,10 @@ export default function Inventory() {
                         <div className="flex items-center gap-2">
                           <Icon className="w-4 h-4" style={{ color: categoryConfig.color }} />
                           <span className="font-fantasy font-semibold text-sm" style={{ color: rarityStyle.text }}>
-                            {item.name}
+                            {formatInventoryItemName(item)}
                           </span>
                         </div>
-                        {item.quantity > 1 && (
+                        {!canonicalAmmoName(item.name) && item.quantity > 1 && (
                           <span className="px-2 py-0.5 rounded-full text-xs font-fantasy"
                             style={{
                               background: 'rgba(201,169,110,0.2)',
@@ -475,7 +476,7 @@ export default function Inventory() {
                 <div className="flex-1">
                   <h3 className="font-fantasy font-bold text-xl mb-1"
                     style={{ color: RARITY_COLORS[selectedItem.rarity]?.text || '#e8d5b7' }}>
-                    {selectedItem.name}
+                    {formatInventoryItemName(selectedItem)}
                   </h3>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-fantasy px-2 py-0.5 rounded-full badge-gold">

@@ -290,7 +290,10 @@ async function generateItems(base44, tier, level, enemyType = 'humanoid', cr = n
 
     if (equipmentPool.length > 0 && (i === 0 || roll < 0.75)) {
       const equipment = pickItemForClass(equipmentPool, charClass);
-      items.push({ ...equipment, quantity: equipment.category === 'Ammunition' ? rollDice(1, 4) * 5 : 1 });
+      const quantity = equipment.category === 'Ammunition' ? rollDice(1, 4) * 5 : 1;
+      items.push(equipment.category === 'Ammunition'
+        ? { ...equipment, name: String(equipment.name || '').replace(/\s*\(\s*\d+\s*\)\s*$/, ''), quantity, unit: /bolt/i.test(equipment.name || '') ? 'bolt' : 'arrow', stack_semantics: 'individual', pack_size: Number(String(equipment.name || '').match(/\(\s*(\d+)\s*\)/)?.[1]) || undefined }
+        : { ...equipment, quantity });
       continue;
     }
 

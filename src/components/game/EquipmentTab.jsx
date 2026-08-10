@@ -4,6 +4,7 @@ import { Shield, Sword, Star, ArrowLeftRight, Check, Package, Trash2 } from 'luc
 import { LOOT_RARITY } from './lootTables';
 import EquipmentComparePanel from './EquipmentComparePanel';
 import { base44 } from '@/api/base44Client';
+import { formatInventoryItemName } from '@/lib/ammunition';
 
 // Equipment slots definition
 const SLOTS = [
@@ -42,7 +43,7 @@ function ItemCard({ item, isEquipped, onCompare, onEquip, onUnequip, onDrop }) {
         <span className="text-xl flex-shrink-0">{item.icon || '📦'}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-fantasy font-bold truncate" style={{ color: r.color }}>{item.name}</span>
+            <span className="text-sm font-fantasy font-bold truncate" style={{ color: r.color }}>{formatInventoryItemName(item)}</span>
             <span className="text-xs px-1 py-0.5 rounded font-fantasy flex-shrink-0"
               style={{ background: r.bg, color: r.color, border: `1px solid ${r.border}`, fontSize: '0.58rem' }}>
               {r.label}

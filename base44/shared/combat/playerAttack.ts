@@ -64,6 +64,7 @@ export async function handlePlayerAttack(ctx) {
   let damageBonus = 0;
   let attackType = 'melee';
   let extraDamageDice = []; // For smite, sneak attack, etc
+  let ammunitionCommit = null;
   let sneakAttackApplied = false; // tracks if Sneak Attack was used this attack (once-per-turn guard)
   let colossusApplied = false; // Hunter Ranger Colossus Slayer (once-per-turn guard)
 
@@ -525,9 +526,13 @@ export async function handlePlayerAttack(ctx) {
     }
     if (isRanged && usesAmmo) {
       const ammoName = ammoForWeapon(weapon.name) || 'Arrows';
-      const ammo = consumeAmmunition(character.inventory || [], ammoName);
-      if (!ammo.ok) return Response.json({ error: `Out of ammunition (${ammoName}). Restock before firing.`, invalid: true }, { status: 400 });
-      await base44.asServiceRole.entities.Character.update(character_id, { inventory: ammo.inventory });
+      const priorAmmoReceipt = (character.long_rest_abilities?.__ammo_attack_receipts || []).find((entry) => entry.request_id === request_id);
+      if (priorAmmoReceipt) ammunitionCommit = { ...priorAmmoReceipt, inventory: character.inventory || [], already_committed: true };
+      else {
+        const ammo = consumeAmmunition(character.inventory || [], ammoName);
+        if (!ammo.ok) return Response.json({ error: `Out of ammunition (${ammoName}). Restock before firing.`, invalid: true }, { status: 400 });
+        ammunitionCommit = { request_id: request_id || null, ammo_name: ammoName, consumed: 1, remaining: ammo.remaining, consumed_index: ammo.consumed_index, inventory: ammo.inventory };
+      }
     }
     const isFinesse = (weapon.properties || []).includes('finesse');
     const strMod = statMod(character.strength);
@@ -812,34 +817,19 @@ export async function handlePlayerAttack(ctx) {
   const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, target_id, spell_name: spell?.name || null, weapon: spell ? null : { name: weapon?.name || 'Weapon', damage_dice: damageDice, damage_type: weapon?.damage_type || null, damage_bonus: weapon?.damage_bonus || 0, attack_bonus: weapon?.attack_bonus || 0, type: weapon?.type || attackType, properties: weapon?.properties || [] }, request_id: request_id || null, raw_d20: attackResult.roll, selected_d20: attackResult.roll, all_rolls: attackResult.rolls, attack_bonus: attackMod, target_ac: target.ac + targetACBonus, advantage: attackResult.advantage, disadvantage: attackResult.disadvantage, advantage_sources: advantageSources };
 
   if (hit) {
-    // H5 fix: guard non-NdM dice strings (e.g. "1d8+1", "2d6 fire") — extract the
-    // NdM core, else fall back to 1d6 (matches the offhand handler's guard). Never throw.
-    let dMatch = damageDice.match(/(\d+)d(\d+)/);
-    if (!dMatch) {
-      console.warn(`player_attack: unparseable damage dice "${damageDice}" — falling back to 1d6`);
-      dMatch = [null, '1', '6'];
-    }
-    let numDice = isCritical ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1]);
-    const sides = parseInt(dMatch[2]);
-
-    // Brutal Critical (Barbarian 9+) - add extra crit dice
+    const parsedBase = damageDice.match(/(\d+)d(\d+)/);
+    if (!parsedBase) console.warn(`player_attack: unparseable damage dice "${damageDice}" — falling back to 1d6`);
+    let numDice = isCritical ? Number(parsedBase?.[1] || 1) * 2 : Number(parsedBase?.[1] || 1);
     if (isCritical && character.class === 'Barbarian') {
       const level = character.level || 1;
       if (level >= 9) numDice += 1;
       if (level >= 13) numDice += 1;
       if (level >= 17) numDice += 1;
     }
-    // Half-Orc Savage Attacks (PHB p.41): roll one additional weapon damage die on crits
-    if (isCritical && (character.race || '') === 'Half-Orc' && !spell) {
-      numDice += 1;
-    }
-
-    for (let i = 0; i < numDice; i++) {
-      const r = rollDice(sides);
-      damageRolls.push(r);
-      damage += r;
-    }
-    damage += damageBonus;
+    if (isCritical && (character.race || '') === 'Half-Orc' && !spell) numDice += 1;
+    const baseRoll = rollWeaponBaseDamage({ damageDice: parsedBase ? damageDice : '1d6', damageBonus, diceCountOverride: numDice, rollDie: rollDice });
+    damageRolls = baseRoll.rolls;
+    damage = baseRoll.damage;
 
     // Extra damage dice (Sneak Attack, Divine Smite, etc)
     for (const extra of extraDamageDice) {
@@ -1105,6 +1095,16 @@ export async function handlePlayerAttack(ctx) {
   if (spell?.requires_concentration) {
     newWorldState.concentration_spell = spell.name;
     newWorldState.concentration_caster = character.name;
+  }
+
+  if (ammunitionCommit) {
+    const ammoReceipt = { request_id: request_id || null, ammo_name: ammunitionCommit.ammo_name, consumed: 1, remaining: ammunitionCommit.remaining, consumed_index: ammunitionCommit.consumed_index };
+    logEntry.ammunition = ammoReceipt;
+    newWorldState.__ammo_receipts = [...(newWorldState.__ammo_receipts || []).filter((entry) => entry.request_id !== request_id).slice(-49), ammoReceipt];
+    if (!ammunitionCommit.already_committed) {
+      const abilities = { ...(character.long_rest_abilities || {}), __ammo_attack_receipts: [...(character.long_rest_abilities?.__ammo_attack_receipts || []).filter((entry) => entry.request_id !== request_id).slice(-49), ammoReceipt] };
+      await base44.asServiceRole.entities.Character.update(character_id, { inventory: ammunitionCommit.inventory, long_rest_abilities: abilities });
+    }
   }
 
   // Self/ally concentration break (computed during damage application above).

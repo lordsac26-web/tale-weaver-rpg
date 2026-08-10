@@ -22,6 +22,7 @@ import CombatPlayerStatus from './CombatPlayerStatus';
 import CombatStatusDashboard from './CombatStatusDashboard';
 import SmiteSlotPicker from './SmiteSlotPicker';
 import CombatActWindow from './CombatActWindow';
+import { ammoStatusForWeapon } from '@/lib/ammunition';
 
 export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent, onCharacterUpdate, onCombatAct, actEvaluating }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
@@ -94,6 +95,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const strMod      = calcStatMod(character?.strength   || 10);
   const dexMod      = calcStatMod(character?.dexterity  || 10);
   const activeWeaponForMod = getActiveWeapon() || equippedWeaponObj;
+  const activeAmmoStatus = ammoStatusForWeapon(character?.inventory || [], activeWeaponForMod);
   const isRangedMod    = activeWeaponForMod?.type === 'ranged';
   const isFinesseMod   = (activeWeaponForMod?.properties || []).includes('finesse') || ['rapier','shortsword','dagger','hand crossbow','whip','scimitar'].includes((activeWeaponForMod?.name || '').toLowerCase());
   const statMod     = isRangedMod ? dexMod : isFinesseMod ? Math.max(strMod, dexMod) : strMod;
@@ -189,7 +191,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const actionReady = action === 'spell'
     ? !!selectedSpell && (!!selectedTarget || !!selectedSpellDetails.is_utility)
     : !!selectedTarget;
-  const canAct = isPlayerTurn && actionReady;
+  const canAct = isPlayerTurn && actionReady && !(action === 'attack' && activeAmmoStatus.depleted);
 
   return (
     <div className="flex flex-col h-full overflow-hidden relative" style={{ background: 'rgba(8,3,3,0.95)' }}>
@@ -456,7 +458,8 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                       <option value="equipped">
                         ⚔️ {equippedWeaponObj.name} [EQUIPPED] — {equippedWeaponObj.damage || equippedWeaponObj.damage_dice || '?'}
                         {equippedWeaponObj.attack_bonus ? ` (+${equippedWeaponObj.attack_bonus})` : ''}
-                      </option>
+                        {ammoStatusForWeapon(character?.inventory || [], equippedWeaponObj).required ? ` — ${ammoStatusForWeapon(character?.inventory || [], equippedWeaponObj).remaining} ammo` : ''}
+                        </option>
                     ) : (
                       <option value="equipped" disabled>⚔️ No weapon equipped</option>
                     )}
@@ -464,10 +467,16 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                       <option key={i} value={i}>
                         🗡 {w.name} — {w.damage || w.damage_dice || '?'}
                         {w.attack_bonus ? ` (+${w.attack_bonus})` : ''}
-                      </option>
+                        {ammoStatusForWeapon(character?.inventory || [], w).required ? ` — ${ammoStatusForWeapon(character?.inventory || [], w).remaining} ammo` : ''}
+                        </option>
                     ))}
                     <option value="unarmed">👊 Unarmed Strike — 1d4</option>
                   </select>
+                  {activeAmmoStatus.required && (
+                    <div className="mt-1 text-xs font-fantasy" style={{ color: activeAmmoStatus.depleted ? '#fca5a5' : '#86efac' }}>
+                      {activeAmmoStatus.ammoName} — {activeAmmoStatus.remaining} remaining{activeAmmoStatus.depleted ? ' (Depleted)' : ''}
+                    </div>
+                  )}
 
                   {/* Paladin Divine Smite slot picker */}
                   <div className="mt-2">
@@ -612,6 +621,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Swords className="w-4 h-4" />}
                 {loading ? 'Resolving...' :
                   actionsRemaining === 0 ? 'No Actions Left' :
+                  action === 'attack' && activeAmmoStatus.depleted ? `Out of ${activeAmmoStatus.ammoName}` :
                   action === 'spell' && !selectedSpell ? 'Select a Spell' :
                   action === 'spell' && selectedSpellDetails.is_utility ? `Cast ${selectedSpell}` :
                   !selectedTarget ? 'Select a Target' :

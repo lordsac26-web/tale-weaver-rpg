@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Coins, TrendingDown } from 'lucide-react';
+import { formatInventoryItemName } from '@/lib/ammunition';
 
 const RARITY_COLORS = {
   common: '#e8d5b7',
@@ -29,8 +30,8 @@ export function estimateItemValue(item) {
 const SELL_MULTIPLIER = 0.5;
 
 export default function SellItemModal({ item, onConfirm, onClose }) {
-  const maxQty = item.quantity || 1;
-  const [qty, setQty] = useState(1);
+  const maxQty = Math.max(0, item.quantity ?? 1);
+  const [qty, setQty] = useState(maxQty > 0 ? 1 : 0);
 
   const unitValue = estimateItemValue(item);
   const unitSell = Math.max(1, Math.floor(unitValue * SELL_MULTIPLIER));
@@ -66,7 +67,7 @@ export default function SellItemModal({ item, onConfirm, onClose }) {
           <div className="flex items-center gap-3">
             <span className="text-2xl">{item.icon || '📦'}</span>
             <div>
-              <h3 className="font-fantasy font-bold" style={{ color }}>{item.name}</h3>
+              <h3 className="font-fantasy font-bold" style={{ color }}>{formatInventoryItemName(item)}</h3>
               <p className="text-xs" style={{ color: 'rgba(201,169,110,0.5)' }}>
                 Worth {unitValue} gp · sells for {unitSell} gp each
               </p>
@@ -98,8 +99,8 @@ export default function SellItemModal({ item, onConfirm, onClose }) {
               style={{ background: 'rgba(40,20,8,0.6)', border: '1px solid rgba(180,140,90,0.2)', color: 'rgba(201,169,110,0.6)' }}>
               Cancel
             </button>
-            <button onClick={() => onConfirm(item, qty, totalGold)}
-              className="flex-1 py-3 rounded-xl font-fantasy font-bold text-sm btn-fantasy flex items-center justify-center gap-2">
+            <button onClick={() => onConfirm(item, qty, totalGold)} disabled={maxQty === 0}
+              className="flex-1 py-3 rounded-xl font-fantasy font-bold text-sm btn-fantasy flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
               <Coins className="w-4 h-4" /> Sell for {totalGold} gp
             </button>
           </div>
