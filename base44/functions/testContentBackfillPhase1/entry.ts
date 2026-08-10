@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { applyPhase1Plan, buildPhase1Plan, loadPhase1Records, PHASE1_DEPLOYMENT_ID } from '../../shared/contentBackfill/phase1.ts';
+import { applyPhase1Plan, buildPhase1Plan, forgetPhase1Receipt, loadPhase1Records, PHASE1_DEPLOYMENT_ID } from '../../shared/contentBackfill/phase1.ts';
 import { DOMAIN_NAMES } from '../../shared/contentAudit/config.ts';
 import { hashAuditValue, paginateCatalog } from '../../shared/contentAudit/engine.ts';
 
@@ -45,11 +45,21 @@ export default async function testContentBackfillPhase1(req) {
     results.push({ name: 'wrong proposal hash fails closed with writes zero', pass: wrong.status === 409 && wrong.body.writes === 0 });
     const conditionBefore = await base44.asServiceRole.entities.DnDCondition.get(conditionRecipient.id); const conditionDonorBefore = await base44.asServiceRole.entities.DnDCondition.get(conditionDonorA.id);
     const conditionMechanicsBefore = await hashAuditValue(conditionBefore.mechanical_effects); const donorMechanicsBefore = await hashAuditValue(conditionDonorBefore.mechanical_effects);
-    const applied = await applyPhase1Plan({ base44, proposalHash: plan.proposal_hash, approvalId: `${token}:apply`, scopeIds }); const replay = await applyPhase1Plan({ base44, proposalHash: plan.proposal_hash, approvalId: `${token}:apply`, scopeIds });
+    const approvalId = `${token}:apply`;
+    const applied = await applyPhase1Plan({ base44, proposalHash: plan.proposal_hash, approvalId, scopeIds });
+    const replay = await applyPhase1Plan({ base44, proposalHash: plan.proposal_hash, approvalId, scopeIds });
+    const fixtureCompletedBatch = { approvalId, proposalHash: plan.proposal_hash, originalAppliedCount: 1, recipients: [{ id: conditionRecipient.id, expectedDescriptionHash: proposalFor(conditionRecipient.id).proposed_value_hash }] };
+    forgetPhase1Receipt(approvalId, plan.proposal_hash);
+    const coldReplay = await applyPhase1Plan({ base44, proposalHash: plan.proposal_hash, approvalId, scopeIds, completedBatch: fixtureCompletedBatch });
+    await base44.asServiceRole.entities.DnDCondition.update(conditionRecipient.id, { description: ['Postcondition changed.'] });
+    forgetPhase1Receipt(approvalId, plan.proposal_hash);
+    const partialReplay = await applyPhase1Plan({ base44, proposalHash: plan.proposal_hash, approvalId, scopeIds, completedBatch: fixtureCompletedBatch });
     const spellAfter = await base44.asServiceRole.entities.Spell.get(spellRecipient.id); const conditionAfter = await base44.asServiceRole.entities.DnDCondition.get(conditionRecipient.id); const conditionDonorAfter = await base44.asServiceRole.entities.DnDCondition.get(conditionDonorA.id);
     results.push({ name: 'hash-plus-approval-only apply writes the eligible Condition description and never Spell', pass: applied.status === 200 && applied.body.writes === 1 && spellAfter.description === '' && Array.isArray(conditionAfter.description) && applied.body.unrelated_fields_unchanged === true, diagnostic: applied.body });
     results.push({ name: 'Condition backfill never writes mechanical_effects', pass: await hashAuditValue(conditionAfter.mechanical_effects) === conditionMechanicsBefore && await hashAuditValue(conditionDonorAfter.mechanical_effects) === donorMechanicsBefore });
     results.push({ name: 'fixture apply replay is idempotent with writes zero', pass: replay.status === 200 && replay.body.already_applied === true && replay.body.writes === 0, diagnostic: replay.body });
+    results.push({ name: 'cold replay verifies completed postconditions after the proposal set becomes empty', pass: coldReplay.status === 200 && coldReplay.body.already_applied === true && coldReplay.body.writes === 0 && coldReplay.body.applied_count === 0 && coldReplay.body.original_applied_count === 1 && coldReplay.body.proposal_hash === plan.proposal_hash, diagnostic: coldReplay.body });
+    results.push({ name: 'cold replay fails closed and identifies changed postconditions', pass: partialReplay.status === 409 && partialReplay.body.writes === 0 && partialReplay.body.postcondition_mismatches?.some((mismatch) => mismatch.recipient_id === conditionRecipient.id), diagnostic: partialReplay.body });
     const afterProtected = await protectedSnapshot(base44); results.push({ name: 'protected live record hashes remain unchanged', pass: JSON.stringify(beforeProtected) === JSON.stringify(afterProtected) });
     const passed = results.filter((result) => result.pass).length; const failed = results.length - passed;
     output = { deployment_id: PHASE1_DEPLOYMENT_ID, passed, failed, total: results.length, all_pass: failed === 0, failures: results.filter((result) => !result.pass), live_dry_run: { proposal_hash: liveDry.proposal_hash, counts: liveDry.counts, proposal_ids: liveDry.proposals.map((proposal) => proposal.recipient_id), ambiguity_blocks: liveDry.ambiguity_blocks }, zero_write_proof: { dry_run_unchanged: JSON.stringify(beforeDry) === JSON.stringify(afterDry), catalogs: beforeDry }, protected_state: beforeProtected.map((before, index) => ({ ...before, after_hash: afterProtected[index].hash, unchanged: before.hash === afterProtected[index].hash })) };

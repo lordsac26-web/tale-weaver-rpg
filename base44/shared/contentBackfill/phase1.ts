@@ -1,4 +1,5 @@
 import { hashAuditValue, normalizeAuditName, paginateCatalog } from '../contentAudit/engine.ts';
+import { COMPLETED_PHASE1_BATCH } from './completedPhase1Batch.ts';
 
 export const PHASE1_DEPLOYMENT_ID = 'content-backfill-phase1-v1';
 export const PHASE1_DOMAINS = ['Spell', 'DnDCondition'];
@@ -107,13 +108,40 @@ export async function loadPhase1Records(base44, scopeIds = null) {
 const protectedSnapshot = async (base44) => Promise.all(PROTECTED.map(async ([entity, id]) => { let record = null; try { record = await base44.asServiceRole.entities[entity].get(id); } catch {} return { entity, id, exists: !!record, hash: await hashAuditValue(record) }; }));
 const unrelatedProjection = (record) => { const { description, updated_date, ...unrelated } = record || {}; return unrelated; };
 const rememberReceipt = (key, body) => { APPLY_RECEIPTS.set(key, body); if (APPLY_RECEIPTS.size > 100) APPLY_RECEIPTS.delete(APPLY_RECEIPTS.keys().next().value); };
+export const forgetPhase1Receipt = (approvalId, proposalHash) => APPLY_RECEIPTS.delete(`${approvalId}:${proposalHash}`);
 
-export async function applyPhase1Plan({ base44, proposalHash, approvalId, scopeIds = null }) {
+const matchingCompletedBatch = (approvalId, proposalHash, completedBatch) => {
+  const candidate = completedBatch || COMPLETED_PHASE1_BATCH;
+  return candidate?.approvalId === approvalId && candidate?.proposalHash === proposalHash ? candidate : null;
+};
+
+async function verifyCompletedBatch(base44, batch, scopeIds) {
+  const records = await loadPhase1Records(base44, scopeIds);
+  const conditions = new Map(records.DnDCondition.map((record) => [record.id, record]));
+  const mismatches = [];
+  for (const expected of batch.recipients) {
+    const record = conditions.get(expected.id);
+    const actualHash = record ? await hashAuditValue(record.description) : null;
+    if (actualHash !== expected.expectedDescriptionHash) mismatches.push({ recipient_id: expected.id, expected_description_hash: expected.expectedDescriptionHash, actual_description_hash: actualHash, reason: record ? 'description hash mismatch' : 'recipient missing' });
+  }
+  const remainingPlan = await buildPhase1Plan(records);
+  for (const proposal of remainingPlan.proposals.filter((item) => item.domain === 'DnDCondition')) mismatches.push({ recipient_id: proposal.recipient_id, expected_description_hash: proposal.proposed_value_hash, actual_description_hash: proposal.before_value_hash, reason: 'eligible proposal remains' });
+  return { mismatches, remainingProposalHash: remainingPlan.proposal_hash };
+}
+
+export async function applyPhase1Plan({ base44, proposalHash, approvalId, scopeIds = null, completedBatch = null }) {
   if (!approvalId || typeof approvalId !== 'string') return { status: 400, body: { error: 'approval_id is required', writes: 0 } };
   if (!proposalHash || typeof proposalHash !== 'string') return { status: 400, body: { error: 'proposal_hash is required', writes: 0 } };
   const receiptKey = `${approvalId}:${proposalHash}`;
   const prior = APPLY_RECEIPTS.get(receiptKey);
   if (prior) return { status: 200, body: { ...prior, already_applied: true, writes: 0, applied_count: 0, applied: [] } };
+  const completed = matchingCompletedBatch(approvalId, proposalHash, completedBatch);
+  if (completed) {
+    const verificationScope = scopeIds || new Set(completed.recipients.map((recipient) => recipient.id));
+    const verification = await verifyCompletedBatch(base44, completed, verificationScope);
+    if (verification.mismatches.length) return { status: 409, body: { error: 'completed batch postconditions do not match', approval_id: approvalId, proposal_hash: proposalHash, writes: 0, postcondition_mismatches: verification.mismatches } };
+    return { status: 200, body: { deployment_id: PHASE1_DEPLOYMENT_ID, mode: 'apply', approval_id: approvalId, proposal_hash: proposalHash, already_applied: true, writes: 0, applied_count: 0, original_applied_count: completed.originalAppliedCount, applied: [], applied_ids: completed.recipients.map((recipient) => recipient.id), postconditions_verified: true } };
+  }
 
   const firstRecords = await loadPhase1Records(base44, scopeIds);
   const firstPlan = await buildPhase1Plan(firstRecords);
@@ -144,7 +172,7 @@ export async function applyPhase1Plan({ base44, proposalHash, approvalId, scopeI
   }
   const afterProtected = await protectedSnapshot(base44);
   const protected_state = beforeProtected.map((item, index) => ({ ...item, after_hash: afterProtected[index].hash, unchanged: item.hash === afterProtected[index].hash }));
-  const body = { deployment_id: PHASE1_DEPLOYMENT_ID, mode: 'apply', approval_id: approvalId, already_applied: false, writes: applied.length, applied_count: applied.length, proposal_hash: proposalHash, ignored_spell_proposals: immediatePlan.counts.Spell, applied_ids: applied.map((item) => item.id), applied_names: applied.map((item) => item.name), applied, unrelated_fields_unchanged: applied.every((item) => item.unrelated_fields_unchanged), protected_state };
+  const body = { deployment_id: PHASE1_DEPLOYMENT_ID, mode: 'apply', approval_id: approvalId, already_applied: false, writes: applied.length, applied_count: applied.length, original_applied_count: applied.length, proposal_hash: proposalHash, ignored_spell_proposals: immediatePlan.counts.Spell, applied_ids: applied.map((item) => item.id), applied_names: applied.map((item) => item.name), applied, unrelated_fields_unchanged: applied.every((item) => item.unrelated_fields_unchanged), protected_state };
   rememberReceipt(receiptKey, body);
   return { status: 200, body };
 }
