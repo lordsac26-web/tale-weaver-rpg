@@ -1,4 +1,4 @@
-export const AUDIT_DEPLOYMENT_ID = 'content-completeness-readonly-v1';
+export const AUDIT_DEPLOYMENT_ID = 'content-completeness-phase1-v2';
 
 export const DOMAIN_NAMES = ['Race', 'Subclass', 'DnDClass', 'Feat', 'Spell', 'Equipment', 'MagicItem', 'VendorItem', 'Monster', 'DnDCondition'];
 

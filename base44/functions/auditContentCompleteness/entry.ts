@@ -9,7 +9,7 @@ export default async function auditContentCompleteness(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     if (user.role !== 'admin') return Response.json({ error: 'Admin access required' }, { status: 403 });
     const input = await req.json();
-    const mode = ['summary', 'domain', 'dry_run_proposals'].includes(input?.mode) ? input.mode : 'summary';
+    const mode = ['summary', 'domain', 'dry_run_proposals', 'conditional_summary'].includes(input?.mode) ? input.mode : 'summary';
     const domain = input?.domain ? String(input.domain) : null;
     if (domain && !DOMAIN_NAMES.includes(domain)) return Response.json({ error: 'Unsupported domain', allowed_domains: DOMAIN_NAMES }, { status: 400 });
     if (mode === 'domain' && !domain) return Response.json({ error: 'domain is required for domain mode', allowed_domains: DOMAIN_NAMES }, { status: 400 });
@@ -22,10 +22,12 @@ export default async function auditContentCompleteness(req) {
     const selected = domain ? [domain] : DOMAIN_NAMES;
     const audit = await auditDomains(base44, selected, options);
     const dryRunResult = Object.fromEntries(Object.entries(audit).map(([name, value]) => [name, {
-      audit: { total_rows: value.total_rows, display: value.display, structured: value.structured, duplicate_rows: value.duplicate_rows, duplicate_clusters: value.duplicate_clusters, classification: { canonical_candidate_count: value.classification.canonical_candidate_count, reference_variant_count: value.classification.reference_variant_count, same_source_duplicate_count: value.classification.same_source_duplicate_count }, unresolved_count: value.anomalies.counts.unresolved, pagination: value.pagination },
+      audit: { total_rows: value.total_rows, display: value.display, structured: value.structured, structured_semantics: value.structured_semantics, legacy_raw_gap_counts: value.legacy_raw_gap_counts, duplicate_rows: value.duplicate_rows, duplicate_clusters: value.duplicate_clusters, classification: { canonical_candidate_count: value.classification.canonical_candidate_count, reference_variant_count: value.classification.reference_variant_count, same_source_duplicate_count: value.classification.same_source_duplicate_count }, unresolved_count: value.anomalies.counts.unresolved, pagination: value.pagination },
       dry_run: value.dry_run,
     }]));
-    const result = mode === 'summary' ? compactAudit(audit) : mode === 'dry_run_proposals' ? dryRunResult : audit;
+    const conditionalSummary = Object.fromEntries(Object.entries(audit).map(([name, value]) => [name, { total_rows: value.total_rows, structured_semantics: value.structured_semantics, legacy_raw_gap_counts: value.legacy_raw_gap_counts }]));
+    const conditionalTotals = Object.fromEntries(Object.entries(audit).map(([name, value]) => [name, { total_rows: value.total_rows, required_gap_count: value.structured_semantics.required_gap_count, conditional_gap_count: value.structured_semantics.conditional_gap_count, engine_structuring_backlog: value.structured_semantics.engine_structuring_backlog, legacy_raw_gap_count: value.legacy_raw_gap_counts.gap_count }]));
+    const result = mode === 'summary' ? compactAudit(audit) : mode === 'dry_run_proposals' ? dryRunResult : mode === 'conditional_summary' ? (input?.totals_only === true ? conditionalTotals : conditionalSummary) : audit;
     return Response.json({ deployment_id: AUDIT_DEPLOYMENT_ID, mode, read_only: true, writes: 0, domains: result });
   } catch (error) {
     return Response.json({ error: error.message || 'Content completeness audit failed' }, { status: 500 });

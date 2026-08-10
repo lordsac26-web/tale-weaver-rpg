@@ -81,6 +81,29 @@ const structuredResolution = (record, config) => {
   }
   return { complete: gaps.length === 0, gaps, malformed, ratio: fields.length ? (fields.length - gaps.length) / fields.length : 1 };
 };
+const fallbackValid = (record, paths, kind) => paths.some((path) => validKind(getPath(record, path), kind));
+const semanticRequirement = (domain, record, path, canonical) => {
+  if (domain === 'Spell') {
+    if (path === 'components') return { status: fallbackValid(record, ['components', 'raw_data.components'], 'text') || fallbackValid(record, ['raw_data.components'], 'array') ? 'present' : 'required' };
+    if (path === 'classes') return { status: fallbackValid(record, ['classes', 'raw_data.classes'], 'array') ? 'present' : 'required' };
+    if (path === 'attack_type') { const attack = collapse(getPath(record, 'raw_data.attack_type')); const prose = `${collapse(record.description)} ${collapse(getPath(record, 'raw_data.desc'))}`; const required = /spell.?attack/i.test(`${attack} ${prose}`); return { status: validKind(record.attack_type, 'text') ? 'present' : required ? 'required' : 'not_applicable' }; }
+  }
+  if (domain === 'Equipment' && path === 'properties') { const category = collapse(record.category).toLowerCase(); const required = /weapon|armor|shield|ammunition/.test(category); return { status: validKind(record.properties, 'array') ? 'present' : required ? 'conditional' : 'not_applicable' }; }
+  if (domain === 'Equipment' && path === 'weight') { const category = collapse(record.category).toLowerCase(); const required = !/service|vehicle|mount|trade good/.test(category); return { status: validKind(record.weight, 'text_or_number') ? 'present' : required ? 'conditional' : 'not_applicable' }; }
+  if (domain === 'MagicItem' && path === 'modifiers') return { status: validKind(record.modifiers, 'object') ? 'present' : 'optional' };
+  if (domain === 'Feat' && path === 'tags') return { status: validKind(record.tags, 'array') ? 'present' : 'optional' };
+  if (domain === 'Race' && path === 'traits') { const present = validKind(record.traits, 'array') || fallbackValid(record, ['raw_data.traits', 'raw_data.special_abilities'], 'array'); return { status: present ? 'present' : canonical ? 'required' : 'not_applicable' }; }
+  if (domain === 'Race' && path === 'languages') { const present = validKind(record.languages, 'array') || fallbackValid(record, ['raw_data.languages'], 'array'); return { status: present ? 'present' : canonical ? 'required' : 'not_applicable' }; }
+  if (domain === 'DnDClass' && path === 'saving_throw_proficiencies') { const present = validKind(record.saving_throw_proficiencies, 'array') || fallbackValid(record, ['raw_data.saving_throws', 'raw_data.proficiencies.saving_throws'], 'array'); return { status: present ? 'present' : canonical ? 'required' : 'not_applicable' }; }
+  if (domain === 'DnDCondition' && path === 'mechanical_effects') return { status: validKind(record.mechanical_effects, 'nonempty_object') ? 'present' : 'engine_structuring_backlog' };
+  const kind = DOMAIN_CONFIG[domain]?.structured?.[path]; return { status: validKind(getPath(record, path), kind) ? 'present' : 'required' };
+};
+const semanticStructuredReport = (domain, records, groups, config) => {
+  const canonicalIds = new Set([...groups.values()].map((group) => canonicalChoice(group, config).winner.record.id)); const fields = {};
+  for (const path of Object.keys(config.structured || {})) fields[path] = { present: 0, required: 0, conditional: 0, optional: 0, not_applicable: 0, engine_structuring_backlog: 0 };
+  for (const record of records) for (const path of Object.keys(config.structured || {})) { const result = semanticRequirement(domain, record, path, canonicalIds.has(record.id)); fields[path][result.status] += 1; }
+  return { fields, required_gap_count: Object.values(fields).reduce((sum, counts) => sum + counts.required, 0), conditional_gap_count: Object.values(fields).reduce((sum, counts) => sum + counts.conditional, 0), engine_structuring_backlog: Object.values(fields).reduce((sum, counts) => sum + counts.engine_structuring_backlog, 0) };
+};
 const scoreRecord = (record, config) => {
   const display = displayResolution(record, config); const structured = structuredResolution(record, config); const source = sourceMeta(record);
   return Math.round((display.usable ? 40 : 0) + structured.ratio * 40 + (source.document !== 'unknown' ? 12 : 0) + (source.version !== 'unknown' ? 5 : 0) + (textStatus(record.name) === 'usable' ? 3 : 0));
@@ -133,11 +156,12 @@ export function auditRecords(domain, records, options = {}) {
     variantRows += Math.max(0, distinctSources.size - 1); referenceDuplicateRows += Math.max(0, group.length - distinctSources.size);
     if (canonicalSamples.length < anomalyLimit) canonicalSamples.push({ normalized_name: name, rows: group.length, source_versions: distinctSources.size, ...(includeIds ? { canonical_id: choice.winner.record.id || null } : {}), confidence: choice.confidence, reason: choice.reason });
   }
-  const total = records.length; const unique = groups.size;
+  const total = records.length; const unique = groups.size; const structuredSemantics = semanticStructuredReport(domain, records, groups, config);
   return {
     domain, total_rows: total, normalized_unique_names: unique, duplicate_rows: total - unique, duplicate_clusters: duplicateGroups.length,
     display: { usable_count: usable, usable_rate: total ? Number((usable / total).toFixed(6)) : 1, direct_count: direct, fallback_count: fallback, unresolved_count: total - usable, fallback_paths: fallbackPaths },
     structured: { complete_count: structuredComplete, complete_rate: total ? Number((structuredComplete / total).toFixed(6)) : 1, gap_count: total - structuredComplete, gaps_by_field: structuredGaps },
+    structured_semantics: structuredSemantics, legacy_raw_gap_counts: { gap_count: total - structuredComplete, gaps_by_field: structuredGaps },
     anomalies: { counts: anomalyCounts, samples: anomalySamples }, source_distribution: sources, document_version_distribution: versions,
     classification: { canonical_candidate_count: unique, reference_variant_count: variantRows, same_source_duplicate_count: referenceDuplicateRows, duplicate_cluster_samples: canonicalSamples },
   };
@@ -190,7 +214,7 @@ export async function auditDomains(base44, domains = DOMAIN_NAMES, options = {})
 export function compactAudit(audit) {
   return Object.fromEntries(Object.entries(audit).map(([domain, result]) => [domain, {
     total_rows: result.total_rows, normalized_unique_names: result.normalized_unique_names, duplicate_rows: result.duplicate_rows, duplicate_clusters: result.duplicate_clusters,
-    display: result.display, structured: result.structured, anomalies: result.anomalies.counts,
+    display: result.display, structured: result.structured, structured_semantics: result.structured_semantics, legacy_raw_gap_counts: result.legacy_raw_gap_counts, anomalies: result.anomalies.counts,
     classification: { canonical_candidate_count: result.classification.canonical_candidate_count, reference_variant_count: result.classification.reference_variant_count, same_source_duplicate_count: result.classification.same_source_duplicate_count },
     source_distribution: result.source_distribution, document_version_distribution: result.document_version_distribution, pagination: result.pagination,
   }]));
