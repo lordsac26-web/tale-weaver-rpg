@@ -12,7 +12,7 @@ export async function handleStartCombat(ctx) {
   const { user, error: authError } = await requireUser(base44);
   if (authError) return authError;
 
-  let { enemies } = payload;
+  let { enemies, ambush_setup: ambushSetup } = payload;
   const reconciled = await reconcileSessionCombat(base44, session_id);
   const session = reconciled.session;
   if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
@@ -84,6 +84,8 @@ export async function handleStartCombat(ctx) {
   };
 
   enemies = scaleEnemies(enemies, character);
+  const ambushTargets = ambushSetup ? enemies.filter((enemy) => /necromancer|ritual master|ritualist|obsidian circle scout/i.test(String(enemy?.name || ''))) : [];
+  if (ambushSetup && (ambushTargets.length !== 1 || Number(ambushTargets[0]?.current_hp ?? ambushTargets[0]?.hp) <= 0)) return Response.json({ error: 'Pending ambush combat requires exactly one living authoritative ritual target.', invalid: true }, { status: 409 });
 
   // Roll initiative for all combatants
   const combatants = [];
@@ -220,11 +222,11 @@ export async function handleStartCombat(ctx) {
     round: 1,
     combatants,
     initiative_order: combatants.map(c => ({ id: c.id, name: c.name, initiative_value: c.initiative_total, initiative: c.initiative_total })),
-    current_turn_index: 0,
+    current_turn_index: ambushSetup ? combatants.findIndex((entry) => entry.type === 'player' && entry.id === character.id) : 0,
     log_entries: [{ round: 1, text: `⚔️ Combat begins! Initiative: ${combatants.map(c => `${c.name} (${c.initiative_total})`).join(' → ')}` }],
     is_active: true,
     result: 'ongoing',
-    world_state: { actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, concentration_spell: activeConcentration?.source || null, concentration_caster: activeConcentration ? character.name : null }
+    world_state: { actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, concentration_spell: activeConcentration?.source || null, concentration_caster: activeConcentration ? character.name : null, ...(ambushSetup ? { pending_ambush_attack: true, ambush_setup: ambushSetup, ambush_source_target: combatants.find((entry) => entry.type === 'enemy' && /necromancer|ritual master|ritualist|obsidian circle scout/i.test(entry.name)) } : {}) }
     });
     await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: combatLog.id } });
   } catch (error) {

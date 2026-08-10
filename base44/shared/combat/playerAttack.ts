@@ -808,7 +808,7 @@ export async function handlePlayerAttack(ctx) {
   let concentrationBrokenSelf = null; // set if this attack broke the player's own concentration
   const isSpellAttack = !!spell;
   const advantageSources = concealmentAttributions(character.conditions);
-  const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, spell_name: spell?.name || null, advantage_sources: advantageSources };
+  const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, spell_name: spell?.name || null, raw_d20: attackResult.roll, all_rolls: attackResult.rolls, advantage: attackResult.advantage, disadvantage: attackResult.disadvantage, advantage_sources: advantageSources };
 
   if (hit) {
     // H5 fix: guard non-NdM dice strings (e.g. "1d8+1", "2d6 fire") — extract the
@@ -1126,7 +1126,7 @@ export async function handlePlayerAttack(ctx) {
     updatedLog, nextIndex, nextRound, newWorldState);
 
   return Response.json({
-    hit, damage, damage_rolls: damageRolls, attack_roll: totalAttack, log_entry: logEntry,
+    hit, damage, damage_rolls: damageRolls, raw_d20: attackResult.roll, all_rolls: attackResult.rolls, attack_roll: totalAttack, log_entry: logEntry,
     target_hp: target.hp_current, result, combat_ended: result !== 'ongoing',
     next_turn_index: nextIndex,
     actions_remaining: actionsRemaining > 0 ? actionsRemaining : 0,

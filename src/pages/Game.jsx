@@ -34,6 +34,7 @@ import { getManualRollEnabled } from '@/components/game/rollPreferences';
 import { canonicalSkillName } from '@/components/game/skillCheckResolver';
 import { buildThrownWeaponContext } from '@/lib/thrownWeaponIntent';
 import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '../../base44/shared/skills/authoritativeSkillModifier';
+import { classifyPrecisionAmbushIntent, stripGeneratedChoiceAnnotations } from '../../base44/shared/story/generatedChoiceIntent';
 
 const getFunctionErrorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.response?.data?.message ||
@@ -359,7 +360,7 @@ export default function Game() {
         choice_index: choiceIndex,
         choice_text: choice.text,
         request_id: requestId,
-        choice_context: { check: skillReceipt || { success: skillSuccess === true }, recovery: choice.recovery || null, weapon_attack: buildThrownWeaponContext(choice.text, character, skillSuccess !== false) },
+        choice_context: { check: skillReceipt || { success: skillSuccess === true }, recovery: choice.recovery || null, weapon_attack: buildThrownWeaponContext(choice.text, character, skillSuccess !== false), ambush_intent: classifyPrecisionAmbushIntent(choice.text) },
         custom_input: (choice.skill_check
           ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}${skillReceipt ? ` (d20 ${skillReceipt.raw_d20} + base ${skillReceipt.modifier_breakdown.base_skill} + effects ${skillReceipt.modifier_breakdown.effect_bonus} = ${skillReceipt.final_total})` : ''}]`
           : choice.text) + mechanicsContext + tacticalContext,
@@ -376,7 +377,7 @@ export default function Game() {
 
       if (data.combat_trigger && data.enemies?.length > 0) {
         setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
-        await startCombat(data.enemies);
+        await startCombat(data.enemies, { requestId: `${requestId}:combat`, ambushSetup: data.pending_ambush_attack || null });
       } else {
         setChoices(data.choices || []);
       }
@@ -391,11 +392,12 @@ export default function Game() {
   };
 
   const handleChoice = async (choiceIndex) => {
-    const choice = choices[choiceIndex];
+    const sourceChoice = choices[choiceIndex];
+    const choice = { ...sourceChoice, text: stripGeneratedChoiceAnnotations(sourceChoice?.text) };
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
     setChoices([]);
 
-    const requestId = `story-choice:${sessionId}:${session?.story_log?.length || 0}:${choiceIndex}`;
+    const requestId = `story-choice:${sessionId}:${crypto.randomUUID()}`;
     let preCast = null;
     try { preCast = await maybeCastStorySpell(choice.text, requestId); }
     catch (err) {
@@ -411,9 +413,8 @@ export default function Game() {
     }
 
     const equipAdv = getEquipmentAdvantage(checkCharacter?.equipped, canonicalSkillName(choice.skill_check));
-    const tacticalAdv = getTacticalAttackContext(choice.text, choice.skill_check);
-    const resolvedAdvantage = equipAdv.advantage || tacticalAdv.advantage;
-    const resolvedAdvantageSources = [...(equipAdv.sources || []), ...(tacticalAdv.sources || [])];
+    const resolvedAdvantage = equipAdv.advantage;
+    const resolvedAdvantageSources = [...(equipAdv.sources || [])];
     const breakdown = computeSkillBreakdown(choice.skill_check, checkCharacter);
     if (!breakdown.ok) { setNarrative(prev => [...prev, { type: 'roll_result', text: breakdown.error, success: false }]); return; }
     const modifier = breakdown.total;
@@ -814,7 +815,7 @@ export default function Game() {
     if (!requires_check || success) await applyCombatReward(reward);
   };
 
-  const startCombat = async (enemies) => {
+  const startCombat = async (enemies, { requestId = null, ambushSetup = null } = {}) => {
     // Clear story affordances immediately. If the server write is visible before
     // the new CombatLog read, the user must never be allowed to submit another
     // story choice and accidentally start a duplicate fight.
@@ -825,7 +826,8 @@ export default function Game() {
       action: 'start_combat',
       session_id: sessionId,
       character_id: character?.id,
-      payload: { enemies }
+      request_id: requestId || `combat-start:${sessionId}:${crypto.randomUUID()}`,
+      payload: { enemies, ambush_setup: ambushSetup }
     });
 
     const combatId = result.data?.combat_id;
@@ -888,9 +890,10 @@ export default function Game() {
 
     let result;
     try {
+      const attackRequestId = modifiers?.request_id || `player-attack:${combatId}:${combat?.round || 1}:${combat?.current_turn_index || 0}:${combat?.world_state?.actions_used_this_turn || 0}:${targetId}:${actionType}`;
       result = await base44.functions.invoke('combatEngine', {
         action: 'player_attack', session_id: sessionId, combat_id: combatId,
-        character_id: character?.id, payload: { target_id: targetId, weapon, spell, modifiers, twin_target_id: twinTargetId }
+        character_id: character?.id, request_id: attackRequestId, payload: { target_id: targetId, weapon, spell, modifiers, twin_target_id: twinTargetId }
       });
     } catch (err) {
       setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'That action could not be resolved.'), success: false }]);
