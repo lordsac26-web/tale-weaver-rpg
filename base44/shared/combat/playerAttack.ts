@@ -12,6 +12,7 @@ import { addStructuredCondition, buildStructuredCondition, concealmentAttributio
 import { findHuntersMark, rollHuntersMarkBonus, removeHuntersMark } from './huntersMark.ts';
 import { ammoForWeapon, consumeAmmunition } from '../ammunition.ts';
 import { rollWeaponBaseDamage } from './weaponDamage.ts';
+import { appendRecoverableItem, buildRecoverableItem } from '../story/recoveryTransaction.ts';
 
 export async function handlePlayerAttack(ctx) {
   const { base44, session_id, combat_id, character_id, payload, request_id, roll_d20 = rollD20 } = ctx;
@@ -1103,7 +1104,10 @@ export async function handlePlayerAttack(ctx) {
     newWorldState.__ammo_receipts = [...(newWorldState.__ammo_receipts || []).filter((entry) => entry.request_id !== request_id).slice(-49), ammoReceipt];
     if (!ammunitionCommit.already_committed) {
       const abilities = { ...(character.long_rest_abilities || {}), __ammo_attack_receipts: [...(character.long_rest_abilities?.__ammo_attack_receipts || []).filter((entry) => entry.request_id !== request_id).slice(-49), ammoReceipt] };
-      await base44.asServiceRole.entities.Character.update(character_id, { inventory: ammunitionCommit.inventory, long_rest_abilities: abilities });
+      const attackSession = await base44.asServiceRole.entities.GameSession.get(session_id);
+      const recoverable = buildRecoverableItem({ originRequestId: request_id, characterId: character_id, sessionId: session_id, combatId: combat_id, location: combatLog.location || attackSession?.current_location, canonicalName: ammunitionCommit.ammo_name, quantity: 1, sourceAction: 'fired_ammunition', itemSnapshot: { name: ammunitionCommit.ammo_name, category: 'Ammunition', quantity: 1, unit: ammunitionCommit.ammo_name === 'Arrows' ? 'arrow' : 'bolt', stack_semantics: 'individual' } });
+      const nextAbilities = appendRecoverableItem(abilities, recoverable);
+      await base44.asServiceRole.entities.Character.update(character_id, { inventory: ammunitionCommit.inventory, long_rest_abilities: nextAbilities });
     }
   }
 
