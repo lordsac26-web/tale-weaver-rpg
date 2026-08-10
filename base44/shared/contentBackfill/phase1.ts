@@ -2,6 +2,8 @@ import { hashAuditValue, normalizeAuditName, paginateCatalog } from '../contentA
 
 export const PHASE1_DEPLOYMENT_ID = 'content-backfill-phase1-v1';
 export const PHASE1_DOMAINS = ['Spell', 'DnDCondition'];
+const PROTECTED = [['Character', '6a6825cd07a490fa70a46852'], ['GameSession', '6a6825edd695bd65a4322256'], ['CombatLog', '6a767f23ec36fe219063ae49'], ['CombatLog', '6a77463582a26b50018110ea']];
+const APPLY_RECEIPTS = new Map();
 const PLACEHOLDER = /^(?:n\/?a|none|unknown|tbd|todo|placeholder|no description|description unavailable|not available|coming soon|-+)\.?$/i;
 const collapse = (value) => String(value ?? '').normalize('NFKC').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[\u2010-\u2015]/g, '-').replace(/\s+/g, ' ').trim();
 const pathValue = (record, path) => path.split('.').reduce((value, key) => value && typeof value === 'object' ? value[key] : undefined, record);
@@ -102,29 +104,47 @@ export async function loadPhase1Records(base44, scopeIds = null) {
   return records;
 }
 
-export async function applyPhase1Plan({ base44, submittedPlan, proposalHash, approvalId, scopeIds = null }) {
+const protectedSnapshot = async (base44) => Promise.all(PROTECTED.map(async ([entity, id]) => { let record = null; try { record = await base44.asServiceRole.entities[entity].get(id); } catch {} return { entity, id, exists: !!record, hash: await hashAuditValue(record) }; }));
+const unrelatedProjection = (record) => { const { description, updated_date, ...unrelated } = record || {}; return unrelated; };
+const rememberReceipt = (key, body) => { APPLY_RECEIPTS.set(key, body); if (APPLY_RECEIPTS.size > 100) APPLY_RECEIPTS.delete(APPLY_RECEIPTS.keys().next().value); };
+
+export async function applyPhase1Plan({ base44, proposalHash, approvalId, scopeIds = null }) {
   if (!approvalId || typeof approvalId !== 'string') return { status: 400, body: { error: 'approval_id is required', writes: 0 } };
-  if (!submittedPlan || !Array.isArray(submittedPlan.proposals) || proposalHash !== await hashAuditValue(submittedPlan.proposals)) return { status: 400, body: { error: 'proposal_hash does not match submitted dry-run proposals', writes: 0 } };
-  const currentRecords = await loadPhase1Records(base44, scopeIds); const currentPlan = await buildPhase1Plan(currentRecords);
-  if (currentPlan.proposal_hash !== proposalHash) {
-    let alreadyApplied = submittedPlan.proposals.length > 0;
-    for (const proposal of submittedPlan.proposals) {
-      const current = currentRecords[proposal.domain]?.find((record) => record.id === proposal.recipient_id);
-      if (!current || await hashAuditValue(current.description) !== proposal.proposed_value_hash) { alreadyApplied = false; break; }
-    }
-    if (alreadyApplied) return { status: 200, body: { deployment_id: PHASE1_DEPLOYMENT_ID, mode: 'apply', approval_id: approvalId, already_applied: true, writes: 0, proposal_hash: proposalHash } };
-    return { status: 409, body: { error: 'stale proposal: live recipients, donors, clusters, or proposal set changed', writes: 0, expected_proposal_hash: proposalHash, current_proposal_hash: currentPlan.proposal_hash } };
+  if (!proposalHash || typeof proposalHash !== 'string') return { status: 400, body: { error: 'proposal_hash is required', writes: 0 } };
+  const receiptKey = `${approvalId}:${proposalHash}`;
+  const prior = APPLY_RECEIPTS.get(receiptKey);
+  if (prior) return { status: 200, body: { ...prior, already_applied: true, writes: 0, applied_count: 0, applied: [] } };
+
+  const firstRecords = await loadPhase1Records(base44, scopeIds);
+  const firstPlan = await buildPhase1Plan(firstRecords);
+  if (firstPlan.proposal_hash !== proposalHash) return { status: 409, body: { error: 'stale or incorrect proposal_hash', writes: 0, supplied_proposal_hash: proposalHash, current_proposal_hash: firstPlan.proposal_hash } };
+
+  const immediateRecords = await loadPhase1Records(base44, scopeIds);
+  const immediatePlan = await buildPhase1Plan(immediateRecords);
+  if (immediatePlan.proposal_hash !== proposalHash) return { status: 409, body: { error: 'proposal set changed during preflight', writes: 0, supplied_proposal_hash: proposalHash, current_proposal_hash: immediatePlan.proposal_hash } };
+  const eligible = immediatePlan.proposals.filter((proposal) => proposal.domain === 'DnDCondition' && proposal.field === 'description');
+  const beforeProtected = await protectedSnapshot(base44); const before = [];
+  for (const proposal of eligible) {
+    const recipient = immediateRecords.DnDCondition.find((row) => row.id === proposal.recipient_id);
+    const donor = immediateRecords.DnDCondition.find((row) => row.id === proposal.donor_id);
+    const current = immediatePlan.proposals.find((item) => item.domain === proposal.domain && item.recipient_id === proposal.recipient_id);
+    const recipientHash = recipient ? await hashAuditValue(recipient.description) : null;
+    const donorHash = donor ? await hashAuditValue(pathValue(donor, proposal.source_path)) : null;
+    if (!recipient || !donor || !current || recipientHash !== proposal.before_value_hash || donorHash !== proposal.donor_value_hash || current.cluster_hash !== proposal.cluster_hash) return { status: 409, body: { error: 'recipient, donor, or cluster changed during preflight', recipient_id: proposal.recipient_id, writes: 0 } };
+    before.push({ id: recipient.id, name: recipient.name, before_hash: await hashAuditValue(recipient), description_before_hash: recipientHash, unrelated_before_hash: await hashAuditValue(unrelatedProjection(recipient)), proposed_value: proposal.proposed_value, proposed_value_hash: proposal.proposed_value_hash });
   }
-  for (const proposal of currentPlan.proposals) {
-    const recipient = currentRecords[proposal.domain].find((record) => record.id === proposal.recipient_id); const donor = currentRecords[proposal.domain].find((record) => record.id === proposal.donor_id);
-    const recipientHash = recipient ? await hashAuditValue(recipient.description) : null; const donorHash = donor ? await hashAuditValue(pathValue(donor, proposal.source_path)) : null;
-    if (!recipient || !donor || recipientHash !== proposal.before_value_hash || donorHash !== proposal.donor_value_hash) return { status: 409, body: { error: 'stale proposal record hash', recipient_id: proposal.recipient_id, writes: 0, recipient_hash_match: recipientHash === proposal.before_value_hash, donor_hash_match: donorHash === proposal.donor_value_hash, expected_recipient_hash: proposal.before_value_hash, actual_recipient_hash: recipientHash, expected_donor_hash: proposal.donor_value_hash, actual_donor_hash: donorHash } };
+  if (eligible.length) await base44.asServiceRole.entities.DnDCondition.bulkUpdate(eligible.map((proposal) => ({ id: proposal.recipient_id, description: proposal.proposed_value })));
+
+  const applied = [];
+  for (const proof of before) {
+    const after = await base44.asServiceRole.entities.DnDCondition.get(proof.id);
+    const descriptionAfterHash = await hashAuditValue(after?.description);
+    const unrelatedAfterHash = await hashAuditValue(unrelatedProjection(after));
+    applied.push({ id: proof.id, name: proof.name, before_hash: proof.before_hash, after_hash: await hashAuditValue(after), description_before_hash: proof.description_before_hash, description_after_hash: descriptionAfterHash, expected_description_hash: proof.proposed_value_hash, unrelated_before_hash: proof.unrelated_before_hash, unrelated_after_hash: unrelatedAfterHash, unrelated_fields_unchanged: proof.unrelated_before_hash === unrelatedAfterHash, description_applied: descriptionAfterHash === proof.proposed_value_hash });
   }
-  const domain_results = [];
-  for (const domain of PHASE1_DOMAINS) {
-    const domainProposals = currentPlan.proposals.filter((proposal) => proposal.domain === domain);
-    if (domainProposals.length) await base44.asServiceRole.entities[domain].bulkUpdate(domainProposals.map((proposal) => ({ id: proposal.recipient_id, description: proposal.proposed_value })));
-    domain_results.push({ domain, writes: domainProposals.length, ids: domainProposals.map((proposal) => proposal.recipient_id) });
-  }
-  return { status: 200, body: { deployment_id: PHASE1_DEPLOYMENT_ID, mode: 'apply', approval_id: approvalId, already_applied: false, writes: currentPlan.proposals.length, proposal_hash: proposalHash, domain_results } };
+  const afterProtected = await protectedSnapshot(base44);
+  const protected_state = beforeProtected.map((item, index) => ({ ...item, after_hash: afterProtected[index].hash, unchanged: item.hash === afterProtected[index].hash }));
+  const body = { deployment_id: PHASE1_DEPLOYMENT_ID, mode: 'apply', approval_id: approvalId, already_applied: false, writes: applied.length, applied_count: applied.length, proposal_hash: proposalHash, ignored_spell_proposals: immediatePlan.counts.Spell, applied_ids: applied.map((item) => item.id), applied_names: applied.map((item) => item.name), applied, unrelated_fields_unchanged: applied.every((item) => item.unrelated_fields_unchanged), protected_state };
+  rememberReceipt(receiptKey, body);
+  return { status: 200, body };
 }
