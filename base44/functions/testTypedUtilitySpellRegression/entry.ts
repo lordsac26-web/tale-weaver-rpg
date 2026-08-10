@@ -47,6 +47,15 @@ export default async function testTypedUtilitySpellRegression(req) {
     const articleSession = await base44.asServiceRole.entities.GameSession.get(article.session.id);
     results.push({ name: 'route parser accepts cast/use optional-article Pass without a Trace alias once and synchronizes session concentration', pass: resolveKnownTypedSpell(articleAfter, articleAction) === 'Pass without Trace' && articleCast.status === 200 && articleCast.body?.success && articleAfter.spell_slots?.level_2 === 1 && stealthBonus(articleAfter) === 10 && (articleAfter.conditions || []).filter((condition) => condition.name === 'pass without trace').length === 1 && articleSession.world_state?.active_concentration?.spell_name === 'Pass without Trace' });
 
+    const cosmetic = await createFixture('cosmetic-residue', 5, { conditions: [{ name: 'Pass Without Trace', source: 'story', duration: 'scene', applied_at: '2026-08-10T01:06:14.812Z' }] });
+    const liveWording = 'cast pass without a trace on myself';
+    const cosmeticCast = await executeUtilitySpellCast({ base44, user, payload: { session_id: cosmetic.session.id, character_id: cosmetic.character.id, action_text: liveWording, request_id: `${token}:live-wording` } });
+    const cosmeticAfter = await base44.asServiceRole.entities.Character.get(cosmetic.character.id);
+    const cosmeticSession = await base44.asServiceRole.entities.GameSession.get(cosmetic.session.id);
+    results.push({ name: 'exact latest live plain PWT wording ignores cosmetic residue and commits mechanics before narration', pass: cosmeticCast.status === 200 && cosmeticCast.body?.already_active === false && cosmeticAfter.spell_slots?.level_2 === 1 && stealthBonus(cosmeticAfter) === 10 && (cosmeticAfter.conditions || []).some((condition) => condition.name === 'pass without trace' && condition.concentration === true) && cosmeticSession.world_state?.active_concentration?.request_id === `${token}:live-wording` });
+    const cosmeticReplay = await executeUtilitySpellCast({ base44, user, payload: { session_id: cosmetic.session.id, character_id: cosmetic.character.id, action_text: liveWording, request_id: `${token}:live-wording` } });
+    results.push({ name: 'exact latest live plain PWT replay spends no second slot', pass: cosmeticReplay.body?.already_processed === true && (await base44.asServiceRole.entities.Character.get(cosmetic.character.id)).spell_slots?.level_2 === 1 });
+
     const noSlot = await createFixture('no-slot', 3);
     const rejected = await executeUtilitySpellCast({ base44, user, payload: { session_id: noSlot.session.id, character_id: noSlot.character.id, spell_name: 'Pass without Trace', action_text: 'Cast Pass without Trace then hide.', request_id: `${token}:no-slot` } });
     const afterRejected = await base44.asServiceRole.entities.Character.get(noSlot.character.id);
@@ -54,6 +63,10 @@ export default async function testTypedUtilitySpellRegression(req) {
 
     const control = await executeUtilitySpellCast({ base44, user, payload: { session_id: valid.session.id, character_id: valid.character.id, action_text: 'Scout the ridge quietly.', request_id: `${token}:control` } });
     results.push({ name: 'non-spell free text remains a non-cast control', pass: control.status === 200 && control.body?.spell_detected === false });
+    const longstrider = await createFixture('longstrider-control', 5, { spells_known: ['Longstrider'], spells_prepared: ['Longstrider'] });
+    const longstriderCast = await executeUtilitySpellCast({ base44, user, payload: { session_id: longstrider.session.id, character_id: longstrider.character.id, action_text: 'cast longstrider on myself', request_id: `${token}:longstrider-control` } });
+    const longstriderAfter = await base44.asServiceRole.entities.Character.get(longstrider.character.id);
+    results.push({ name: 'Longstrider remains a passing plain utility control', pass: longstriderCast.status === 200 && longstriderCast.body?.spell_name === 'Longstrider' && longstriderAfter.spell_slots?.level_1 === 1 });
 
     const sheetFixture = await createFixture('sheet-cure', 5, { hp_max: 44, hp_current: 26, spell_slots: { level_1: 0 }, spells_known: ['Cure Wounds'], spells_prepared: ['Cure Wounds'] });
     const sheetPayload = { session_id: sheetFixture.session.id, character_id: sheetFixture.character.id, spell_name: 'Cure Wounds', slot_level: 1, target: 'self', action_text: 'cast Cure Wounds on myself', cast_token: `${token}:sheet-cure` };

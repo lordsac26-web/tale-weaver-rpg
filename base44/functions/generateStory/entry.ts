@@ -7,6 +7,7 @@ import { factualAftermathFallback, findDeadCombatantContradictions, readComplete
 import { isPwt, repairPostRestNarration } from '../../shared/story/postRestResiduals.ts';
 import { executePwtCompoundAction } from '../../shared/story/compoundPwtAction.ts';
 import { executeLongRestStoryAction } from '../../shared/story/longRestStoryAction.ts';
+import { executeThrownWeaponAction, recoverThrownWeapon } from '../../shared/story/thrownWeaponAction.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -58,6 +59,22 @@ Deno.serve(async (req) => {
         const entry = { timestamp: new Date().toISOString(), action: 'choice', request_id: storyRequestId, player_choice: selectedChoice, text: compound.body.narration, choices: [], compound_action: { child_ids: compound.body.child_ids, plan: compound.body.plan, skill: compound.body.skill } };
         await base44.asServiceRole.entities.GameSession.update(session_id, { story_log: [...(freshSession?.story_log || []), entry].slice(-60) });
         return Response.json({ narrative: compound.body.narration, choices: [], compound_action: compound.body });
+      }
+    }
+    let authoritativeWeaponAction = null;
+    if (action === 'choice') {
+      const thrownOutcome = await executeThrownWeaponAction({
+        base44,
+        user,
+        payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId, weapon_attack: choice_context?.weapon_attack },
+      });
+      if (thrownOutcome.body?.handled) {
+        if (thrownOutcome.status >= 400) return Response.json(thrownOutcome.body, { status: thrownOutcome.status });
+        authoritativeWeaponAction = thrownOutcome.body;
+      }
+      if (choice_context?.thrown_recovery) {
+        const recoveryOutcome = await recoverThrownWeapon({ base44, user, payload: { session_id, character_id: character.id, request_id: storyRequestId, ...choice_context.thrown_recovery, check: choice_context.check } });
+        if (recoveryOutcome.status >= 400) return Response.json(recoveryOutcome.body, { status: recoveryOutcome.status });
       }
     }
     let authoritativeSpellCast = null;
@@ -190,6 +207,7 @@ JOURNAL NOTES: ${journalSummary}
 RECENT EVENTS: ${recentLog}
 ${gameDataContext}
 ${authoritativeSpellCast ? `AUTHORITATIVE SPELL RESULT: ${authoritativeSpellCast.spell_name} ${authoritativeSpellCast.already_processed ? 'was already processed; do not repeat it.' : `was cast at level ${authoritativeSpellCast.slot_level}.`} ${authoritativeSpellCast.concentration ? 'Concentration is active.' : ''} ${String(authoritativeSpellCast.spell_name || '').toLowerCase() === 'pass without trace' ? '+10 Stealth is active for the spell duration; narrate these facts exactly and do not deduct another slot.' : 'Do not deduct another slot or invent a different mechanical outcome.'}` : ''}
+${authoritativeWeaponAction ? `AUTHORITATIVE THROWN-WEAPON RESULT: exactly one ${authoritativeWeaponAction.weapon_attack.item_name} (${authoritativeWeaponAction.weapon_attack.item_id}) was consumed. Target: ${authoritativeWeaponAction.weapon_attack.target}. Outcome: ${authoritativeWeaponAction.weapon_attack.hit ? 'hit' : 'miss'}${authoritativeWeaponAction.weapon_attack.kill ? ' and confirmed kill' : ''}. Narrate only this result; never invent a kill without confirmed kill.` : ''}
 ${completedCombat ? `COMPLETED COMBAT CONTEXT: Combat ${completedCombat.combat_id} ended in ${completedCombat.result}. Dead enemies: ${(completedCombat.defeated_enemies || completedCombat.dead_enemies || []).map((enemy) => enemy.name || enemy.id).join(', ') || 'all listed enemies'}. This is aftermath narration only: combat_trigger MUST be false, enemies MUST be [], and no dead enemy may escape or re-engage.` : ''}
 ${Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested ? 'POST-REST FACT: the character is fully rested and alert. Do not describe fatigue, tiredness, weariness, raggedness, sleeplessness, or exhaustion unless a new structured mechanic explicitly causes it.' : ''}
 ${Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested ? 'POST-REST FACT: the character completed a successful rest and is not exhausted. Do not describe fatigue, tiredness, weariness, raggedness, sleeplessness, or impaired focus unless a new mechanical effect explicitly causes it.' : ''}
@@ -455,7 +473,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
           // let narrative output add Exhausted while the authoritative level is 0.
           const mechanicalExhaustion = authoritativeExhaustion;
           const isInvalidExhaustionAdd = (key === 'exhausted' || key === 'exhaustion') && mechanicalExhaustion <= 0;
-          if (!isInvalidExhaustionAdd && !nextConditions.some(cond => conditionKey(cond) === key)) {
+          if (!isInvalidExhaustionAdd && !isPwt(name) && !nextConditions.some(cond => conditionKey(cond) === key)) {
             nextConditions.push({
               name, source: 'story', duration: incoming.duration || 'scene',
               applied_at: new Date().toISOString()

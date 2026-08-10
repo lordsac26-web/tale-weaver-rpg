@@ -32,6 +32,7 @@ import SkillCheckRollModal from '@/components/game/SkillCheckRollModal';
 import AskDMDialog from '@/components/game/AskDMDialog';
 import { getManualRollEnabled } from '@/components/game/rollPreferences';
 import { resolveSkillCheck, canonicalSkillName } from '@/components/game/skillCheckResolver';
+import { buildThrownWeaponContext } from '@/lib/thrownWeaponIntent';
 
 const getFunctionErrorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.response?.data?.message ||
@@ -373,7 +374,7 @@ export default function Game() {
         choice_index: choiceIndex,
         choice_text: choice.text,
         request_id: requestId,
-        choice_context: { check: { success: skillSuccess === true }, recovery: choice.recovery || null },
+        choice_context: { check: { success: skillSuccess === true }, recovery: choice.recovery || null, weapon_attack: buildThrownWeaponContext(choice.text, character, skillSuccess !== false) },
         custom_input: (choice.skill_check
           ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}]`
           : choice.text) + mechanicsContext + tacticalContext,
@@ -567,7 +568,7 @@ export default function Game() {
         mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
         mechanicalItem ? ` [MECHANICS: ${mechanicalItem.quantity} ${mechanicalItem.item_name} were authoritatively consumed and restored ${mechanicalItem.heal_amount} HP. Do not narrate a different quantity or apply another mechanical heal.]` : '',
       ].join('');
-      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', request_id: requestId, choice_context: outcome, custom_input: action + checkResult + mechanicsContext });
+      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', request_id: requestId, choice_context: { ...outcome, weapon_attack: buildThrownWeaponContext(action, character, outcome?.check?.success !== false) }, custom_input: action + checkResult + mechanicsContext });
       const data = result.data;
       if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);

@@ -63,7 +63,9 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   const known = [...(character.spells_known || []), ...(character.spells_prepared || [])].some((spell) => normalize(spell) === normalize(canonicalName));
   if (!known) return respond(400, { error: `${character.name} does not know or have ${canonicalName} prepared`, invalid: true });
   const spellCandidates = await base44.asServiceRole.entities.Spell.filter({ name: canonicalName }, '-updated_date', 50);
-  const spell = spellCandidates.find((candidate) => String(candidate?.attack_type || '').toLowerCase() === 'healing' || (typeof candidate?.description === 'string' && candidate.description.trim())) || spellCandidates[0];
+  const spell = spellCandidates.find((candidate) => ['utility', 'healing'].includes(String(candidate?.attack_type || '').toLowerCase()) || candidate?.is_utility === true)
+    || spellCandidates.find((candidate) => typeof candidate?.description === 'string' && candidate.description.trim())
+    || spellCandidates[0];
   if (!spell) return respond(404, { error: `Canonical spell data is missing for ${canonicalName}`, invalid: true });
   const normalizedName = normalize(canonicalName);
   const isHealingSpell = spell.attack_type === 'healing' || normalizedName === 'cure wounds';
@@ -92,7 +94,14 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   const now = Date.now();
   const active = (character.active_modifiers || []).filter((modifier) => !modifier.expires_at || new Date(modifier.expires_at).getTime() > now);
   const existing = spell.concentration ? active.find((modifier) => normalize(modifier.source) === normalizedName && modifier.concentration) : null;
-  if (existing) return respond(200, { success: true, spell_detected: true, already_active: true, spell_name: canonicalName, slot_level: selectedLevel, spell_slots: character.spell_slots || {}, active_modifiers: active });
+  const structured = (character.conditions || []).find((condition) => normalize(condition?.name) === normalizedName && condition?.concentration === true && (!condition.expires_at || new Date(condition.expires_at).getTime() > now));
+  const concentration = session?.world_state?.active_concentration;
+  const slotReceipt = receipts.find((receipt) => normalize(receipt?.spell_name) === normalizedName && receipt?.token === concentration?.request_id);
+  const coherentExisting = existing && structured && concentration && slotReceipt
+    && existing.target_id === character_id && structured.target_id === character_id && concentration.target_id === character_id
+    && existing.expires_at === structured.expires_at && existing.expires_at === concentration.expires_at
+    && normalize(concentration.spell_name) === normalizedName && concentration.concentration === true;
+  if (coherentExisting) return respond(200, { success: true, spell_detected: true, already_active: true, spell_name: canonicalName, slot_level: selectedLevel, spell_slots: character.spell_slots || {}, active_modifiers: active, concentration: true, duration: spell.duration });
   let spellSlots = normalizeSpellSlots(character.spell_slots);
   let maximum = 0;
   let usedAfter = 0;
@@ -142,7 +151,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
     else inventory.push({ name: 'Goodberry', category: 'Consumable', quantity: 10, description: 'A transmuted berry that restores 1 Hit Point when eaten and provides enough nourishment to sustain a creature for one day. Expires 24 hours after casting.', expires_at: expires });
     grantedInventory = inventory;
   }
-  abilities.__typed_spell_casts = [...receipts.filter((receipt) => receipt?.token !== token).slice(-24), { token, receipt_id: token, spell_name: canonicalName, slot_level: selectedLevel, heal_amount: healAmount, roll_expression: rollExpression, roll_total: rollTotal, hp_before: hpBefore, hp_after: hpCurrent, granted_goodberry: grantedGoodberry, at: new Date(now).toISOString() }];
+  abilities.__typed_spell_casts = [...receipts.filter((receipt) => receipt?.token !== token).slice(-24), { token, receipt_id: token, spell_name: canonicalName, slot_level: selectedLevel, target_id: character_id, duration: spell.duration || null, expires_at: expiresAt, concentration: !!spell.concentration, heal_amount: healAmount, roll_expression: rollExpression, roll_total: rollTotal, hp_before: hpBefore, hp_after: hpCurrent, granted_goodberry: grantedGoodberry, at: new Date(now).toISOString() }];
   const updates = { spell_slots: spellSlots, active_modifiers: activeModifiers, long_rest_abilities: abilities };
   if (isPassWithoutTrace || isSilence) updates.conditions = structuredConditions;
   if (healAmount > 0) updates.hp_current = hpCurrent;
