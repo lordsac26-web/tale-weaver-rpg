@@ -1,6 +1,6 @@
 import { executeUtilitySpellCast } from '../spells/castUtilitySpell.ts';
-import { normalizeSpellText } from '../spells/typedSpellParser.ts';
-import { rollD20, statMod } from '../dice.ts';
+import { rollD20 } from '../dice.ts';
+import { resolveAuthoritativeSkillModifier } from '../skills/authoritativeSkillModifier.ts';
 
 const pwtPattern = /\bpass\s+without\s+(?:a\s+)?trace\b/i;
 const dependentPattern = /\b(hide|hiding|sneak|sneaking|stealth)\b/i;
@@ -11,12 +11,6 @@ export function parsePwtCompoundIntent(actionText) {
   if (!hasCast || !pwtPattern.test(text) || !dependentPattern.test(text)) return null;
   return { steps: [{ type: 'cast', spell_name: 'Pass without Trace' }, { type: 'skill', skill: 'Stealth', action: 'Hide' }] };
 }
-
-const skillModifier = (character) => {
-  const proficiency = character.skills?.Stealth === 'expert' ? (Number(character.proficiency_bonus) || 2) * 2 : (character.skills?.Stealth ? (Number(character.proficiency_bonus) || 2) : 0);
-  const bonus = (character.active_modifiers || []).filter((m) => m?.effect === 'skill_bonus' && normalizeSpellText(m.skill) === 'stealth' && (!m.expires_at || new Date(m.expires_at).getTime() > Date.now())).reduce((sum, m) => sum + (Number(m.bonus) || 0), 0);
-  return { ability: statMod(character.dexterity), proficiency, bonus, total: statMod(character.dexterity) + proficiency + bonus };
-};
 
 export async function executePwtCompoundAction({ base44, user, payload }) {
   const plan = parsePwtCompoundIntent(payload?.action_text);
@@ -32,7 +26,8 @@ export async function executePwtCompoundAction({ base44, user, payload }) {
   const receipts = Array.isArray(session.world_state?.__compound_action_receipts) ? session.world_state.__compound_action_receipts : [];
   const prior = receipts.find((receipt) => receipt?.id === skillId);
   if (prior) return { status: 200, body: { handled: true, plan: plan.steps, child_ids: { cast: castId, skill: skillId }, cast: cast.body, skill: prior, already_processed: true, narration: prior.narration } };
-  const breakdown = skillModifier(character);
+  const breakdown = resolveAuthoritativeSkillModifier({ character, session, skill: 'Stealth' });
+  if (!breakdown.ok) return { status: 409, body: { error: breakdown.error, handled: true, plan: plan.steps, child_ids: { cast: castId, skill: skillId }, invalid: true } };
   const raw = rollD20();
   const dc = Math.max(5, Number(payload?.skill_dc) || 15);
   const total = raw + breakdown.total;

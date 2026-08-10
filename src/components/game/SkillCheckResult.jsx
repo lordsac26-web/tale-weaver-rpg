@@ -11,7 +11,7 @@ const SKILL_ICONS = {
 };
 
 export default function SkillCheckResult({ entry }) {
-  const { skill, dc, raw, modifier, final, success, character_name, feedback, allRolls, hadAdvantage, hadDisadvantage, advantageSources } = entry;
+  const { skill, dc, raw, modifier, breakdown, final, success, character_name, feedback, allRolls, hadAdvantage, hadDisadvantage, advantageSources } = entry;
   const icon = SKILL_ICONS[skill] || '🎲';
   const margin = final - dc;
 
@@ -96,6 +96,7 @@ export default function SkillCheckResult({ entry }) {
                 vs DC {dc}
               </span>
             </div>
+            {breakdown && <div className="text-xs mt-1" style={{ color: 'rgba(201,169,110,0.65)' }}>Base {breakdown.base_skill >= 0 ? '+' : ''}{breakdown.base_skill} · Pass without Trace {breakdown.pwt_active ? '+10' : '+0'} · Total {breakdown.total >= 0 ? '+' : ''}{breakdown.total}</div>}
             <div className="text-xs mt-0.5 font-fantasy"
               style={{ color: 'rgba(180,140,90,0.4)' }}>
               {raw === 20 ? '⭐ Natural 20!' : raw === 1 ? '💀 Natural 1!' :

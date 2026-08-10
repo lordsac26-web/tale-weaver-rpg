@@ -364,6 +364,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
         ...(storyRequestId ? { request_id: storyRequestId } : {}),
         player_choice: action === 'choice' ? selectedChoice : (custom_input ?? choice_index),
         text: result.narrative, choices: result.choices || [],
+        ...(choice_context?.check?.raw_d20 != null ? { skill_check: choice_context.check } : {}),
         ...(result.item_recovery ? { item_recovery: result.item_recovery } : {})
       };
       const updatedLog = action === 'choice' && storyRequestId

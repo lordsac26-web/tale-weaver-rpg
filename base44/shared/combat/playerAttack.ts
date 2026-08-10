@@ -8,7 +8,7 @@ import {
   getActionsPerTurn, resolveActionAndAdvance,
 } from './helpers.ts';
 import { finalizeAndPersistCombat } from './persistence.ts';
-import { addStructuredCondition, buildStructuredCondition, consumeBreakOnAttackConditions, getAttackConcealment } from './conditions.ts';
+import { addStructuredCondition, buildStructuredCondition, concealmentAttributions, consumeBreakOnAttackConditions, getAttackConcealment } from './conditions.ts';
 import { findHuntersMark, rollHuntersMarkBonus, removeHuntersMark } from './huntersMark.ts';
 import { ammoForWeapon, consumeAmmunition } from '../ammunition.ts';
 
@@ -807,7 +807,7 @@ export async function handlePlayerAttack(ctx) {
   let baseDamage = 0;
   let concentrationBrokenSelf = null; // set if this attack broke the player's own concentration
   const isSpellAttack = !!spell;
-  const advantageSources = attackConcealment.length ? ['Attacking from concealment'] : [];
+  const advantageSources = concealmentAttributions(character.conditions);
   const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, spell_name: spell?.name || null, advantage_sources: advantageSources };
 
   if (hit) {
@@ -1040,7 +1040,7 @@ export async function handlePlayerAttack(ctx) {
 
   // Consume only structured concealment states whose canonical rule explicitly
   // says they end on attack. Greater Invisibility-style effects remain intact.
-  if (attackConcealment.some((condition) => condition.break_on_attack)) {
+  if (attackConcealment.some((condition) => condition.break_on_attack || ['stealthed', 'hidden', 'concealed'].includes(String(condition.name || '').toLowerCase()))) {
     const remainingConditions = consumeBreakOnAttackConditions(character.conditions);
     await base44.asServiceRole.entities.Character.update(character_id, { conditions: remainingConditions });
     const pcInv = combatants.find(c => c.type === 'player');

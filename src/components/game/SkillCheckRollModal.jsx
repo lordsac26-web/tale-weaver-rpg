@@ -23,6 +23,7 @@ import { rollD20WithAdvantage, resolveCheckSuccess } from './equipmentAdvantage'
 export default function SkillCheckRollModal({
   skill,
   modifier = 0,
+  breakdown = null,
   dc,
   advantage = false,
   disadvantage = false,
@@ -42,7 +43,7 @@ export default function SkillCheckRollModal({
       const final = raw + modifier;
       // Nat 20 always succeeds, nat 1 always fails
       const success = resolveCheckSuccess(raw, final, dc);
-      const data = { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, final, success };
+      const data = { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, breakdown, final, success };
       setResult(data);
       setRolling(false);
     }, 600);
@@ -75,10 +76,9 @@ export default function SkillCheckRollModal({
 
         <div className="p-5 space-y-4">
           {/* Check summary */}
-          <div className="flex items-center justify-center gap-3 text-sm font-fantasy" style={{ color: 'rgba(232,213,183,0.85)' }}>
-            <span>d20 {modLabel}</span>
-            <span style={{ color: 'rgba(201,169,110,0.4)' }}>vs</span>
-            <span style={{ color: '#fca5a5' }}>DC {dc}</span>
+          <div className="text-center text-sm font-fantasy" style={{ color: 'rgba(232,213,183,0.85)' }}>
+            <div>d20 {modLabel} <span style={{ color: 'rgba(201,169,110,0.4)' }}>vs</span> <span style={{ color: '#fca5a5' }}>DC {dc}</span></div>
+            {breakdown && <div className="text-xs mt-1" style={{ color: 'rgba(201,169,110,0.65)' }}>Base {breakdown.base_skill >= 0 ? '+' : ''}{breakdown.base_skill} · Pass without Trace {breakdown.pwt_active ? '+10' : '+0'} · Total {breakdown.total >= 0 ? '+' : ''}{breakdown.total}</div>}
           </div>
 
           {(advantage || disadvantage) && (

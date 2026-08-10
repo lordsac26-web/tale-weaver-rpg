@@ -150,4 +150,13 @@ export const getAttackConcealment = (arr) => {
 // Only effects explicitly marked as ending on attack are consumed. This preserves
 // effects such as Greater Invisibility without special-case client logic.
 export const consumeBreakOnAttackConditions = (arr) =>
-  (arr || []).filter((condition) => !(typeof condition === 'object' && condition?.break_on_attack));
+  (arr || []).filter((condition) => {
+    if (typeof condition !== 'object' || !condition) return true;
+    const name = normalizeConditionName(condition.name);
+    return !condition.break_on_attack && !['stealthed', 'hidden', 'concealed'].includes(name);
+  });
+
+export const concealmentAttributions = (arr) => getAttackConcealment(arr).map((condition) => {
+  const name = normalizeConditionName(condition.name);
+  return ['stealthed', 'hidden', 'concealed'].includes(name) ? 'Stealth setup: unseen attacker' : `Concealment: ${condition.display_name || condition.name}`;
+});
