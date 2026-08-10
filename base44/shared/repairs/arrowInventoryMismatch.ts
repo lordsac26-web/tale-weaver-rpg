@@ -27,8 +27,12 @@ function collectEvidence(root, source) {
 }
 
 const isPreShotPath = (path) => /(pre.?attack|before.?attack|inventory.?before|ammo.?before|pre.?shot)/i.test(path);
+const OWNER_ATTESTED_POLICY = 'owner_attested_catalog_pack';
+const EXPECTED_ATTESTATION = { source: 'character_sheet_add_item', catalog_name: 'Arrows (20)', packs_added: 1, shots_already_committed: 1, expected_remaining_units: 19 };
+const exactAttestation = (value) => !!value && Object.keys(EXPECTED_ATTESTATION).every((key) => value[key] === EXPECTED_ATTESTATION[key]) && Object.keys(value).length === Object.keys(EXPECTED_ATTESTATION).length;
+const exactLegacyZeroPack = (item) => item?.name === 'Arrows (20)' && item?.category === 'Ammunition' && Number(item?.quantity) === 0 && !item?.unit && !item?.stack_semantics && (Number(item?.pack_size) || isAmmoPackage(item?.name)) === 20;
 
-export async function auditRepairArrowInventoryMismatchCore({ db, scope, mode, requestId, expectedHashes = null }) {
+export async function auditRepairArrowInventoryMismatchCore({ db, scope, mode, requestId, expectedHashes = null, applyPolicy = null, ownerAttestation = null, contract = ARROW_INVENTORY_CONTRACT }) {
   if (!requestId || !['dry_run', 'apply'].includes(mode)) return { status: 400, body: { error: 'mode dry_run/apply and request_id are required', writes: 0 } };
   const [character, session, combat] = await Promise.all([
     db.entities.Character.get(scope.characterId), db.entities.GameSession.get(scope.sessionId), db.entities.CombatLog.get(scope.combatId),
@@ -39,7 +43,10 @@ export async function auditRepairArrowInventoryMismatchCore({ db, scope, mode, r
   if (mode === 'apply' && prior) return { status: 200, body: { ...prior, already_processed: true, writes: 0 } };
 
   const protectedHashes = { character: await hash(semantic(character)), session: await hash(semantic(session)), combat: await hash(semantic(combat)) };
-  const hashesMatch = mode === 'dry_run' || (!!expectedHashes && Object.entries(protectedHashes).every(([key, value]) => expectedHashes[key] === value));
+  const ownerAttested = applyPolicy === OWNER_ATTESTED_POLICY;
+  const hashesMatch = ownerAttested
+    ? !!expectedHashes && Object.entries(protectedHashes).every(([key, value]) => expectedHashes[key] === value)
+    : mode === 'dry_run' || (!!expectedHashes && Object.entries(protectedHashes).every(([key, value]) => expectedHashes[key] === value));
   const evidence = [
     ...collectEvidence(character.inventory || [], 'Character.inventory'),
     ...collectEvidence(character.long_rest_abilities || {}, 'Character.receipts'),
@@ -68,20 +75,28 @@ export async function auditRepairArrowInventoryMismatchCore({ db, scope, mode, r
     && (combat.log_entries || []).length === 2 && latest?.action === 'attack' && knownCommittedAttackState
     && target?.hp_max === 16 && actionReceipts.filter((entry) => entry?.action === 'player_attack').length === 0
     && noAmmoReceipt.length === 0 && currentUnits === 0;
+  const attestedCandidates = arrows.filter(({ item }) => exactLegacyZeroPack(item));
   const guards = {
-    exact_ids_and_linkage: scope.characterId === ARROW_INVENTORY_CONTRACT.characterId && scope.sessionId === ARROW_INVENTORY_CONTRACT.sessionId && scope.combatId === ARROW_INVENTORY_CONTRACT.combatId && session.character_id === character.id && session.combat_state?.combat_id === combat.id && combat.session_id === session.id,
+    exact_ids_and_linkage: scope.characterId === contract.characterId && scope.sessionId === contract.sessionId && scope.combatId === contract.combatId && session.character_id === character.id && session.combat_state?.combat_id === combat.id && combat.session_id === session.id,
     current_authoritative_quantity_zero: arrows.length > 0 && currentUnits === 0,
     consumed_shot_not_blindly_refunded: true,
     latest_rejected_no_ammo_attempt_inert: latestRejectedWasInert,
     exact_precondition_hashes: hashesMatch,
+    ...(ownerAttested ? {
+      exact_owner_attestation: exactAttestation(ownerAttestation),
+      exact_single_legacy_zero_pack: arrows.length === 1 && attestedCandidates.length === 1,
+    } : {}),
   };
   const failedGuards = Object.entries(guards).filter(([, pass]) => !pass).map(([key]) => key);
-  const repairDecision = provenance === 'legacy_pack_quantity_1' ? 'normalize_remaining_to_19'
+  const repairDecision = ownerAttested ? (failedGuards.length === 0 ? 'owner_attested_normalize_0_to_19' : 'reject_owner_attested_policy')
+    : provenance === 'legacy_pack_quantity_1' ? 'normalize_remaining_to_19'
     : provenance === 'individual_arrow_quantity_1' ? 'leave_quantity_0' : 'reject_apply_ambiguous';
+  const applySafe = failedGuards.length === 0 && (ownerAttested || provenance !== 'ambiguous');
   const report = {
     success: failedGuards.length === 0, mode, dry_run: mode === 'dry_run', request_id: requestId, writes: 0,
-    apply_safe: failedGuards.length === 0 && provenance !== 'ambiguous', guards, failed_guards: failedGuards,
-    protected_hashes: protectedHashes, provenance, repair_decision: repairDecision,
+    apply_policy: applyPolicy, apply_safe: applySafe, guards, failed_guards: failedGuards,
+    protected_hashes: protectedHashes, provenance: ownerAttested ? 'owner_attested_catalog_pack' : provenance, repair_decision: repairDecision,
+    migration_proposal: ownerAttested && applySafe ? { stack_index: attestedCandidates[0].index, before_units: 0, after_units: 19, pack_size: 20, committed_shots: 1 } : null,
     current: { arrow_stacks: arrows.map(({ item, index }) => ({ index, ...itemShape(item) })), total_authoritative_units: currentUnits },
     searched_sources: ['Character.inventory', 'Character.long_rest_abilities vendor/ammo/audit receipts', 'GameSession world_state/story_log/combat_state', 'CombatLog world_state/log_entries/loot_collected'],
     evidence, pre_shot_candidates: preShot,
@@ -89,13 +104,15 @@ export async function auditRepairArrowInventoryMismatchCore({ db, scope, mode, r
     refund_proposal: latestRejectedWasInert ? null : 'Guarded refund review required; no mutation included in this deployment.',
   };
   if (mode === 'dry_run') return { status: 200, body: report };
-  if (failedGuards.length || provenance === 'ambiguous') return { status: 409, body: { error: provenance === 'ambiguous' ? 'Pre-shot ammunition provenance is ambiguous or unavailable; no write was made.' : 'Protected-state guards failed; no write was made.', ...report } };
-  if (provenance === 'individual_arrow_quantity_1') return { status: 200, body: { ...report, apply_safe: true, already_correct: true, writes: 0 } };
+  if (failedGuards.length || (!ownerAttested && provenance === 'ambiguous')) return { status: 409, body: { error: !ownerAttested && provenance === 'ambiguous' ? 'Pre-shot ammunition provenance is ambiguous or unavailable; no write was made.' : 'Protected-state guards failed; no write was made.', ...report } };
+  if (!ownerAttested && provenance === 'individual_arrow_quantity_1') return { status: 200, body: { ...report, apply_safe: true, already_correct: true, writes: 0 } };
 
-  const firstArrow = arrows[0];
+  const firstArrow = ownerAttested ? attestedCandidates[0] : arrows[0];
   const inventory = [...(character.inventory || [])];
-  inventory[firstArrow.index] = { ...firstArrow.item, name: 'Arrows', category: 'Ammunition', quantity: 19, unit: 'arrow', stack_semantics: 'individual', pack_size: 20 };
-  const receipt = { request_id: requestId, correction_type: 'legacy_arrow_pack_after_one_shot', before_units: 0, after_units: 19, provenance, protected_hashes: protectedHashes };
+  inventory[firstArrow.index] = { ...firstArrow.item, name: 'Arrows', category: 'Ammunition', quantity: 19, unit: 'arrow', stack_semantics: 'individual', pack_size: 20, ...(ownerAttested ? { source: 'Character Sheet Add Item' } : {}) };
+  const receipt = ownerAttested
+    ? { request_id: requestId, correction_type: 'owner_attested_ammunition_migration', source: 'character_sheet_add_item', catalog_name: 'Arrows (20)', before_units: 0, after_units: 19, pack_size: 20, committed_shots: 1, protected_hashes: protectedHashes }
+    : { request_id: requestId, correction_type: 'legacy_arrow_pack_after_one_shot', before_units: 0, after_units: 19, provenance, protected_hashes: protectedHashes };
   await db.entities.Character.update(character.id, { inventory, long_rest_abilities: { ...(character.long_rest_abilities || {}), __arrow_inventory_audit_receipts: [...auditReceipts.slice(-24), receipt] } });
   return { status: 200, body: { ...report, success: true, writes: 1, receipt } };
 }

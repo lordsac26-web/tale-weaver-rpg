@@ -12,7 +12,7 @@ export default async function auditRepairArrowInventoryMismatch(req) {
     if (body.mode === 'apply' && !body.expected_hashes) return Response.json({ error: 'expected_hashes are required for apply', writes: 0 }, { status: 400 });
     const character = await base44.asServiceRole.entities.Character.get(body.character_id);
     if (!character || character.created_by_id !== user.id) return Response.json({ error: 'Protected Character owner mismatch', writes: 0 }, { status: 403 });
-    const result = await auditRepairArrowInventoryMismatchCore({ db: base44.asServiceRole, scope: { characterId: body.character_id, sessionId: body.session_id, combatId: body.combat_id }, mode: body.mode, requestId: body.request_id, expectedHashes: body.expected_hashes });
+    const result = await auditRepairArrowInventoryMismatchCore({ db: base44.asServiceRole, scope: { characterId: body.character_id, sessionId: body.session_id, combatId: body.combat_id }, mode: body.mode, requestId: body.request_id, expectedHashes: body.expected_hashes, applyPolicy: body.apply_policy, ownerAttestation: body.owner_attestation });
     return Response.json(result.body, { status: result.status });
   } catch (error) { return Response.json({ error: error.message || 'Arrow inventory mismatch audit failed', writes: 0 }, { status: 500 }); }
 }
