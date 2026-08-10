@@ -59,6 +59,22 @@ export default async function testPausedPwtStealthModifierRegression(req) {
     const replay = await auditRepairLatestPwtStealth({ db: base44.asServiceRole, scope, requestId: `${token}:repair`, mode: 'apply' });
     results.push({ name: 'repair request replay writes zero', pass: replay.status === 200 && replay.body.already_processed === true && replay.body.writes === 0 });
 
+    const missing = await make('missing-d20-certain-success', { stealthed: true });
+    const missingScope = { characterId: missing.character.id, sessionId: missing.session.id };
+    const missingBefore = { character: await base44.asServiceRole.entities.Character.get(missingScope.characterId), session: await base44.asServiceRole.entities.GameSession.get(missingScope.sessionId) };
+    const missingDryRun = await auditRepairLatestPwtStealth({ db: base44.asServiceRole, scope: missingScope, requestId: `${token}:missing-d20`, mode: 'dry_run' });
+    const missingRepair = await auditRepairLatestPwtStealth({ db: base44.asServiceRole, scope: missingScope, requestId: `${token}:missing-d20`, mode: 'apply', preconditionHashes: missingDryRun.body.protected_hashes });
+    const missingAfter = { character: await base44.asServiceRole.entities.Character.get(missingScope.characterId), session: await base44.asServiceRole.entities.GameSession.get(missingScope.sessionId) };
+    const missingReceipt = missingAfter.session.story_log[59].skill_check;
+    results.push({ name: 'missing d20 repairs only when minimum roll proves deterministic success', pass: missingDryRun.body.guards.original_d20_available === false && missingDryRun.body.guards.deterministic_success_without_d20 === true && missingRepair.status === 200 && missingReceipt.success === true });
+    results.push({ name: 'deterministic legacy repair fabricates no d20 or exact total', pass: missingReceipt.raw_d20 === null && missingReceipt.final_total === null && missingReceipt.all_rolls.length === 0 });
+    results.push({ name: 'deterministic legacy receipt stores minimum total and plus17 attribution', pass: missingReceipt.minimum_total === 18 && missingReceipt.modifier_total === 17 && missingReceipt.modifier_breakdown.base_skill === 7 && missingReceipt.modifier_breakdown.effect_bonus === 10 && /original d20 was not persisted/i.test(missingReceipt.legacy_note) });
+    results.push({ name: 'deterministic repair preserves one story entry and changes only its outcome marker', pass: missingAfter.session.story_log.length === missingBefore.session.story_log.length && /SUCCESS/.test(missingAfter.session.story_log[59].player_choice) && !/FAILURE/.test(missingAfter.session.story_log[59].player_choice) && missingAfter.session.story_log[59].text === missingBefore.session.story_log[59].text });
+    results.push({ name: 'deterministic repair preserves exactly one existing Stealthed condition', pass: missingAfter.character.conditions.filter((condition) => condition.name === 'Stealthed').length === 1 && missingRepair.body.writes === 1 });
+    results.push({ name: 'deterministic repair causes no attack damage or unrelated character mutation', pass: missingDryRun.body.attack_or_damage_already_occurred === false && missingBefore.character.hp_current === missingAfter.character.hp_current && JSON.stringify(missingBefore.character.inventory) === JSON.stringify(missingAfter.character.inventory) && missingBefore.character.xp === missingAfter.character.xp });
+    const missingReplay = await auditRepairLatestPwtStealth({ db: base44.asServiceRole, scope: missingScope, requestId: `${token}:missing-d20`, mode: 'apply' });
+    results.push({ name: 'deterministic missing-d20 repair replay writes zero', pass: missingReplay.status === 200 && missingReplay.body.already_processed === true && missingReplay.body.writes === 0 });
+
     const already = await make('already-success', { raw: 10, recordedSuccess: true, stealthed: true });
     const alreadyScope = { characterId: already.character.id, sessionId: already.session.id };
     const alreadyDryRun = await auditRepairLatestPwtStealth({ db: base44.asServiceRole, scope: alreadyScope, requestId: `${token}:metadata`, mode: 'dry_run' });
