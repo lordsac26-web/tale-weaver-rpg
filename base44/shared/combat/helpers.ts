@@ -132,21 +132,21 @@ export const advanceTurn = (currentIndex, currentRound, combatantsArr) => {
 };
 
 // ─── CENTRALIZED ATTACK ROLL (PHB p.173) ────────────────────────────────────
-export const resolveAttackRoll = ({ advSources = [], disSources = [], forceCrit = false, rerollOnes = false } = {}) => {
+export const resolveAttackRoll = ({ advSources = [], disSources = [], forceCrit = false, rerollOnes = false, rollD20Fn = rollD20 } = {}) => {
   const hasAdv = advSources.some(Boolean);
   const hasDis = disSources.some(Boolean);
   // PHB p.173: if both advantage and disadvantage are present, they cancel —
   // regardless of how many of each — and you roll a single straight d20.
   const netAdvantage = hasAdv && !hasDis;
   const netDisadvantage = hasDis && !hasAdv;
-  const r1 = rollD20();
-  const r2 = (netAdvantage || netDisadvantage) ? rollD20() : r1;
+  const r1 = rollD20Fn();
+  const r2 = (netAdvantage || netDisadvantage) ? rollD20Fn() : r1;
   let roll = netAdvantage ? Math.max(r1, r2) : netDisadvantage ? Math.min(r1, r2) : r1;
   // Halfling Lucky (PHB p.28): reroll natural 1s
-  if (rerollOnes && roll === 1) roll = rollD20();
+  if (rerollOnes && roll === 1) roll = rollD20Fn();
   return {
     roll,
-    rolls: [r1, r2],
+    rolls: (netAdvantage || netDisadvantage) ? [r1, r2] : [r1],
     advantage: netAdvantage,
     disadvantage: netDisadvantage,
     isCritical: forceCrit || roll === 20,

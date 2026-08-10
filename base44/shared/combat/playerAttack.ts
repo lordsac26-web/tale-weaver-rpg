@@ -8,12 +8,13 @@ import {
   getActionsPerTurn, resolveActionAndAdvance,
 } from './helpers.ts';
 import { finalizeAndPersistCombat } from './persistence.ts';
-import { addStructuredCondition, buildStructuredCondition, concealmentAttributions, consumeBreakOnAttackConditions, getAttackConcealment } from './conditions.ts';
+import { addStructuredCondition, buildStructuredCondition, concealmentAttributions, consumeBreakOnAttackConditions, getAttackConcealment, mergeAttackConcealment } from './conditions.ts';
 import { findHuntersMark, rollHuntersMarkBonus, removeHuntersMark } from './huntersMark.ts';
 import { ammoForWeapon, consumeAmmunition } from '../ammunition.ts';
+import { rollWeaponBaseDamage } from './weaponDamage.ts';
 
 export async function handlePlayerAttack(ctx) {
-  const { base44, session_id, combat_id, character_id, payload } = ctx;
+  const { base44, session_id, combat_id, character_id, payload, request_id, roll_d20 = rollD20 } = ctx;
   const { target_id, weapon, spell, modifiers = {} } = payload;
   const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
   // User-scoped fetch: RLS only returns the record if the user may read (owns) it,
@@ -27,6 +28,8 @@ export async function handlePlayerAttack(ctx) {
   const isHordeBreakerAttack = modifiers.horde_breaker === true;
 
   const combatants = [...combatLog.combatants];
+  const playerCombatant = combatants.find(c => c.type === 'player' && c.id === character_id);
+  const authoritativePlayerConditions = [...(playerCombatant?.conditions || []), ...(character.conditions || [])];
   const target = combatants.find(c => c.id === target_id);
   if (!target) return Response.json({ error: 'Target not found', invalid: true }, { status: 404 });
   if (target.type === 'enemy' && (!target.is_conscious || (target.hp_current ?? target.hp ?? 0) <= 0)) {
@@ -701,14 +704,12 @@ export async function handlePlayerAttack(ctx) {
   }
 
   // Condition checks — apply RAW condition mechanics (PHB p.290-292)
-  const conditions = (character.conditions || []).map(c => c.name || c);
+  const conditions = authoritativePlayerConditions.map(c => c?.name || c);
 
   // Structured concealment supplies a named advantage source at the one central
   // resolver. Only states explicitly marked break_on_attack are consumed after
   // the attack. Legacy invisible remains readable but is never silently removed.
-  const concealmentStates = getAttackConcealment(character.conditions);
-  const hasLegacyInvisible = conditions.includes('invisible') && concealmentStates.length === 0;
-  const attackConcealment = [...concealmentStates, ...(hasLegacyInvisible ? [{ name: 'invisible', break_on_attack: false }] : [])];
+  const attackConcealment = mergeAttackConcealment(playerCombatant?.conditions, character.conditions);
   if (attackConcealment.length) advSources.push(true);
   // Kobold Draconic Cry (activated via racialActions): advantage on your attacks this turn
   if (combatLog.world_state?.draconic_cry_active) advSources.push(true);
@@ -768,10 +769,10 @@ export async function handlePlayerAttack(ctx) {
 
   // ── SINGLE CENTRALIZED ROLL: all sources gathered, cancel rule applied once ──
   const isHalfling = (character.race || '') === 'Halfling';
-  let attackResult = resolveAttackRoll({ advSources, disSources, forceCrit, rerollOnes: isHalfling });
+  let attackResult = resolveAttackRoll({ advSources, disSources, forceCrit, rerollOnes: isHalfling, rollD20Fn: roll_d20 });
   // Lucky feat (PHB p.167): reroll the d20 once and keep the better result.
   if (useLuckyPoint) {
-    const luckyRoll = rollD20();
+    const luckyRoll = roll_d20();
     if (luckyRoll > attackResult.roll) {
       attackResult = { ...attackResult, roll: luckyRoll, isCritical: forceCrit || luckyRoll === 20, isMiss: luckyRoll === 1 };
     }
@@ -807,8 +808,8 @@ export async function handlePlayerAttack(ctx) {
   let baseDamage = 0;
   let concentrationBrokenSelf = null; // set if this attack broke the player's own concentration
   const isSpellAttack = !!spell;
-  const advantageSources = concealmentAttributions(character.conditions);
-  const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, spell_name: spell?.name || null, raw_d20: attackResult.roll, all_rolls: attackResult.rolls, advantage: attackResult.advantage, disadvantage: attackResult.disadvantage, advantage_sources: advantageSources };
+  const advantageSources = concealmentAttributions(attackConcealment);
+  const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, target_id, spell_name: spell?.name || null, weapon: spell ? null : { name: weapon?.name || 'Weapon', damage_dice: damageDice, damage_type: weapon?.damage_type || null, damage_bonus: weapon?.damage_bonus || 0, attack_bonus: weapon?.attack_bonus || 0, type: weapon?.type || attackType, properties: weapon?.properties || [] }, request_id: request_id || null, raw_d20: attackResult.roll, selected_d20: attackResult.roll, all_rolls: attackResult.rolls, attack_bonus: attackMod, target_ac: target.ac + targetACBonus, advantage: attackResult.advantage, disadvantage: attackResult.disadvantage, advantage_sources: advantageSources };
 
   if (hit) {
     // H5 fix: guard non-NdM dice strings (e.g. "1d8+1", "2d6 fire") — extract the
@@ -1030,12 +1031,14 @@ export async function handlePlayerAttack(ctx) {
     logEntry.hunters_mark_bonus = huntersMarkDamage;
     logEntry.hunters_mark_rolls = huntersMarkRolls;
     const actionLabel = spell ? `casts ${spell.name} at` : (isCritical ? 'CRITICALLY strikes' : 'hits');
-    logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage!${huntersMark ? ` Base ${baseDamage} + Hunter's Mark ${huntersMarkDamage} (${huntersMarkRolls.join('+') || 0}) = ${damage}.` : ''} (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${advantageSources.length ? ' Advantage: attacking from concealment.' : ''}${stormRuneBonus ? ` ⛈️ Storm Rune guided the strike (+${stormRuneBonus} to hit).` : ''}${fireRuneText}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
+    const attackDisplay = attackResult.advantage ? `Advantage [${attackResult.rolls.join(', ')}] → ${attackRoll}; ${attackRoll}+${attackMod}=${totalAttack}` : attackResult.disadvantage ? `Disadvantage [${attackResult.rolls.join(', ')}] → ${attackRoll}; ${attackRoll}+${attackMod}=${totalAttack}` : `${attackRoll}+${attackMod}=${totalAttack}`;
+    logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage!${huntersMark ? ` Base ${baseDamage} + Hunter's Mark ${huntersMarkDamage} (${huntersMarkRolls.join('+') || 0}) = ${damage}.` : ''} (Roll: ${attackDisplay} vs AC ${target.ac})${advantageSources.length ? ` Advantage source: ${advantageSources.join('; ')}.` : ''}${stormRuneBonus ? ` ⛈️ Storm Rune guided the strike (+${stormRuneBonus} to hit).` : ''}${fireRuneText}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
   } else {
     logEntry.hit = false;
     logEntry.attack_roll = totalAttack;
     const missLabel = spell ? `${spell.name} misses` : 'misses';
-    logEntry.text = `${character.name} ${missLabel} ${target.name}! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})`;
+    const attackDisplay = attackResult.advantage ? `Advantage [${attackResult.rolls.join(', ')}] → ${attackRoll}; ${attackRoll}+${attackMod}=${totalAttack}` : attackResult.disadvantage ? `Disadvantage [${attackResult.rolls.join(', ')}] → ${attackRoll}; ${attackRoll}+${attackMod}=${totalAttack}` : `${attackRoll}+${attackMod}=${totalAttack}`;
+    logEntry.text = `${character.name} ${missLabel} ${target.name}! (Roll: ${attackDisplay} vs AC ${target.ac})${advantageSources.length ? ` Advantage source: ${advantageSources.join('; ')}.` : ''}`;
   }
 
   // Consume only structured concealment states whose canonical rule explicitly
@@ -1043,8 +1046,7 @@ export async function handlePlayerAttack(ctx) {
   if (attackConcealment.some((condition) => condition.break_on_attack || ['stealthed', 'hidden', 'concealed'].includes(String(condition.name || '').toLowerCase()))) {
     const remainingConditions = consumeBreakOnAttackConditions(character.conditions);
     await base44.asServiceRole.entities.Character.update(character_id, { conditions: remainingConditions });
-    const pcInv = combatants.find(c => c.type === 'player');
-    if (pcInv) pcInv.conditions = consumeBreakOnAttackConditions(pcInv.conditions);
+    if (playerCombatant) playerCombatant.conditions = consumeBreakOnAttackConditions(playerCombatant.conditions);
   }
 
   const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);

@@ -116,6 +116,12 @@ export default function CombatLog({ logEntries = [], player }) {
                 <div className="mt-0.5">{icon}</div>
                 <div className="flex-1 min-w-0">
                   <p>{formatEntryText(entry)}</p>
+                  {entry.advantage && Array.isArray(entry.all_rolls) && entry.all_rolls.length === 2 && (
+                    <span className="inline-block mt-0.5 mr-1 px-1.5 py-0.5 rounded text-xs font-fantasy"
+                      style={{ background: 'rgba(20,70,45,0.55)', border: '1px solid rgba(80,200,130,0.4)', color: '#86efac', fontSize: '0.6rem' }}>
+                      ADVANTAGE: {entry.all_rolls.join(' / ')} → {entry.selected_d20 ?? entry.raw_d20}
+                    </span>
+                  )}
                   {entry.critical && (
                     <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-xs font-fantasy"
                       style={{ background: 'rgba(100,70,5,0.6)', border: '1px solid rgba(240,192,64,0.4)', color: '#f0c040', fontSize: '0.6rem', letterSpacing: '0.05em' }}>

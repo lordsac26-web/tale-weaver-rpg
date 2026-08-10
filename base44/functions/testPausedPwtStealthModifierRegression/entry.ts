@@ -84,7 +84,7 @@ export default async function testPausedPwtStealthModifierRegression(req) {
 
     const stealthConditions = [{ name: 'Alert' }, { name: 'Stealthed', source: 'story', duration: 'scene' }];
     const concealment = getAttackConcealment(stealthConditions); const attributions = concealmentAttributions(stealthConditions); const revealed = consumeBreakOnAttackConditions(stealthConditions);
-    results.push({ name: 'attack from Stealthed grants one attributed advantage source', pass: concealment.length === 1 && attributions.length === 1 && attributions[0] === 'Stealth setup: unseen attacker' });
+    results.push({ name: 'attack from Stealthed grants one attributed advantage source', pass: concealment.length === 1 && attributions.length === 1 && attributions[0] === 'Attacking from Stealthed/concealed' });
     results.push({ name: 'attack reveal consumes Stealthed while preserving unrelated conditions', pass: revealed.length === 1 && revealed[0].name === 'Alert' });
 
     const liveAfter = await Promise.all(LIVE_IDS.map((id, index) => base44.asServiceRole.entities[index ? 'GameSession' : 'Character'].get(id)));

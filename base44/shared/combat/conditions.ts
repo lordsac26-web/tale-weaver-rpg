@@ -144,19 +144,29 @@ export const expireStructuredConditions = (arr, { phase, round = null, now = Dat
 // the same named advantage source through the single attack-roll resolver.
 export const getAttackConcealment = (arr) => {
   const names = new Set(['stealthed', 'hidden', 'concealed', 'invisible']);
-  return (arr || []).filter((condition) => typeof condition === 'object' && condition && names.has(normalizeConditionName(condition.name)));
+  return (arr || []).map((condition) => typeof condition === 'string' ? { name: condition } : condition)
+    .filter((condition) => condition && names.has(normalizeConditionName(condition.name)));
+};
+
+export const mergeAttackConcealment = (...conditionLists) => {
+  const merged = new Map();
+  for (const condition of conditionLists.flatMap(getAttackConcealment)) {
+    const key = normalizeConditionName(condition.name);
+    if (!merged.has(key)) merged.set(key, condition);
+  }
+  return [...merged.values()];
 };
 
 // Only effects explicitly marked as ending on attack are consumed. This preserves
 // effects such as Greater Invisibility without special-case client logic.
 export const consumeBreakOnAttackConditions = (arr) =>
   (arr || []).filter((condition) => {
-    if (typeof condition !== 'object' || !condition) return true;
-    const name = normalizeConditionName(condition.name);
-    return !condition.break_on_attack && !['stealthed', 'hidden', 'concealed'].includes(name);
+    if (!condition) return true;
+    const name = normalizeConditionName(typeof condition === 'string' ? condition : condition.name);
+    if (['stealthed', 'hidden', 'concealed'].includes(name)) return false;
+    return typeof condition !== 'object' || !condition.break_on_attack;
   });
 
-export const concealmentAttributions = (arr) => getAttackConcealment(arr).map((condition) => {
-  const name = normalizeConditionName(condition.name);
-  return ['stealthed', 'hidden', 'concealed'].includes(name) ? 'Stealth setup: unseen attacker' : `Concealment: ${condition.display_name || condition.name}`;
-});
+export const concealmentAttributions = (arr) => getAttackConcealment(arr).length
+  ? ['Attacking from Stealthed/concealed']
+  : [];

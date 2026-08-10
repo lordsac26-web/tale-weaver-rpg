@@ -2,6 +2,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { auditRepairAmbushSplitBrain, deriveAuthoritativeTargetState } from '../../shared/repairs/ambushSplitBrain.ts';
 import { classifyPrecisionAmbushIntent, normalizePendingAmbushRoster, pendingAmbushNarrative, stripGeneratedChoiceAnnotations } from '../../shared/story/generatedChoiceIntent.js';
 import { concealmentAttributions } from '../../shared/combat/conditions.ts';
+import { handlePlayerAttack } from '../../shared/combat/playerAttack.ts';
+import { executePlayerAttackCore } from '../../shared/combat/playerAttackCore.ts';
 
 const LIVE = ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256'];
 const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -33,7 +35,7 @@ export default async function testAmbushSplitBrainRegression(req) {
     results.push({ name: 'pending ambush roster requires one living complete target', pass: normalized.ok && normalized.target.current_hp === 27 && normalized.target.authoritative_state === 'alive_pending_attack' });
     results.push({ name: 'narrative before attack receipt states setup only and no kill', pass: /strike itself is still pending/i.test(pendingAmbushNarrative('Necromancer')) && !/dies|dead|killed/i.test(pendingAmbushNarrative('Necromancer')) });
     const ambushAttribution = concealmentAttributions([{ name: 'Stealthed', source: 'story', duration: 'scene' }]);
-    results.push({ name: 'successful Stealthed setup grants exactly one attributed attack advantage source', pass: ambushAttribution.length === 1 && ambushAttribution[0] === 'Stealth setup: unseen attacker' });
+    results.push({ name: 'successful Stealthed setup grants exactly one attributed attack advantage source', pass: ambushAttribution.length === 1 && ambushAttribution[0] === 'Attacking from Stealthed/concealed' });
 
     const dry = await auditRepairAmbushSplitBrain({ db: base44.asServiceRole, scope, requestId: `${token}:repair`, mode: 'dry_run' });
     results.push({ name: 'raw7 plus authoritative17 is total24 success with one PWT plus10', pass: dry.body.corrected_stealth.raw_d20 === 7 && dry.body.corrected_stealth.total === 24 && dry.body.corrected_stealth.breakdown.components.filter((entry) => entry.source === 'Pass without Trace' && entry.value === 10).length === 1 });
@@ -46,6 +48,11 @@ export default async function testAmbushSplitBrainRegression(req) {
     results.push({ name: 'lethal prose is minimally replaced by successful setup pending attack', pass: /approach succeeds/i.test(afterSession.story_log[1].text) && /still pending/i.test(afterSession.story_log[1].text) && !/dies|dead|bites true/i.test(afterSession.story_log[1].text) });
     const replay = await auditRepairAmbushSplitBrain({ db: base44.asServiceRole, scope, requestId: `${token}:repair`, mode: 'apply' });
     results.push({ name: 'repair replay writes zero and creates no second combat', pass: replay.body.already_processed && replay.body.writes === 0 && (await base44.asServiceRole.entities.CombatLog.filter({ session_id: session.id })).length === 1 });
+    const uiPayload = { target_id: sourceTarget.id, weapon: { name: 'Longbow', damage_dice: '1d8', damage_type: 'piercing', type: 'ranged', properties: [], attack_bonus: 0, damage_bonus: 0 }, spell: null, modifiers: {}, twin_target_id: null };
+    let ambushRollIndex = 0; const ambushRolls = [3, 17];
+    const productionAttack = await executePlayerAttackCore({ base44, sessionId: session.id, combatId: combat.id, characterId: character.id, ownerId: user.id, requestId: `${token}:ui-attack`, payload: uiPayload, handler: handlePlayerAttack, rollD20Fn: () => ambushRolls[Math.min(ambushRollIndex++, ambushRolls.length - 1)] });
+    results.push({ name: 'repaired ambush uses real production player_attack payload with exactly two d20s', pass: productionAttack.status === 200 && productionAttack.body.all_rolls?.length === 2 && productionAttack.body.log_entry?.advantage === true });
+    results.push({ name: 'real production attack persists request and Stealthed attribution before display', pass: productionAttack.body.log_entry?.request_id === `${token}:ui-attack` && productionAttack.body.log_entry?.advantage_sources?.length === 1 && /Attacking from Stealthed\/concealed/.test(productionAttack.body.log_entry?.text || '') });
 
     const dead = deriveAuthoritativeTargetState([{ id: 'a', action: 'player_attack', outcome: { target_hp: 0, log_entry: { target: 'Necromancer' } } }]);
     const alive = deriveAuthoritativeTargetState([{ id: 'b', action: 'player_attack', outcome: { target_hp: 4, log_entry: { target: 'Necromancer' } } }]);
