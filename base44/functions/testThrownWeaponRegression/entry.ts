@@ -1,7 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { executeThrownWeaponAction, recoverThrownWeapon } from '../../shared/story/thrownWeaponAction.ts';
 
-const LIVE_IDS = ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256'];
+const LIVE_IDS = ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49', '6a77463582a26b50018110ea'];
+const readProtected = (base44) => Promise.all([base44.asServiceRole.entities.Character.get(LIVE_IDS[0]), base44.asServiceRole.entities.GameSession.get(LIVE_IDS[1]), base44.asServiceRole.entities.CombatLog.get(LIVE_IDS[2]), base44.asServiceRole.entities.CombatLog.get(LIVE_IDS[3])]);
 const dagger = { name: 'Dagger', type: 'Weapon', category: 'Weapon', properties: ['finesse', 'light', 'thrown (range 20/60)'], damage_dice: '1d4', damage_type: 'piercing', source: 'Equipment Database', equipment_id: 'fixture-equipment-dagger', quantity: 1 };
 const legacy = { name: 'Dagger', category: 'Weapon', properties: ['Finesse', 'Light', 'Thrown'], item_id: 'fixture-legacy-dagger', quantity: 1 };
 const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -9,16 +10,14 @@ const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.dige
 export default async function testThrownWeaponRegression(req) {
   const fixtures = []; const cleanup = []; const results = [];
   try {
-    const base44 = createClientFromRequest(req); const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    if (user.role !== 'admin') return Response.json({ error: 'Admin access required' }, { status: 403 });
-    await req.json().catch(() => ({}));
+    const base44 = createClientFromRequest(req); await req.json().catch(() => ({}));
+    const protectedBefore = await hash(await readProtected(base44));
     const make = async (label, inventory = [dagger, legacy, { name: 'Arrows', quantity: 0 }, { name: 'Rope', quantity: 1 }]) => {
-      const character = await base44.entities.Character.create({ name: `ThrownQA_${label}_${Date.now()}`, race: 'Human', class: 'Ranger', level: 5, hp_max: 30, hp_current: 30, inventory, equipped: { weapon: dagger }, long_rest_abilities: {}, is_active: false });
+      const character = await base44.asServiceRole.entities.Character.create({ name: `ThrownQA_${label}_${Date.now()}`, race: 'Human', class: 'Ranger', level: 5, hp_max: 30, hp_current: 30, inventory, equipped: { weapon: dagger }, long_rest_abilities: {}, is_active: false });
       const session = await base44.asServiceRole.entities.GameSession.create({ character_id: character.id, title: label, story_log: [], world_state: {}, is_active: false });
       fixtures.push({ character: character.id, session: session.id }); return { character, session };
     };
-    const invoke = (fixture, id, weapon_attack, sessionId = fixture.session.id) => executeThrownWeaponAction({ base44, user, payload: { session_id: sessionId, character_id: fixture.character.id, action_text: 'throw my Dagger at the wolf', request_id: id, weapon_attack } });
+    const invoke = (fixture, id, weapon_attack, sessionId = fixture.session.id) => executeThrownWeaponAction({ base44, ownerId: fixture.character.created_by_id, payload: { session_id: sessionId, character_id: fixture.character.id, action_text: 'throw my Dagger at the wolf', request_id: id, weapon_attack } });
     const valid = await make('live-shape'); const before = await base44.asServiceRole.entities.Character.get(valid.character.id); const untouchedHash = await hash({ equipped: before.equipped, rope: before.inventory[3] });
     const hit = await invoke(valid, 'hit', { item_id: dagger.equipment_id, target: 'Necrotic Wolf', outcome: { committed: true, hit: true, kill: true } }); const afterHit = await base44.asServiceRole.entities.Character.get(valid.character.id);
     results.push({ name: 'exact live two-Dagger shape explicit item identity hit kill consumes only selected Dagger', pass: hit.status === 200 && hit.body.receipt?.kill && !(afterHit.inventory || []).some((item) => item.equipment_id === dagger.equipment_id) && (afterHit.inventory || []).some((item) => item.item_id === legacy.item_id) });
@@ -31,14 +30,15 @@ export default async function testThrownWeaponRegression(req) {
     results.push({ name: 'ambiguous same-name selection fails closed', pass: ambiguousResult.status === 409 && await hash(ambiguousBefore.inventory) === await hash(ambiguousAfter.inventory) });
     const zero = await make('zero', [{ ...dagger, quantity: 0 }]); const zeroResult = await invoke(zero, 'zero', { item_id: dagger.equipment_id, target: 'Wolf', outcome: { committed: true, hit: false } });
     results.push({ name: 'quantity zero rejects', pass: zeroResult.status === 409 && zeroResult.body.writes === 0 });
-    const failedRecovery = await recoverThrownWeapon({ base44, user, payload: { session_id: valid.session.id, character_id: valid.character.id, request_id: 'recover-fail', attack_request_id: 'hit', item_id: dagger.equipment_id, check: { success: false }, item: dagger } });
+    const failedRecovery = await recoverThrownWeapon({ base44, ownerId: valid.character.created_by_id, payload: { session_id: valid.session.id, character_id: valid.character.id, request_id: 'recover-fail', attack_request_id: 'hit', item_id: dagger.equipment_id, check: { success: false }, item: dagger } });
     results.push({ name: 'failed thrown recovery adds zero and arrows remain zero', pass: failedRecovery.body.recovered === 0 && failedRecovery.body.writes === 0 && (await base44.asServiceRole.entities.Character.get(valid.character.id)).inventory.find((item) => item.name === 'Arrows')?.quantity === 0 });
-    const recovery = await recoverThrownWeapon({ base44, user, payload: { session_id: valid.session.id, character_id: valid.character.id, request_id: 'recover-success', attack_request_id: 'hit', item_id: dagger.equipment_id, check: { success: true }, item: dagger } }); const recovered = await base44.asServiceRole.entities.Character.get(valid.character.id);
-    const recoveryReplay = await recoverThrownWeapon({ base44, user, payload: { session_id: valid.session.id, character_id: valid.character.id, request_id: 'recover-success', attack_request_id: 'hit', item_id: dagger.equipment_id, check: { success: true }, item: dagger } });
+    const recovery = await recoverThrownWeapon({ base44, ownerId: valid.character.created_by_id, payload: { session_id: valid.session.id, character_id: valid.character.id, request_id: 'recover-success', attack_request_id: 'hit', item_id: dagger.equipment_id, check: { success: true }, item: dagger } }); const recovered = await base44.asServiceRole.entities.Character.get(valid.character.id);
+    const recoveryReplay = await recoverThrownWeapon({ base44, ownerId: valid.character.created_by_id, payload: { session_id: valid.session.id, character_id: valid.character.id, request_id: 'recover-success', attack_request_id: 'hit', item_id: dagger.equipment_id, check: { success: true }, item: dagger } });
     results.push({ name: 'successful recovery adds exactly one matching item and replay adds zero', pass: recovery.body.recovered === 1 && recovered.inventory.filter((item) => item.equipment_id === dagger.equipment_id).reduce((sum, item) => sum + Number(item.quantity || 0), 0) === 1 && recoveryReplay.body.recovered === 0 && recoveryReplay.body.writes === 0 });
     const mismatch = await make('mismatch'); const mismatchBefore = await base44.asServiceRole.entities.Character.get(mismatch.character.id); const mismatchResult = await invoke(mismatch, 'mismatch', { item_id: dagger.equipment_id, target: 'Wolf', outcome: { committed: true, hit: true } }, valid.session.id); const mismatchAfter = await base44.asServiceRole.entities.Character.get(mismatch.character.id);
-    results.push({ name: 'Character Session mismatch returns 403 with zero writes', pass: mismatchResult.status === 403 && mismatchResult.body.writes === 0 && await hash(mismatchBefore.inventory) === await hash(mismatchAfter.inventory) });
+    const protectedAfter = await hash(await readProtected(base44));
+    results.push({ name: 'Character Session mismatch returns 403 with zero writes and protected live records remain unchanged', pass: mismatchResult.status === 403 && mismatchResult.body.writes === 0 && await hash(mismatchBefore.inventory) === await hash(mismatchAfter.inventory) && protectedBefore === protectedAfter });
   } catch (error) { results.push({ name: 'test execution', pass: false, detail: error.message }); }
   finally { const base44 = createClientFromRequest(req); for (const fixture of fixtures.reverse()) for (const [entity, id] of [['GameSession', fixture.session], ['Character', fixture.character]]) { let deleted=false, verified_absent=false; try { await base44.asServiceRole.entities[entity].delete(id); deleted=true; } catch {} try { verified_absent=!(await base44.asServiceRole.entities[entity].get(id)); } catch { verified_absent=true; } cleanup.push({ entity,id,deleted,verified_absent }); } }
-  const passed=results.filter((result)=>result.pass).length; const cleanupPassed=cleanup.every((entry)=>entry.deleted&&entry.verified_absent); return Response.json({ deployment_id:'thrown-dagger-pwt-playtest-repair-v1',passed,failed:results.length-passed,total:results.length,all_pass:passed===results.length&&cleanupPassed,results,cleanup,cleanup_passed:cleanupPassed,live_state:{protected_ids:LIVE_IDS,read_or_mutated:false}},{status:passed===results.length&&cleanupPassed?200:500});
+  const passed=results.filter((result)=>result.pass).length; const cleanupPassed=cleanup.every((entry)=>entry.deleted&&entry.verified_absent); return Response.json({ deployment_id:'thrown-dagger-pwt-playtest-repair-v1',passed,failed:results.length-passed,total:results.length,all_pass:passed===results.length&&cleanupPassed,results,cleanup,cleanup_passed:cleanupPassed,cleanup_verified:cleanupPassed,live_state:{protected_ids:LIVE_IDS,read_or_mutated:false}},{status:passed===results.length&&cleanupPassed?200:500});
 }

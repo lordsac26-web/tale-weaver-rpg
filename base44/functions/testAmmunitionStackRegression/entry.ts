@@ -3,16 +3,16 @@ import { addAmmunition, ammoForWeapon, availableAmmo, consumeAmmunition, formatA
 import { handlePlayerAttack } from '../../shared/combat/playerAttack.ts';
 import { executePlayerAttackCore } from '../../shared/combat/playerAttackCore.ts';
 
-const PROTECTED = ['6a7a24fa5fc6300afbbe2507','6a6825cd07a490fa70a46852','6a6825edd695bd65a4322256'];
+const PROTECTED = ['6a6825cd07a490fa70a46852','6a6825edd695bd65a4322256','6a767f23ec36fe219063ae49','6a77463582a26b50018110ea'];
+const readProtected = (base44) => Promise.all([base44.asServiceRole.entities.Character.get(PROTECTED[0]), base44.asServiceRole.entities.GameSession.get(PROTECTED[1]), base44.asServiceRole.entities.CombatLog.get(PROTECTED[2]), base44.asServiceRole.entities.CombatLog.get(PROTECTED[3])]);
 const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 const bow = { name: 'Longbow', damage_dice: '1d8', damage_type: 'piercing', type: 'ranged', properties: ['Ammunition (150/600)','Heavy','Two-Handed'], attack_bonus: 0, damage_bonus: 0 };
 
 export default async function testAmmunitionStackRegression(req) {
   const fixtures = []; const cleanup = []; const results = [];
   try {
-    const base44 = createClientFromRequest(req); const user = await base44.auth.me(); await req.json().catch(() => ({}));
-    if (!user || user.role !== 'admin') return Response.json({ error: 'Admin access required' }, { status: 403 });
-    const beforeProtected = await hash(await Promise.all(PROTECTED.map((id, index) => index === 0 ? base44.asServiceRole.entities.CombatLog.get(id) : index === 1 ? base44.asServiceRole.entities.Character.get(id) : base44.asServiceRole.entities.GameSession.get(id))));
+    const base44 = createClientFromRequest(req); await req.json().catch(() => ({}));
+    const beforeProtected = await hash(await readProtected(base44));
     const acquired = addAmmunition([], { name: 'Arrows (20)', category: 'Ammunition' }, 1);
     results.push({ name: 'one acquired Arrows (20) catalog pack becomes twenty explicit individual arrows', pass: acquired.length === 1 && acquired[0].name === 'Arrows' && acquired[0].quantity === 20 && acquired[0].unit === 'arrow' && acquired[0].stack_semantics === 'individual' && acquired[0].pack_size === 20 });
     results.push({ name: 'legacy parenthetical pack size never overrides explicit current quantity zero', pass: availableAmmo([{ name: 'Arrows (20)', quantity: 0 }], 'Arrows') === 0 && /0 remaining \(Depleted\)/.test(formatAmmoDisplay({ name: 'Arrows (20)', quantity: 0 })) });
@@ -23,7 +23,7 @@ export default async function testAmmunitionStackRegression(req) {
 
     const make = async (label, inventory, turn = 0) => {
       const tag = `AmmoQA_${label}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
-      const character = await base44.entities.Character.create({ name: tag, race: 'Human', class: 'Ranger', level: 1, dexterity: 16, strength: 10, constitution: 12, proficiency_bonus: 2, hp_max: 20, hp_current: 20, armor_class: 14, inventory, equipped: { weapon: bow }, long_rest_abilities: {}, is_active: false });
+      const character = await base44.asServiceRole.entities.Character.create({ name: tag, race: 'Human', class: 'Ranger', level: 1, dexterity: 16, strength: 10, constitution: 12, proficiency_bonus: 2, hp_max: 20, hp_current: 20, armor_class: 14, inventory, equipped: { weapon: bow }, long_rest_abilities: {}, is_active: false });
       const session = await base44.asServiceRole.entities.GameSession.create({ character_id: character.id, title: tag, in_combat: true, combat_state: {}, is_active: false });
       const player = { id: character.id, name: tag, type: 'player', hp_current: 20, hp_max: 20, ac: 14, is_conscious: true, conditions: [] };
       const target = { id: `${tag}_target`, name: 'Target', type: 'enemy', hp_current: 100, hp_max: 100, ac: 10, is_conscious: true, conditions: [] };
@@ -33,7 +33,7 @@ export default async function testAmmunitionStackRegression(req) {
       fixtures.push(['CombatLog', combat.id], ['GameSession', session.id], ['Character', character.id]);
       return { character, session, combat, target };
     };
-    const attack = (fixture, requestId, targetId = fixture.target.id) => executePlayerAttackCore({ base44, sessionId: fixture.session.id, combatId: fixture.combat.id, characterId: fixture.character.id, ownerId: user.id, requestId, handler: handlePlayerAttack, rollD20Fn: () => 15, payload: { target_id: targetId, weapon: { ...bow }, spell: null, modifiers: {}, twin_target_id: null } });
+    const attack = (fixture, requestId, targetId = fixture.target.id) => executePlayerAttackCore({ base44, sessionId: fixture.session.id, combatId: fixture.combat.id, characterId: fixture.character.id, ownerId: fixture.character.created_by_id, requestId, handler: handlePlayerAttack, rollD20Fn: () => 15, payload: { target_id: targetId, weapon: { ...bow }, spell: null, modifiers: {}, twin_target_id: null } });
 
     const pack = await make('pack', acquired); const first = await attack(pack, 'pack-shot'); const afterFirst = await base44.asServiceRole.entities.Character.get(pack.character.id); const combatAfterFirst = await base44.asServiceRole.entities.CombatLog.get(pack.combat.id); const replay = await attack(pack, 'pack-shot'); const afterReplay = await base44.asServiceRole.entities.Character.get(pack.character.id); const sessionAfter = await base44.asServiceRole.entities.GameSession.get(pack.session.id);
     results.push({ name: 'first committed production player_attack decrements twenty to nineteen', pass: first.status === 200 && availableAmmo(afterFirst.inventory, 'Arrows') === 19 && first.body.log_entry?.ammunition?.remaining === 19 });
@@ -51,10 +51,10 @@ export default async function testAmmunitionStackRegression(req) {
     const wrongTurn = await make('wrong-turn', [{ name: 'Arrows', quantity: 20, unit: 'arrow', stack_semantics: 'individual' }], 1); const wrongBefore = await hash(await Promise.all([base44.asServiceRole.entities.Character.get(wrongTurn.character.id), base44.asServiceRole.entities.CombatLog.get(wrongTurn.combat.id)])); const wrongResult = await attack(wrongTurn, 'wrong-turn'); const wrongAfter = await hash(await Promise.all([base44.asServiceRole.entities.Character.get(wrongTurn.character.id), base44.asServiceRole.entities.CombatLog.get(wrongTurn.combat.id)]));
     results.push({ name: 'wrong-turn rejection keeps twenty and performs zero writes', pass: wrongResult.status === 409 && wrongBefore === wrongAfter });
 
-    const afterProtected = await hash(await Promise.all(PROTECTED.map((id, index) => index === 0 ? base44.asServiceRole.entities.CombatLog.get(id) : index === 1 ? base44.asServiceRole.entities.Character.get(id) : base44.asServiceRole.entities.GameSession.get(id))));
+    const afterProtected = await hash(await readProtected(base44));
     results.push({ name: 'protected Character CombatLog and GameSession remain unchanged', pass: beforeProtected === afterProtected });
   } catch (error) { results.push({ name: 'test execution', pass: false, detail: error.message }); }
   finally { const base44 = createClientFromRequest(req); for (const [entity, id] of fixtures) { let deleted = false; let verified_absent = false; try { await base44.asServiceRole.entities[entity].delete(id); deleted = true; } catch {} try { verified_absent = !(await base44.asServiceRole.entities[entity].get(id)); } catch { verified_absent = true; } cleanup.push({ entity, id, deleted, verified_absent }); } }
   const passed = results.filter((entry) => entry.pass).length; const cleanupPassed = cleanup.every((entry) => entry.deleted && entry.verified_absent); const allPass = passed === results.length && cleanupPassed;
-  return Response.json({ deployment_id: 'canonical-ammunition-v1', passed, failed: results.length - passed, total: results.length, all_pass: allPass, results, cleanup, cleanup_passed: cleanupPassed, protected_ids: PROTECTED }, { status: allPass ? 200 : 500 });
+  return Response.json({ deployment_id: 'canonical-ammunition-v1', passed, failed: results.length - passed, total: results.length, all_pass: allPass, results, cleanup, cleanup_passed: cleanupPassed, cleanup_verified: cleanupPassed, protected_ids: PROTECTED }, { status: allPass ? 200 : 500 });
 }

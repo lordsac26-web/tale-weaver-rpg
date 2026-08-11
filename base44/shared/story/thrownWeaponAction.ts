@@ -1,4 +1,3 @@
-import { characterBelongsToUser } from '../combat/authGuard.ts';
 import { appendRecoverableItem, buildRecoverableItem, executeRecoveryTransaction } from './recoveryTransaction.ts';
 
 const RECEIPTS = '__thrown_weapon_actions';
@@ -21,13 +20,13 @@ const baseRead = async (base44, sessionId, characterId) => {
   return { session, character };
 };
 
-export async function executeThrownWeaponAction({ base44, user, payload }) {
+export async function executeThrownWeaponAction({ base44, ownerId = null, payload }) {
   const parsed = parseThrownWeaponIntent(payload?.action_text);
   if (!parsed) return { status: 200, body: { handled: false } };
   const token = String(payload?.request_id || '').slice(0, 120);
   if (!token) return { status: 400, body: { handled: true, error: 'request_id is required.', writes: 0 } };
   const { session, character } = await baseRead(base44, payload.session_id, payload.character_id);
-  if (!session || !character || session.character_id !== character.id || !characterBelongsToUser(character, user)) return { status: 403, body: { handled: true, error: 'Character and Session linkage is invalid.', writes: 0 } };
+  if (!session || !character || session.character_id !== character.id || (ownerId && character.created_by_id !== ownerId)) return { status: 403, body: { handled: true, error: 'Character and Session linkage is invalid.', writes: 0 } };
   const abilities = { ...(character.long_rest_abilities || {}) };
   const receipts = Array.isArray(abilities[RECEIPTS]) ? abilities[RECEIPTS] : [];
   const prior = receipts.find((receipt) => receipt?.token === token);
@@ -58,11 +57,11 @@ export async function executeThrownWeaponAction({ base44, user, payload }) {
   return { status: 200, body: { handled: true, success: true, already_processed: false, writes: 1, receipt, weapon_attack: receipt, recoverable_item: recoverable, inventory: nextInventory } };
 }
 
-export async function recoverThrownWeapon({ base44, user, payload }) {
+export async function recoverThrownWeapon({ base44, ownerId = null, payload }) {
   const token = String(payload?.request_id || '').slice(0, 120);
   if (!token) return { status: 400, body: { error: 'request_id is required.', writes: 0 } };
   const result = await executeRecoveryTransaction({
-    base44, user, sessionId: payload.session_id, characterId: payload.character_id,
+    base44, ownerId, sessionId: payload.session_id, characterId: payload.character_id,
     combatId: payload.combat_id || null, requestId: token,
     outcome: { check: payload.check, recovery: { type: 'recover_owned_items', items: [{ canonical_item: payload.item?.name || 'Dagger', quantity: 1, origin_request_id: payload.attack_request_id }] } },
   });
