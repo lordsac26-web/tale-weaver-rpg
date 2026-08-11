@@ -7,10 +7,13 @@ const invoke = async (payload) => {
 };
 
 export const prepareStorySkillCheck = ({ sessionId, characterId, skill, dc, requestId }) => invoke({
-  session_id: sessionId, character_id: characterId, skill, dc, request_id: requestId,
+  session_id: sessionId, character_id: characterId, skill, dc, request_id: requestId, prepare_only: true,
 });
 
-export const resolveStorySkillRoll = ({ sessionId, characterId, skill, dc, requestId, raw, allRolls, advantageSources }) => invoke({
-  session_id: sessionId, character_id: characterId, skill, dc, request_id: requestId,
-  raw_d20: raw, all_rolls: allRolls, advantage_sources: advantageSources,
-});
+export const resolveStorySkillRoll = async ({ sessionId, characterId, skill, dc, requestId, raw, allRolls, advantageSources, advantage, disadvantage, luckyReroll }) => {
+  const resolved = await invoke({
+    session_id: sessionId, character_id: characterId, skill, dc, request_id: requestId,
+    ...(raw == null ? {} : { raw_d20: raw }), ...(allRolls?.length ? { all_rolls: allRolls } : {}), advantage_sources: advantageSources || [], advantage: !!advantage, disadvantage: !!disadvantage, lucky_reroll: !!luckyReroll,
+  });
+  return { ...resolved, allRolls: resolved.all_rolls || [], hadAdvantage: !!resolved.receipt?.had_advantage, hadDisadvantage: !!resolved.receipt?.had_disadvantage };
+};

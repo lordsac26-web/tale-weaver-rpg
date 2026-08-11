@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 
 Deno.serve(async (req) => {
   try {
@@ -6,7 +7,13 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { action, character, session_context, in_combat, combat_context, combat_enemies } = await req.json();
+    const { action, character: incomingCharacter, session_id, character_id, session_context, in_combat, combat_context, combat_enemies } = await req.json();
+    if (!session_id || !character_id) return Response.json({ error: 'session_id and character_id are required' }, { status: 400 });
+    const [session, character] = await Promise.all([
+      base44.asServiceRole.entities.GameSession.get(session_id).catch(() => null),
+      base44.asServiceRole.entities.Character.get(character_id).catch(() => null),
+    ]);
+    if (!session || !character || session.character_id !== character.id || !characterBelongsToUser(character, user)) return Response.json({ error: 'Character and session linkage is invalid' }, { status: 403 });
 
     // ============ COMBAT MODE ============
     // During combat the DM must decide whether a free-text action is a skill check,

@@ -5,6 +5,13 @@ import { inferArchetype } from '../monsterAI.ts';
 import { requireUser, characterBelongsToUser } from './authGuard.ts';
 import { reconcileSessionCombat } from './sessionCombatState.ts';
 
+export function validateStorySkillCombatHandoff(session, storyRequestId, handoff) {
+  const persisted = storyRequestId ? (session?.world_state?.__skill_check_receipts || []).find((entry) => entry?.request_id === storyRequestId && entry?.unified_story_skill_resolution === true) : null;
+  if (!persisted) return { ok: true, persisted: null };
+  const ok = !!handoff && handoff.resolution_id === persisted.resolution_id && JSON.stringify(handoff.skill_check) === JSON.stringify(persisted);
+  return { ok, persisted, error: ok ? null : 'Story combat handoff does not match the persisted authoritative skill resolution.' };
+}
+
 export async function handleStartCombat(ctx) {
   const { base44, session_id, payload } = ctx;
 
@@ -13,6 +20,8 @@ export async function handleStartCombat(ctx) {
   if (authError) return authError;
 
   let { enemies, ambush_setup: ambushSetup } = payload;
+  const storyRequestId = String(payload?.story_request_id || '').trim();
+  const storySkillHandoff = payload?.story_skill_handoff || null;
   const reconciled = await reconcileSessionCombat(base44, session_id);
   const session = reconciled.session;
   if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
@@ -34,6 +43,8 @@ export async function handleStartCombat(ctx) {
   if (session.character_id !== character.id) {
     return Response.json({ error: 'Session character linkage mismatch' }, { status: 403 });
   }
+  const handoffInvariant = validateStorySkillCombatHandoff(session, storyRequestId, storySkillHandoff);
+  if (!handoffInvariant.ok) return Response.json({ error: handoffInvariant.error, invalid: true, writes: 0 }, { status: 409 });
 
   // ─── DYNAMIC ENCOUNTER SCALING ──────────────────────────────────────────
   // Keep solo-player encounters balanced and challenging by scaling enemy HP,

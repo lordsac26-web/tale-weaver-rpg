@@ -2,12 +2,10 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '../../shared/skills/authoritativeSkillModifier.ts';
 import { auditRepairLatestPwtStealth } from '../../shared/repairs/latestPwtStealthResolution.ts';
 import { concealmentAttributions, consumeBreakOnAttackConditions, getAttackConcealment } from '../../shared/combat/conditions.ts';
+import { pwtCondition, pwtModifier, pwtConcentration as concentration } from '../../shared/tests/pwtFixtures.ts';
 
 const LIVE_IDS = ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256'];
 const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
-const pwtCondition = (id, overrides = {}) => ({ id: `cond_pwt_${id}`, name: 'pass without trace', display_name: 'Pass Without Trace', source: 'Pass without Trace', target_id: id, caster_id: id, applied_at: '2026-08-10T01:10:46.874Z', duration_type: 'timestamp', expires_at: '2026-08-10T02:10:46.874Z', concentration: true, ...overrides });
-const pwtModifier = (id, overrides = {}) => ({ id: `mod_pwt_${id}`, source: 'Pass without Trace', effect: 'skill_bonus', skill: 'Stealth', bonus: 10, concentration: true, character_id: id, target_id: id, caster_id: id, applied_at: '2026-08-10T01:10:46.874Z', expires_at: '2026-08-10T02:10:46.874Z', ...overrides });
-const concentration = (id, overrides = {}) => ({ spell_name: 'Pass without Trace', character_id: id, target_id: id, caster_id: id, concentration: true, applied_at: '2026-08-10T01:10:46.874Z', expires_at: '2026-08-10T02:10:46.874Z', ...overrides });
 const storyLog = (receipt, success = false) => Array.from({ length: 60 }, (_, index) => index === 59 ? { timestamp: '2026-08-10T18:49:58.409Z', request_id: 'fixture-story-action', action: 'choice', player_choice: `Attempt the ritual strike. [Skill Check: Stealth DC16 — ${success ? 'SUCCESS' : 'FAILURE'}]`, text: 'The ritual continues.', choices: [], ...(receipt ? { skill_check: receipt } : {}) } : { timestamp: `fixture-${index}`, text: `Entry ${index}`, choices: [] });
 
 export default async function testPausedPwtStealthModifierRegression(req) {

@@ -29,16 +29,31 @@ export function receiptsMatchResolution(incoming, resolution) {
     && JSON.stringify(incoming.modifier_breakdown) === JSON.stringify(resolution.breakdown);
 }
 
+export const formatStorySkillDisplay = (receipt) => `${receipt.skill} DC${receipt.dc} — ${receipt.success ? 'SUCCESS' : 'FAILURE'} (d20 ${receipt.raw_d20} + modifier ${receipt.modifier_total} = ${receipt.final_total})`;
+
+export const isConcealmentMaintenanceAction = (actionText) => /\bhide|hiding|hidden|secluded|conceal|concealment|shadow|sneak|wait|waiting|observe|watch|maintain|remain\b/i.test(String(actionText || ''));
+
 export function applyAuthoritativeStorySkillOutcome(result, actionText, resolution) {
-  if (!resolution?.ok || resolution.skill !== 'Stealth' || !/\bhide|hiding|secluded|conceal|shadow|sneak\b/i.test(String(actionText || ''))) return result;
-  if (!resolution.success) return { ...result, authoritative_skill_check: resolution.receipt };
+  if (!resolution?.ok) return result;
+  const authoritative = { ...result, authoritative_skill_check: resolution.receipt };
+  if (resolution.skill !== 'Stealth' || !isConcealmentMaintenanceAction(actionText)) return authoritative;
+  if (!resolution.success) return authoritative;
   return {
-    ...result,
-    narrative: 'You settle into concealment without betraying your position. Pass without Trace muffles every sound, and the threat fails to locate you.',
+    ...authoritative,
+    narrative: 'You remain still and patient, preserving your concealed vantage without betraying your position. The threat continues toward the bait, unaware of you, and no further action is taken.',
     combat_trigger: false,
     enemies: [],
     hp_change: 0,
-    condition_update: { target: 'player', add: 'Stealthed', remove: ['Engaged'], duration: 'scene' },
-    authoritative_skill_check: resolution.receipt,
+    condition_update: { target: 'player', add: 'Stealthed', remove: ['Engaged', 'Exposed'], duration: 'scene' },
   };
+}
+
+export function enforceStorySkillOutcomeInvariant(result, actionText, resolution) {
+  if (!resolution?.ok) return { ok: true, result };
+  const next = { ...applyAuthoritativeStorySkillOutcome(result, actionText, resolution), skill_display: formatStorySkillDisplay(resolution.receipt) };
+  if (JSON.stringify(next.authoritative_skill_check) !== JSON.stringify(resolution.receipt)) return { ok: false, error: 'Story output diverged from the authoritative skill receipt.' };
+  if (next.combat_trigger) next.combat_handoff = { resolution_id: resolution.receipt.resolution_id || resolution.receipt.request_id, skill_check: resolution.receipt };
+  if (next.combat_trigger && JSON.stringify(next.combat_handoff?.skill_check) !== JSON.stringify(resolution.receipt)) return { ok: false, error: 'Combat handoff does not consume the authoritative skill resolution.' };
+  if (resolution.skill === 'Stealth' && isConcealmentMaintenanceAction(actionText) && resolution.success && (next.combat_trigger || next.condition_update?.add !== 'Stealthed')) return { ok: false, error: 'Successful concealment cannot create combat or Exposed state.' };
+  return { ok: true, result: next };
 }

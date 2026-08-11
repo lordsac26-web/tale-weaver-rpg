@@ -9,7 +9,8 @@ import { executePwtCompoundAction } from '../../shared/story/compoundPwtAction.t
 import { executeLongRestStoryAction } from '../../shared/story/longRestStoryAction.ts';
 import { executeThrownWeaponAction, recoverThrownWeapon } from '../../shared/story/thrownWeaponAction.ts';
 import { classifyPrecisionAmbushIntent, normalizePendingAmbushRoster, pendingAmbushNarrative, stripGeneratedChoiceAnnotations } from '../../shared/story/generatedChoiceIntent.js';
-import { applyAuthoritativeStorySkillOutcome, receiptsMatchResolution, resolveStorySkillCheck } from '../../shared/story/storySkillCheck.ts';
+import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkillCheck.ts';
+import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -49,9 +50,9 @@ Deno.serve(async (req) => {
     let authoritativeChoiceContext = incomingChoiceContext && typeof incomingChoiceContext === 'object' ? incomingChoiceContext : {};
     if (action === 'choice' && authoritativeChoiceContext?.check?.raw_d20 != null) {
       const incomingCheck = authoritativeChoiceContext.check;
-      const skillResolution = resolveStorySkillCheck({ character, session, skill: incomingCheck.skill, dc: incomingCheck.dc, requestId: storyRequestId, raw: incomingCheck.raw_d20, allRolls: incomingCheck.all_rolls || [], advantageSources: incomingCheck.advantage_sources || [], at: incomingCheck.at });
-      if (!skillResolution.ok || !receiptsMatchResolution(incomingCheck, skillResolution)) return Response.json({ error: skillResolution.error || 'The story skill receipt does not match authoritative character state.', invalid: true }, { status: 409 });
-      authoritativeChoiceContext = { ...authoritativeChoiceContext, check: skillResolution.receipt, authoritative_skill_resolution: skillResolution };
+      const persistedCheck = (session.world_state?.__skill_check_receipts || []).find((entry) => entry?.request_id === incomingCheck.request_id && entry?.unified_story_skill_resolution === true);
+      if (!persistedCheck || persistedCheck.request_id !== storyRequestId || JSON.stringify(persistedCheck) !== JSON.stringify(incomingCheck)) return Response.json({ error: 'The story skill receipt is not the persisted authoritative resolution.', invalid: true, writes: 0 }, { status: 409 });
+      authoritativeChoiceContext = { ...authoritativeChoiceContext, check: persistedCheck, authoritative_skill_resolution: resolutionFromReceipt(persistedCheck) };
     }
     const completedCombat = await readCompletedCombatContext(base44, session) || (authoritativeChoiceContext?.completed_combat && typeof authoritativeChoiceContext.completed_combat === 'object'
       ? authoritativeChoiceContext.completed_combat : null);
@@ -101,15 +102,8 @@ Deno.serve(async (req) => {
     if (action === 'choice' && storyRequestId) {
       const existing = (session.story_log || []).find((entry) => entry?.request_id === storyRequestId);
       if (existing?.text) return Response.json({ narrative: existing.text, choices: existing.choices || [], ...(existing.item_recovery ? { item_recovery: { ...existing.item_recovery, already_processed: true } } : {}) });
-      if (!existing) {
-        const incomingSkillReceipt = authoritativeChoiceContext?.check?.raw_d20 != null ? authoritativeChoiceContext.check : null;
-        const nextSkillReceipts = incomingSkillReceipt ? [...(session.world_state?.__skill_check_receipts || []).filter((entry) => entry?.id !== incomingSkillReceipt.id).slice(-49), incomingSkillReceipt] : (session.world_state?.__skill_check_receipts || []);
-        await base44.asServiceRole.entities.GameSession.update(session_id, {
-          story_log: [...(session.story_log || []), { timestamp: new Date().toISOString(), action: 'choice', request_id: storyRequestId, player_choice: selectedChoice, text: '', choices: [], ...(incomingSkillReceipt ? { skill_check: incomingSkillReceipt } : {}) }].slice(-60),
-          ...(incomingSkillReceipt ? { world_state: { ...(session.world_state || {}), __skill_check_receipts: nextSkillReceipts } } : {}),
-        });
-        session = await base44.asServiceRole.entities.GameSession.get(session_id);
-      }
+      // Skill receipts are persisted atomically by resolveStorySkillCheck. Do not stage
+      // blank story entries here; failed invariant checks must leave story state untouched.
     }
     const charLevel = character.level || 1;
 
@@ -362,7 +356,9 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...result, narrative: pendingAmbushNarrative(ambushIntent.target_hint, setupSucceeded), key_event: '', combat_trigger: setupSucceeded && result.combat_trigger && roster.ok, enemies: roster.ok ? roster.enemies : [], pending_ambush_attack: setupSucceeded && roster.ok ? { request_id: storyRequestId, target_name: roster.target.name, setup_receipt_id: authoritativeChoiceContext.check.id || authoritativeChoiceContext.check.request_id, setup_success: true } : null };
     }
 
-    result = applyAuthoritativeStorySkillOutcome(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
+    const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
+    if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0 }, { status: 409 });
+    result = skillInvariant.result;
 
     // ====================== POST-PROCESSING ======================
     // Inventory rewards are allowed only from structured recovery metadata passed
@@ -387,7 +383,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
         ...(storyRequestId ? { request_id: storyRequestId } : {}),
         player_choice: action === 'choice' ? selectedChoice : (custom_input ?? choice_index),
         text: result.narrative, choices: result.choices || [],
-        ...(authoritativeChoiceContext?.check?.raw_d20 != null ? { skill_check: authoritativeChoiceContext.check } : {}),
+        ...(authoritativeChoiceContext?.check?.raw_d20 != null ? { skill_check: authoritativeChoiceContext.check, skill_display: result.skill_display } : {}),
+        ...(result.combat_handoff ? { combat_handoff: result.combat_handoff } : {}),
         ...(result.item_recovery ? { item_recovery: result.item_recovery } : {})
       };
       const updatedLog = action === 'choice' && storyRequestId
@@ -497,10 +494,21 @@ Write a gripping 1-2 paragraph combat narrative.`;
           // let narrative output add Exhausted while the authoritative level is 0.
           const mechanicalExhaustion = authoritativeExhaustion;
           const isInvalidExhaustionAdd = (key === 'exhausted' || key === 'exhaustion') && mechanicalExhaustion <= 0;
+          if (key === 'stealthed') {
+            let foundStealthed = false;
+            nextConditions = nextConditions.filter((cond) => {
+              if (conditionKey(cond) !== 'stealthed') return true;
+              if (foundStealthed) return false;
+              foundStealthed = true;
+              return true;
+            });
+          }
           if (!isInvalidExhaustionAdd && !isPwt(name) && !nextConditions.some(cond => conditionKey(cond) === key)) {
+            const pwtAttributed = key === 'stealthed' && authoritativeChoiceContext?.check?.modifier_breakdown?.pwt_active === true;
             nextConditions.push({
-              name, source: 'story', duration: incoming.duration || 'scene',
-              applied_at: new Date().toISOString()
+              name, source: pwtAttributed ? 'Pass without Trace' : 'story', duration: incoming.duration || 'scene',
+              applied_at: new Date().toISOString(),
+              ...(pwtAttributed ? { caster_id: session.world_state?.active_concentration?.caster_id, target_id: character.id } : {})
             });
           }
         }

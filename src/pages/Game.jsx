@@ -381,7 +381,7 @@ export default function Game() {
 
       if (data.combat_trigger && data.enemies?.length > 0) {
         setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
-        await startCombat(data.enemies, { requestId: `${requestId}:combat`, ambushSetup: data.pending_ambush_attack || null });
+        await startCombat(data.enemies, { requestId: `${requestId}:combat`, storyRequestId: requestId, skillHandoff: data.combat_handoff || null, ambushSetup: data.pending_ambush_attack || null });
       } else {
         setChoices(data.choices || []);
       }
@@ -433,20 +433,18 @@ export default function Game() {
         advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, advantageSources: resolvedAdvantageSources,
         resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: resolvedAdvantageSources }),
         onResolve: (rollData) => { setPendingRoll(null); continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { ...rollData, advantageSources: resolvedAdvantageSources }); },
-        onCancel: () => {
+        onCancel: async () => {
           setPendingRoll(null);
-          const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(resolvedAdvantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
-          const final = raw + modifier;
-          continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: resolvedAdvantageSources, modifier, breakdown, final, success: resolveCheckSuccess(raw, final, choice.dc) });
+          const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, requestId, advantageSources: resolvedAdvantageSources, advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
+          continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { ...resolved, advantageSources: resolvedAdvantageSources });
         },
       });
       return;
     }
 
-    // Auto mode: roll immediately.
-    const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(resolvedAdvantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
-    const final = raw + modifier;
-    await continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: resolvedAdvantageSources, modifier, breakdown, final, success: resolveCheckSuccess(raw, final, choice.dc) });
+    // Auto mode: the authoritative server rolls once, persists once, and returns the immutable result.
+    const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, requestId, advantageSources: resolvedAdvantageSources, advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
+    await continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { ...resolved, advantageSources: resolvedAdvantageSources });
   };
 
   // Intercept custom input — send to DM for adjudication first
@@ -459,6 +457,8 @@ export default function Game() {
     try {
       const result = await base44.functions.invoke('evaluatePlayerAction', {
         action: text,
+        session_id: sessionId,
+        character_id: character?.id,
         character,
         session_context: `${session?.current_location || ''} — ${narrative.filter(e => e.type === 'narration').slice(-1)[0]?.text?.slice(0, 200) || ''}`
       });
@@ -574,7 +574,7 @@ export default function Game() {
       }
       if (data.combat_trigger && data.enemies?.length > 0) {
         setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
-        await startCombat(data.enemies);
+        await startCombat(data.enemies, { requestId: `${requestId}:combat`, storyRequestId: requestId, skillHandoff: data.combat_handoff || null });
       } else {
         setChoices(data.choices || []);
       }
@@ -635,20 +635,18 @@ export default function Game() {
         advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, advantageSources: equipAdv.sources,
         resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: equipAdv.sources }),
         onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { ...rollData, advantageSources: equipAdv.sources }); },
-        onCancel: () => {
+        onCancel: async () => {
           setPendingRoll(null);
-          const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
-          const final = raw + modifier;
-          continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, breakdown, final, success: resolveCheckSuccess(raw, final, dc) });
+          const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, advantageSources: equipAdv.sources, advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
+          continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { ...resolved, advantageSources: equipAdv.sources });
         },
       });
       return;
     }
 
-    // Auto mode.
-    const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(equipAdv.advantage, equipAdv.disadvantage, 0, character?.race === 'Halfling');
-    const final = raw + modifier;
-    await continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources: equipAdv.sources, modifier, breakdown, final, success: resolveCheckSuccess(raw, final, dc) });
+    // Auto mode: resolve and persist through the same authoritative server transaction.
+    const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, advantageSources: equipAdv.sources, advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
+    await continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { ...resolved, advantageSources: equipAdv.sources });
   };
 
   // ===== Free-text "Act" during combat — DM adjudicates first =====
@@ -673,6 +671,8 @@ export default function Game() {
         .map(e => e.name);
       const result = await base44.functions.invoke('evaluatePlayerAction', {
         action: text,
+        session_id: sessionId,
+        character_id: character?.id,
         character,
         in_combat: true,
         combat_context: buildCombatContext(),
@@ -828,7 +828,7 @@ export default function Game() {
     if (!requires_check || success) await applyCombatReward(reward);
   };
 
-  const startCombat = async (enemies, { requestId = null, ambushSetup = null } = {}) => {
+  const startCombat = async (enemies, { requestId = null, storyRequestId = null, skillHandoff = null, ambushSetup = null } = {}) => {
     // Clear story affordances immediately. If the server write is visible before
     // the new CombatLog read, the user must never be allowed to submit another
     // story choice and accidentally start a duplicate fight.
@@ -840,7 +840,7 @@ export default function Game() {
       session_id: sessionId,
       character_id: character?.id,
       request_id: requestId || `combat-start:${sessionId}:${crypto.randomUUID()}`,
-      payload: { enemies, ambush_setup: ambushSetup }
+      payload: { enemies, ambush_setup: ambushSetup, story_request_id: storyRequestId, story_skill_handoff: skillHandoff }
     });
 
     const combatId = result.data?.combat_id;
