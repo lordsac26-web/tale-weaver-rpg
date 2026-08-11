@@ -35,6 +35,7 @@ import { canonicalSkillName } from '@/components/game/skillCheckResolver';
 import { buildThrownWeaponContext } from '@/lib/thrownWeaponIntent';
 import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '../../base44/shared/skills/authoritativeSkillModifier';
 import { classifyPrecisionAmbushIntent, stripGeneratedChoiceAnnotations } from '../../base44/shared/story/generatedChoiceIntent';
+import { prepareStorySkillCheck, resolveStorySkillRoll } from '@/lib/storySkillCheck';
 
 const getFunctionErrorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.response?.data?.message ||
@@ -331,13 +332,16 @@ export default function Game() {
   // Records the skill-check result entry in the narrative, then continues the
   // story by sending the outcome to the DM. Shared by both auto-roll and manual.
   const continueChoiceWithRoll = async (choice, choiceIndex, requestId, preCast, rollData) => {
-    const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, breakdown, final, success } = rollData;
+    const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources } = rollData;
+    const resolved = rollData.receipt || rollData.modifier_breakdown
+      ? rollData
+      : await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, requestId, raw, allRolls, advantageSources });
+    const { modifier, breakdown, final, success, receipt } = resolved;
     const feedback = getSkillFeedback(choice.skill_check, success, final, choice.dc, raw);
     setNarrative(prev => [...prev, {
       type: 'skill_check', skill: choice.skill_check, dc: choice.dc, raw, allRolls, hadAdvantage, hadDisadvantage,
       advantageSources, modifier, breakdown, final, success, feedback, character_name: character?.name,
     }]);
-    const receipt = buildSkillCheckReceipt({ requestId, raw, allRolls, dc: choice.dc, success, breakdown, advantageSources });
     await runChoiceStory(choice, choiceIndex, success, advantageSources, requestId, preCast, receipt);
   };
 
@@ -415,9 +419,11 @@ export default function Game() {
     const equipAdv = getEquipmentAdvantage(checkCharacter?.equipped, canonicalSkillName(choice.skill_check));
     const resolvedAdvantage = equipAdv.advantage;
     const resolvedAdvantageSources = [...(equipAdv.sources || [])];
-    const breakdown = computeSkillBreakdown(choice.skill_check, checkCharacter);
-    if (!breakdown.ok) { setNarrative(prev => [...prev, { type: 'roll_result', text: breakdown.error, success: false }]); return; }
-    const modifier = breakdown.total;
+    let prepared;
+    try { prepared = await prepareStorySkillCheck({ sessionId, characterId: checkCharacter?.id, skill: choice.skill_check, dc: choice.dc, requestId }); }
+    catch (err) { setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'The skill check could not be prepared.'), success: false }]); return; }
+    const breakdown = prepared.breakdown;
+    const modifier = prepared.modifier;
 
     // Manual mode: open the dice roller pre-configured for this check. The story
     // continues once the player rolls (onResolve). Cancel falls back to auto-roll.
@@ -425,6 +431,7 @@ export default function Game() {
       setPendingRoll({
         skill: choice.skill_check, dc: choice.dc, modifier, breakdown,
         advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, advantageSources: resolvedAdvantageSources,
+        resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: resolvedAdvantageSources }),
         onResolve: (rollData) => { setPendingRoll(null); continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { ...rollData, advantageSources: resolvedAdvantageSources }); },
         onCancel: () => {
           setPendingRoll(null);
@@ -582,10 +589,13 @@ export default function Game() {
 
   // Records a custom action's skill-check entry, then continues the story.
   const continueProposalWithRoll = async (action, skill, dc, recovery, requestId, preCast, rollData) => {
-    const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, breakdown, final, success } = rollData;
+    const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources } = rollData;
+    const resolved = rollData.receipt || rollData.modifier_breakdown
+      ? rollData
+      : await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, raw, allRolls, advantageSources });
+    const { modifier, breakdown, final, success, receipt } = resolved;
     const feedback = getSkillFeedback(skill, success, final, dc, raw);
     setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, breakdown, final, success, feedback, character_name: character?.name }]);
-    const receipt = buildSkillCheckReceipt({ requestId, raw, allRolls, dc, success, breakdown, advantageSources });
     const checkResult = ` [Skill Check: ${skill} DC${dc} — ${success ? 'SUCCESS' : 'FAILURE'} (d20 ${raw} + base ${breakdown.base_skill} + effects ${breakdown.effect_bonus} = ${final}${hadAdvantage ? ', with advantage' : ''}${hadDisadvantage ? ', with disadvantage' : ''}${advantageSources?.length ? `; source: ${advantageSources.join(', ')}` : ''})]`;
     await runProposalStory(action, checkResult, { check: receipt, recovery: recovery || null }, requestId, preCast);
   };
@@ -612,15 +622,18 @@ export default function Game() {
     }
 
     const equipAdv = getEquipmentAdvantage(checkCharacter?.equipped, canonicalSkillName(skill));
-    const breakdown = computeSkillBreakdown(skill, checkCharacter);
-    if (!breakdown.ok) { setNarrative(prev => [...prev, { type: 'roll_result', text: breakdown.error, success: false }]); return; }
-    const modifier = breakdown.total;
+    let prepared;
+    try { prepared = await prepareStorySkillCheck({ sessionId, characterId: checkCharacter?.id, skill, dc, requestId }); }
+    catch (err) { setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'The skill check could not be prepared.'), success: false }]); return; }
+    const breakdown = prepared.breakdown;
+    const modifier = prepared.modifier;
 
     // Manual mode: prompt the player to roll the configured dice.
     if (getManualRollEnabled()) {
       setPendingRoll({
         skill, dc, modifier, breakdown,
         advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, advantageSources: equipAdv.sources,
+        resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: equipAdv.sources }),
         onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { ...rollData, advantageSources: equipAdv.sources }); },
         onCancel: () => {
           setPendingRoll(null);
@@ -1850,6 +1863,7 @@ export default function Game() {
             disadvantage={pendingRoll.disadvantage}
             advantageSources={pendingRoll.advantageSources}
             luckyReroll={character?.race === 'Halfling'}
+            resolveRoll={pendingRoll.resolveRoll}
             onResolve={pendingRoll.onResolve}
             onCancel={pendingRoll.onCancel}
           />

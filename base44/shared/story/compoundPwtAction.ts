@@ -1,6 +1,6 @@
 import { executeUtilitySpellCast } from '../spells/castUtilitySpell.ts';
 import { rollD20 } from '../dice.ts';
-import { resolveAuthoritativeSkillModifier } from '../skills/authoritativeSkillModifier.ts';
+import { resolveStorySkillCheck } from './storySkillCheck.ts';
 
 const pwtPattern = /\bpass\s+without\s+(?:a\s+)?trace\b/i;
 const dependentPattern = /\b(hide|hiding|sneak|sneaking|stealth)\b/i;
@@ -26,13 +26,11 @@ export async function executePwtCompoundAction({ base44, user, payload }) {
   const receipts = Array.isArray(session.world_state?.__compound_action_receipts) ? session.world_state.__compound_action_receipts : [];
   const prior = receipts.find((receipt) => receipt?.id === skillId);
   if (prior) return { status: 200, body: { handled: true, plan: plan.steps, child_ids: { cast: castId, skill: skillId }, cast: cast.body, skill: prior, already_processed: true, narration: prior.narration } };
-  const breakdown = resolveAuthoritativeSkillModifier({ character, session, skill: 'Stealth' });
-  if (!breakdown.ok) return { status: 409, body: { error: breakdown.error, handled: true, plan: plan.steps, child_ids: { cast: castId, skill: skillId }, invalid: true } };
   const raw = rollD20();
   const dc = Math.max(5, Number(payload?.skill_dc) || 15);
-  const total = raw + breakdown.total;
-  const success = raw !== 1 && (raw === 20 || total >= dc);
-  const skill = { id: skillId, action: 'Hide', skill: 'Stealth', raw, dc, success, total, breakdown, at: new Date().toISOString(), narration: success ? `Pass without Trace is active. Your Hide check succeeds (${raw} + ${breakdown.total} = ${total} vs DC ${dc}).` : `Pass without Trace remains active, but your Hide check fails (${raw} + ${breakdown.total} = ${total} vs DC ${dc}).` };
+  const resolution = resolveStorySkillCheck({ character, session, skill: 'Stealth', dc, requestId: skillId, raw, allRolls: [raw] });
+  if (!resolution.ok) return { status: 409, body: { error: resolution.error, handled: true, plan: plan.steps, child_ids: { cast: castId, skill: skillId }, invalid: true } };
+  const skill = { ...resolution.receipt, action: 'Hide', raw: resolution.raw, total: resolution.final, breakdown: resolution.breakdown, narration: resolution.success ? `Pass without Trace is active. Your Hide check succeeds (${resolution.raw} + ${resolution.modifier} = ${resolution.final} vs DC ${dc}).` : `Pass without Trace remains active, but your Hide check fails (${resolution.raw} + ${resolution.modifier} = ${resolution.final} vs DC ${dc}).` };
   await base44.asServiceRole.entities.GameSession.update(session.id, { world_state: { ...(session.world_state || {}), __compound_action_receipts: [...receipts.filter((receipt) => receipt?.id !== skillId).slice(-23), skill] } });
   return { status: 200, body: { handled: true, plan: plan.steps, child_ids: { cast: castId, skill: skillId }, cast: cast.body, skill, narration: skill.narration } };
 }

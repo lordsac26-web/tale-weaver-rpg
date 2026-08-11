@@ -1,12 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { executeThrownWeaponAction, recoverThrownWeapon } from '../../shared/story/thrownWeaponAction.ts';
+import { hashValue as hash, PROTECTED_DND_IDS as LIVE_IDS, readProtectedDndState } from '../../shared/tests/liveProtection.ts';
 
-const LIVE_IDS = ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49', '6a77463582a26b50018110ea'];
-const readProtected = (base44) => Promise.all([base44.asServiceRole.entities.Character.get(LIVE_IDS[0]), base44.asServiceRole.entities.GameSession.get(LIVE_IDS[1]), base44.asServiceRole.entities.CombatLog.get(LIVE_IDS[2]), base44.asServiceRole.entities.CombatLog.get(LIVE_IDS[3])]);
+const readProtected = (base44) => readProtectedDndState(base44.asServiceRole);
 const dagger = { name: 'Dagger', type: 'Weapon', category: 'Weapon', properties: ['finesse', 'light', 'thrown (range 20/60)'], damage_dice: '1d4', damage_type: 'piercing', source: 'Equipment Database', equipment_id: 'fixture-equipment-dagger', quantity: 1 };
 const legacy = { name: 'Dagger', category: 'Weapon', properties: ['Finesse', 'Light', 'Thrown'], item_id: 'fixture-legacy-dagger', quantity: 1 };
-const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
-
 export default async function testThrownWeaponRegression(req) {
   const fixtures = []; const cleanup = []; const results = [];
   try {

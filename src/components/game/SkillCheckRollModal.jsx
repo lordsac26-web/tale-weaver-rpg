@@ -30,22 +30,28 @@ export default function SkillCheckRollModal({
   advantageSources = [],
   reliableTalent = false,
   luckyReroll = false,
+  resolveRoll = null,
   onResolve,
   onCancel,
 }) {
   const [rolling, setRolling] = useState(false);
   const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
 
   const doRoll = () => {
     setRolling(true);
-    setTimeout(() => {
+    setError('');
+    setTimeout(async () => {
       const { roll: raw, allRolls, hadAdvantage, hadDisadvantage } = rollD20WithAdvantage(advantage, disadvantage, reliableTalent ? 10 : 0, luckyReroll);
-      const final = raw + modifier;
-      // Nat 20 always succeeds, nat 1 always fails
-      const success = resolveCheckSuccess(raw, final, dc);
-      const data = { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, breakdown, final, success };
-      setResult(data);
-      setRolling(false);
+      const provisional = { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, breakdown, final: raw + modifier, success: resolveCheckSuccess(raw, raw + modifier, dc) };
+      try {
+        const authoritative = resolveRoll ? await resolveRoll(provisional) : provisional;
+        setResult({ ...provisional, ...authoritative, allRolls: authoritative.all_rolls || provisional.allRolls });
+      } catch (rollError) {
+        setError(rollError?.message || 'The roll could not be verified.');
+      } finally {
+        setRolling(false);
+      }
     }, 600);
   };
 
@@ -90,6 +96,8 @@ export default function SkillCheckRollModal({
               )}
             </div>
           )}
+
+          {error && <div className="text-center text-xs" style={{ color: '#fca5a5' }}>{error}</div>}
 
           {/* Roll button / result */}
           {!result ? (
