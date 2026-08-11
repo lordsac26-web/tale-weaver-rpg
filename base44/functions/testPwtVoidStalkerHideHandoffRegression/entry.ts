@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { applyAuthoritativeStorySkillOutcome, resolveStorySkillCheck } from '../../shared/story/storySkillCheck.ts';
 import { auditRepairPwtVoidStalkerHideHandoff } from '../../shared/repairs/pwtVoidStalkerHideHandoff.ts';
 import { hashValue as hash, PROTECTED_DND_IDS as PROTECTED, readProtectedDndState as readProtected } from '../../shared/tests/liveProtection.ts';
+import { handlePwtHideAuditRequest } from '../../shared/repairs/pwtHideAuditEndpoint.ts';
 const pwtCondition = (id) => ({ id:`cond_${id}`,name:'pass without trace',source:'Pass without Trace',target_id:id,caster_id:id,concentration:true,applied_at:'2026-08-11T20:00:00.000Z',expires_at:'2026-08-11T22:00:00.000Z' });
 const pwtModifier = (id) => ({ id:`mod_${id}`,source:'Pass without Trace',effect:'skill_bonus',skill:'Stealth',bonus:10,character_id:id,target_id:id,caster_id:id,concentration:true,applied_at:'2026-08-11T20:00:00.000Z',expires_at:'2026-08-11T22:00:00.000Z' });
 const concentration = (id) => ({ spell_name:'Pass without Trace',character_id:id,target_id:id,caster_id:id,concentration:true,applied_at:'2026-08-11T20:00:00.000Z',expires_at:'2026-08-11T22:00:00.000Z' });
@@ -9,8 +10,10 @@ const concentration = (id) => ({ spell_name:'Pass without Trace',character_id:id
 export default async function testPwtVoidStalkerHideHandoffRegression(req) {
   const fixtures=[]; const cleanup=[]; const results=[];
   try {
-    const base44=createClientFromRequest(req); const db=base44.asServiceRole; await req.json().catch(()=>({}));
+    const base44=createClientFromRequest(req); const db=base44.asServiceRole; const user=await base44.auth.me(); await req.json().catch(()=>({}));
     const protectedBefore=await hash(await readProtected(db)); const token=`VoidHideQA_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+    const canonicalResponse=await handlePwtHideAuditRequest({base44,user,rawBody:{mode:'dry_run',character_id:PROTECTED[0],session_id:PROTECTED[1],combat_log_id:PROTECTED[2],request_id:`${token}:canonical-contract`}}); const canonicalBody=await canonicalResponse.json();
+    results.push({name:'deployed-style canonical snake_case payload reaches guard evaluation',pass:canonicalResponse.status===200&&canonicalBody.mode==='dry_run'&&canonicalBody.writes===0&&!!canonicalBody.guards&&!canonicalBody.expected_fields,detail:{status:canonicalResponse.status,failed_guards:canonicalBody.failed_guards||[],error:canonicalBody.error||null}});
     const make=async(label,{ambiguous=false,postAction=false,mismatch=false}={})=>{
       const character=await db.entities.Character.create({name:`${token}_${label}`,race:'Human',class:'Ranger',level:5,dexterity:19,proficiency_bonus:3,skills:{Stealth:'proficient'},hp_max:44,hp_current:30,xp:100,inventory:[{name:'Dagger',quantity:2}],gold:5,silver:6,copper:7,spell_slots:{level_1:1},conditions:[],active_modifiers:[],is_active:false});
       await db.entities.Character.update(character.id,{conditions:[pwtCondition(character.id)],active_modifiers:[pwtModifier(character.id)]});
