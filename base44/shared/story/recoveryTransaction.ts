@@ -1,6 +1,7 @@
 import { canonicalAmmoName } from '../ammunition.ts';
 
 export const RECOVERABLE_LEDGER_KEY = '__recoverable_items';
+export const SPENT_ITEM_LEDGER_KEY = '__spent_item_ledger';
 export const RECOVERY_RECEIPTS_KEY = '__item_recovery_receipts';
 const MAX_RECEIPTS = 50;
 const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -15,7 +16,9 @@ export function buildRecoverableItem({ originRequestId, characterId, sessionId, 
   return {
     ledger_id: `${originRequestId}:${canonical}:${itemId || 'canonical'}`,
     origin_request_id: originRequestId,
+    action_request_id: originRequestId,
     owner_character_id: characterId,
+    character_id: characterId,
     session_id: sessionId,
     combat_id: combatId || null,
     location: String(location || '').trim(),
@@ -24,8 +27,12 @@ export function buildRecoverableItem({ originRequestId, characterId, sessionId, 
     quantity: Number(quantity),
     quantity_remaining: Number(quantity),
     recovery_status: 'recoverable',
+    recoverability_state: 'recoverable',
+    recovery_request_id: null,
     source_action: sourceAction,
     item_snapshot: itemSnapshot ? { ...itemSnapshot } : null,
+    inventory_decrement_proven: true,
+    consumed_at: new Date().toISOString(),
     created_at: new Date().toISOString(),
   };
 }
@@ -33,7 +40,9 @@ export function buildRecoverableItem({ originRequestId, characterId, sessionId, 
 export function appendRecoverableItem(abilities, entry) {
   const next = { ...(abilities || {}) };
   const ledger = Array.isArray(next[RECOVERABLE_LEDGER_KEY]) ? next[RECOVERABLE_LEDGER_KEY] : [];
+  const spent = Array.isArray(next[SPENT_ITEM_LEDGER_KEY]) ? next[SPENT_ITEM_LEDGER_KEY] : [];
   if (entry && !ledger.some((item) => item?.ledger_id === entry.ledger_id)) next[RECOVERABLE_LEDGER_KEY] = [...ledger.slice(-99), entry];
+  if (entry && !spent.some((item) => item?.ledger_id === entry.ledger_id)) next[SPENT_ITEM_LEDGER_KEY] = [...spent.slice(-99), Object.freeze({ ...entry })];
   return next;
 }
 
@@ -58,7 +67,8 @@ function parseDirectRecovery(recovery) {
 
 function applyStack(inventory, request) {
   const ammo = canonicalAmmoName(request.canonical_item);
-  const candidates = inventory.map((item, index) => ({ item, index })).filter(({ item }) => ammo ? canonicalAmmoName(item?.name) === ammo : normalize(item?.name) === normalize(request.canonical_item));
+  const requestId = stableIdentity(request.item);
+  const candidates = inventory.map((item, index) => ({ item, index })).filter(({ item }) => requestId ? stableIdentity(item) === requestId : ammo ? canonicalAmmoName(item?.name) === ammo : normalize(item?.name) === normalize(request.canonical_item));
   const positive = candidates.filter(({ item }) => Number(item?.quantity) > 0);
   if (positive.length > 1) return { ok: false, reason: 'ambiguous_positive_stack' };
   const target = positive[0] || null;
@@ -89,20 +99,24 @@ function parseLedgerRecovery(recovery, ledger, { characterId, sessionId, combatI
     const matches = ledger.filter((entry) => entry?.origin_request_id === request.origin_request_id && entry?.canonical_item === canonical && entry?.recovery_status === 'recoverable');
     if (matches.length !== 1) return { ok: false, reason: 'missing_or_ambiguous_origin' };
     const entry = matches[0];
-    if (entry.owner_character_id !== characterId || entry.session_id !== sessionId || (combatId && entry.combat_id !== combatId) || normalize(entry.location) !== normalize(location) || Number(request.quantity) > Number(entry.quantity_remaining || 0) || selected.some((item) => item.entry.ledger_id === entry.ledger_id)) return { ok: false, reason: 'ledger_linkage_precondition_failed' };
+    if (entry.owner_character_id !== characterId || entry.session_id !== sessionId || (combatId && entry.combat_id !== combatId) || Number(request.quantity) > Number(entry.quantity_remaining || 0) || selected.some((item) => item.entry.ledger_id === entry.ledger_id)) return { ok: false, reason: 'ledger_linkage_precondition_failed' };
     const item = entry.item_snapshot || { name: canonical, category: canonicalAmmoName(canonical) ? 'Ammunition' : 'Item', stackable: !!canonicalAmmoName(canonical) };
-    selected.push({ entry, request: { kind: item.stackable || canonicalAmmoName(canonical) ? 'stack' : 'unique', canonical_item: canonical, quantity: Number(request.quantity), item } });
+    const anomalyNoIncrement = entry.inventory_decrement_proven === false;
+    selected.push({ entry, request: { kind: anomalyNoIncrement ? 'anomaly' : (item.stackable || canonicalAmmoName(canonical) || Number(item.quantity) > 1 ? 'stack' : 'unique'), canonical_item: canonical, quantity: Number(request.quantity), item } });
   }
   return { ok: true, selected };
 }
 
 export async function executeRecoveryTransaction({ base44, ownerId = null, sessionId, characterId, combatId = null, requestId, outcome }) {
   if (!requestId || !sessionId || !characterId) return { status: 400, body: { applied: false, reason: 'missing_scope', writes: 0 } };
-  const [session, character] = await Promise.all([
+  const [session, character, combat] = await Promise.all([
     base44.asServiceRole.entities.GameSession.get(sessionId),
     base44.asServiceRole.entities.Character.get(characterId),
+    combatId ? base44.asServiceRole.entities.CombatLog.get(combatId).catch(() => null) : Promise.resolve(null),
   ]);
   if (!session || !character || session.character_id !== characterId || (ownerId && character.created_by_id !== ownerId)) return { status: 403, body: { applied: false, reason: 'character_session_mismatch', writes: 0 } };
+  const combatPlayerLink = combat ? (combat.combatants || []).filter((entry) => entry?.type === 'player' && entry?.id === characterId).length === 1 : false;
+  if (combatId && (!combat || combat.session_id !== sessionId || (combat.character_id && combat.character_id !== characterId) || !combatPlayerLink || combat.is_active || !['victory','defeat','fled','resolved'].includes(combat.result))) return { status: 409, body: { applied: false, reason: 'completed_combat_scope_invalid', writes: 0 } };
   if (outcome?.check?.success !== true) return { status: 200, body: { applied: false, reason: 'failed_check', writes: 0 } };
 
   const abilities = { ...(character.long_rest_abilities || {}) };
@@ -122,10 +136,10 @@ export async function executeRecoveryTransaction({ base44, ownerId = null, sessi
   let inventory = Array.isArray(character.inventory) ? character.inventory : [];
   const results = [];
   for (const request of work) {
-    const applied = request.kind === 'unique' ? applyUnique(inventory, request) : applyStack(inventory, request);
+    const applied = request.kind === 'anomaly' ? { ok: true, inventory, inventory_result: 'preexisting_missed_decrement_reconciled' } : request.kind === 'unique' ? applyUnique(inventory, request) : applyStack(inventory, request);
     if (!applied.ok) return { status: 409, body: { applied: false, reason: applied.reason, writes: 0 } };
     inventory = applied.inventory;
-    results.push({ canonical_item: request.canonical_item, quantity: request.quantity, inventory_result: applied.inventory_result, unique: request.kind === 'unique' });
+    results.push({ canonical_item: request.canonical_item, quantity: request.quantity, inventory_result: applied.inventory_result, unique: request.kind === 'unique', anomaly_reconciled: request.kind === 'anomaly' });
   }
 
   const beforeHash = await stableHash(character.inventory || []);
@@ -154,7 +168,7 @@ export async function executeRecoveryTransaction({ base44, ownerId = null, sessi
       const quantity = selectedById.get(entry.ledger_id);
       if (!quantity) return entry;
       const remaining = Number(entry.quantity_remaining) - quantity;
-      return { ...entry, quantity_remaining: remaining, recovery_status: remaining === 0 ? 'recovered' : 'partially_recovered', recovered_by_request_id: requestId, recovered_at: at };
+      return { ...entry, quantity_remaining: remaining, recovery_status: remaining === 0 ? 'recovered' : 'partially_recovered', recoverability_state: remaining === 0 ? 'recovered' : 'partially_recovered', recovery_request_id: requestId, recovered_by_request_id: requestId, recovered_at: at };
     });
   }
   abilities[RECOVERY_RECEIPTS_KEY] = [...receipts.slice(-(MAX_RECEIPTS - 1)), receipt];

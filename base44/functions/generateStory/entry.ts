@@ -11,6 +11,7 @@ import { executeThrownWeaponAction, recoverThrownWeapon } from '../../shared/sto
 import { classifyPrecisionAmbushIntent, normalizePendingAmbushRoster, pendingAmbushNarrative, stripGeneratedChoiceAnnotations } from '../../shared/story/generatedChoiceIntent.js';
 import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkillCheck.ts';
 import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
+import { recoveryAnnotation } from '../../shared/story/projectileLifecycle.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -88,6 +89,17 @@ Deno.serve(async (req) => {
         const recoveryOutcome = await recoverThrownWeapon({ base44, user, payload: { session_id, character_id: character.id, request_id: storyRequestId, ...authoritativeChoiceContext.thrown_recovery, check: authoritativeChoiceContext.check } });
         if (recoveryOutcome.status >= 400) return Response.json(recoveryOutcome.body, { status: recoveryOutcome.status });
       }
+    }
+    let authoritativeRecovery = null;
+    let itemRecovery = { applied: false, writes: 0 };
+    if (action === 'choice' && authoritativeChoiceContext?.recovery?.type === 'recover_owned_items') {
+      const recovery = authoritativeChoiceContext.recovery;
+      const check = authoritativeChoiceContext.check || { success: recovery.rule?.type === 'automatic_recovery' };
+      if (check.success === true) {
+        itemRecovery = await resolveItemRecovery({ base44, ownerId: user.id, sessionId: session_id, characterId: character.id, combatId: recovery.combat_id, requestId: storyRequestId, outcome: { check, recovery } });
+        if (!itemRecovery.applied) return Response.json({ error: itemRecovery.reason || itemRecovery.error || 'Recovery did not commit.', invalid: true, writes: 0 }, { status: itemRecovery.status >= 400 ? itemRecovery.status : 409 });
+      }
+      authoritativeRecovery = { recovery, check, applied: itemRecovery.applied, recovered_items: itemRecovery.recovered_items || [], annotation: recoveryAnnotation({ recovery, resolution: check, applied: itemRecovery.applied, recoveredItems: itemRecovery.recovered_items || [] }) };
     }
     let authoritativeSpellCast = null;
     if (action === 'choice' && storyRequestId) {
@@ -216,6 +228,7 @@ RECENT EVENTS: ${recentLog}
 ${gameDataContext}
 ${authoritativeSpellCast ? `AUTHORITATIVE SPELL RESULT: ${authoritativeSpellCast.spell_name} ${authoritativeSpellCast.already_processed ? 'was already processed; do not repeat it.' : `was cast at level ${authoritativeSpellCast.slot_level}.`} ${authoritativeSpellCast.concentration ? 'Concentration is active.' : ''} ${String(authoritativeSpellCast.spell_name || '').toLowerCase() === 'pass without trace' ? '+10 Stealth is active for the spell duration; narrate these facts exactly and do not deduct another slot.' : 'Do not deduct another slot or invent a different mechanical outcome.'}` : ''}
 ${authoritativeWeaponAction ? `AUTHORITATIVE THROWN-WEAPON RESULT: exactly one ${authoritativeWeaponAction.weapon_attack.item_name} (${authoritativeWeaponAction.weapon_attack.item_id}) was consumed. Target: ${authoritativeWeaponAction.weapon_attack.target}. Outcome: ${authoritativeWeaponAction.weapon_attack.hit ? 'hit' : 'miss'}${authoritativeWeaponAction.weapon_attack.kill ? ' and confirmed kill' : ''}. Narrate only this result; never invent a kill without confirmed kill.` : ''}
+${authoritativeRecovery ? `AUTHORITATIVE PROJECTILE RECOVERY: ${authoritativeRecovery.annotation} This inventory result is already committed when successful. Never claim any other item or quantity.` : ''}
 ${completedCombat ? `COMPLETED COMBAT CONTEXT: Combat ${completedCombat.combat_id} ended in ${completedCombat.result}. Dead enemies: ${(completedCombat.defeated_enemies || completedCombat.dead_enemies || []).map((enemy) => enemy.name || enemy.id).join(', ') || 'all listed enemies'}. This is aftermath narration only: combat_trigger MUST be false, enemies MUST be [], and no dead enemy may escape or re-engage.` : ''}
 ${authoritativeChoiceContext?.authoritative_skill_resolution ? `AUTHORITATIVE SKILL CHECK: ${authoritativeChoiceContext.check.skill} DC${authoritativeChoiceContext.check.dc}; original d20 ${authoritativeChoiceContext.check.raw_d20} + authoritative modifier ${authoritativeChoiceContext.check.modifier_total} = ${authoritativeChoiceContext.check.final_total}; ${authoritativeChoiceContext.check.success ? 'SUCCESS' : 'FAILURE'}. The narration, condition update, HP change, and combat trigger must honor this exact receipt.` : ''}
 ${ambushIntent ? `PENDING AMBUSH CONTRACT: This action resolves ONLY the Stealth setup phase. Do not narrate an arrow release, weapon attack, hit, damage, target defeat, concentration break, or death. If combat starts, the living ritual target must appear exactly once in enemies with complete HP and AC; the actual strike will be resolved later through player_attack.` : ''}
@@ -361,13 +374,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
     result = skillInvariant.result;
 
     // ====================== POST-PROCESSING ======================
-    // Inventory rewards are allowed only from structured recovery metadata passed
-    // by the client. Narrative text and generic searches can never grant items.
-    const itemRecovery = action === 'choice'
-      ? await resolveItemRecovery({ base44, user, sessionId: session_id, characterId: character.id, requestId: request_id, outcome: authoritativeChoiceContext })
-      : { applied: false };
-    if (itemRecovery.applied) {
-      result = { ...result, item_recovery: { ...itemRecovery.item_recovery, already_processed: !!itemRecovery.already_processed } };
+    if (authoritativeRecovery) {
+      result = { ...result, narrative: authoritativeRecovery.annotation, recovery_resolution: authoritativeRecovery, combat_trigger: false, enemies: [], item_recovery: itemRecovery.applied ? { ...itemRecovery.item_recovery, already_processed: !!itemRecovery.already_processed } : null };
     }
 
     // Story narration never owns combat linkage. Only startCombat may link a live
@@ -385,7 +393,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
         text: result.narrative, choices: result.choices || [],
         ...(authoritativeChoiceContext?.check?.raw_d20 != null ? { skill_check: authoritativeChoiceContext.check, skill_display: result.skill_display } : {}),
         ...(result.combat_handoff ? { combat_handoff: result.combat_handoff } : {}),
-        ...(result.item_recovery ? { item_recovery: result.item_recovery } : {})
+        ...(result.item_recovery ? { item_recovery: result.item_recovery } : {}),
+        ...(result.recovery_resolution ? { recovery_resolution: result.recovery_resolution } : {})
       };
       const updatedLog = action === 'choice' && storyRequestId
         ? (session.story_log || []).map((entry) => entry?.request_id === storyRequestId ? completedEntry : entry).slice(-60)

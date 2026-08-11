@@ -13,10 +13,12 @@ import { findHuntersMark, rollHuntersMarkBonus, removeHuntersMark } from './hunt
 import { ammoForWeapon, consumeAmmunition } from '../ammunition.ts';
 import { rollWeaponBaseDamage } from './weaponDamage.ts';
 import { appendRecoverableItem, buildRecoverableItem } from '../story/recoveryTransaction.ts';
+import { resolveExplicitThrownWeapon } from '../story/projectileLifecycle.ts';
 
 export async function handlePlayerAttack(ctx) {
   const { base44, session_id, combat_id, character_id, payload, request_id, roll_d20 = rollD20 } = ctx;
-  const { target_id, weapon, spell, modifiers = {} } = payload;
+  const { target_id, spell, modifiers = {} } = payload;
+  let weapon = payload.weapon;
   const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
   // User-scoped fetch: RLS only returns the record if the user may read (owns) it,
   // so a successful fetch proves ownership. (Manual created_by/email compare was
@@ -66,6 +68,7 @@ export async function handlePlayerAttack(ctx) {
   let attackType = 'melee';
   let extraDamageDice = []; // For smite, sneak attack, etc
   let ammunitionCommit = null;
+  let projectileCommit = null;
   let sneakAttackApplied = false; // tracks if Sneak Attack was used this attack (once-per-turn guard)
   let colossusApplied = false; // Hunter Ranger Colossus Slayer (once-per-turn guard)
 
@@ -503,6 +506,10 @@ export async function handlePlayerAttack(ctx) {
     // Fall through: ranged/melee spell attacks use spellAttackBonus already set above.
     // damageBonus stays 0 for spell attacks (no ability mod added to spell damage by default).
   } else if (weapon) {
+    const projectile = resolveExplicitThrownWeapon({ actionText: modifiers.action_text, inventory: character.inventory || [], selectedWeapon: weapon });
+    if (projectile.handled && !request_id) return Response.json({ error: 'Explicit thrown attacks require request_id.', invalid: true, writes: 0 }, { status: 400 });
+    if (projectile.handled && !projectile.ok) return Response.json({ error: projectile.error, invalid: true, writes: 0 }, { status: projectile.status });
+    if (projectile.ok) { projectileCommit = projectile; weapon = projectile.weapon; }
     const isRanged = weapon.type === 'ranged';
     // Monk Martial Arts (PHB p.76): unarmed strikes scale die by level and can use DEX
     if ((character.class || '') === 'Monk' && weapon.name === 'Unarmed Strike') {
@@ -526,6 +533,7 @@ export async function handlePlayerAttack(ctx) {
       return Response.json({ error: `${weapon.name} has the Loading property — it can only be fired once per turn.`, invalid: true }, { status: 400 });
     }
     if (isRanged && usesAmmo) {
+      if (!request_id) return Response.json({ error: 'Ammunition attacks require request_id.', invalid: true, writes: 0 }, { status: 400 });
       const ammoName = ammoForWeapon(weapon.name) || 'Arrows';
       const priorAmmoReceipt = (character.long_rest_abilities?.__ammo_attack_receipts || []).find((entry) => entry.request_id === request_id);
       if (priorAmmoReceipt) ammunitionCommit = { ...priorAmmoReceipt, inventory: character.inventory || [], already_committed: true };
@@ -815,7 +823,7 @@ export async function handlePlayerAttack(ctx) {
   let concentrationBrokenSelf = null; // set if this attack broke the player's own concentration
   const isSpellAttack = !!spell;
   const advantageSources = concealmentAttributions(attackConcealment);
-  const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : 'attack', target: target.name, target_id, spell_name: spell?.name || null, weapon: spell ? null : { name: weapon?.name || 'Weapon', damage_dice: damageDice, damage_type: weapon?.damage_type || null, damage_bonus: weapon?.damage_bonus || 0, attack_bonus: weapon?.attack_bonus || 0, type: weapon?.type || attackType, properties: weapon?.properties || [] }, request_id: request_id || null, raw_d20: attackResult.roll, selected_d20: attackResult.roll, all_rolls: attackResult.rolls, attack_bonus: attackMod, target_ac: target.ac + targetACBonus, advantage: attackResult.advantage, disadvantage: attackResult.disadvantage, advantage_sources: advantageSources };
+  const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : projectileCommit ? 'player_attack' : 'attack', attack_mode: projectileCommit ? 'thrown' : attackType, target: target.name, target_id, spell_name: spell?.name || null, weapon: spell ? null : { name: weapon?.name || 'Weapon', canonical_item_id: projectileCommit?.item_id || weapon?.canonical_item_id || null, equipment_id: weapon?.equipment_id || null, item_id: weapon?.item_id || null, damage_dice: damageDice, damage_type: weapon?.damage_type || null, damage_bonus: weapon?.damage_bonus || 0, attack_bonus: weapon?.attack_bonus || 0, type: weapon?.type || attackType, attack_mode: projectileCommit ? 'thrown' : attackType, recoverable: !!projectileCommit, properties: weapon?.properties || [] }, request_id: request_id || null, raw_d20: attackResult.roll, selected_d20: attackResult.roll, all_rolls: attackResult.rolls, attack_bonus: attackMod, target_ac: target.ac + targetACBonus, advantage: attackResult.advantage, disadvantage: attackResult.disadvantage, advantage_sources: advantageSources };
 
   if (hit) {
     const parsedBase = damageDice.match(/(\d+)d(\d+)/);
@@ -1096,6 +1104,16 @@ export async function handlePlayerAttack(ctx) {
   if (spell?.requires_concentration) {
     newWorldState.concentration_spell = spell.name;
     newWorldState.concentration_caster = character.name;
+  }
+
+  if (projectileCommit) {
+    const projectileReceipt = { character_id, session_id, combat_id, action_request_id: request_id || null, request_id: request_id || null, canonical_item: projectileCommit.item.name, item_id: projectileCommit.item_id, quantity: 1, quantity_before: projectileCommit.quantity_before, quantity_after: projectileCommit.quantity_after, hit, consumed_at: new Date().toISOString(), recoverability_state: 'recoverable', recovery_request_id: null };
+    logEntry.projectile = projectileReceipt;
+    const attackSession = await base44.asServiceRole.entities.GameSession.get(session_id);
+    const recoverable = buildRecoverableItem({ originRequestId: request_id, characterId: character_id, sessionId: session_id, combatId: combat_id, location: combatLog.location || attackSession?.current_location, canonicalName: projectileCommit.item.name, quantity: 1, sourceAction: 'thrown_weapon_attack', itemSnapshot: projectileCommit.item });
+    const abilities = appendRecoverableItem(character.long_rest_abilities || {}, recoverable);
+    await base44.asServiceRole.entities.Character.update(character_id, { inventory: projectileCommit.inventory, long_rest_abilities: abilities });
+    newWorldState.__projectile_receipts = [...(newWorldState.__projectile_receipts || []).filter((entry) => entry.request_id !== request_id).slice(-49), projectileReceipt];
   }
 
   if (ammunitionCommit) {

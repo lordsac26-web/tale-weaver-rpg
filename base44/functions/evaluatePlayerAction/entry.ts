@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
+import { prepareProjectileRecoveryProposal } from '../../shared/story/projectileLifecycle.ts';
 
 Deno.serve(async (req) => {
   try {
@@ -101,7 +102,12 @@ Return ONLY a JSON object:
       return Response.json({ ...result, action, in_combat: true });
     }
 
-    // ============ EXPLORATION MODE (unchanged) ============
+    // ============ EXPLORATION MODE ============
+    const projectileRecovery = await prepareProjectileRecoveryProposal({ base44, session, character, actionText: action });
+    if (projectileRecovery.handled) {
+      if (projectileRecovery.status >= 400) return Response.json({ error: projectileRecovery.error, writes: 0, combat_id: projectileRecovery.combat_id || null }, { status: projectileRecovery.status });
+      return Response.json({ action, requires_check: projectileRecovery.requires_check, skill: projectileRecovery.skill, dc: projectileRecovery.dc, reasoning: projectileRecovery.reasoning, risk_level: projectileRecovery.risk_level, recovery: projectileRecovery.recovery, recovery_rule: projectileRecovery.recovery.rule, combat_id: projectileRecovery.combat_id });
+    }
     const prompt = `You are a Dungeon Master evaluating a player's proposed action in a D&D 5e game.
     
 Character: ${character?.name}, ${character?.race} ${character?.class} Level ${character?.level}

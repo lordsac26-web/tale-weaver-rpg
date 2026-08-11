@@ -787,7 +787,7 @@ export default function Game() {
         setNarrative(prev => [...prev, { type: 'roll_result', text: `✓ ${skill} succeeds — you set up the strike on ${target.name}!`, success: true }]);
       }
       // Reuse the standard attack pipeline so damage, action economy, and enemy turns all apply
-      await handlePlayerAttack(target.id, 'attack', character?.equipped?.weapon || null);
+      await handlePlayerAttack(target.id, 'attack', character?.equipped?.weapon || null, { action_text: action });
       await applyCombatReward(reward);
       return;
     }
