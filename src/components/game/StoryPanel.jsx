@@ -5,6 +5,7 @@ import SkillCheckResult from './SkillCheckResult';
 import MicButton from './MicButton';
 import { stopAllNarration } from './narrationControl';
 import { stripEmbeddedChoices } from './stripEmbeddedChoices';
+import { normalizeChoiceCheckDisplay } from '../../../base44/shared/story/choiceCheckDisplay';
 import AskDMDialog from './AskDMDialog';
 import { base44 } from '@/api/base44Client';
  
@@ -527,6 +528,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
               <AnimatePresence>
                 {choices.map((choice, i) => {
                   const riskStyle = RISK_STYLES[choice.risk_level] || RISK_STYLES['low'];
+                  const checkDisplay = normalizeChoiceCheckDisplay(choice, { logConflicts: true });
                   return (
                     <motion.button key={i}
                       initial={{ opacity: 0, x: -16 }}
@@ -550,10 +552,10 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {choice.skill_check && choice.dc && (
+                          {checkDisplay.badgeText && (
                             <span className="px-1.5 py-0.5 rounded-full font-fantasy"
                               style={{ background: riskStyle.badge.bg, color: riskStyle.badge.color, border: `1px solid ${riskStyle.badge.border}`, fontSize: '0.6rem' }}>
-                              {choice.skill_check} DC{choice.dc}
+                              {checkDisplay.badgeText}
                             </span>
                           )}
                           {choice.risk_level && (

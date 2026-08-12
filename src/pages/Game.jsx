@@ -35,6 +35,7 @@ import { canonicalSkillName } from '@/components/game/skillCheckResolver';
 import { buildThrownWeaponContext } from '@/lib/thrownWeaponIntent';
 import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '../../base44/shared/skills/authoritativeSkillModifier';
 import { classifyPrecisionAmbushIntent, stripGeneratedChoiceAnnotations } from '../../base44/shared/story/generatedChoiceIntent';
+import { normalizeChoiceCheckDisplay } from '../../base44/shared/story/choiceCheckDisplay';
 import { prepareStorySkillCheck, resolveStorySkillRoll } from '@/lib/storySkillCheck';
 
 const getFunctionErrorMessage = (error, fallback) =>
@@ -397,7 +398,8 @@ export default function Game() {
 
   const handleChoice = async (choiceIndex) => {
     const sourceChoice = choices[choiceIndex];
-    const choice = { ...sourceChoice, text: stripGeneratedChoiceAnnotations(sourceChoice?.text) };
+    const normalizedCheck = normalizeChoiceCheckDisplay(sourceChoice, { logConflicts: true });
+    const choice = { ...sourceChoice, skill_check: normalizedCheck.skillLabel || sourceChoice?.skill_check, dc: normalizedCheck.dc ?? sourceChoice?.dc, text: stripGeneratedChoiceAnnotations(sourceChoice?.text) };
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
     setChoices([]);
 
