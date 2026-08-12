@@ -16,6 +16,7 @@ export const sanitizeChoiceSkillLabel = (value) => {
     .replace(/^\s*skill\s*check\s*:\s*/i, '')
     .replace(/[([]\s*DC\s*[1-9]\d?\s*[)\]]/gi, ' ')
     .replace(DC_FRAGMENT, ' ')
+    .replace(/\s+\d+\s*$/, '')
     .replace(/\s+/g, ' ')
     .replace(/^[\s:;,-]+|[\s:;,-]+$/g, '')
     .trim();
@@ -56,7 +57,7 @@ export const normalizeChoiceCheckDisplay = (choice = {}, { logConflicts = false 
 };
 
 export const CHOICE_CHECK_BOUNDARY_CONTRACT = Object.freeze({
-  production_render_sites: ['src/components/game/StoryPanel.jsx -> src/components/game/StoryChoiceCheckBadge.jsx'],
+  production_render_sites: ['src/components/game/StoryPanel.jsx:inline-choice-map-pill-v3'],
   text_children: 'formatted_badge_text_only',
   separately_appends_dc: false,
 });
