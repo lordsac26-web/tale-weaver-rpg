@@ -2,9 +2,9 @@ const DC_FRAGMENT = /\bDC\s*([1-9]\d?)\b/gi;
 const loggedConflicts = new Set();
 
 const validDc = (value) => {
-  if (value === null || value === undefined || String(value).trim() === '') return null;
-  const number = Number(value);
-  return Number.isInteger(number) && number > 0 && number < 100 ? number : null;
+  if (value === null || value === undefined) return null;
+  const match = String(value).trim().match(/^(?:DC\s*)?([1-9]\d?)$/i);
+  return match ? Number(match[1]) : null;
 };
 
 export const sanitizeChoiceSkillLabel = (value) => {
@@ -22,9 +22,10 @@ export const sanitizeChoiceSkillLabel = (value) => {
 };
 
 export const normalizeChoiceCheckDisplay = (choice = {}, { logConflicts = false } = {}) => {
-  const rawSkill = String(choice.skill_check || '');
+  const rawSkill = String(choice.skill_check ?? choice.skill ?? '');
   const embeddedDcs = [...rawSkill.matchAll(DC_FRAGMENT)].map((match) => Number(match[1]));
-  const structuredDc = validDc(choice.dc);
+  const explicitDc = choice.dc ?? choice.difficulty_class;
+  const structuredDc = validDc(explicitDc);
   const dc = structuredDc ?? embeddedDcs[0] ?? null;
   const conflictingDcs = structuredDc === null
     ? embeddedDcs.slice(1).filter((value) => value !== dc)
@@ -52,4 +53,15 @@ export const normalizeChoiceCheckDisplay = (choice = {}, { logConflicts = false 
     badgeText: skillLabel && dc ? `${skillLabel.toUpperCase()} DC ${dc}` : null,
     diagnostic,
   };
+};
+
+export const CHOICE_CHECK_BOUNDARY_CONTRACT = Object.freeze({
+  production_render_sites: ['src/components/game/StoryPanel.jsx -> src/components/game/StoryChoiceCheckBadge.jsx'],
+  text_children: 'formatted_badge_text_only',
+  separately_appends_dc: false,
+});
+
+export const createChoiceCheckBadgeElement = (createElement, choice, elementProps = {}) => {
+  const display = normalizeChoiceCheckDisplay(choice, { logConflicts: true });
+  return display.badgeText ? createElement('span', elementProps, display.badgeText) : null;
 };
