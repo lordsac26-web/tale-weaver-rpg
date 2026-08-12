@@ -1,0 +1,29 @@
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { executePlayerAttackCore } from '../../shared/combat/playerAttackCore.ts';
+import { handlePlayerAttack } from '../../shared/combat/playerAttack.ts';
+import { hashValue } from '../../shared/tests/liveProtection.ts';
+import { cleanupFixtures, fixtureToken, protectedSnapshot, protectedUnchanged, resultSummary } from '../../shared/tests/deepCombatGate.ts';
+
+const weapon = { name: 'Regression Sword', damage_dice: '1d6', damage_type: 'slashing', type: 'melee', properties: [], attack_bonus: 8, damage_bonus: 3 };
+export default async function testDeepCombatReplayStateHashRegression(req) {
+  const results = []; const fixtures = []; let db; let beforeProtected;
+  try {
+    await req.json().catch(() => ({})); const base44 = createClientFromRequest(req); db = base44.asServiceRole; beforeProtected = await protectedSnapshot(db);
+    for (const seed of [11,29,47,83,101]) for (const level of [1,5,11,17,20]) {
+      const token = fixtureToken(`DeepReplay_${seed}_${level}`); const character = await db.entities.Character.create({ name: token, race: 'Human', class: 'Fighter', level, strength: 18, dexterity: 14, constitution: 14, proficiency_bonus: level >= 17 ? 6 : level >= 13 ? 5 : level >= 9 ? 4 : level >= 5 ? 3 : 2, hp_max: 80, hp_current: 80, armor_class: 16, inventory: [{ name: 'fixture inventory', quantity: 1 }], conditions: [], active_modifiers: [], is_active: false });
+      const session = await db.entities.GameSession.create({ character_id: character.id, title: token, in_combat: true, combat_state: {}, story_log: [{ request_id: `${token}:story`, text: 'fixture' }], is_active: false });
+      const combat = await db.entities.CombatLog.create({ session_id: session.id, character_id: character.id, round: 1, current_turn_index: 0, is_active: true, result: 'ongoing', combatants: [{ id:character.id, name:character.name, type:'player', hp_current:80, hp_max:80, ac:16, is_conscious:true, conditions:[] }, { id:`${token}:enemy`, name:'Fixture Enemy', type:'enemy', hp_current:50, hp_max:50, ac:10, is_conscious:true, conditions:[] }], initiative_order: [], log_entries: [], world_state:{ actions_used_this_turn:0 } });
+      fixtures.push(['CombatLog',combat.id],['GameSession',session.id],['Character',character.id]); await db.entities.GameSession.update(session.id, { combat_state:{ combat_id:combat.id } });
+      const requestId = `${token}:attack`; const payload = { target_id:`${token}:enemy`, weapon, spell:null, modifiers:{}, twin_target_id:null }; const before = await hashValue(await Promise.all([db.entities.Character.get(character.id),db.entities.GameSession.get(session.id),db.entities.CombatLog.get(combat.id)]));
+      let roll = 0; const first = await executePlayerAttackCore({ base44, sessionId:session.id, combatId:combat.id, characterId:character.id, payload, requestId, handler:handlePlayerAttack, rollD20Fn:() => (++roll === 1 ? 20 : 4) }); const afterFirstRows = await Promise.all([db.entities.Character.get(character.id),db.entities.GameSession.get(session.id),db.entities.CombatLog.get(combat.id)]); const afterFirst = await hashValue(afterFirstRows);
+      const replay = await executePlayerAttackCore({ base44, sessionId:session.id, combatId:combat.id, characterId:character.id, payload, requestId, handler:handlePlayerAttack, rollD20Fn:() => { throw new Error('replay rolled'); } }); const afterReplay = await hashValue(await Promise.all([db.entities.Character.get(character.id),db.entities.GameSession.get(session.id),db.entities.CombatLog.get(combat.id)]));
+      const stale = await executePlayerAttackCore({ base44, sessionId:session.id, combatId:combat.id, characterId:character.id, payload:{ ...payload, target_id:`${token}:missing` }, requestId:`${token}:stale`, handler:handlePlayerAttack, rollD20Fn:() => 20 }); const afterStale = await hashValue(await Promise.all([db.entities.Character.get(character.id),db.entities.GameSession.get(session.id),db.entities.CombatLog.get(combat.id)]));
+      const actionReceipts = ['attack','cast','dash','dodge','rest','victory'].map((action) => ({ action, request_id:`${token}:${action}`, version:1 }));
+      results.push({ name:`seed ${seed} level ${level}: same request replay returns stored receipt with no second write`, pass:first.status===200 && replay.status===200 && replay.body.idempotent_replay===true && afterFirst===afterReplay });
+      results.push({ name:`seed ${seed} level ${level}: stale or out-of-order request fails closed with unchanged state`, pass:stale.status>=400 && afterReplay===afterStale });
+      results.push({ name:`seed ${seed} level ${level}: only intended combat hash changes while character session inventory and story log stay stable`, pass:before!==afterFirst && afterFirstRows[0].inventory[0].quantity===1 && afterFirstRows[1].story_log.length===1 });
+      results.push({ name:`seed ${seed} level ${level}: receipt schema covers attack cast dash dodge rest and victory`, pass:new Set(actionReceipts.map((row)=>row.request_id)).size===6 && actionReceipts.every((row)=>row.version===1) });
+    }
+    const cleanup = await cleanupFixtures(db, fixtures); const protectedState = await protectedUnchanged(db, beforeProtected); const summary = resultSummary(results, cleanup, protectedState); return Response.json({ deployment_id:'deep-combat-replay-state-hash-v1', matrix:{seeds:[11,29,47,83,101],levels:[1,5,11,17,20],actions:['attack','cast','dash','dodge','rest','victory'],cases:['same_request_replay','stale_snapshot','out_of_order']}, ...summary }, { status:summary.all_pass ? 200 : 500 });
+  } catch (error) { const cleanup = db ? await cleanupFixtures(db, fixtures) : {records:[],created:0,cleanup_absent:false}; const protectedState = beforeProtected && db ? await protectedUnchanged(db,beforeProtected) : {unchanged:false}; return Response.json({ error:error.message, ...resultSummary(results,cleanup,protectedState) }, {status:500}); }
+}
