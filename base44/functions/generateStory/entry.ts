@@ -12,6 +12,7 @@ import { classifyPrecisionAmbushIntent, normalizePendingAmbushRoster, pendingAmb
 import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkillCheck.ts';
 import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
 import { recoveryAnnotation } from '../../shared/story/projectileLifecycle.ts';
+import { commitNarratedStoryInventoryRecovery, narrationMayPublishRecovery } from '../../shared/story/narratedStoryInventoryCommit.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -92,14 +93,13 @@ Deno.serve(async (req) => {
     }
     let authoritativeRecovery = null;
     let itemRecovery = { applied: false, writes: 0 };
-    if (action === 'choice' && authoritativeChoiceContext?.recovery?.type === 'recover_owned_items') {
+    if (action === 'choice' && authoritativeChoiceContext?.recovery) {
       const recovery = authoritativeChoiceContext.recovery;
       const check = authoritativeChoiceContext.check || { success: recovery.rule?.type === 'automatic_recovery' };
-      if (check.success === true) {
-        itemRecovery = await resolveItemRecovery({ base44, ownerId: user.id, sessionId: session_id, characterId: character.id, combatId: recovery.combat_id, requestId: storyRequestId, outcome: { check, recovery } });
-        if (!itemRecovery.applied) return Response.json({ error: itemRecovery.reason || itemRecovery.error || 'Recovery did not commit.', invalid: true, writes: 0 }, { status: itemRecovery.status >= 400 ? itemRecovery.status : 409 });
-      }
-      authoritativeRecovery = { recovery, check, applied: itemRecovery.applied, recovered_items: itemRecovery.recovered_items || [], annotation: recoveryAnnotation({ recovery, resolution: check, applied: itemRecovery.applied, recoveredItems: itemRecovery.recovered_items || [] }) };
+      const committed = await commitNarratedStoryInventoryRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check, recovery });
+      if (!committed.body?.applied) return Response.json({ error:committed.body?.reason || 'Recovery did not commit.', invalid:true, writes:0 }, { status:committed.status >= 400 ? committed.status : 409 });
+      itemRecovery = { applied:true, already_processed:!!committed.body.already_processed, recovered_items:committed.body.recovered_items || [], item_recovery:{ request_id:storyRequestId, recovered_items:committed.body.recovered_items || [], quantity:(committed.body.recovered_items || []).reduce((sum,item)=>sum+Number(item.quantity || 0),0), item_name:(committed.body.recovered_items || []).map((item)=>item.canonical_item).join(' and '), inventory_result:committed.body.receipt?.inventory_result }, writes:committed.body.writes };
+      authoritativeRecovery = { recovery, check, applied:true, recovered_items:itemRecovery.recovered_items, annotation:recoveryAnnotation({ recovery, resolution:check, applied:true, recoveredItems:itemRecovery.recovered_items }) };
     }
     let authoritativeSpellCast = null;
     if (action === 'choice' && storyRequestId) {
@@ -290,7 +290,7 @@ ${adultToneInstruction}
 5. Should combat be triggered? Only when dramatically justified.
 6. How do environment (season, time, weather) and current conditions influence the scene?
 
-Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; a specific tangible item must include {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise recovery must be null.
+Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. For a concrete item gained by the CURRENT action, set current_recovery to an exact structured object: {type:"arrows", quantity:1-20} or {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise current_recovery must be null. Never claim that an item was found or recovered unless current_recovery is exact and the authoritative check succeeded. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null.
 
 CONDITION CONTRACT: condition_update is ONLY for a real mechanical status affecting the PLAYER CHARACTER. Set target to "player" only when the player is actually affected; use "other" for an enemy/NPC effect and "none" when no player condition changes. Never use placeholder labels such as "None", "Normal", or "N/A". Use the remove field when a prior player condition ends. Choose duration "scene", "combat", or "persistent" accurately. Enemy conditions that begin combat belong in that enemy's starting_conditions, never on the player.
 

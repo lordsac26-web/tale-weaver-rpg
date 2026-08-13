@@ -58,3 +58,29 @@ export async function auditRepairNarratedProjectileRecovery({ db, scope, request
   await db.entities.GameSession.update(session.id, { story_log: nextStory, world_state: { ...(session.world_state || {}), __narrated_projectile_recovery_repairs: [...(session.world_state?.__narrated_projectile_recovery_repairs || []).slice(-19), repair] } });
   return { status: 200, body: { success: true, already_processed: false, request_id: requestId, writes: Number(committed.body.writes || 0) + 1, recovered_items: committed.body.recovered_items, protected_hashes: hashes } };
 }
+
+export async function discoverNarratedProjectileRecovery({ db, characterId, sessionId }) {
+  const [character, session, combats] = await Promise.all([
+    db.entities.Character.get(characterId).catch(() => null),
+    db.entities.GameSession.get(sessionId).catch(() => null),
+    db.entities.CombatLog.filter({ session_id:sessionId }, '-created_date', 20),
+  ]);
+  if (!character || !session || session.character_id !== character.id) return { status:403, body:{ error:'Character and session linkage is invalid', writes:0 } };
+  const story = Array.isArray(session.story_log) ? session.story_log : [];
+  const candidates = story.map((entry,index) => {
+    const action=String(entry?.player_choice || ''); const text=String(entry?.text || ''); const found=text.match(/\b(?:found|recover(?:ed)?|retrieve[ds]?|collect(?:ed)?)\b[^.]{0,100}\b(\d+)\s+arrows\b/i);
+    const skill=entry?.skill_check || entry?.authoritative_skill_check || null;
+    const checkSuccess=skill?.success === true || /\b(?:perception|investigation)\b[^.]{0,80}\b(?:success|passed)\b/i.test(text);
+    return found && /\b(?:look|search|find|arrow)/i.test(action) && checkSuccess ? { index, entry, quantity:Number(found[1]), excerpt:text.slice(Math.max(0,found.index-80),Math.min(text.length,found.index+180)), skill } : null;
+  }).filter(Boolean);
+  const completed=(combats || []).filter((combat)=>!combat?.is_active && ['victory','defeat','fled','resolved'].includes(combat?.result));
+  const candidate=candidates.length===1 ? candidates[0] : null;
+  const linkedCombatId=candidate?.entry?.item_recovery?.receipt?.combat_id || candidate?.entry?.recovery_resolution?.recovery?.combat_id || null;
+  const combat=linkedCombatId ? completed.find((entry)=>entry.id===linkedCombatId) || null : null;
+  const later= candidate ? story.slice(candidate.index+1).map((entry,index)=>({ index:candidate.index+1+index, timestamp:entry?.timestamp || null, request_id:entry?.request_id || null, player_choice:entry?.player_choice || null, recovery:entry?.item_recovery || entry?.recovery_resolution || null })).filter((entry)=>entry.recovery || /\b(?:arrow|arrows|recover|retrieve|collect)\b/i.test(String(entry.player_choice || ''))) : [];
+  const protectedHashes={ character:await hash(character), session:await hash(session), inventory:await hash(character.inventory || []), completed_combats:await hash(completed.map(semanticCombat)) };
+  const current=quantity(character.inventory,'Arrows'); const ambiguity=[]; if (candidates.length!==1) ambiguity.push(`expected_one_candidate_found_${candidates.length}`); if (candidate && (!Number.isInteger(candidate.quantity) || candidate.quantity<=0)) ambiguity.push('invalid_exact_quantity'); if (later.length) ambiguity.push('later_recovery_conflict');
+  const discovery={ candidate_story_index:candidate?.index ?? null, candidate_timestamp:candidate?.entry?.timestamp || null, player_action:candidate?.entry?.player_choice || null, narrated_text_excerpt:candidate?.excerpt || null, skill_check_result:candidate?.skill || null, recovered_item:candidate ? { canonical_item:'Arrows', quantity:candidate.quantity } : null, combat_log_id:linkedCombatId, request_id:candidate?.entry?.request_id || candidate?.skill?.request_id || null, receipt_identity:candidate?.entry?.item_recovery?.receipt?.token || candidate?.skill?.resolution_id || candidate?.skill?.request_id || null, current_canonical_stack_quantity:current, expected_post_repair_quantity:candidate ? current+candidate.quantity : null, later_conflict_scan:later, ambiguity_diagnostics:ambiguity, completed_combat_context:completed.map((entry)=>({id:entry.id,result:entry.result,created_date:entry.created_date})), protected_hashes:protectedHashes };
+  if (ambiguity.length) return { status:409, body:{ success:false, mode:'discover', writes:0, discovery } };
+  return { status:200, body:{ success:true, mode:'discover', writes:0, discovery, protected_hashes } };
+}
