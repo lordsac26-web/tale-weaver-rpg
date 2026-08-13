@@ -45,6 +45,7 @@ export function normalizePwtHideAuditRequest(rawBody) {
     session_id: cleanString(source.session_id ?? source.sessionId),
     combat_log_id: cleanString(source.combat_log_id ?? source.combat_id ?? source.combatLogId ?? source.combatId),
     request_id: cleanString(source.request_id ?? source.requestId),
+    incident_key: cleanString(source.incident_key ?? source.incidentKey),
     expected_hashes: source.expected_hashes ?? source.expectedHashes ?? null,
     compact: source.compact === true || source.response_mode === 'compact' || source.responseMode === 'compact',
   };

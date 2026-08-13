@@ -310,6 +310,7 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
           xp_earned: { type: 'number' },
           loot: { type: 'array', items: { type: 'object', properties: { name:{type:'string'}, type:{type:'string'}, quantity:{type:'number'}, description:{type:'string'}, value:{type:'number'} } } },
           loot_coins: { type: 'object', properties: { gold:{type:'number'}, silver:{type:'number'}, copper:{type:'number'} } },
+          current_recovery: { type:'object', properties:{ type:{type:'string',enum:['arrows','item']}, quantity:{type:'number'}, item:{type:'object',properties:{name:{type:'string'},quantity:{type:'number'},stackable:{type:'boolean'},category:{type:'string'},rarity:{type:'string'},description:{type:'string'},source:{type:'string'},item_id:{type:'string'}}} } },
           location_update: { type: 'string' },
           quest_update: { type: 'object', properties: { new_quest:{type:'string'}, completed_quest:{type:'string'} } },
           condition_update: {
@@ -372,6 +373,13 @@ Write a gripping 1-2 paragraph combat narrative.`;
     const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
     if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0 }, { status: 409 });
     result = skillInvariant.result;
+    if (!authoritativeRecovery && action === 'choice' && result.current_recovery) {
+      const committed = await commitNarratedStoryInventoryRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check:authoritativeChoiceContext.check, recovery:result.current_recovery });
+      if (!committed.body?.applied) return Response.json({ error:committed.body?.reason || 'Structured reward did not commit.', invalid:true, writes:0 },{status:committed.status >= 400 ? committed.status : 409});
+      itemRecovery = { applied:true, already_processed:!!committed.body.already_processed, recovered_items:committed.body.recovered_items || [], item_recovery:{request_id:storyRequestId,recovered_items:committed.body.recovered_items || [],quantity:(committed.body.recovered_items || []).reduce((sum,item)=>sum+Number(item.quantity||0),0),item_name:(committed.body.recovered_items || []).map((item)=>item.canonical_item).join(' and '),inventory_result:committed.body.receipt?.inventory_result} };
+      authoritativeRecovery = { recovery:result.current_recovery, check:authoritativeChoiceContext.check, applied:true, recovered_items:itemRecovery.recovered_items, annotation:recoveryAnnotation({recovery:result.current_recovery,resolution:authoritativeChoiceContext.check,applied:true,recoveredItems:itemRecovery.recovered_items}) };
+    }
+    if (!narrationMayPublishRecovery({ narrative:result.narrative, committed:authoritativeRecovery?.applied === true })) return Response.json({error:'Exact item-recovery narration requires a committed structured receipt.',invalid:true,writes:0},{status:409});
 
     // ====================== POST-PROCESSING ======================
     if (authoritativeRecovery) {
