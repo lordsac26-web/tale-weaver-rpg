@@ -25,7 +25,7 @@ export function SessionProvider({ children, sessionId }) {
       const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: e.text }));
       setNarrative(restored);
       const lastEntry = sess.story_log[sess.story_log.length - 1];
-      if (lastEntry?.choices?.length > 0) setChoices(lastEntry.choices);
+      setChoices(Array.isArray(lastEntry?.choices) ? lastEntry.choices : []);
     }
     
     setLoading(false);

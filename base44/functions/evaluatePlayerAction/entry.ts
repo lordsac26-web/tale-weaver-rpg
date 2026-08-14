@@ -8,7 +8,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { action, character: incomingCharacter, session_id, character_id, session_context, in_combat, combat_context, combat_enemies } = await req.json();
+    const { action, character: incomingCharacter, session_id, character_id, session_context, in_combat, combat_context, combat_enemies, request_id } = await req.json();
     if (!session_id || !character_id) return Response.json({ error: 'session_id and character_id are required' }, { status: 400 });
     const [session, character] = await Promise.all([
       base44.asServiceRole.entities.GameSession.get(session_id).catch(() => null),
@@ -99,14 +99,14 @@ Return ONLY a JSON object:
         },
       });
 
-      return Response.json({ ...result, action, in_combat: true });
+      return Response.json({ ...result, action, request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.1.0', in_combat: true });
     }
 
     // ============ EXPLORATION MODE ============
     const projectileRecovery = await prepareProjectileRecoveryProposal({ base44, session, character, actionText: action });
     if (projectileRecovery.handled) {
       if (projectileRecovery.status >= 400) return Response.json({ error: projectileRecovery.error, writes: 0, combat_id: projectileRecovery.combat_id || null }, { status: projectileRecovery.status });
-      return Response.json({ action, requires_check: projectileRecovery.requires_check, skill: projectileRecovery.skill, dc: projectileRecovery.dc, reasoning: projectileRecovery.reasoning, risk_level: projectileRecovery.risk_level, recovery: projectileRecovery.recovery, recovery_rule: projectileRecovery.recovery.rule, combat_id: projectileRecovery.combat_id });
+      return Response.json({ action, request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.1.0', requires_check: projectileRecovery.requires_check, skill: projectileRecovery.skill, dc: projectileRecovery.dc, reasoning: projectileRecovery.reasoning, risk_level: projectileRecovery.risk_level, recovery: projectileRecovery.recovery, recovery_rule: projectileRecovery.recovery.rule, combat_id: projectileRecovery.combat_id });
     }
     const prompt = `You are a Dungeon Master evaluating a player's proposed action in a D&D 5e game.
     
@@ -146,7 +146,7 @@ Return a JSON object with these fields only:
       }
     });
 
-    return Response.json({ ...result, action });
+    return Response.json({ ...result, action, request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.1.0' });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

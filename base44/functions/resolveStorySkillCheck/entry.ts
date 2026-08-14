@@ -8,7 +8,7 @@ export default async function resolveStorySkillCheckEndpoint(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await req.json();
     const outcome = await resolveUnifiedStorySkillCheck({ db: base44.asServiceRole, user, payload: body });
-    return Response.json(outcome.body, { status: outcome.status });
+    return Response.json({ ...outcome.body, function_version: 'resolve-story-skill-check-v2.1.0' }, { status: outcome.status });
   } catch (error) {
     return Response.json({ error: error.message || 'Story skill check could not be resolved', writes: 0 }, { status: 500 });
   }

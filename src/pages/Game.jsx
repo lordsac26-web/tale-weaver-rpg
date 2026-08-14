@@ -37,6 +37,7 @@ import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '../..
 import { classifyPrecisionAmbushIntent, stripGeneratedChoiceAnnotations } from '../../base44/shared/story/generatedChoiceIntent';
 import { normalizeChoiceCheckDisplay } from '../../base44/shared/story/choiceCheckDisplay';
 import { prepareStorySkillCheck, resolveStorySkillRoll } from '@/lib/storySkillCheck';
+import { acceptSequencedStoryPayload, hydrateLatestStoryEntry } from '../../base44/shared/story/storyTransition';
 
 const getFunctionErrorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.response?.data?.message ||
@@ -72,6 +73,7 @@ export default function Game() {
   const [defeatedEnemies, setDefeatedEnemies] = useState([]);
   const [completedCombatId, setCompletedCombatId] = useState(null);
   const victoryResumeInFlight = useRef(false);
+  const storyRequestSequenceRef = useRef(0);
   const [companions, setCompanions] = useState([]);
   const [showCompanions, setShowCompanions] = useState(false);
   const [showDeathModal, setShowDeathModal] = useState(false);
@@ -124,7 +126,7 @@ export default function Game() {
     return { session: repaired, combat: null, recovered: !!result.data?.reconciled, error: result.data?.valid ? 'Combat synchronization is still pending.' : null };
   }, [readActiveCombat, sessionId]);
 
-  const loadState = useCallback(async () => {
+  const loadState = useCallback(async (transition = {}) => {
     if (!sessionId) { navigate('/Home'); return; }
     const sessions = await base44.entities.GameSession.filter({ id: sessionId });
     let sess = sessions[0];
@@ -170,14 +172,18 @@ export default function Game() {
 
     if (sess.story_log?.length > 0) {
       setNarrative(prev => {
-        if (prev.length > 0) return prev; // already have narrative, don't overwrite
-        const restored = sess.story_log.slice(-10).map(e => ({ type: 'narration', text: e.text }));
-        return restored;
+        if (prev.length > 0) return prev; // preserve local roll/action cards during the active screen
+        return sess.story_log.slice(-10).map(e => ({ type: 'narration', text: e.text }));
       });
       setStarted(true);
-      const lastEntry = sess.story_log[sess.story_log.length - 1];
-      if (!sess.in_combat && lastEntry?.choices?.length > 0) setChoices(lastEntry.choices);
-      else if (sess.in_combat) setChoices([]);
+      const hydration = hydrateLatestStoryEntry(sess);
+      const transitionIsCurrent = transition.storySequence == null || (
+        transition.storySequence === storyRequestSequenceRef.current &&
+        hydration.request_id === transition.expectedRequestId
+      );
+      if (transitionIsCurrent) setChoices(sess.in_combat ? [] : hydration.choices);
+    } else if (transition.storySequence == null) {
+      setChoices([]);
     }
 
     // resolveSessionCombat above is authoritative in both directions: it resumes
@@ -348,6 +354,7 @@ export default function Game() {
 
   // Sends the chosen action (and any resolved skill check) to the story engine.
   const runChoiceStory = async (choice, choiceIndex, skillSuccess, tacticalSources, requestId, preCast = null, skillReceipt = null) => {
+    const storySequence = ++storyRequestSequenceRef.current;
     setStoryLoading(true);
     try {
       const mechanicalCast = preCast || await maybeCastStorySpell(choice.text, requestId);
@@ -365,14 +372,17 @@ export default function Game() {
         choice_index: choiceIndex,
         choice_text: choice.text,
         request_id: requestId,
+        story_sequence: Date.now() * 1000 + storySequence,
         choice_context: { check: skillReceipt || { success: skillSuccess === true }, recovery: choice.recovery || null, weapon_attack: buildThrownWeaponContext(choice.text, character, skillSuccess !== false), ambush_intent: classifyPrecisionAmbushIntent(choice.text) },
         custom_input: (choice.skill_check
           ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}${skillReceipt ? ` (d20 ${skillReceipt.raw_d20} + base ${skillReceipt.modifier_breakdown.base_skill} + effects ${skillReceipt.modifier_breakdown.effect_bonus} = ${skillReceipt.final_total})` : ''}]`
           : choice.text) + mechanicsContext + tacticalContext,
       });
       const data = result.data;
+      const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
+      if (!acceptedStory.accepted) return;
 
-      if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
+      if (acceptedStory.hydration.text) setNarrative(prev => [...prev, { type: 'narration', text: acceptedStory.hydration.text }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP earned!` }]);
       if (data.item_recovery && !data.item_recovery.already_processed) setNarrative(prev => [...prev, { type: 'xp_gain', text: data.item_recovery.inventory_result === 'already_owned' ? `📦 ${data.item_recovery.item_name} was already secured.` : `📦 Recovered ${data.item_recovery.quantity} ${data.item_recovery.item_name}${data.item_recovery.quantity === 1 ? '' : 's'}.` }]);
       if (data.hp_change) {
@@ -384,10 +394,10 @@ export default function Game() {
         setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
         await startCombat(data.enemies, { requestId: `${requestId}:combat`, storyRequestId: requestId, skillHandoff: data.combat_handoff || null, ambushSetup: data.pending_ambush_attack || null });
       } else {
-        setChoices(data.choices || []);
+        setChoices(acceptedStory.hydration.choices);
       }
 
-      await loadState();
+      await loadState({ storySequence, expectedRequestId: requestId });
     } catch (err) {
       console.error('Failed to process choice:', err);
       setNarrative(prev => [...prev, { type: 'narration', text: getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry. Please try again.') }]);
@@ -459,6 +469,7 @@ export default function Game() {
     try {
       const result = await base44.functions.invoke('evaluatePlayerAction', {
         action: text,
+        request_id: `evaluate-action:${sessionId}:${crypto.randomUUID()}`,
         session_id: sessionId,
         character_id: character?.id,
         character,
@@ -557,6 +568,7 @@ export default function Game() {
 
   // Continues a custom action's story after its (optional) skill check resolves.
   const runProposalStory = async (action, checkResult, outcome, requestId, preCast = null) => {
+    const storySequence = ++storyRequestSequenceRef.current;
     setStoryLoading(true);
     try {
       const mechanicalCast = preCast || await maybeCastStorySpell(action, requestId);
@@ -565,9 +577,11 @@ export default function Game() {
         mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
         mechanicalItem ? ` [MECHANICS: ${mechanicalItem.quantity} ${mechanicalItem.item_name} were authoritatively consumed and restored ${mechanicalItem.heal_amount} HP. Do not narrate a different quantity or apply another mechanical heal.]` : '',
       ].join('');
-      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', request_id: requestId, choice_context: { ...outcome, weapon_attack: buildThrownWeaponContext(action, character, outcome?.check?.success !== false) }, custom_input: action + checkResult + mechanicsContext });
+      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', request_id: requestId, story_sequence: Date.now() * 1000 + storySequence, choice_context: { ...outcome, weapon_attack: buildThrownWeaponContext(action, character, outcome?.check?.success !== false) }, custom_input: action + checkResult + mechanicsContext });
       const data = result.data;
-      if (data.narrative) setNarrative(prev => [...prev, { type: 'narration', text: data.narrative }]);
+      const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
+      if (!acceptedStory.accepted) return;
+      if (acceptedStory.hydration.text) setNarrative(prev => [...prev, { type: 'narration', text: acceptedStory.hydration.text }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);
       if (data.item_recovery && !data.item_recovery.already_processed) setNarrative(prev => [...prev, { type: 'xp_gain', text: data.item_recovery.inventory_result === 'already_owned' ? `📦 ${data.item_recovery.item_name} was already secured.` : `📦 Recovered ${data.item_recovery.quantity} ${data.item_recovery.item_name}${data.item_recovery.quantity === 1 ? '' : 's'}.` }]);
       if (data.hp_change) {
@@ -578,9 +592,9 @@ export default function Game() {
         setNarrative(prev => [...prev, { type: 'combat_start', text: 'Combat begins!' }]);
         await startCombat(data.enemies, { requestId: `${requestId}:combat`, storyRequestId: requestId, skillHandoff: data.combat_handoff || null });
       } else {
-        setChoices(data.choices || []);
+        setChoices(acceptedStory.hydration.choices);
       }
-      await loadState();
+      await loadState({ storySequence, expectedRequestId: requestId });
     } catch (err) {
       console.error('Failed to execute action:', err);
       setNarrative(prev => [...prev, { type: 'narration', text: getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry. Please try again.') }]);
@@ -673,6 +687,7 @@ export default function Game() {
         .map(e => e.name);
       const result = await base44.functions.invoke('evaluatePlayerAction', {
         action: text,
+        request_id: `evaluate-action:${sessionId}:${crypto.randomUUID()}`,
         session_id: sessionId,
         character_id: character?.id,
         character,

@@ -13,6 +13,7 @@ import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkill
 import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
 import { recoveryAnnotation } from '../../shared/story/projectileLifecycle.ts';
 import { commitNarratedStoryInventoryRecovery, narrationMayPublishRecovery } from '../../shared/story/narratedStoryInventoryCommit.ts';
+import { commitStoryTransition, storyPayloadFromCommit, STORY_TRANSITION_VERSION } from '../../shared/story/storyTransition.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -36,7 +37,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { session_id, action, choice_index, choice_text, custom_input, choice_context: incomingChoiceContext, request_id } = await req.json();
+    const { session_id, action, choice_index, choice_text, custom_input, choice_context: incomingChoiceContext, request_id, story_sequence } = await req.json();
 
     let session = await base44.asServiceRole.entities.GameSession.get(session_id);
     if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
@@ -112,8 +113,9 @@ Deno.serve(async (req) => {
       if (castOutcome.body?.spell_detected) authoritativeSpellCast = castOutcome.body;
     }
     if (action === 'choice' && storyRequestId) {
-      const existing = (session.story_log || []).find((entry) => entry?.request_id === storyRequestId);
-      if (existing?.text) return Response.json({ narrative: existing.text, choices: existing.choices || [], ...(existing.item_recovery ? { item_recovery: { ...existing.item_recovery, already_processed: true } } : {}) });
+      const existingIndex = (session.story_log || []).findIndex((entry) => entry?.request_id === storyRequestId);
+      const existing = existingIndex >= 0 ? session.story_log[existingIndex] : null;
+      if (existing?.text) return Response.json({ narrative: existing.text, choices: Array.isArray(existing.choices) ? existing.choices : [], ...storyPayloadFromCommit({ entry: existing, index: existingIndex }), already_processed: true, ...(existing.item_recovery ? { item_recovery: { ...existing.item_recovery, already_processed: true } } : {}) });
       // Skill receipts are persisted atomically by resolveStorySkillCheck. Do not stage
       // blank story entries here; failed invariant checks must leave story state untouched.
     }
@@ -394,21 +396,26 @@ Write a gripping 1-2 paragraph combat narrative.`;
     }
 
     if (result.narrative) {
+      const commitSession = storyRequestId ? await base44.asServiceRole.entities.GameSession.get(session_id) : session;
+      const incomingStorySequence = Number(story_sequence || 0);
+      const persistedStorySequence = Number(commitSession?.world_state?.__story_transition_sequence || 0);
+      if (incomingStorySequence > 0 && persistedStorySequence > incomingStorySequence) return Response.json({ error: 'A newer story transition is already committed.', superseded: true, writes: 0, transition_version: STORY_TRANSITION_VERSION }, { status: 409 });
       const completedEntry = {
         timestamp: new Date().toISOString(), action,
         ...(storyRequestId ? { request_id: storyRequestId } : {}),
         player_choice: action === 'choice' ? selectedChoice : (custom_input ?? choice_index),
-        text: result.narrative, choices: result.choices || [],
+        text: result.narrative, choices: Array.isArray(result.choices) ? result.choices : [],
         ...(authoritativeChoiceContext?.check?.raw_d20 != null ? { skill_check: authoritativeChoiceContext.check, skill_display: result.skill_display } : {}),
         ...(result.combat_handoff ? { combat_handoff: result.combat_handoff } : {}),
         ...(result.item_recovery ? { item_recovery: result.item_recovery } : {}),
         ...(result.recovery_resolution ? { recovery_resolution: result.recovery_resolution } : {})
       };
-      const updatedLog = action === 'choice' && storyRequestId
-        ? (session.story_log || []).map((entry) => entry?.request_id === storyRequestId ? completedEntry : entry).slice(-60)
-        : [...(session.story_log || []), completedEntry].slice(-60);
+      const committedTransition = commitStoryTransition(commitSession.story_log || [], completedEntry, storyRequestId || null);
+      const updatedLog = committedTransition.story_log;
+      result = { ...result, choices: completedEntry.choices, story_sequence: incomingStorySequence || null, ...storyPayloadFromCommit(committedTransition) };
 
       const updateData = { story_log: updatedLog };
+      if (incomingStorySequence > 0) updateData.world_state = { ...(commitSession.world_state || {}), __story_transition_sequence: incomingStorySequence };
 
       // Campaign Memory Refresh — keep a persistent running log of key events so
       // deliberate player actions are never forgotten. A player's custom action is
@@ -552,7 +559,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json(result);
+    return Response.json({ ...result, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);
