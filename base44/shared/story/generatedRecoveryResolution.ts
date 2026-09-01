@@ -10,7 +10,7 @@ const fallbackChoices = (location) => [
 ];
 
 const groundedFallback = ({ action, location, check }) => ({
-  narrative: `${check?.success === false ? 'The attempt does not gain the intended advantage' : 'Your cautious advance succeeds'}, and you remain focused on the surroundings. The terrain around ${location} offers several ways forward, but nothing changes hands and no supplies are added.`,
+  narrative: `${check?.success === false ? 'The attempt does not gain the intended advantage' : 'Your cautious advance succeeds'}, and you remain focused on the surroundings. The terrain around ${location} offers several ways forward, but no possessions change.`,
   choices: fallbackChoices(location),
   current_recovery: null,
   loot: [],
