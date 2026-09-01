@@ -50,7 +50,7 @@ export async function verifyFailedChoiceApplyToken({ token, scope, receipt, char
   const expected = new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(body)));
   let supplied;
   try { supplied = decode(signaturePart); } catch { return { ok: false, error: 'Invalid apply token.', status: 409 }; }
-  if (!equalBytes(expected, supplied)) return { ok: false, error: 'Invalid apply token signature.', status: 409 };
+  if (encode(supplied) !== signaturePart || !equalBytes(expected, supplied)) return { ok: false, error: 'Invalid apply token signature.', status: 409 };
   const requestId = scope.requestId || receipt?.request_id;
   if (payload.issuer !== ISSUER || payload.character_id !== scope.characterId || payload.session_id !== scope.sessionId || payload.request_id !== requestId) return { ok: false, error: 'Apply token scope mismatch.', status: 409 };
   if (!allowExpired && Number(payload.exp) <= Date.now()) return { ok: false, error: 'Apply token expired.', status: 409 };

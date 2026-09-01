@@ -1,4 +1,4 @@
-export const STORY_TRANSITION_VERSION = 'story-transition-v2.2.0';
+export const STORY_TRANSITION_VERSION = 'story-transition-v2.3.0';
 
 export const normalizeStoryChoices = (value) => Array.isArray(value) ? value : [];
 export const hashStoryValue = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value ?? null))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -33,6 +33,9 @@ export function storyPayloadFromCommit(commit) {
   return {
     transition_version: STORY_TRANSITION_VERSION,
     persistence_confirmed: commit?.persistence_confirmed === true,
+    narrative: String(commit.entry?.text || ''),
+    choices: normalizeStoryChoices(commit.entry?.choices),
+    response_payload_hash: commit.entry?.choice_evidence?.response_payload_hash,
     story_entry: commit.entry,
     hydration: {
       index: commit.index,
@@ -46,6 +49,16 @@ export function storyPayloadFromCommit(commit) {
 export function acceptSequencedStoryPayload(payload, sequence, latestSequence) {
   if (sequence !== latestSequence) return { accepted: false, reason: 'superseded' };
   if (payload?.persistence_confirmed !== true) return { accepted: false, reason: 'persistence_unconfirmed' };
+  const entry = payload?.story_entry;
+  const persistedChoices = normalizeStoryChoices(entry?.choices);
+  const pairConfirmed = !!entry?.request_id && String(entry?.text || '') && persistedChoices.length === 4
+    && payload?.hydration?.request_id === entry.request_id
+    && String(payload?.hydration?.text || '') === String(entry.text)
+    && JSON.stringify(normalizeStoryChoices(payload?.hydration?.choices)) === JSON.stringify(persistedChoices)
+    && String(payload?.narrative || '') === String(entry.text)
+    && JSON.stringify(normalizeStoryChoices(payload?.choices)) === JSON.stringify(persistedChoices)
+    && payload?.response_payload_hash === entry?.choice_evidence?.response_payload_hash;
+  if (!pairConfirmed) return { accepted: false, reason: 'persisted_pair_mismatch' };
   const hydration = payload?.hydration || (payload?.story_entry ? {
     request_id: payload.story_entry.request_id || null,
     text: String(payload.story_entry.text || ''),

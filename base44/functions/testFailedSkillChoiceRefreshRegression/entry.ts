@@ -66,6 +66,6 @@ export default async function testFailedSkillChoiceRefreshRegression(req) {
     record('cleanup fixtures absent', cleanup.every((item)=>item.absent));
     const protectedAfter = await hashValue(await readProtectedDndState(base44.asServiceRole)); record('protected live IDs unchanged', protectedBefore === protectedAfter);
     const passed=results.filter((item)=>item.pass).length; const allPass=passed===results.length;
-    return Response.json({ function_version:'test-failed-skill-choice-refresh-v2.2.0',passed,failed:results.length-passed,total:results.length,all_pass:allPass,results,cleanup },{status:allPass?200:500});
+    return Response.json({ function_version:'test-failed-skill-choice-refresh-v2.3.0',passed,failed:results.length-passed,total:results.length,all_pass:allPass,results,cleanup },{status:allPass?200:500});
   } catch(error){return Response.json({error:error.message||'Regression failed'},{status:500});}
 }
