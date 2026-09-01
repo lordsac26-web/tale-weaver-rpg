@@ -9,7 +9,18 @@ export const isStructuredNarratedRecovery = (recovery) => {
   return recovery.type === 'item' && recovery.item && typeof recovery.item === 'object' && typeof recovery.item.name === 'string' && recovery.item.name.trim() && exactQuantity(recovery.item.quantity ?? 1);
 };
 
-export const containsExactRecoveryClaim = (narrative) => /\b(?:found|find|recovered|recover|retrieve|retrieved|collected|collect)\b[^.]{0,100}\b\d+\s+(?:arrow|arrows|bolt|bolts|sling bullet|sling bullets)\b/i.test(String(narrative || ''));
+const QUANTITY = '(?:[1-9]\\d?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)';
+const CANONICAL_ITEM = '(?:arrows?|bolts?|sling\\s+bullets?|daggers?|shortswords?|longswords?|potions?|gold\\s+pieces?|silver\\s+pieces?|copper\\s+pieces?)';
+const ACQUISITION = '(?:find|found|recover|recovered|retrieve|retrieved|collect|collected|salvage|salvaged|obtain|obtained|gain|gained|pick(?:ed)?\\s+up)';
+const HISTORICAL_OR_EXISTING = /\b(?:remember|remembered|recall|recalled|previously|earlier|yesterday|last time|already|already-carried|carried|holding|held|in (?:your|the) (?:hand|pack|satchel|quiver|inventory))\b/i;
+const IDIOMATIC_RECOVERY = /\brecover(?:ed|ing)?\s+(?:your|his|her|their|its)?\s*(?:footing|balance|breath|composure|strength|momentum|from injury|memories?|information)\b/i;
+const EXACT_NEW_ITEM = new RegExp(`\\b${ACQUISITION}\\b\\s+(?:exactly\\s+)?${QUANTITY}\\s+${CANONICAL_ITEM}\\b`, 'i');
+
+export const containsExactRecoveryClaim = (narrative) => String(narrative || '').split(/(?<=[.!?])\s+|\n+/).some((sentence) => {
+  const text = sentence.trim();
+  if (!text || HISTORICAL_OR_EXISTING.test(text) || IDIOMATIC_RECOVERY.test(text)) return false;
+  return EXACT_NEW_ITEM.test(text);
+});
 
 export async function commitNarratedStoryInventoryRecovery({ base44, sessionId, characterId, requestId, check, recovery }) {
   if (!requestId || !sessionId || !characterId || !isStructuredNarratedRecovery(recovery)) return { status: 409, body: { applied:false, reason:'missing_exact_structured_recovery', writes:0 } };

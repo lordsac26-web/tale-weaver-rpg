@@ -13,7 +13,8 @@ import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkill
 import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
 import { recoveryAnnotation } from '../../shared/story/projectileLifecycle.ts';
 import { commitNarratedStoryInventoryRecovery, narrationMayPublishRecovery } from '../../shared/story/narratedStoryInventoryCommit.ts';
-import { commitStoryTransition, storyPayloadFromCommit, STORY_TRANSITION_VERSION } from '../../shared/story/storyTransition.ts';
+import { commitStoryTransition, hydrateLatestStoryEntry, storyPayloadFromCommit, STORY_TRANSITION_VERSION } from '../../shared/story/storyTransition.ts';
+import { buildGameHydration, finalizeGeneratedStoryResult } from '../../shared/story/storyBootstrap.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -49,7 +50,12 @@ Deno.serve(async (req) => {
     if (!characterBelongsToUser(character, user)) {
       return Response.json({ error: 'Session character does not belong to the authenticated user' }, { status: 403 });
     }
+    if (action === 'hydrate') return Response.json(buildGameHydration(session, character));
     const storyRequestId = String(request_id || '').slice(0, 120);
+    if (action === 'start') {
+      const existingOpening = hydrateLatestStoryEntry(session);
+      if (existingOpening.text && existingOpening.choices.length >= 4) return Response.json({ narrative: existingOpening.text, choices: existingOpening.choices, ...storyPayloadFromCommit({ entry: existingOpening.entry, index: existingOpening.index }), already_processed: true });
+    }
     let authoritativeChoiceContext = incomingChoiceContext && typeof incomingChoiceContext === 'object' ? incomingChoiceContext : {};
     if (action === 'choice' && authoritativeChoiceContext?.check?.raw_d20 != null) {
       const incomingCheck = authoritativeChoiceContext.check;
@@ -372,6 +378,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...result, narrative: pendingAmbushNarrative(ambushIntent.target_hint, setupSucceeded), key_event: '', combat_trigger: setupSucceeded && result.combat_trigger && roster.ok, enemies: roster.ok ? roster.enemies : [], pending_ambush_attack: setupSucceeded && roster.ok ? { request_id: storyRequestId, target_name: roster.target.name, setup_receipt_id: authoritativeChoiceContext.check.id || authoritativeChoiceContext.check.request_id, setup_success: true } : null };
     }
 
+    result = finalizeGeneratedStoryResult(result, { location: result?.location_update || session.current_location || 'the current area' });
     const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
     if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0 }, { status: 409 });
     result = skillInvariant.result;

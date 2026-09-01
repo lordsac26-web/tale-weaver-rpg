@@ -128,9 +128,10 @@ export default function Game() {
 
   const loadState = useCallback(async (transition = {}) => {
     if (!sessionId) { navigate('/Home'); return; }
-    const sessions = await base44.entities.GameSession.filter({ id: sessionId });
-    let sess = sessions[0];
-    if (!sess) { navigate('/Home'); return; }
+    const authoritative = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'hydrate' });
+    let sess = authoritative.data?.session;
+    let loadedChar = authoritative.data?.character || null;
+    if (!sess || !loadedChar) { navigate('/Home'); return; }
     const combatResolution = await resolveSessionCombat(sess);
     sess = combatResolution.session;
     setSession(sess);
@@ -138,35 +139,10 @@ export default function Game() {
     setCombatSyncError(combatResolution.error);
     if (combatResolution.combat) setCombatViewTab('combat');
 
-    let chars = await base44.entities.Character.filter({ id: sess.character_id });
-    let loadedChar = chars[0] || null;
-
-    // Self-heal orphaned sessions: if the session points to a character that no
-    // longer exists (e.g. it was deleted/recreated), fall back to the user's most
-    // recent character and repair the session link so future calls work.
-    if (!loadedChar) {
-      const myChars = await base44.entities.Character.list('-created_date', 1);
-      if (myChars[0]) {
-        loadedChar = myChars[0];
-        chars = [loadedChar];
-        await base44.entities.GameSession.update(sessionId, { character_id: loadedChar.id });
-      }
-    }
-
-    // Recalculate stats from equipment on every load to fix any stale/double-counted values
-    if (loadedChar?.equipped && Object.keys(loadedChar.equipped).length > 0) {
-      const recalc = recalculateStats(loadedChar, loadedChar.equipped, loadedChar.inventory || []);
-      const needsUpdate = recalc.armor_class !== loadedChar.armor_class;
-      if (needsUpdate) {
-        loadedChar = { ...loadedChar, ...recalc };
-        // Persist the corrected values to DB so they stay fixed
-        await base44.entities.Character.update(loadedChar.id, { armor_class: recalc.armor_class });
-      }
-    }
     setCharacter(loadedChar);
 
-    if (chars[0]) {
-      const comps = await base44.entities.Companion.filter({ character_id: chars[0].id });
+    if (loadedChar) {
+      const comps = await base44.entities.Companion.filter({ character_id: loadedChar.id });
       setCompanions(comps);
     }
 
@@ -263,11 +239,14 @@ export default function Game() {
     setStoryLoading(true);
     setStarted(true);
     try {
-      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'start' });
+      const storySequence = ++storyRequestSequenceRef.current;
+      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'start', request_id: `story-start:${sessionId}`, story_sequence: Date.now() * 1000 + storySequence });
       const data = result.data;
-      setNarrative([{ type: 'narration', text: data.narrative }]);
-      setChoices(data.choices || []);
-      await loadState();
+      const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
+      if (!acceptedStory.accepted) return;
+      setNarrative([{ type: 'narration', text: acceptedStory.hydration.text }]);
+      setChoices(acceptedStory.hydration.choices);
+      await loadState({ storySequence, expectedRequestId: `story-start:${sessionId}` });
     } catch (err) {
       console.error('Failed to start adventure:', err);
       setNarrative([{ type: 'narration', text: 'The tale hesitates... Please try beginning your adventure again.' }]);
