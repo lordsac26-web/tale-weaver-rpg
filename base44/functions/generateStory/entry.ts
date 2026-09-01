@@ -17,6 +17,7 @@ import { generatedRecoveryDiagnostics, GENERATED_RECOVERY_RESOLUTION_VERSION, re
 import { guardAndCommitNarratedRecovery } from '../../shared/story/storyRecoveryGuard.ts';
 import { canonicalStoryResponsePayload, commitStoryTransition, hashStoryValue, hydrateLatestStoryEntry, storyPayloadFromCommit, STORY_TRANSITION_VERSION } from '../../shared/story/storyTransition.ts';
 import { buildGameHydration, finalizeGeneratedStoryResult } from '../../shared/story/storyBootstrap.ts';
+import { canonicalStoryStealthedCondition, classifyStealthSetupIntent, STEALTH_SETUP_HANDOFF_VERSION, withCanonicalStoryStealthed } from '../../shared/story/stealthSetupHandoff.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -70,11 +71,13 @@ Deno.serve(async (req) => {
       ? authoritativeChoiceContext.completed_combat : null);
     const selectedChoice = action === 'choice' ? stripGeneratedChoiceAnnotations(choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`) : '';
     const ambushIntent = action === 'choice' ? classifyPrecisionAmbushIntent(selectedChoice) : null;
+    const stealthSetupIntent = action === 'choice' ? classifyStealthSetupIntent(selectedChoice || custom_input, authoritativeChoiceContext?.check) : null;
     if (ambushIntent && (!authoritativeChoiceContext?.check || !Number.isFinite(Number(authoritativeChoiceContext.check.raw_d20)) || !Number.isFinite(Number(authoritativeChoiceContext.check.final_total)))) return Response.json({ error: 'Precision stealth strikes require a fresh persisted Stealth setup receipt before narration.', invalid: true }, { status: 409 });
     if (action === 'choice' && storyRequestId) {
       const longRest = await executeLongRestStoryAction({ base44, ownerId: user.id, payload: { session_id, character_id: character.id, action_text: selectedChoice, choice_context: authoritativeChoiceContext, request_id: storyRequestId } });
       if (longRest.body?.handled) return Response.json({ narrative: longRest.body.narration, choices: [], long_rest: longRest.body }, { status: longRest.status });
-      const compound = await executePwtCompoundAction({ base44, user, payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId, skill_dc: authoritativeChoiceContext?.skill_dc } });
+      const hasAuthoritativeStoryReceipt = authoritativeChoiceContext?.check?.unified_story_skill_resolution === true;
+      const compound = hasAuthoritativeStoryReceipt ? { status:200, body:{ handled:false, skipped:'authoritative_story_receipt' } } : await executePwtCompoundAction({ base44, user, payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId, skill_dc: authoritativeChoiceContext?.skill_dc } });
       if (compound.body?.handled) {
         if (compound.status >= 400) return Response.json(compound.body, { status: compound.status });
         const freshSession = await base44.asServiceRole.entities.GameSession.get(session_id);
@@ -400,6 +403,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
     const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
     if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0, parser_version:NARRATED_RECOVERY_PARSER_VERSION, recovery_diagnostics:result.recovery_diagnostics }, { status: 409 });
     result = skillInvariant.result;
+    if (stealthSetupIntent?.establishes_concealment) result = { ...result, combat_trigger:false, enemies:[], condition_update:{target:'player',add:'Stealthed',remove:[],duration:'persistent'}, stealth_handoff:{version:STEALTH_SETUP_HANDOFF_VERSION,request_id:storyRequestId,classification_evidence:stealthSetupIntent,attack_resolved:false,advantage_attribution:'Attacking from Stealthed/concealed'} };
     if (!authoritativeRecovery && action === 'choice') {
       const committed = await guardAndCommitNarratedRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check:authoritativeChoiceContext.check, narrative:result.narrative, recovery:result.current_recovery });
       result = { ...result, recovery_transaction: committed.body?.recovery_transaction || { status: committed.body?.reason || 'unknown', ...generatedRecoveryDiagnostics(result) } };
@@ -447,7 +451,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
         ...(result.combat_handoff ? { combat_handoff: result.combat_handoff } : {}),
         ...(result.item_recovery ? { item_recovery: result.item_recovery } : {}),
         ...(result.recovery_resolution ? { recovery_resolution: result.recovery_resolution } : {}),
-        ...(result.recovery_transaction ? { recovery_transaction: result.recovery_transaction } : {})
+        ...(result.recovery_transaction ? { recovery_transaction: result.recovery_transaction } : {}),
+        ...(result.stealth_handoff ? { stealth_handoff: result.stealth_handoff } : {})
       };
       result = { ...result, previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash };
       const committedTransition = commitStoryTransition(commitSession.story_log || [], completedEntry, storyRequestId || null);
@@ -556,7 +561,10 @@ Write a gripping 1-2 paragraph combat narrative.`;
           if (!duration && typeof cond === 'object' && cond.source === 'story' && !session.in_combat && TEMPORARY_STORY_CONDITIONS.has(key)) return false;
           return true;
         });
-        if (incoming.target === 'player' && validConditionName(incoming.add)) {
+        if (stealthSetupIntent?.establishes_concealment) {
+          const stealthCondition=canonicalStoryStealthedCondition({characterId:character.id,sessionId:session_id,requestId:storyRequestId,receipt:authoritativeChoiceContext.check});
+          nextConditions=withCanonicalStoryStealthed(nextConditions,stealthCondition);
+        } else if (incoming.target === 'player' && validConditionName(incoming.add)) {
           const name = conditionName(incoming.add);
           const key = name.toLowerCase();
           // Exhaustion is a mechanical level, not a free-form story badge. Never
@@ -604,7 +612,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json({ ...result, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
+    return Response.json({ ...result, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);

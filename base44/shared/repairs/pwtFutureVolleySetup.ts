@@ -1,0 +1,51 @@
+import { concealmentAttributions, getAttackConcealment } from '../combat/conditions.ts';
+import { groundedFallbackChoices, normalizeGeneratedChoices } from '../story/storyBootstrap.ts';
+import { canonicalStoryStealthedCondition, classifyStealthSetupIntent, withCanonicalStoryStealthed } from '../story/stealthSetupHandoff.ts';
+import { hashStoryValue } from '../story/storyTransition.ts';
+import { createStaleChoiceApplyToken, verifyStaleChoiceApplyToken } from './staleChoiceApplyToken.ts';
+
+export const PWT_FUTURE_VOLLEY_REPAIR_VERSION='pwt-future-volley-setup-repair-v1.0.0';
+export const LIVE_PWT_FUTURE_VOLLEY_SCOPE={characterId:'6a6825cd07a490fa70a46852',sessionId:'6a6825edd695bd65a4322256',requestId:'story-action:6a6825edd695bd65a4322256:1788298091834:fotzng'};
+const LIVE_HASHES={story_log:'e8f821d708fd76a051f15e2414dbf9587fe952758691b6963d2ecd8d925e33ea',result_entry:'30fb527c4d2b3b376b29a6f3a5021f64af87b929993a3a7468c333435c200ced',session:'49bbbb842578724d7249afb0d49b28fa15dd090a312604ad8e2f3c2108157418',character:'b325863d3c8b03d0b15555ceddadae3ec58dee6ca04f79b4a91adcd2cac57612',protected_session:'838c658e1079a15f6c779403cbab8bfb8ec6f857cdfb4fee282669ee36715aac',skill_receipts:'f627d5cec5a413156d5b3aeb3783f96109f3efc1dd610c5510a5befd99b216b9'};
+const receipts=(s)=>s?.world_state?.__skill_check_receipts||[];
+const repairs=(s)=>s?.world_state?.__pwt_future_volley_repairs||[];
+const protectedSession=(s)=>{const {story_log,updated_date,world_state,...rest}=s||{};const {__pwt_future_volley_repairs,...protectedWorld}=world_state||{};return {...rest,world_state:protectedWorld};};
+const isLive=(scope)=>scope.characterId===LIVE_PWT_FUTURE_VOLLEY_SCOPE.characterId&&scope.sessionId===LIVE_PWT_FUTURE_VOLLEY_SCOPE.sessionId&&scope.requestId===LIVE_PWT_FUTURE_VOLLEY_SCOPE.requestId;
+
+async function inspect(db,scope){
+  const [character,session,activeCombats]=await Promise.all([db.entities.Character.get(scope.characterId).catch(()=>null),db.entities.GameSession.get(scope.sessionId).catch(()=>null),db.entities.CombatLog.filter({session_id:scope.sessionId,is_active:true}).catch(()=>[])]);
+  if(!character||!session||session.character_id!==character.id)return {status:403,error:'Exact Character/Session linkage is invalid.'};
+  const log=session.story_log||[],resultIndex=log.findIndex((e)=>e?.request_id===scope.requestId),result=log[resultIndex],receipt=receipts(session).find((r)=>r?.request_id===scope.requestId&&r?.unified_story_skill_resolution===true);
+  const pwtCondition=(character.conditions||[]).filter((c)=>c?.id==='cond_pass_without_trace_1788298092495_wgu705');
+  const pwtModifier=(character.active_modifiers||[]).filter((m)=>m?.id==='typed_spell_pass_without_trace_1788298092495');
+  const concentration=session.world_state?.active_concentration;
+  const intent=classifyStealthSetupIntent(result?.player_choice,receipt);
+  const later=log.slice(resultIndex+1),stealth=getAttackConcealment(character.conditions).filter((c)=>String(c.name||'').toLowerCase()==='stealthed');
+  const attackEvidence=later.some((e)=>/\b(?:attack|damage|hit|volley fired)\b/i.test(String(e?.text||''))||e?.combat_handoff)||activeCombats.length>0;
+  const pwtExact=pwtCondition.length===1&&pwtModifier.length===1&&pwtCondition[0].target_id===character.id&&pwtCondition[0].caster_id===character.id&&pwtCondition[0].concentration===true&&pwtModifier[0].bonus===10&&pwtModifier[0].target_id===character.id&&concentration?.request_id===`${scope.requestId}:intent:0`&&concentration?.concentration===true&&concentration?.broken!==true;
+  const receiptExact=!!receipt&&receipt.raw_d20===17&&receipt.modifier_total===17&&receipt.final_total===34&&receipt.dc===18&&receipt.success===true;
+  const choices=normalizeGeneratedChoices(result?.choices),existing=repairs(session).find((r)=>r?.request_id===scope.requestId);
+  return {status:200,character,session,log,resultIndex,result,receipt,pwtCondition,pwtModifier,concentration,intent,later,stealth,attackEvidence,pwtExact,receiptExact,choices,activeCombats,existing};
+}
+async function hashes(state){return {story_log:await hashStoryValue(state.log),result_entry:await hashStoryValue(state.result),session:await hashStoryValue(state.session),character:await hashStoryValue(state.character),protected_session:await hashStoryValue(protectedSession(state.session)),skill_receipts:await hashStoryValue(receipts(state.session))};}
+function proposal(state,scope){const sourceChoices=normalizeGeneratedChoices(state.log[state.resultIndex-1]?.choices);const choices=groundedFallbackChoices({location:state.session.current_location||'the current area',requestId:scope.requestId,previousChoices:sourceChoices});const condition=canonicalStoryStealthedCondition({characterId:scope.characterId,sessionId:scope.sessionId,requestId:scope.requestId,receipt:state.receipt});return {choices,condition,classification_evidence:state.intent};}
+
+export async function auditPwtFutureVolleySetup({db,mode,applyToken,scope=LIVE_PWT_FUTURE_VOLLEY_SCOPE}){
+  if(!['discover','dry_run','apply'].includes(mode))return {status:400,body:{error:'mode must be discover, dry_run, or apply',writes:0}};
+  let state=await inspect(db,scope);if(state.error)return {status:state.status,body:{error:state.error,writes:0}};
+  if(state.existing)return {status:200,body:{success:true,replayed:true,writes:0,function_version:PWT_FUTURE_VOLLEY_REPAIR_VERSION,receipt:state.existing}};
+  const expectedHashes=await hashes(state),proposed=proposal(state,scope),proposalHash=await hashStoryValue({request_id:scope.requestId,result_index:state.resultIndex,narrative:state.result?.text,receipt:state.result?.skill_check,choices:proposed.choices,condition:proposed.condition});
+  const liveHashesOk=!isLive(scope)||Object.entries(LIVE_HASHES).every(([k,v])=>expectedHashes[k]===v);
+  const guards={live_hashes_exact:liveHashesOk,result_is_latest:state.resultIndex===state.log.length-1,result_choices_missing:state.choices.length===0,no_later_conflicts:state.later.length===0,no_attack_or_combat:!state.attackEvidence,pwt_exact_unambiguous:state.pwtExact,authoritative_receipt_exact:state.receiptExact,explicit_future_surprise_setup:state.intent.establishes_concealment,stealthed_missing:state.stealth.length===0,narration_present:!!state.result?.text};
+  const safe=Object.values(guards).every(Boolean),receiptKey=`pwt-future-volley:${await hashStoryValue({scope,version:PWT_FUTURE_VOLLEY_REPAIR_VERSION})}`,tokenScope={...scope,receiptKey};
+  const compact={success:true,mode,function_version:PWT_FUTURE_VOLLEY_REPAIR_VERSION,classification:'server_persisted_empty_choices_missing_stealthed',safe_to_repair:safe,writes:0,character_id:scope.characterId,session_id:scope.sessionId,request_id:scope.requestId,result_index:state.resultIndex,expected_hashes:expectedHashes,guards,proposed_choice_count:proposed.choices.length,proposed_choice_hash:await hashStoryValue(proposed.choices),proposed_condition_hash:await hashStoryValue(proposed.condition),proposed_entry_hash:proposalHash,classification_evidence:proposed.classification_evidence,no_later_conflicts:state.later.length===0};
+  if(mode!=='apply'){const token=safe?await createStaleChoiceApplyToken({scope:tokenScope,receipt:state.receipt,character:state.character,expectedHashes,classification:compact.classification,proposalHash}):null;return {status:200,body:{...compact,apply_token:token}};}
+  const tokenCheck=await verifyStaleChoiceApplyToken({token:applyToken,scope:tokenScope,receipt:state.receipt,character:state.character});
+  if(!safe||!tokenCheck.ok||tokenCheck.payload.proposal_hash!==proposalHash||Object.entries(expectedHashes).some(([k,v])=>tokenCheck.payload.expected_hashes?.[k]!==v))return {status:409,body:{error:tokenCheck.error||'Apply token state or proposal mismatch.',writes:0}};
+  state=await inspect(db,scope);const freshHashes=state.error?null:await hashes(state);if(!freshHashes||Object.entries(expectedHashes).some(([k,v])=>freshHashes[k]!==v))return {status:409,body:{error:'Bound state changed before apply.',writes:0}};
+  const originalConditions=state.character.conditions||[],nextConditions=withCanonicalStoryStealthed(originalConditions,proposed.condition);const repairedEntry={...state.result,choices:proposed.choices,stealth_handoff:{request_id:scope.requestId,classification_evidence:proposed.classification_evidence,condition_id:proposed.condition.id,attack_resolved:false}};const nextLog=state.log.map((e,i)=>i===state.resultIndex?repairedEntry:e);const repairReceipt={request_id:scope.requestId,version:PWT_FUTURE_VOLLEY_REPAIR_VERSION,proposal_hash:proposalHash,condition_id:proposed.condition.id,applied_at:new Date().toISOString(),immutable:true};
+  await db.entities.Character.update(scope.characterId,{conditions:nextConditions});
+  try{await db.entities.GameSession.update(scope.sessionId,{story_log:nextLog,world_state:{...(state.session.world_state||{}),__pwt_future_volley_repairs:[...repairs(state.session),repairReceipt]}});}catch(error){await db.entities.Character.update(scope.characterId,{conditions:originalConditions});return {status:500,body:{error:`Session repair failed and Character compensation completed: ${error.message}`,writes:0,compensated:true}};}
+  const [afterCharacter,afterSession]=await Promise.all([db.entities.Character.get(scope.characterId),db.entities.GameSession.get(scope.sessionId)]);const target=afterSession.story_log[state.resultIndex],concealment=getAttackConcealment(afterCharacter.conditions);const ok=target.text===state.result.text&&await hashStoryValue(target.skill_check)===await hashStoryValue(state.result.skill_check)&&target.choices.length===4&&concealment.filter((c)=>c.id===proposed.condition.id).length===1&&concealmentAttributions(concealment).length===1;
+  return {status:ok?200:500,body:{success:ok,replayed:false,writes:2,function_version:PWT_FUTURE_VOLLEY_REPAIR_VERSION,receipt:repairReceipt,postconditions:{narration_preserved:target.text===state.result.text,receipt_preserved:await hashStoryValue(target.skill_check)===await hashStoryValue(state.result.skill_check),choices:target.choices.length,stealthed_count:concealment.filter((c)=>c.id===proposed.condition.id).length,pwt_preserved:(afterCharacter.conditions||[]).some((c)=>c.id==='cond_pass_without_trace_1788298092495_wgu705')}}};
+}
