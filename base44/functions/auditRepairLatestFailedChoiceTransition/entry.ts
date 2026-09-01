@@ -9,7 +9,8 @@ export default async function auditRepairLatestFailedChoiceTransition(req) {
     const owner = user ? await base44.asServiceRole.entities.Character.get(FAILED_CHOICE_SCOPE.characterId).catch(() => null) : null;
     if (!user || !owner || !characterBelongsToUser(owner, user)) return Response.json({ error: 'Owner authorization required.', writes: 0 }, { status: 403 });
     const payload = await req.json().catch(() => ({}));
-    const allowed = new Set(['mode', 'expected_hashes', 'replacement_narrative', 'replacement_choices', 'proposal_hash']);
+    const allowed = new Set(['mode', 'response_format', 'apply_token', 'expected_hashes', 'replacement_narrative', 'replacement_choices', 'proposal_hash']);
+    if (payload.response_format && (payload.response_format !== 'guard_only' || !['discover', 'dry_run'].includes(payload.mode))) return Response.json({ error: 'guard_only is accepted only for discover or dry_run.', writes: 0 }, { status: 400 });
     if (Object.keys(payload).some((key) => !allowed.has(key))) return Response.json({ error: 'Unsupported field.', writes: 0 }, { status: 400 });
     const generateChoices = async ({ scene, check }) => {
       const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
@@ -18,7 +19,7 @@ export default async function auditRepairLatestFailedChoiceTransition(req) {
       });
       return result;
     };
-    const outcome = await failedChoiceTransitionRepairCore({ db: base44.asServiceRole, mode: payload.mode, expectedHashes: payload.expected_hashes, replacementNarrative: payload.replacement_narrative, replacementChoices: payload.replacement_choices, proposalHash: payload.proposal_hash, generateChoices });
+    const outcome = await failedChoiceTransitionRepairCore({ db: base44.asServiceRole, mode: payload.mode, responseFormat: payload.response_format, applyToken: payload.apply_token, expectedHashes: payload.expected_hashes, replacementNarrative: payload.replacement_narrative, replacementChoices: payload.replacement_choices, proposalHash: payload.proposal_hash, generateChoices });
     return Response.json(outcome.body, { status: outcome.status });
   } catch (error) {
     return Response.json({ error: error.message || 'Failed-choice transition audit failed.', writes: 0 }, { status: 500 });
