@@ -1,6 +1,6 @@
 import { executeRecoveryTransaction } from './recoveryTransaction.ts';
 
-export const NARRATED_RECOVERY_PARSER_VERSION = 'narrated-recovery-parser-v2.1.0';
+export const NARRATED_RECOVERY_PARSER_VERSION = 'narrated-recovery-parser-v2.2.0';
 const exactQuantity = (value) => Number.isInteger(Number(value)) && Number(value) > 0;
 
 export const isStructuredNarratedRecovery = (recovery) => {

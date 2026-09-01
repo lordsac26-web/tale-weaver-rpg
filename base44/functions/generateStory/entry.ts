@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 import { resolveItemRecovery } from '../../shared/story/itemRecovery.ts';
 import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
@@ -12,7 +12,8 @@ import { classifyPrecisionAmbushIntent, normalizePendingAmbushRoster, pendingAmb
 import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkillCheck.ts';
 import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
 import { recoveryAnnotation } from '../../shared/story/projectileLifecycle.ts';
-import { narrationMayPublishRecovery } from '../../shared/story/narratedStoryInventoryCommit.ts';
+import { narrationMayPublishRecovery, NARRATED_RECOVERY_PARSER_VERSION } from '../../shared/story/narratedStoryInventoryCommit.ts';
+import { generatedRecoveryDiagnostics, GENERATED_RECOVERY_RESOLUTION_VERSION, resolveGeneratedRecoveryCandidate } from '../../shared/story/generatedRecoveryResolution.ts';
 import { guardAndCommitNarratedRecovery } from '../../shared/story/storyRecoveryGuard.ts';
 import { canonicalStoryResponsePayload, commitStoryTransition, hashStoryValue, hydrateLatestStoryEntry, storyPayloadFromCommit, STORY_TRANSITION_VERSION } from '../../shared/story/storyTransition.ts';
 import { buildGameHydration, finalizeGeneratedStoryResult } from '../../shared/story/storyBootstrap.ts';
@@ -32,6 +33,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
+const GENERATE_STORY_VERSION = 'generate-story-v2.4.0';
 
 Deno.serve(async (req) => {
   try {
@@ -366,6 +368,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       max_tokens: 1400
     });
     let result = await generateNarrative(prompt);
+    console.info('Story model candidate', JSON.stringify({ generate_story_version:GENERATE_STORY_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, request_id:storyRequestId, candidate:result }));
     const postRestNoMagic = Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested && !isPwt((character.conditions || []).find(isPwt)) && !isPwt(session.world_state?.active_concentration);
     if (postRestNoMagic && result?.narrative) result = { ...result, narrative: repairPostRestNarration(result.narrative).text };
     const contradictions = completedCombat ? findDeadCombatantContradictions(result?.narrative, completedCombat) : [];
@@ -381,23 +384,35 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...result, narrative: pendingAmbushNarrative(ambushIntent.target_hint, setupSucceeded), key_event: '', combat_trigger: setupSucceeded && result.combat_trigger && roster.ok, enemies: roster.ok ? roster.enemies : [], pending_ambush_attack: setupSucceeded && roster.ok ? { request_id: storyRequestId, target_name: roster.target.name, setup_receipt_id: authoritativeChoiceContext.check.id || authoritativeChoiceContext.check.request_id, setup_success: true } : null };
     }
 
+    let recoveryResolution = null;
+    if (!authoritativeRecovery && action === 'choice') {
+      recoveryResolution = await resolveGeneratedRecoveryCandidate({
+        candidate: result,
+        action: selectedChoice || custom_input,
+        location: result?.location_update || session.current_location || 'the current area',
+        check: authoritativeChoiceContext.check,
+        regenerate: ({ instruction }) => generateNarrative(`${prompt}\n\n${instruction}`),
+      });
+      result = { ...recoveryResolution.result, recovery_diagnostics: { parser_version:recoveryResolution.parser_version, classification:recoveryResolution.classification, attempts:recoveryResolution.attempts, fallback_used:!!recoveryResolution.fallback_used } };
+      console.info('Story recovery resolution', JSON.stringify({ request_id:storyRequestId, ...recoveryResolution, result:undefined }));
+    }
     result = finalizeGeneratedStoryResult(result, { location: result?.location_update || session.current_location || 'the current area', requestId: storyRequestId, previousChoices: hydrateLatestStoryEntry(session).choices });
     const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
-    if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0 }, { status: 409 });
+    if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0, parser_version:NARRATED_RECOVERY_PARSER_VERSION, recovery_diagnostics:result.recovery_diagnostics }, { status: 409 });
     result = skillInvariant.result;
     if (!authoritativeRecovery && action === 'choice') {
       const committed = await guardAndCommitNarratedRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check:authoritativeChoiceContext.check, narrative:result.narrative, recovery:result.current_recovery });
-      result = { ...result, recovery_transaction: committed.body?.recovery_transaction || { status: committed.body?.reason || 'unknown' } };
+      result = { ...result, recovery_transaction: committed.body?.recovery_transaction || { status: committed.body?.reason || 'unknown', ...generatedRecoveryDiagnostics(result) } };
       if (!committed.body?.applied && committed.body?.reason !== 'not_applicable') {
-        console.warn('Story recovery validation rejected', JSON.stringify({ request_id:storyRequestId, narrative:result.narrative, current_recovery:result.current_recovery, recovery_transaction:committed.body?.recovery_transaction }));
-        return Response.json({ error:committed.body?.reason || 'Structured reward did not commit.', invalid:true, recovery_transaction:committed.body?.recovery_transaction, writes:0 },{status:committed.status >= 400 ? committed.status : 409});
+        console.warn('Story recovery validation rejected after bounded repair', JSON.stringify({ request_id:storyRequestId, generate_story_version:GENERATE_STORY_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, narrative:result.narrative, current_recovery:result.current_recovery, recovery_transaction:committed.body?.recovery_transaction }));
+        return Response.json({ error:committed.body?.reason || 'Structured reward did not commit.', invalid:true, parser_version:NARRATED_RECOVERY_PARSER_VERSION, classification:committed.body?.classification, recovery_transaction:committed.body?.recovery_transaction, recovery_diagnostics:result.recovery_diagnostics, writes:0 },{status:committed.status >= 400 ? committed.status : 409});
       }
       if (committed.body?.applied) {
         itemRecovery = { applied:true, already_processed:!!committed.body.already_processed, recovered_items:committed.body.recovered_items || [], item_recovery:{request_id:storyRequestId,recovered_items:committed.body.recovered_items || [],quantity:(committed.body.recovered_items || []).reduce((sum,item)=>sum+Number(item.quantity||0),0),item_name:(committed.body.recovered_items || []).map((item)=>item.canonical_item).join(' and '),inventory_result:committed.body.receipt?.inventory_result} };
         authoritativeRecovery = { recovery:result.current_recovery, check:authoritativeChoiceContext.check, applied:true, recovered_items:itemRecovery.recovered_items, annotation:recoveryAnnotation({recovery:result.current_recovery,resolution:authoritativeChoiceContext.check,applied:true,recoveredItems:itemRecovery.recovered_items}) };
       }
     }
-    if (!narrationMayPublishRecovery({ narrative:result.narrative, committed:authoritativeRecovery?.applied === true })) return Response.json({error:'Exact item-recovery narration requires a committed structured receipt.',invalid:true,writes:0},{status:409});
+    if (!narrationMayPublishRecovery({ narrative:result.narrative, committed:authoritativeRecovery?.applied === true })) return Response.json({error:'Exact item-recovery narration requires a committed structured receipt.',invalid:true,parser_version:NARRATED_RECOVERY_PARSER_VERSION,recovery_diagnostics:result.recovery_diagnostics,writes:0},{status:409});
 
     // ====================== POST-PROCESSING ======================
     if (authoritativeRecovery) {
@@ -589,7 +604,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json({ ...result, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
+    return Response.json({ ...result, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);
