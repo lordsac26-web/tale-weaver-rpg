@@ -12,7 +12,8 @@ import { classifyPrecisionAmbushIntent, normalizePendingAmbushRoster, pendingAmb
 import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkillCheck.ts';
 import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
 import { recoveryAnnotation } from '../../shared/story/projectileLifecycle.ts';
-import { commitNarratedStoryInventoryRecovery, narrationMayPublishRecovery } from '../../shared/story/narratedStoryInventoryCommit.ts';
+import { narrationMayPublishRecovery } from '../../shared/story/narratedStoryInventoryCommit.ts';
+import { guardAndCommitNarratedRecovery } from '../../shared/story/storyRecoveryGuard.ts';
 import { canonicalStoryResponsePayload, commitStoryTransition, hashStoryValue, hydrateLatestStoryEntry, storyPayloadFromCommit, STORY_TRANSITION_VERSION } from '../../shared/story/storyTransition.ts';
 import { buildGameHydration, finalizeGeneratedStoryResult } from '../../shared/story/storyBootstrap.ts';
 
@@ -103,10 +104,12 @@ Deno.serve(async (req) => {
     if (action === 'choice' && authoritativeChoiceContext?.recovery) {
       const recovery = authoritativeChoiceContext.recovery;
       const check = authoritativeChoiceContext.check || { success: recovery.rule?.type === 'automatic_recovery' };
-      const committed = await commitNarratedStoryInventoryRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check, recovery });
-      if (!committed.body?.applied) return Response.json({ error:committed.body?.reason || 'Recovery did not commit.', invalid:true, writes:0 }, { status:committed.status >= 400 ? committed.status : 409 });
-      itemRecovery = { applied:true, already_processed:!!committed.body.already_processed, recovered_items:committed.body.recovered_items || [], item_recovery:{ request_id:storyRequestId, recovered_items:committed.body.recovered_items || [], quantity:(committed.body.recovered_items || []).reduce((sum,item)=>sum+Number(item.quantity || 0),0), item_name:(committed.body.recovered_items || []).map((item)=>item.canonical_item).join(' and '), inventory_result:committed.body.receipt?.inventory_result }, writes:committed.body.writes };
-      authoritativeRecovery = { recovery, check, applied:true, recovered_items:itemRecovery.recovered_items, annotation:recoveryAnnotation({ recovery, resolution:check, applied:true, recoveredItems:itemRecovery.recovered_items }) };
+      const committed = await guardAndCommitNarratedRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check, narrative:selectedChoice, recovery });
+      if (!committed.body?.applied && committed.body?.reason !== 'not_applicable') return Response.json({ error:committed.body?.reason || 'Recovery did not commit.', invalid:true, recovery_transaction:committed.body?.recovery_transaction, writes:0 }, { status:committed.status >= 400 ? committed.status : 409 });
+      if (committed.body?.applied) {
+        itemRecovery = { applied:true, already_processed:!!committed.body.already_processed, recovered_items:committed.body.recovered_items || [], item_recovery:{ request_id:storyRequestId, recovered_items:committed.body.recovered_items || [], quantity:(committed.body.recovered_items || []).reduce((sum,item)=>sum+Number(item.quantity || 0),0), item_name:(committed.body.recovered_items || []).map((item)=>item.canonical_item).join(' and '), inventory_result:committed.body.receipt?.inventory_result }, writes:committed.body.writes };
+        authoritativeRecovery = { recovery, check, applied:true, recovered_items:itemRecovery.recovered_items, annotation:recoveryAnnotation({ recovery, resolution:check, applied:true, recoveredItems:itemRecovery.recovered_items }) };
+      }
     }
     let authoritativeSpellCast = null;
     if (action === 'choice' && storyRequestId) {
@@ -382,11 +385,17 @@ Write a gripping 1-2 paragraph combat narrative.`;
     const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
     if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0 }, { status: 409 });
     result = skillInvariant.result;
-    if (!authoritativeRecovery && action === 'choice' && result.current_recovery) {
-      const committed = await commitNarratedStoryInventoryRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check:authoritativeChoiceContext.check, recovery:result.current_recovery });
-      if (!committed.body?.applied) return Response.json({ error:committed.body?.reason || 'Structured reward did not commit.', invalid:true, writes:0 },{status:committed.status >= 400 ? committed.status : 409});
-      itemRecovery = { applied:true, already_processed:!!committed.body.already_processed, recovered_items:committed.body.recovered_items || [], item_recovery:{request_id:storyRequestId,recovered_items:committed.body.recovered_items || [],quantity:(committed.body.recovered_items || []).reduce((sum,item)=>sum+Number(item.quantity||0),0),item_name:(committed.body.recovered_items || []).map((item)=>item.canonical_item).join(' and '),inventory_result:committed.body.receipt?.inventory_result} };
-      authoritativeRecovery = { recovery:result.current_recovery, check:authoritativeChoiceContext.check, applied:true, recovered_items:itemRecovery.recovered_items, annotation:recoveryAnnotation({recovery:result.current_recovery,resolution:authoritativeChoiceContext.check,applied:true,recoveredItems:itemRecovery.recovered_items}) };
+    if (!authoritativeRecovery && action === 'choice') {
+      const committed = await guardAndCommitNarratedRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check:authoritativeChoiceContext.check, narrative:result.narrative, recovery:result.current_recovery });
+      result = { ...result, recovery_transaction: committed.body?.recovery_transaction || { status: committed.body?.reason || 'unknown' } };
+      if (!committed.body?.applied && committed.body?.reason !== 'not_applicable') {
+        console.warn('Story recovery validation rejected', JSON.stringify({ request_id:storyRequestId, narrative:result.narrative, current_recovery:result.current_recovery, recovery_transaction:committed.body?.recovery_transaction }));
+        return Response.json({ error:committed.body?.reason || 'Structured reward did not commit.', invalid:true, recovery_transaction:committed.body?.recovery_transaction, writes:0 },{status:committed.status >= 400 ? committed.status : 409});
+      }
+      if (committed.body?.applied) {
+        itemRecovery = { applied:true, already_processed:!!committed.body.already_processed, recovered_items:committed.body.recovered_items || [], item_recovery:{request_id:storyRequestId,recovered_items:committed.body.recovered_items || [],quantity:(committed.body.recovered_items || []).reduce((sum,item)=>sum+Number(item.quantity||0),0),item_name:(committed.body.recovered_items || []).map((item)=>item.canonical_item).join(' and '),inventory_result:committed.body.receipt?.inventory_result} };
+        authoritativeRecovery = { recovery:result.current_recovery, check:authoritativeChoiceContext.check, applied:true, recovered_items:itemRecovery.recovered_items, annotation:recoveryAnnotation({recovery:result.current_recovery,resolution:authoritativeChoiceContext.check,applied:true,recoveredItems:itemRecovery.recovered_items}) };
+      }
     }
     if (!narrationMayPublishRecovery({ narrative:result.narrative, committed:authoritativeRecovery?.applied === true })) return Response.json({error:'Exact item-recovery narration requires a committed structured receipt.',invalid:true,writes:0},{status:409});
 
@@ -422,7 +431,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
         choice_evidence: { previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash, guard: result.choice_guard },
         ...(result.combat_handoff ? { combat_handoff: result.combat_handoff } : {}),
         ...(result.item_recovery ? { item_recovery: result.item_recovery } : {}),
-        ...(result.recovery_resolution ? { recovery_resolution: result.recovery_resolution } : {})
+        ...(result.recovery_resolution ? { recovery_resolution: result.recovery_resolution } : {}),
+        ...(result.recovery_transaction ? { recovery_transaction: result.recovery_transaction } : {})
       };
       result = { ...result, previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash };
       const committedTransition = commitStoryTransition(commitSession.story_log || [], completedEntry, storyRequestId || null);
