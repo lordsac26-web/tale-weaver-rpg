@@ -1,6 +1,6 @@
 import { hydrateLatestStoryEntry, normalizeStoryChoices } from './storyTransition.ts';
 
-export const STORY_BOOTSTRAP_VERSION = 'story-bootstrap-v1.0.0';
+export const STORY_BOOTSTRAP_VERSION = 'story-bootstrap-v1.1.0';
 
 const dcFrom = (choice) => {
   const direct = Number(choice?.dc ?? choice?.skill_check?.dc);
@@ -23,19 +23,31 @@ export function normalizeGeneratedChoices(value) {
   })).filter((choice) => choice.text).slice(0, 4);
 }
 
-export function groundedFallbackChoices({ location = 'the current area' } = {}) {
-  return [
-    { text: `Observe ${location} carefully before moving.`, skill_check: 'Perception', dc: 10, risk_level: 'low' },
-    { text: `Investigate the most unusual detail in ${location}.`, skill_check: 'Investigation', dc: 12, risk_level: 'medium' },
-    { text: 'Move forward cautiously and stay ready for danger.', skill_check: 'Stealth', dc: 11, risk_level: 'medium' },
-    { text: 'Pause to assess your gear and choose the safest route.', skill_check: 'Survival', dc: 10, risk_level: 'low' },
+const validChoiceSet = (choices) => choices.length === 4 && new Set(choices.map((choice) => choice.text.toLowerCase())).size === 4 && choices.every((choice) => choice.text && (!choice.skill_check || Number.isFinite(Number(choice.dc))));
+const sameChoices = (left, right) => JSON.stringify(normalizeGeneratedChoices(left)) === JSON.stringify(normalizeGeneratedChoices(right));
+
+export function groundedFallbackChoices({ location = 'the current area', requestId = '', previousChoices = [] } = {}) {
+  const seed = [...String(requestId)].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const openings = ['Reassess', 'Survey', 'Study', 'Examine'];
+  const first = openings[seed % openings.length];
+  const choices = [
+    { text: `${first} ${location} from a safer position before moving.`, skill_check: 'Perception', dc: 10, risk_level: 'low' },
+    { text: `Investigate the clearest unresolved detail in ${location}.`, skill_check: 'Investigation', dc: 12, risk_level: 'medium' },
+    { text: `Advance cautiously through ${location} while avoiding notice.`, skill_check: 'Stealth', dc: 11, risk_level: 'medium' },
+    { text: `Use the terrain around ${location} to choose a safer route.`, skill_check: 'Survival', dc: 10, risk_level: 'low' },
   ];
+  if (sameChoices(choices, previousChoices)) choices[0] = { ...choices[0], text: `${choices[0].text} Check it from a different angle.` };
+  return choices;
 }
 
 export function finalizeGeneratedStoryResult(result, context = {}) {
   const choices = normalizeGeneratedChoices(result?.choices);
   const needsChoices = !result?.combat_trigger;
-  return { ...result, choices: needsChoices && choices.length < 4 ? groundedFallbackChoices(context) : choices };
+  if (!needsChoices) return { ...result, choices, choice_guard: { replaced: false, reason: 'combat' } };
+  const malformed = !validChoiceSet(choices);
+  const identical = !malformed && sameChoices(choices, context.previousChoices);
+  const replacement = malformed || identical ? groundedFallbackChoices(context) : choices;
+  return { ...result, choices: replacement, choice_guard: { replaced: malformed || identical, reason: malformed ? 'missing_or_malformed' : identical ? 'identical_to_preceding' : 'valid_generated' } };
 }
 
 export function deriveCharacterActions(character) {

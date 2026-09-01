@@ -1,6 +1,8 @@
-export const STORY_TRANSITION_VERSION = 'story-transition-v2.1.0';
+export const STORY_TRANSITION_VERSION = 'story-transition-v2.2.0';
 
 export const normalizeStoryChoices = (value) => Array.isArray(value) ? value : [];
+export const hashStoryValue = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value ?? null))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+export const canonicalStoryResponsePayload = ({ requestId, text, choices, skillCheck }) => ({ request_id: requestId || null, text: String(text || ''), choices: normalizeStoryChoices(choices), skill_check: skillCheck || null });
 
 export function commitStoryTransition(storyLog, completedEntry, requestId, limit = 60) {
   const source = Array.isArray(storyLog) ? storyLog : [];

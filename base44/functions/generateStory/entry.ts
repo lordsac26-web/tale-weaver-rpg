@@ -13,7 +13,7 @@ import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkill
 import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
 import { recoveryAnnotation } from '../../shared/story/projectileLifecycle.ts';
 import { commitNarratedStoryInventoryRecovery, narrationMayPublishRecovery } from '../../shared/story/narratedStoryInventoryCommit.ts';
-import { commitStoryTransition, hydrateLatestStoryEntry, storyPayloadFromCommit, STORY_TRANSITION_VERSION } from '../../shared/story/storyTransition.ts';
+import { canonicalStoryResponsePayload, commitStoryTransition, hashStoryValue, hydrateLatestStoryEntry, storyPayloadFromCommit, STORY_TRANSITION_VERSION } from '../../shared/story/storyTransition.ts';
 import { buildGameHydration, finalizeGeneratedStoryResult } from '../../shared/story/storyBootstrap.ts';
 
 /**
@@ -378,7 +378,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...result, narrative: pendingAmbushNarrative(ambushIntent.target_hint, setupSucceeded), key_event: '', combat_trigger: setupSucceeded && result.combat_trigger && roster.ok, enemies: roster.ok ? roster.enemies : [], pending_ambush_attack: setupSucceeded && roster.ok ? { request_id: storyRequestId, target_name: roster.target.name, setup_receipt_id: authoritativeChoiceContext.check.id || authoritativeChoiceContext.check.request_id, setup_success: true } : null };
     }
 
-    result = finalizeGeneratedStoryResult(result, { location: result?.location_update || session.current_location || 'the current area' });
+    result = finalizeGeneratedStoryResult(result, { location: result?.location_update || session.current_location || 'the current area', requestId: storyRequestId, previousChoices: hydrateLatestStoryEntry(session).choices });
     const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
     if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0 }, { status: 409 });
     result = skillInvariant.result;
@@ -407,16 +407,24 @@ Write a gripping 1-2 paragraph combat narrative.`;
       const incomingStorySequence = Number(story_sequence || 0);
       const persistedStorySequence = Number(commitSession?.world_state?.__story_transition_sequence || 0);
       if (incomingStorySequence > 0 && persistedStorySequence > incomingStorySequence) return Response.json({ error: 'A newer story transition is already committed.', superseded: true, writes: 0, transition_version: STORY_TRANSITION_VERSION }, { status: 409 });
+      const immediatelyPreceding = hydrateLatestStoryEntry(commitSession);
+      result = finalizeGeneratedStoryResult(result, { location: result?.location_update || commitSession.current_location || 'the current area', requestId: storyRequestId, previousChoices: immediatelyPreceding.choices });
+      const skillCheck = authoritativeChoiceContext?.check?.raw_d20 != null ? authoritativeChoiceContext.check : null;
+      const previousChoiceHash = await hashStoryValue(immediatelyPreceding.choices);
+      const currentChoiceHash = await hashStoryValue(result.choices);
+      const responsePayloadHash = await hashStoryValue(canonicalStoryResponsePayload({ requestId: storyRequestId, text: result.narrative, choices: result.choices, skillCheck }));
       const completedEntry = {
         timestamp: new Date().toISOString(), action,
         ...(storyRequestId ? { request_id: storyRequestId } : {}),
         player_choice: action === 'choice' ? selectedChoice : (custom_input ?? choice_index),
-        text: result.narrative, choices: Array.isArray(result.choices) ? result.choices : [],
-        ...(authoritativeChoiceContext?.check?.raw_d20 != null ? { skill_check: authoritativeChoiceContext.check, skill_display: result.skill_display } : {}),
+        text: result.narrative, choices: result.choices,
+        ...(skillCheck ? { skill_check: skillCheck, skill_display: result.skill_display } : {}),
+        choice_evidence: { previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash, guard: result.choice_guard },
         ...(result.combat_handoff ? { combat_handoff: result.combat_handoff } : {}),
         ...(result.item_recovery ? { item_recovery: result.item_recovery } : {}),
         ...(result.recovery_resolution ? { recovery_resolution: result.recovery_resolution } : {})
       };
+      result = { ...result, previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash };
       const committedTransition = commitStoryTransition(commitSession.story_log || [], completedEntry, storyRequestId || null);
       const updatedLog = committedTransition.story_log;
       result = { ...result, choices: completedEntry.choices, story_sequence: incomingStorySequence || null, ...storyPayloadFromCommit(committedTransition) };
