@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
     const storyRequestId = String(request_id || '').slice(0, 120);
     if (action === 'start') {
       const existingOpening = hydrateLatestStoryEntry(session);
-      if (existingOpening.text && existingOpening.choices.length >= 4) return Response.json({ narrative: existingOpening.text, choices: existingOpening.choices, ...storyPayloadFromCommit({ entry: existingOpening.entry, index: existingOpening.index }), already_processed: true });
+      if (existingOpening.text && existingOpening.choices.length >= 4) return Response.json({ narrative: existingOpening.text, choices: existingOpening.choices, ...storyPayloadFromCommit({ entry: existingOpening.entry, index: existingOpening.index, persistence_confirmed: true }), persistence_confirmed: true, already_processed: true });
     }
     let authoritativeChoiceContext = incomingChoiceContext && typeof incomingChoiceContext === 'object' ? incomingChoiceContext : {};
     if (action === 'choice' && authoritativeChoiceContext?.check?.raw_d20 != null) {
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
     if (action === 'choice' && storyRequestId) {
       const existingIndex = (session.story_log || []).findIndex((entry) => entry?.request_id === storyRequestId);
       const existing = existingIndex >= 0 ? session.story_log[existingIndex] : null;
-      if (existing?.text) return Response.json({ narrative: existing.text, choices: Array.isArray(existing.choices) ? existing.choices : [], ...storyPayloadFromCommit({ entry: existing, index: existingIndex }), already_processed: true, ...(existing.item_recovery ? { item_recovery: { ...existing.item_recovery, already_processed: true } } : {}) });
+      if (existing?.text) return Response.json({ narrative: existing.text, choices: Array.isArray(existing.choices) ? existing.choices : [], ...storyPayloadFromCommit({ entry: existing, index: existingIndex, persistence_confirmed: true }), persistence_confirmed: true, already_processed: true, ...(existing.item_recovery ? { item_recovery: { ...existing.item_recovery, already_processed: true } } : {}) });
       // Skill receipts are persisted atomically by resolveStorySkillCheck. Do not stage
       // blank story entries here; failed invariant checks must leave story state untouched.
     }
@@ -495,6 +495,11 @@ Write a gripping 1-2 paragraph combat narrative.`;
       }
 
       await base44.asServiceRole.entities.GameSession.update(session_id, updateData);
+      const persistedSession = await base44.asServiceRole.entities.GameSession.get(session_id);
+      const persistedTransition = hydrateLatestStoryEntry(persistedSession);
+      const persistedPayloadHash = await hashStoryValue(canonicalStoryResponsePayload({ requestId: persistedTransition.request_id, text: persistedTransition.text, choices: persistedTransition.choices, skillCheck: persistedTransition.entry?.skill_check || null }));
+      if (persistedTransition.request_id !== (storyRequestId || completedEntry.request_id || null) || persistedPayloadHash !== responsePayloadHash) return Response.json({ error: 'Story narration was generated but its authoritative narration and choices pair was not confirmed. Rehydrate and retry.', persistence_confirmed: false, writes: 0, transition_version: STORY_TRANSITION_VERSION }, { status: 409 });
+      result = { ...result, persistence_confirmed: true, ...storyPayloadFromCommit({ ...committedTransition, persistence_confirmed: true }) };
 
       // Target-aware character conditions. Enemy/NPC effects never belong on the
       // Character record, and placeholders such as "None" are always discarded.

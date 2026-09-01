@@ -359,7 +359,7 @@ export default function Game() {
       });
       const data = result.data;
       const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
-      if (!acceptedStory.accepted) return;
+      if (!acceptedStory.accepted) throw new Error(acceptedStory.reason === 'persistence_unconfirmed' ? 'The new story was not confirmed by the server.' : 'A newer story response superseded this one.');
 
       if (acceptedStory.hydration.text) setNarrative(prev => [...prev, { type: 'narration', text: acceptedStory.hydration.text }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP earned!` }]);
@@ -379,7 +379,9 @@ export default function Game() {
       await loadState({ storySequence, expectedRequestId: requestId });
     } catch (err) {
       console.error('Failed to process choice:', err);
-      setNarrative(prev => [...prev, { type: 'narration', text: getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry. Please try again.') }]);
+      await loadState().catch(() => null);
+      setChoices([]);
+      setNarrative(prev => [...prev, { type: 'narration', text: `${getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry.')} The latest authoritative scene was restored; retry your last action.` }]);
     } finally {
       setStoryLoading(false);
     }
@@ -576,7 +578,9 @@ export default function Game() {
       await loadState({ storySequence, expectedRequestId: requestId });
     } catch (err) {
       console.error('Failed to execute action:', err);
-      setNarrative(prev => [...prev, { type: 'narration', text: getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry. Please try again.') }]);
+      await loadState().catch(() => null);
+      setChoices([]);
+      setNarrative(prev => [...prev, { type: 'narration', text: `${getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry.')} The latest authoritative scene was restored; retry your last action.` }]);
     } finally {
       setStoryLoading(false);
     }

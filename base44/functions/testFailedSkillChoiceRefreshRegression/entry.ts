@@ -34,13 +34,13 @@ export default async function testFailedSkillChoiceRefreshRegression(req) {
       record('failed Dash appends one new entry', failedCommit.story_log.length === 2);
       record('failed Dash commits non-identical new choices', JSON.stringify(failedCommit.entry.choices) !== JSON.stringify(oldChoices));
       record('failed roll remains immutable without reroll', failedCommit.entry.skill_check.raw_d20 === 9 && failedCommit.entry.skill_check.final_total === 13 && failedCommit.entry.skill_check.success === false);
-      const failedPayload = storyPayloadFromCommit(failedCommit); const failedUi = acceptSequencedStoryPayload(failedPayload, 1, 1);
+      const failedPayload = { ...storyPayloadFromCommit({ ...failedCommit, persistence_confirmed: true }), persistence_confirmed: true }; const failedUi = acceptSequencedStoryPayload(failedPayload, 1, 1);
       record('latest text and choices pair matches UI payload', failedUi.accepted && failedUi.hydration.text === failedEntry.text && JSON.stringify(failedUi.hydration.choices) === JSON.stringify(failedChoices));
       const reloaded = await base44.asServiceRole.entities.GameSession.get(session.id); const hydration = hydrateLatestStoryEntry(reloaded);
       record('reload hydrates same latest pair', hydration.text === failedEntry.text && JSON.stringify(hydration.choices) === JSON.stringify(failedChoices));
       const missing = acceptSequencedStoryPayload({ narrative: 'missing choices' }, 2, 2); const empty = acceptSequencedStoryPayload({ narrative: 'empty', choices: [] }, 3, 3);
-      record('missing response choices clear rather than retain old', missing.accepted && missing.hydration.choices.length === 0);
-      record('empty response choices clear rather than retain old', empty.accepted && empty.hydration.choices.length === 0);
+      record('missing unconfirmed response is rejected', !missing.accepted && missing.reason === 'persistence_unconfirmed');
+      record('empty unconfirmed response is rejected', !empty.accepted && empty.reason === 'persistence_unconfirmed');
       const late = acceptSequencedStoryPayload(failedPayload, 1, 2); record('late response cannot restore stale choices', !late.accepted);
       const successEntry = { ...failedEntry, timestamp: '2026-08-14T00:01:00.000Z', request_id: 'dash-success', player_choice: 'Dash succeeds', text: 'The successful dash changes the scene.', choices: successChoices, skill_check: { ...failedReceipt, request_id: 'dash-success', raw_d20: 18, final_total: 22, success: true } };
       const successCommit = commitStoryTransition(failedCommit.story_log, successEntry, 'dash-success'); record('successful check also refreshes choices', JSON.stringify(successCommit.entry.choices) === JSON.stringify(successChoices) && JSON.stringify(successChoices) !== JSON.stringify(failedChoices));
@@ -66,6 +66,6 @@ export default async function testFailedSkillChoiceRefreshRegression(req) {
     record('cleanup fixtures absent', cleanup.every((item)=>item.absent));
     const protectedAfter = await hashValue(await readProtectedDndState(base44.asServiceRole)); record('protected live IDs unchanged', protectedBefore === protectedAfter);
     const passed=results.filter((item)=>item.pass).length; const allPass=passed===results.length;
-    return Response.json({ function_version:'test-failed-skill-choice-refresh-v2.1.0',passed,failed:results.length-passed,total:results.length,all_pass:allPass,results,cleanup },{status:allPass?200:500});
+    return Response.json({ function_version:'test-failed-skill-choice-refresh-v2.2.0',passed,failed:results.length-passed,total:results.length,all_pass:allPass,results,cleanup },{status:allPass?200:500});
   } catch(error){return Response.json({error:error.message||'Regression failed'},{status:500});}
 }

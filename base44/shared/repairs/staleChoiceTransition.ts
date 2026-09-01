@@ -16,17 +16,23 @@ async function inspect(db, scope) {
   const receipt = latestUnifiedReceipt(session);
   const resultIndex = receipt ? log.findIndex((entry) => entry?.request_id === receipt.request_id) : -1;
   const result = resultIndex >= 0 ? log[resultIndex] : null;
-  const sourceIndex = resultIndex > 0 ? resultIndex - 1 : log.length - 1;
+  const matchingChoice = (choice) => String(choice?.skill_check || '').toLowerCase().includes(String(receipt?.skill || '').toLowerCase()) && Number(choice?.dc) === Number(receipt?.dc);
+  const receiptSourceIndex = receipt ? log.map((entry, index) => ({ entry, index })).reverse().find(({ entry }) => normalizeGeneratedChoices(entry?.choices).some(matchingChoice))?.index ?? -1 : -1;
+  const sourceIndex = resultIndex > 0 ? resultIndex - 1 : receiptSourceIndex;
   const source = sourceIndex >= 0 ? log[sourceIndex] : null;
+  const selectedChoice = normalizeGeneratedChoices(source?.choices).find(matchingChoice)?.text || null;
   const resultChoices = normalizeGeneratedChoices(result?.choices);
   const sourceChoices = normalizeGeneratedChoices(source?.choices);
   const resultHash = await hashStoryValue(resultChoices);
   const sourceHash = await hashStoryValue(sourceChoices);
   const resultStale = !!result && resultIndex === log.length - 1 && (!valid(resultChoices) || resultHash === sourceHash);
-  const frontendOnly = !!receipt && resultIndex < 0 && sourceIndex === log.length - 1;
-  const classification = resultStale ? 'server_persisted_stale_choices' : frontendOnly ? 'frontend_hydration_stale_choices' : 'no_issue';
+  const laterEntries = sourceIndex >= 0 ? log.slice(sourceIndex + 1).filter((entry) => entry?.request_id !== receipt?.request_id) : log;
+  const orphan = !!receipt && receipt.success === false && resultIndex < 0 && sourceIndex >= 0 && !!selectedChoice;
+  const orphanSafe = orphan && laterEntries.length === 0 && receipts(session).at(-1)?.request_id === receipt.request_id;
+  const frontendOnly = !!receipt && resultIndex < 0 && !orphan;
+  const classification = resultStale ? 'server_persisted_stale_choices' : orphan ? 'orphan_browser_narration_with_failed_receipt' : frontendOnly ? 'frontend_hydration_stale_choices' : 'no_issue';
   const existingRepair = repairs(session).find((item) => item?.receipt_key === scope.receiptKey && item?.source_request_id === receipt?.request_id) || null;
-  return { status: 200, character, session, log, receipt, resultIndex, result, sourceIndex, source, resultChoices, sourceChoices, resultHash, sourceHash, resultStale, frontendOnly, classification, existingRepair };
+  return { status: 200, character, session, log, receipt, resultIndex, result, sourceIndex, source, selectedChoice, laterEntries, resultChoices, sourceChoices, resultHash, sourceHash, resultStale, orphan, orphanSafe, frontendOnly, classification, existingRepair };
 }
 
 async function hashes(state) {
@@ -34,12 +40,13 @@ async function hashes(state) {
 }
 
 function compact(state, mode, expectedHashes, proposalHash, token) {
-  return { success: true, mode, function_version: 'audit-repair-latest-stale-choice-transition-v1.0.0', classification: state.classification, safe_to_repair: state.resultStale, writes: 0, character_id: state.character.id, session_id: state.session.id, request_id: state.receipt?.request_id || null, source_index: state.sourceIndex, result_index: state.resultIndex, expected_hashes: expectedHashes, previous_choice_hash: state.sourceHash, current_choice_hash: state.resultHash, response_payload_hash: state.result?.choice_evidence?.response_payload_hash || null, proposed_entry_hash: proposalHash, proposed_choice_count: proposalHash ? 4 : 0, no_later_conflicts: state.resultIndex < 0 || state.resultIndex === state.log.length - 1, apply_token: token };
+  return { success: true, mode, function_version: 'audit-repair-latest-stale-choice-transition-v1.1.0', classification: state.classification, safe_to_repair: state.resultStale || state.orphanSafe, writes: 0, character_id: state.character.id, session_id: state.session.id, request_id: state.receipt?.request_id || null, source_index: state.sourceIndex, result_index: state.resultIndex, expected_hashes: expectedHashes, previous_choice_hash: state.sourceHash, current_choice_hash: state.resultHash, response_payload_hash: state.result?.choice_evidence?.response_payload_hash || null, proposed_entry_hash: proposalHash, proposed_choice_count: proposalHash ? 4 : 0, no_later_conflicts: state.resultIndex < 0 || state.resultIndex === state.log.length - 1, apply_token: token };
 }
 
 function proposalFor(state) {
-  const guarded = finalizeGeneratedStoryResult({ narrative: state.result.text, choices: state.sourceChoices, combat_trigger: false }, { location: state.session.current_location || 'the current area', requestId: state.receipt.request_id, previousChoices: state.sourceChoices });
-  return { choices: guarded.choices, narrative: state.result.text };
+  const narrative = state.orphan ? `Your careful observation fails to reveal a safe route: the Perception result is ${state.receipt.final_total} against DC ${state.receipt.dc}. You pause before committing to a dangerous path and reassess the scene.` : state.result.text;
+  const guarded = finalizeGeneratedStoryResult({ narrative, choices: state.sourceChoices, combat_trigger: false }, { location: state.session.current_location || 'the current area', requestId: state.receipt.request_id, previousChoices: state.sourceChoices });
+  return { choices: guarded.choices, narrative };
 }
 
 export async function staleChoiceTransitionRepairCore({ db, mode, responseFormat, applyToken, scope = LIVE_STALE_CHOICE_SCOPE }) {
@@ -49,10 +56,11 @@ export async function staleChoiceTransitionRepairCore({ db, mode, responseFormat
   const expectedHashes = await hashes(state);
   const tokenCheck = applyToken ? await verifyStaleChoiceApplyToken({ token: applyToken, scope, receipt: state.receipt, character: state.character, allowExpired: !!state.existingRepair }) : null;
   if (tokenCheck && !tokenCheck.ok) return { status: tokenCheck.status, body: { error: tokenCheck.error, writes: 0 } };
-  if (state.existingRepair) return { status: 200, body: { success: true, replayed: true, writes: 0, function_version: 'audit-repair-latest-stale-choice-transition-v1.0.0', receipt: state.existingRepair } };
+  if (state.existingRepair) return { status: 200, body: { success: true, skipped: true, replayed: true, writes: 0, function_version: 'audit-repair-latest-stale-choice-transition-v1.1.0', receipt: state.existingRepair } };
   const detail = { ...compact(state, mode, expectedHashes, null, null), candidate: state.receipt ? { request_id: state.receipt.request_id, skill: state.receipt.skill, dc: state.receipt.dc, raw_d20: state.receipt.raw_d20, modifier_total: state.receipt.modifier_total, final_total: state.receipt.final_total, success: state.receipt.success, receipt_timestamp: state.receipt.at || null, source_timestamp: state.source?.timestamp || null, result_timestamp: state.result?.timestamp || null } : null, hydration: hydrateLatestStoryEntry(state.session) };
   if (mode === 'discover' && responseFormat !== 'guard_only') return { status: 200, body: detail };
-  if (!state.resultStale) return { status: 200, body: responseFormat === 'guard_only' ? compact(state, mode, expectedHashes, null, null) : detail };
+  const repairable = state.resultStale || state.orphanSafe;
+  if (!repairable) return { status: 200, body: responseFormat === 'guard_only' ? compact(state, mode, expectedHashes, null, null) : detail };
   const proposal = proposalFor(state);
   const proposalHash = await hashStoryValue({ request_id: state.receipt.request_id, result_index: state.resultIndex, narrative: proposal.narrative, choices: proposal.choices });
   if (mode !== 'apply') {
@@ -62,15 +70,17 @@ export async function staleChoiceTransitionRepairCore({ db, mode, responseFormat
   if (!tokenCheck?.ok || tokenCheck.payload.classification !== state.classification || Object.entries(expectedHashes).some(([key, value]) => tokenCheck.payload.expected_hashes?.[key] !== value) || tokenCheck.payload.proposal_hash !== proposalHash) return { status: 409, body: { error: 'Apply token state or proposal mismatch.', writes: 0 } };
   state = await inspect(db, scope);
   const freshHashes = state.error ? null : await hashes(state);
-  if (!state.resultStale || !freshHashes || Object.entries(expectedHashes).some(([key, value]) => freshHashes[key] !== value)) return { status: 409, body: { error: 'Bound state changed before apply.', writes: 0 } };
-  const repairedEntry = { ...state.result, choices: proposal.choices, choice_evidence: { ...(state.result.choice_evidence || {}), previous_choice_hash: state.sourceHash, current_choice_hash: await hashStoryValue(proposal.choices), response_payload_hash: await hashStoryValue(canonicalStoryResponsePayload({ requestId: state.receipt.request_id, text: state.result.text, choices: proposal.choices, skillCheck: state.result.skill_check || state.receipt })), repair_guard: 'stale-choice-transition-v1' } };
-  const nextLog = state.log.map((entry, index) => index === state.resultIndex ? repairedEntry : entry);
-  const receipt = { receipt_key: scope.receiptKey, immutable: true, source_request_id: state.receipt.request_id, source_index: state.sourceIndex, repaired_index: state.resultIndex, source_story_hash: state.sourceHash, stale_choice_hash: state.resultHash, proposal_hash: proposalHash, applied_at: new Date().toISOString() };
+  if (!(state.resultStale || state.orphanSafe) || !freshHashes || Object.entries(expectedHashes).some(([key, value]) => freshHashes[key] !== value)) return { status: 409, body: { error: 'Bound state changed before apply.', writes: 0 } };
+  const repairedEntry = { ...(state.result || {}), timestamp: state.result?.timestamp || new Date().toISOString(), action: 'choice', request_id: state.receipt.request_id, player_choice: state.result?.player_choice || state.selectedChoice, text: proposal.narrative, choices: proposal.choices, skill_check: state.result?.skill_check || state.receipt, repair_origin: state.orphan ? 'orphan_browser_narration_with_failed_receipt' : state.result?.repair_origin, choice_evidence: { ...(state.result?.choice_evidence || {}), previous_choice_hash: state.sourceHash, current_choice_hash: await hashStoryValue(proposal.choices), response_payload_hash: await hashStoryValue(canonicalStoryResponsePayload({ requestId: state.receipt.request_id, text: proposal.narrative, choices: proposal.choices, skillCheck: state.result?.skill_check || state.receipt })), repair_guard: 'stale-choice-transition-v1' } };
+  const nextLog = state.orphan ? [...state.log, repairedEntry] : state.log.map((entry, index) => index === state.resultIndex ? repairedEntry : entry);
+  const repairedIndex = state.orphan ? nextLog.length - 1 : state.resultIndex;
+  const receipt = { receipt_key: scope.receiptKey, immutable: true, source_request_id: state.receipt.request_id, source_index: state.sourceIndex, repaired_index: repairedIndex, source_story_hash: state.sourceHash, stale_choice_hash: state.resultHash, proposal_hash: proposalHash, applied_at: new Date().toISOString() };
   await db.entities.GameSession.update(scope.sessionId, { story_log: nextLog, world_state: { ...(state.session.world_state || {}), __stale_choice_transition_repairs: [...repairs(state.session), receipt] } });
   const after = await db.entities.GameSession.get(scope.sessionId);
   const replayedState = await inspect(db, scope);
-  const priorPreserved = state.log.every((entry, index) => index === state.resultIndex || JSON.stringify(entry) === JSON.stringify(after.story_log[index]));
+  const priorPreserved = state.log.every((entry, index) => state.orphan || index !== state.resultIndex ? JSON.stringify(entry) === JSON.stringify(after.story_log[index]) : true);
   const protectedOk = await hashStoryValue(protectedSession(after)) === expectedHashes.protected_session && await hashStoryValue(await db.entities.Character.get(scope.characterId)) === expectedHashes.character && await hashStoryValue(receipts(after)) === expectedHashes.skill_receipts;
+  const target = after.story_log[repairedIndex];
   if (!priorPreserved || !protectedOk || replayedState.classification !== 'no_issue') return { status: 500, body: { error: 'Repair postcondition failed.', writes: 1 } };
-  return { status: 200, body: { success: true, replayed: false, writes: 1, function_version: 'audit-repair-latest-stale-choice-transition-v1.0.0', receipt, postconditions: { prior_entries_byte_identical: priorPreserved, narration_preserved: after.story_log[state.resultIndex].text === state.result.text, failed_result_preserved: await hashStoryValue(after.story_log[state.resultIndex].skill_check) === await hashStoryValue(state.result.skill_check), protected_state_unchanged: protectedOk } } };
+  return { status: 200, body: { success: true, replayed: false, writes: 1, function_version: 'audit-repair-latest-stale-choice-transition-v1.1.0', receipt, postconditions: { prior_entries_byte_identical: priorPreserved, narration_preserved: state.orphan ? target.text === proposal.narrative : target.text === state.result.text, failed_result_preserved: await hashStoryValue(target.skill_check) === await hashStoryValue(state.result?.skill_check || state.receipt), protected_state_unchanged: protectedOk } } };
 }

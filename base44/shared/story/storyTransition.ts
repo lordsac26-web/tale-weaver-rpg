@@ -32,6 +32,7 @@ export function hydrateLatestStoryEntry(session) {
 export function storyPayloadFromCommit(commit) {
   return {
     transition_version: STORY_TRANSITION_VERSION,
+    persistence_confirmed: commit?.persistence_confirmed === true,
     story_entry: commit.entry,
     hydration: {
       index: commit.index,
@@ -44,6 +45,7 @@ export function storyPayloadFromCommit(commit) {
 
 export function acceptSequencedStoryPayload(payload, sequence, latestSequence) {
   if (sequence !== latestSequence) return { accepted: false, reason: 'superseded' };
+  if (payload?.persistence_confirmed !== true) return { accepted: false, reason: 'persistence_unconfirmed' };
   const hydration = payload?.hydration || (payload?.story_entry ? {
     request_id: payload.story_entry.request_id || null,
     text: String(payload.story_entry.text || ''),
