@@ -17,7 +17,7 @@ const receipts = (session) => Array.isArray(session?.world_state?.__skill_check_
 const repairReceipts = (session) => Array.isArray(session?.world_state?.__failed_choice_transition_repairs) ? session.world_state.__failed_choice_transition_repairs : [];
 const validChoices = (choices) => Array.isArray(choices) && choices.length === 4 && choices.every((choice) => typeof choice?.text === 'string' && choice.text.trim());
 const protectedSessionState = (session) => {
-  const { story_log, current_choices, world_state, ...rest } = session || {};
+  const { story_log, current_choices, world_state, updated_date, ...rest } = session || {};
   const { __failed_choice_transition_repairs, ...protectedWorld } = world_state || {};
   return { ...rest, world_state: protectedWorld };
 };
@@ -45,7 +45,11 @@ async function inspect(db, scope) {
   const equal = index > 0 && entryHash === priorHash;
   const overlap = entryChoices.filter((choice) => priorChoices.some((oldChoice) => oldChoice?.text === choice?.text)).length;
   const laterEntries = index >= 0 ? log.slice(index + 1) : sourceIndex >= 0 ? log.slice(sourceIndex + 1) : log;
-  const laterReceipts = latestReceipt ? receipts(session).filter((item) => item?.request_id !== latestReceipt.request_id && String(item?.at || item?.resolved_at || '') > String(latestReceipt?.at || latestReceipt?.resolved_at || '')) : [];
+  const laterReceipts = latestReceipt ? receipts(session).filter((item) => {
+    if (item?.request_id === latestReceipt.request_id || String(item?.at || item?.resolved_at || '') <= String(latestReceipt?.at || latestReceipt?.resolved_at || '')) return false;
+    const committedIndex = log.findIndex((entry) => entry?.request_id === item?.request_id);
+    return committedIndex > priorIndex;
+  }) : [];
   const existingRepair = repairReceipts(session).find((item) => item?.request_id === scope.receiptKey);
   const expectedMatches = !scope.expected || Object.entries(scope.expected).every(([key, value]) => latestReceipt?.[key] === value);
   const staleSafe = !!entry && index === log.length - 1 && failed(entry.skill_check || latestReceipt) && dashText(entry.player_choice) && equal;
@@ -62,7 +66,7 @@ export async function failedChoiceTransitionRepairCore({ db, mode, expectedHashe
   const hydration = hydrateLatestStoryEntry(state.session);
   const sourceHashes = { story_log: await hash(state.log), source_entry: await hash(state.prior), prior_choices: state.priorHash, session: await hash(state.session), character: await hash(state.character), protected_session: await hash(protectedSessionState(state.session)), skill_receipts: await hash(receipts(state.session)) };
   const discover = {
-    success: true, mode: 'discover', function_version: 'audit-repair-latest-failed-choice-transition-v2.1.0', writes: 0,
+    success: true, mode: 'discover', function_version: 'audit-repair-latest-failed-choice-transition-v2.1.1', writes: 0,
     candidate: state.latestReceipt ? { story_entry_found: state.index >= 0, index: state.index, timestamp: state.entry?.timestamp || null, player_choice: state.entry?.player_choice || null, check: { skill: state.latestReceipt.skill, dc: state.latestReceipt.dc, raw_d20: state.latestReceipt.raw_d20, modifier_total: state.latestReceipt.modifier_total, final_total: state.latestReceipt.final_total, success: state.latestReceipt.success, request_id: state.latestReceipt.request_id } } : null,
     preceding: state.prior ? { index: state.priorIndex, timestamp: state.prior.timestamp, player_choice: state.prior.player_choice, choices: state.priorChoices } : null,
     choice_evidence: { latest_hash: state.entryHash, preceding_hash: state.priorHash, exact_equal: state.equal, overlap_count: state.overlap },
@@ -109,5 +113,5 @@ export async function failedChoiceTransitionRepairCore({ db, mode, expectedHashe
   const failedResultPreserved = failed(target?.skill_check) && await hash(target?.skill_check) === await hash(expectedCheck);
   const targetValid = target?.text === narrative && failedResultPreserved && await hash({ narrative: target?.text, choices: target?.choices }) === proposalHash;
   if (!preserved || !characterUnchanged || !protectedSessionUnchanged || !receiptsUnchanged || !targetValid) return { status: 500, body: { error: 'Repair postcondition failed.', writes: 1 } };
-  return { status: 200, body: { success: true, skipped: false, replayed: false, writes: 1, function_version: 'audit-repair-latest-failed-choice-transition-v2.1.0', receipt, postconditions: { all_prior_story_entries_byte_identical: preserved, failed_result_preserved: failedResultPreserved, authoritative_receipt_unchanged: receiptsUnchanged, character_and_inventory_unchanged: characterUnchanged, protected_session_state_unchanged: protectedSessionUnchanged, one_grounded_entry_committed: true } } };
+  return { status: 200, body: { success: true, skipped: false, replayed: false, writes: 1, function_version: 'audit-repair-latest-failed-choice-transition-v2.1.1', receipt, postconditions: { all_prior_story_entries_byte_identical: preserved, failed_result_preserved: failedResultPreserved, authoritative_receipt_unchanged: receiptsUnchanged, character_and_inventory_unchanged: characterUnchanged, protected_session_state_unchanged: protectedSessionUnchanged, one_grounded_entry_committed: true } } };
 }
