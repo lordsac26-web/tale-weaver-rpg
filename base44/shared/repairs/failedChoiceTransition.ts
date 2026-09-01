@@ -16,6 +16,11 @@ const dashText = (value) => /\bdash(?:ed|ing)?\b|rapidly|outpace|sprint|full spe
 const receipts = (session) => Array.isArray(session?.world_state?.__skill_check_receipts) ? session.world_state.__skill_check_receipts : [];
 const repairReceipts = (session) => Array.isArray(session?.world_state?.__failed_choice_transition_repairs) ? session.world_state.__failed_choice_transition_repairs : [];
 const validChoices = (choices) => Array.isArray(choices) && choices.length === 4 && choices.every((choice) => typeof choice?.text === 'string' && choice.text.trim());
+const protectedSessionState = (session) => {
+  const { story_log, current_choices, world_state, ...rest } = session || {};
+  const { __failed_choice_transition_repairs, ...protectedWorld } = world_state || {};
+  return { ...rest, world_state: protectedWorld };
+};
 
 async function inspect(db, scope) {
   const [character, session] = await Promise.all([db.entities.Character.get(scope.characterId).catch(() => null), db.entities.GameSession.get(scope.sessionId).catch(() => null)]);
@@ -55,8 +60,9 @@ export async function failedChoiceTransitionRepairCore({ db, mode, expectedHashe
   if (state.error) return { status: state.status, body: { error: state.error, writes: 0 } };
   if (state.existingRepair) return { status: 200, body: { success: true, skipped: true, replayed: true, writes: 0, receipt: state.existingRepair } };
   const hydration = hydrateLatestStoryEntry(state.session);
+  const sourceHashes = { story_log: await hash(state.log), source_entry: await hash(state.prior), prior_choices: state.priorHash, session: await hash(state.session), character: await hash(state.character), protected_session: await hash(protectedSessionState(state.session)), skill_receipts: await hash(receipts(state.session)) };
   const discover = {
-    success: true, mode: 'discover', function_version: 'audit-repair-latest-failed-choice-transition-v1.0.0', writes: 0,
+    success: true, mode: 'discover', function_version: 'audit-repair-latest-failed-choice-transition-v2.1.0', writes: 0,
     candidate: state.latestReceipt ? { story_entry_found: state.index >= 0, index: state.index, timestamp: state.entry?.timestamp || null, player_choice: state.entry?.player_choice || null, check: { skill: state.latestReceipt.skill, dc: state.latestReceipt.dc, raw_d20: state.latestReceipt.raw_d20, modifier_total: state.latestReceipt.modifier_total, final_total: state.latestReceipt.final_total, success: state.latestReceipt.success, request_id: state.latestReceipt.request_id } } : null,
     preceding: state.prior ? { index: state.priorIndex, timestamp: state.prior.timestamp, player_choice: state.prior.player_choice, choices: state.priorChoices } : null,
     choice_evidence: { latest_hash: state.entryHash, preceding_hash: state.priorHash, exact_equal: state.equal, overlap_count: state.overlap },
@@ -65,10 +71,11 @@ export async function failedChoiceTransitionRepairCore({ db, mode, expectedHashe
     proposed_repair: state.safe ? (state.orphanSafe ? 'Append exactly one grounded failed-Dash continuation using the immutable receipt; preserve all prior state.' : 'Replace only the latest stale copied choice array; preserve all other state.') : null,
     classification: !state.latestReceipt ? 'no_failed_dash_receipt' : state.index < 0 ? 'orphan_failed_dash_receipt_no_committed_story_entry' : state.safe ? 'provably_stale_latest_choices' : 'ambiguous_or_later_conflict',
     safe_to_repair: state.safe,
+    expected_hashes: sourceHashes,
+    protected_snapshots: { character: sourceHashes.character, session_non_story: sourceHashes.protected_session, authoritative_skill_receipts: sourceHashes.skill_receipts },
   };
   if (mode === 'discover') return { status: 200, body: discover };
   if (!state.safe) return { status: 409, body: { ...discover, mode, error: 'Fail closed: the exact failed-Dash incident or no-later-conflict guards did not match.' } };
-  const sourceHashes = { story_log: await hash(state.log), source_entry: await hash(state.prior), prior_choices: state.priorHash, session: await hash(state.session), character: await hash(state.character) };
   if (mode === 'dry_run') {
     const generatedRaw = await generateChoices({ orphan: state.orphanSafe, scene: state.prior?.text || state.entry?.text, check: state.latestReceipt });
     const generated = normalizeStoryChoices(Array.isArray(generatedRaw) ? generatedRaw : generatedRaw?.choices);
@@ -95,8 +102,12 @@ export async function failedChoiceTransitionRepairCore({ db, mode, expectedHashe
   const preserved = fresh.log.every((item, index) => index === fresh.index || JSON.stringify(item) === JSON.stringify(after.story_log[index]));
   const target = after.story_log[repairedIndex];
   const characterAfter = await db.entities.Character.get(scope.characterId);
+  const expectedCheck = fresh.orphanSafe ? fresh.latestReceipt : fresh.entry?.skill_check;
   const characterUnchanged = await hash(characterAfter) === sourceHashes.character;
-  const targetValid = target?.text === narrative && JSON.stringify(target?.skill_check) === JSON.stringify(fresh.latestReceipt) && await hash({ narrative: target?.text, choices: target?.choices }) === proposalHash;
-  if (!preserved || !characterUnchanged || !targetValid) return { status: 500, body: { error: 'Repair postcondition failed.', writes: 1 } };
-  return { status: 200, body: { success: true, skipped: false, replayed: false, writes: 1, receipt, postconditions: { all_prior_story_entries_byte_identical: preserved, failed_result_preserved: true, character_and_inventory_unchanged: characterUnchanged, one_grounded_entry_committed: true } } };
+  const protectedSessionUnchanged = await hash(protectedSessionState(after)) === sourceHashes.protected_session;
+  const receiptsUnchanged = await hash(receipts(after)) === sourceHashes.skill_receipts;
+  const failedResultPreserved = failed(target?.skill_check) && await hash(target?.skill_check) === await hash(expectedCheck);
+  const targetValid = target?.text === narrative && failedResultPreserved && await hash({ narrative: target?.text, choices: target?.choices }) === proposalHash;
+  if (!preserved || !characterUnchanged || !protectedSessionUnchanged || !receiptsUnchanged || !targetValid) return { status: 500, body: { error: 'Repair postcondition failed.', writes: 1 } };
+  return { status: 200, body: { success: true, skipped: false, replayed: false, writes: 1, function_version: 'audit-repair-latest-failed-choice-transition-v2.1.0', receipt, postconditions: { all_prior_story_entries_byte_identical: preserved, failed_result_preserved: failedResultPreserved, authoritative_receipt_unchanged: receiptsUnchanged, character_and_inventory_unchanged: characterUnchanged, protected_session_state_unchanged: protectedSessionUnchanged, one_grounded_entry_committed: true } } };
 }
