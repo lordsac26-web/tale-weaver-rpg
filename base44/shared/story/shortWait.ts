@@ -13,7 +13,7 @@ const durationMinutes=(text)=>{const m=String(text||'').match(DURATION);if(!m)re
 const effectMinutes=(effect)=>{const text=`${effect?.duration||''} ${effect?.source||effect?.name||''}`.toLowerCase();const m=text.match(/(\d+)\s*(minute|hour)/);if(m)return Number(m[1])*(m[2]==='hour'?60:1);if(text.includes('pass without trace'))return 60;return null;};
 
 export function parseShortWaitIntent(actionText){
-  const text=String(actionText||'').trim();if(!text||NEGATED.test(text)||!WAIT.test(text))return null;
+  const text=String(actionText||'').trim();if(!text||/\blong\s+rest\b/i.test(text)||NEGATED.test(text)||!WAIT.test(text))return null;
   const targetMatch=text.match(TARGET),target=targetMatch?title(targetMatch[1]):null,minutes=durationMinutes(text);
   if(!target&&!minutes)return null;
   return {classification:target?'target_period_wait':'explicit_duration_wait',target_period:target,explicit_minutes:minutes,source_text:text};

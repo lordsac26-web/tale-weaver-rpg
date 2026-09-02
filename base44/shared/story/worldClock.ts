@@ -25,10 +25,12 @@ export const getClockHour = ({ timeOfDay, worldState }) => {
   return Number.isInteger(stored) && stored >= 0 && stored < 24 ? stored : legacyHour(timeOfDay);
 };
 
-export const elapsedHoursForRest = ({ intent = 'long_rest_8h', startHour }) => {
-  if (intent !== 'sleep_until_dawn') return 8;
-  const toNextDawn = (5 - startHour + 24) % 24;
-  return toNextDawn >= 8 ? toNextDawn : toNextDawn + 24;
+export const elapsedHoursForRest = ({ intent = 'long_rest_8h', startHour, targetPeriod = null, explicitHours = null }) => {
+  const targetHour={Midnight:0,Dawn:5,Morning:8,Midday:12,Afternoon:13,Dusk:17,Evening:20,Night:23}[targetPeriod];
+  const requestedTarget=intent==='sleep_until_dawn'?5:targetHour;
+  let targetElapsed=0;
+  if(Number.isFinite(requestedTarget)){targetElapsed=(requestedTarget-startHour+24)%24;if(targetElapsed<8)targetElapsed+=24;}
+  return Math.max(8,Number(explicitHours)||0,targetElapsed);
 };
 
 export const advanceWorldClockForWait = ({ timeOfDay, worldState, elapsedHours = 0, completedAt = new Date().toISOString() }) => {

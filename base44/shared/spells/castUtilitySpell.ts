@@ -2,11 +2,8 @@ import { characterBelongsToUser } from '../combat/authGuard.ts';
 import { addStructuredCondition, buildStructuredCondition } from '../combat/conditions.ts';
 import { normalizeSpellText, resolveKnownTypedSpell } from './typedSpellParser.ts';
 import { conditionIdentityKey, isPassWithoutTraceIdentity, preferStructuredCondition } from './conditionIdentity.js';
+import { getMaxSlotsForLevel } from './slotProgression.ts';
 
-const FULL = [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],[4,3,3,3,3,2,2,1,1]];
-const HALF = [[0],[2],[3],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]];
-const WARLOCK_PACT = [1,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,4,4,4,4];
-const TABLES = { Wizard: FULL, Sorcerer: FULL, Bard: FULL, Cleric: FULL, Druid: FULL, Paladin: HALF, Ranger: HALF, Artificer: HALF };
 const normalize = normalizeSpellText;
 const respond = (status, body) => ({ status, body });
 const ordinal = (level) => level === 1 ? '1st' : level === 2 ? '2nd' : level === 3 ? '3rd' : `${level}th`;
@@ -14,29 +11,8 @@ const normalizeSpellSlots = (value) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).filter(([key, used]) => /^level_[1-9]\d*$/.test(key) && Number.isFinite(Number(used)) && Number(used) >= 0).map(([key, used]) => [key, Number(used)]));
 };
+const maxSlots = getMaxSlotsForLevel;
 
-function casterContribution(cls, sub, levels) {
-  if (['Wizard', 'Sorcerer', 'Bard', 'Cleric', 'Druid'].includes(cls)) return levels;
-  if (['Paladin', 'Ranger', 'Artificer'].includes(cls)) return Math.floor(levels / 2);
-  return String(sub || '').toLowerCase().includes('eldritch knight') || String(sub || '').toLowerCase().includes('arcane trickster') ? Math.floor(levels / 3) : 0;
-}
-function maxSlots(character, slotLevel) {
-  const level = Math.max(1, Math.min(20, Number(character.level) || 1));
-  const index = slotLevel - 1;
-  const multiclass = Array.isArray(character.multiclass) && character.multiclass.length > 0;
-  if (character.class === 'Warlock' && !multiclass) return slotLevel <= Math.min(5, Math.ceil(level / 2)) ? (WARLOCK_PACT[level - 1] || 0) : 0;
-  if (multiclass) {
-    let casterLevel = casterContribution(character.class, character.subclass, level);
-    for (const mc of character.multiclass) if (mc?.class !== 'Warlock') casterLevel += casterContribution(mc?.class, mc?.subclass, Number(mc?.levels) || 0);
-    return casterLevel > 0 ? ((FULL[Math.min(20, casterLevel) - 1] || [])[index] || 0) : 0;
-  }
-  const sub = String(character.subclass || '').toLowerCase();
-  if (sub.includes('eldritch knight') || sub.includes('arcane trickster')) {
-    const casterLevel = Math.floor(level / 3);
-    return casterLevel > 0 ? ((FULL[casterLevel - 1] || [])[index] || 0) : 0;
-  }
-  return (((TABLES[character.class] || [])[level - 1]) || [])[index] || 0;
-}
 function findKnownSpell(character, actionText, requestedName) {
   return resolveKnownTypedSpell(character, actionText, requestedName);
 }

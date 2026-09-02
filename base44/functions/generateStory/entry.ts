@@ -76,13 +76,11 @@ Deno.serve(async (req) => {
     const stealthSetupIntent = action === 'choice' ? classifyStealthSetupIntent(selectedChoice || custom_input, authoritativeChoiceContext?.check) : null;
     if (ambushIntent && (!authoritativeChoiceContext?.check || !Number.isFinite(Number(authoritativeChoiceContext.check.raw_d20)) || !Number.isFinite(Number(authoritativeChoiceContext.check.final_total)))) return Response.json({ error: 'Precision stealth strikes require a fresh persisted Stealth setup receipt before narration.', invalid: true }, { status: 409 });
     let authoritativeWait=null;
-    if(action==='choice'&&storyRequestId){
+    if (action === 'choice' && storyRequestId) {
+      const longRest = await executeLongRestStoryAction({ base44, ownerId: user.id, payload: { session_id, character_id: character.id, action_text: selectedChoice||custom_input, choice_context: authoritativeChoiceContext, request_id: storyRequestId } });
+      if (longRest.body?.handled) return Response.json({ narrative: longRest.body.narration, choices: [], long_rest: longRest.body }, { status: longRest.status });
       const wait=await executeAuthoritativeShortWait({base44,ownerId:user.id,sessionId:session_id,characterId:character.id,requestId:storyRequestId,actionText:selectedChoice||custom_input});
       if(wait.body?.handled){if(wait.status>=400)return Response.json(wait.body,{status:wait.status});authoritativeWait=wait.body;session=wait.body.session;character=wait.body.character;}
-    }
-    if (action === 'choice' && storyRequestId) {
-      const longRest = await executeLongRestStoryAction({ base44, ownerId: user.id, payload: { session_id, character_id: character.id, action_text: selectedChoice, choice_context: authoritativeChoiceContext, request_id: storyRequestId } });
-      if (longRest.body?.handled) return Response.json({ narrative: longRest.body.narration, choices: [], long_rest: longRest.body }, { status: longRest.status });
       const hasAuthoritativeStoryReceipt = authoritativeChoiceContext?.check?.unified_story_skill_resolution === true;
       const compound = hasAuthoritativeStoryReceipt ? { status:200, body:{ handled:false, skipped:'authoritative_story_receipt' } } : await executePwtCompoundAction({ base44, user, payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId, skill_dc: authoritativeChoiceContext?.skill_dc } });
       if (compound.body?.handled) {
