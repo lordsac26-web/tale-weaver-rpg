@@ -20,6 +20,8 @@ import { buildGameHydration, finalizeGeneratedStoryResult } from '../../shared/s
 import { canonicalStoryStealthedCondition, classifyStealthSetupIntent, STEALTH_SETUP_HANDOFF_VERSION, withCanonicalStoryStealthed } from '../../shared/story/stealthSetupHandoff.ts';
 import { executeAuthoritativeShortWait, SHORT_WAIT_VERSION } from '../../shared/story/shortWait.ts';
 import { inferUniqueScenePickup, UNIQUE_SCENE_PICKUP_VERSION } from '../../shared/story/uniqueScenePickup.ts';
+import { normalizeChoiceActionContract, CHOICE_ACTION_CONTRACT_VERSION } from '../../shared/story/choiceActionContract.js';
+import { executeStoryWeaponAttack, STORY_WEAPON_ATTACK_VERSION } from '../../shared/story/storyWeaponAttack.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -36,7 +38,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.6.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.7.0';
 
 Deno.serve(async (req) => {
   try {
@@ -71,9 +73,12 @@ Deno.serve(async (req) => {
     }
     const completedCombat = await readCompletedCombatContext(base44, session) || (authoritativeChoiceContext?.completed_combat && typeof authoritativeChoiceContext.completed_combat === 'object'
       ? authoritativeChoiceContext.completed_combat : null);
-    const selectedChoice = action === 'choice' ? stripGeneratedChoiceAnnotations(choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`) : '';
-    const ambushIntent = action === 'choice' ? classifyPrecisionAmbushIntent(selectedChoice) : null;
-    const narrativeRangedIntent=action==='choice'&&!ambushIntent?classifyNarrativeRangedAttackIntent(selectedChoice):null;
+    const latestChoices = hydrateLatestStoryEntry(session).choices;
+    const persistedChoice = action === 'choice' && Number.isInteger(Number(choice_index)) ? latestChoices[Number(choice_index)] : null;
+    const selectedChoiceContract = normalizeChoiceActionContract(persistedChoice || { text: choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`, ...authoritativeChoiceContext });
+    const selectedChoice = action === 'choice' ? stripGeneratedChoiceAnnotations(selectedChoiceContract.text) : '';
+    const ambushIntent = action === 'choice' && selectedChoiceContract.action_type !== 'weapon_attack' ? classifyPrecisionAmbushIntent(selectedChoice) : null;
+    const narrativeRangedIntent=action==='choice'&&!ambushIntent&&selectedChoiceContract.action_type==='weapon_attack'?selectedChoiceContract.weapon_attack:null;
     const stealthSetupIntent = action === 'choice' ? classifyStealthSetupIntent(selectedChoice || custom_input, authoritativeChoiceContext?.check) : null;
     if (ambushIntent && (!authoritativeChoiceContext?.check || !Number.isFinite(Number(authoritativeChoiceContext.check.raw_d20)) || !Number.isFinite(Number(authoritativeChoiceContext.check.final_total)))) return Response.json({ error: 'Precision stealth strikes require a fresh persisted Stealth setup receipt before narration.', invalid: true }, { status: 409 });
     let authoritativeWait=null;
@@ -274,7 +279,7 @@ ${adultToneInstruction}
 4. How do I make this opening feel fresh and different from previous sessions?
 5. What sensory details and tone will pull the player in?
 
-Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension. Provide exactly 4 meaningful choices in the structured "choices" field ONLY (include skill checks + DCs on 2-3 of them). A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; a specific tangible item must include {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise recovery must be null. Set location_update. No combat in the opening scene.
+Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension. Provide exactly 4 meaningful choices in the structured "choices" field ONLY. Every choice MUST set action_type to one of skill_check, weapon_attack, spell_cast, utility, social, movement, rest, item_use, combat_transition. Only skill_check choices may set skill_check and dc. Weapon attacks must set weapon_attack with target_ref, weapon_hint, attack_mode, declared_attack_count, and intent. Include skill checks + DCs on 2-3 choices. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; a specific tangible item must include {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise recovery must be null. Set location_update. No combat in the opening scene.
 
 CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" text itself. The narrative must be pure prose — never include lines like "1. ...", "2. ...", "What do you do?", or any enumerated options. The choices belong solely in the structured choices array.`;
 
@@ -286,6 +291,8 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
             type: 'object',
             properties: {
                            text: { type: 'string' },
+                           action_type: { type: 'string', enum: ['skill_check','weapon_attack','spell_cast','utility','social','movement','rest','item_use','combat_transition'] },
+                           weapon_attack: { type: 'object', properties: { target_ref: { type: 'string' }, weapon_hint: { type: 'string' }, attack_mode: { type: 'string' }, declared_attack_count: { type: 'number' }, intent: { type: 'string' } } },
                            skill_check: { type: 'string' },
                            dc: { type: 'number' },
                            risk_level: { type: 'string', enum: ['low','medium','high','extreme'] },
@@ -317,7 +324,7 @@ ${adultToneInstruction}
 5. Should combat be triggered? Only when dramatically justified.
 6. How do environment (season, time, weather) and current conditions influence the scene?
 
-Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. For a concrete item gained by the CURRENT action, set current_recovery to an exact structured object: {type:"arrows", quantity:1-20} or {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise current_recovery must be null. Never claim that an item was found or recovered unless current_recovery is exact and the authoritative check succeeded. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null.
+Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Every choice MUST carry action_type; only skill_check choices may carry skill_check and dc, while weapon_attack choices carry target_ref, weapon_hint, attack_mode, declared_attack_count, and intent inside weapon_attack. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. For a concrete item gained by the CURRENT action, set current_recovery to an exact structured object: {type:"arrows", quantity:1-20} or {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise current_recovery must be null. Never claim that an item was found or recovered unless current_recovery is exact and the authoritative check succeeded. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null.
 
 CONDITION CONTRACT: condition_update is ONLY for a real mechanical status affecting the PLAYER CHARACTER. Set target to "player" only when the player is actually affected; use "other" for an enemy/NPC effect and "none" when no player condition changes. Never use placeholder labels such as "None", "Normal", or "N/A". Use the remove field when a prior player condition ends. Choose duration "scene", "combat", or "persistent" accurately. Enemy conditions that begin combat belong in that enemy's starting_conditions, never on the player.
 
@@ -329,7 +336,7 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
         type: 'object',
         properties: {
           narrative: { type: 'string' },
-          choices: { type: 'array', items: { type: 'object', properties: { text: {type:'string'}, skill_check:{type:'string'}, dc:{type:'number'}, risk_level:{type:'string', enum:['low','medium','high','extreme']}, recovery:{ type:'object', properties:{ type:{type:'string', enum:['arrows']}, quantity:{type:'number'} } } } } },
+          choices: { type: 'array', items: { type: 'object', properties: { text: {type:'string'}, action_type:{type:'string',enum:['skill_check','weapon_attack','spell_cast','utility','social','movement','rest','item_use','combat_transition']}, weapon_attack:{type:'object',properties:{target_ref:{type:'string'},weapon_hint:{type:'string'},attack_mode:{type:'string'},declared_attack_count:{type:'number'},intent:{type:'string'}}}, skill_check:{type:'string'}, dc:{type:'number'}, risk_level:{type:'string', enum:['low','medium','high','extreme']}, recovery:{ type:'object', properties:{ type:{type:'string', enum:['arrows']}, quantity:{type:'number'} } } } } },
           combat_trigger: { type: 'boolean' },
           enemies: { type: 'array', items: { type: 'object', properties: { name:{type:'string'}, hp:{type:'number'}, current_hp:{type:'number'}, starting_conditions:{type:'array', items:{type:'string'}}, ac:{type:'number'}, attack_bonus:{type:'number'}, damage_dice:{type:'string'}, damage_bonus:{type:'number'}, dexterity:{type:'number'}, cr:{type:'number'}, xp:{type:'number'} } } },
           reputation_change: { type: 'number' },
@@ -398,9 +405,10 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...result, narrative: pendingAmbushNarrative(ambushIntent.target_hint, setupSucceeded), key_event: '', combat_trigger: setupSucceeded && result.combat_trigger && roster.ok, enemies: roster.ok ? roster.enemies : [], pending_ambush_attack: setupSucceeded && roster.ok ? { request_id: storyRequestId, target_name: roster.target.name, setup_receipt_id: authoritativeChoiceContext.check.id || authoritativeChoiceContext.check.request_id, setup_success: true } : null };
     } else if(narrativeRangedIntent){
       const enemies=Array.isArray(result.enemies)?result.enemies.filter((enemy)=>Number(enemy?.hp)>0&&Number(enemy?.ac)>0):[];
-      if(!enemies.length)return Response.json({error:'A narrative ranged attack requires a structured living target before any shot can resolve.',invalid:true,writes:0,requires_structured_combat:true},{status:409});
-      const stealthReceipt=authoritativeChoiceContext?.check?.skill==='Stealth'&&authoritativeChoiceContext.check.success===true?authoritativeChoiceContext.check:null,target=enemies[0];
-      result={...result,narrative:pendingNarrativeRangedAttack(target.name),key_event:'',hp_change:0,xp_earned:0,loot:[],combat_trigger:true,enemies,pending_ambush_attack:{type:'narrative_ranged_attack',request_id:storyRequestId,target_name:target.name,setup_receipt_id:stealthReceipt?.id||null,setup_success:true,concealed:!!stealthReceipt,advantage_attribution:stealthReceipt?'Attacking from Stealthed/concealed':null,attack_resolved:false}};
+      const attackOutcome=await executeStoryWeaponAttack({base44,user,sessionId:session_id,requestId:storyRequestId,contract:selectedChoiceContract,enemies});
+      if(attackOutcome.status>=400)return Response.json({...attackOutcome.body,action_type:'weapon_attack',contract_version:CHOICE_ACTION_CONTRACT_VERSION},{status:attackOutcome.status});
+      const attack=attackOutcome.body;
+      result={...result,narrative:attack.narrative,key_event:'',hp_change:0,xp_earned:0,loot:[],combat_trigger:attack.combat_active,enemies:attack.combat_active?enemies:[],authoritative_weapon_attack:attack,pending_ambush_attack:null};
     }
 
     let recoveryResolution = null;
@@ -468,7 +476,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
         ...(result.item_recovery ? { item_recovery: result.item_recovery } : {}),
         ...(result.recovery_resolution ? { recovery_resolution: result.recovery_resolution } : {}),
         ...(result.recovery_transaction ? { recovery_transaction: result.recovery_transaction } : {}),
-        ...(result.stealth_handoff ? { stealth_handoff: result.stealth_handoff } : {})
+        ...(result.stealth_handoff ? { stealth_handoff: result.stealth_handoff } : {}),
+        ...(result.authoritative_weapon_attack ? { authoritative_weapon_attack: result.authoritative_weapon_attack, action_contract: selectedChoiceContract } : {})
       };
       result = { ...result, previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash };
       const committedTransition = commitStoryTransition(commitSession.story_log || [], completedEntry, storyRequestId || null);
@@ -628,7 +637,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json({ ...result, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
+    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);

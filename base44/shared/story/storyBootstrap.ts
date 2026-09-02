@@ -1,4 +1,5 @@
 import { hydrateLatestStoryEntry, normalizeStoryChoices } from './storyTransition.ts';
+import { normalizeChoiceActionContract } from './choiceActionContract.js';
 
 export const STORY_BOOTSTRAP_VERSION = 'story-bootstrap-v1.1.0';
 
@@ -15,7 +16,7 @@ const skillFrom = (choice) => {
 };
 
 export function normalizeGeneratedChoices(value) {
-  return normalizeStoryChoices(value).map((choice) => ({
+  return normalizeStoryChoices(value).map((choice) => normalizeChoiceActionContract({
     ...choice,
     text: String(choice?.text || '').trim(),
     skill_check: skillFrom(choice) || null,
@@ -23,7 +24,7 @@ export function normalizeGeneratedChoices(value) {
   })).filter((choice) => choice.text).slice(0, 4);
 }
 
-const validChoiceSet = (choices) => choices.length === 4 && new Set(choices.map((choice) => choice.text.toLowerCase())).size === 4 && choices.every((choice) => choice.text && (!choice.skill_check || Number.isFinite(Number(choice.dc))));
+const validChoiceSet = (choices) => choices.length === 4 && new Set(choices.map((choice) => choice.text.toLowerCase())).size === 4 && choices.every((choice) => choice.text && (choice.action_type !== 'skill_check' || (choice.skill_check && Number.isFinite(Number(choice.dc)))));
 const sameChoices = (left, right) => JSON.stringify(normalizeGeneratedChoices(left)) === JSON.stringify(normalizeGeneratedChoices(right));
 
 export function groundedFallbackChoices({ location = 'the current area', requestId = '', previousChoices = [] } = {}) {
@@ -31,10 +32,10 @@ export function groundedFallbackChoices({ location = 'the current area', request
   const openings = ['Reassess', 'Survey', 'Study', 'Examine'];
   const first = openings[seed % openings.length];
   const choices = [
-    { text: `${first} ${location} from a safer position before moving.`, skill_check: 'Perception', dc: 10, risk_level: 'low' },
-    { text: `Investigate the clearest unresolved detail in ${location}.`, skill_check: 'Investigation', dc: 12, risk_level: 'medium' },
-    { text: `Advance cautiously through ${location} while avoiding notice.`, skill_check: 'Stealth', dc: 11, risk_level: 'medium' },
-    { text: `Use the terrain around ${location} to choose a safer route.`, skill_check: 'Survival', dc: 10, risk_level: 'low' },
+    { text: `${first} ${location} from a safer position before moving.`, action_type: 'skill_check', skill_check: 'Perception', dc: 10, risk_level: 'low' },
+    { text: `Investigate the clearest unresolved detail in ${location}.`, action_type: 'skill_check', skill_check: 'Investigation', dc: 12, risk_level: 'medium' },
+    { text: `Advance cautiously through ${location} while avoiding notice.`, action_type: 'skill_check', skill_check: 'Stealth', dc: 11, risk_level: 'medium' },
+    { text: `Use the terrain around ${location} to choose a safer route.`, action_type: 'skill_check', skill_check: 'Survival', dc: 10, risk_level: 'low' },
   ];
   if (sameChoices(choices, previousChoices)) choices[0] = { ...choices[0], text: `${choices[0].text} Check it from a different angle.` };
   return choices;

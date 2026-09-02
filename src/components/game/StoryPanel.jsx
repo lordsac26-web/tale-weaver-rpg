@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Loader2, Scroll, Feather, Volume2, VolumeX, Pause, Play, Square } from 'lucide-react';
+import { Loader2, Scroll, Feather, Volume2, VolumeX, Pause, Play, Square, AlertTriangle, Crosshair } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SkillCheckResult from './SkillCheckResult';
 import MicButton from './MicButton';
@@ -25,7 +25,7 @@ function truncateForNarration(text, maxChars = 800) {
   return lastPeriod > 100 ? slice.slice(0, lastPeriod + 1) : slice;
 }
  
-export default function StoryPanel({ narrative, choices, loading, onChoice, customInput, setCustomInput, onCustomSubmit, sessionId }) {
+export default function StoryPanel({ narrative, choices, loading, loadingLabel, onChoice, customInput, setCustomInput, onCustomSubmit, sessionId }) {
   const endRef = useRef(null);
   const [showAskDM, setShowAskDM] = useState(false);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
@@ -436,6 +436,14 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                 <SkillCheckResult entry={entry} />
               )}
  
+              {entry.type === 'action_error' && (
+                <div className="flex justify-center">
+                  <div className="flex max-w-xl items-start gap-2 rounded-xl border border-amber-500/50 bg-amber-950/70 px-4 py-3 text-sm text-amber-100" role="alert">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" /><span>{entry.text}</span>
+                  </div>
+                </div>
+              )}
+  
               {entry.type === 'roll_result' && (
                 <div className="flex justify-center">
                   <motion.div
@@ -497,7 +505,7 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
               className="flex items-center gap-3 py-2">
               <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'rgba(220,190,140,0.85)' }} />
               <span className="text-sm italic" style={{ color: 'rgba(220,190,140,0.85)', fontFamily: 'IM Fell English, serif' }}>
-                The story unfolds...
+                {loadingLabel || 'The story unfolds…'}
               </span>
             </motion.div>
           )}
@@ -552,7 +560,10 @@ export default function StoryPanel({ narrative, choices, loading, onChoice, cust
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {checkDisplay.badgeText && (
+                          {choice.action_type === 'weapon_attack' && (
+                            <span className="flex items-center gap-1 rounded-full border border-red-400/50 bg-red-950/70 px-1.5 py-0.5 font-fantasy text-red-200" style={{ fontSize: '0.6rem' }}><Crosshair className="h-3 w-3" /> Attack</span>
+                          )}
+                          {checkDisplay.badgeText && choice.action_type === 'skill_check' && (
                             <span
                               data-choice-dc-render-version="v3"
                               className="px-1.5 py-0.5 rounded-full font-fantasy"

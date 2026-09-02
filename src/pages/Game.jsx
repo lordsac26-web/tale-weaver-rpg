@@ -37,6 +37,7 @@ import { buildThrownWeaponContext } from '@/lib/thrownWeaponIntent';
 import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '../../base44/shared/skills/authoritativeSkillModifier';
 import { classifyPrecisionAmbushIntent, stripGeneratedChoiceAnnotations } from '../../base44/shared/story/generatedChoiceIntent';
 import { normalizeChoiceCheckDisplay } from '../../base44/shared/story/choiceCheckDisplay';
+import { normalizeChoiceActionContract, CHOICE_ACTION_FRONTEND_VERSION } from '../../base44/shared/story/choiceActionContract';
 import { prepareStorySkillCheck, resolveStorySkillRoll } from '@/lib/storySkillCheck';
 import { acceptSequencedStoryPayload, hydrateLatestStoryEntry, STORY_TRANSITION_VERSION } from '../../base44/shared/story/storyTransition';
 
@@ -75,6 +76,8 @@ export default function Game() {
   const [completedCombatId, setCompletedCombatId] = useState(null);
   const victoryResumeInFlight = useRef(false);
   const storyRequestSequenceRef = useRef(0);
+  const choiceDispatchInFlightRef = useRef(false);
+  const [storyActionLabel, setStoryActionLabel] = useState(null);
   const [companions, setCompanions] = useState([]);
   const [showCompanions, setShowCompanions] = useState(false);
   const [showDeathModal, setShowDeathModal] = useState(false);
@@ -336,6 +339,7 @@ export default function Game() {
   // Sends the chosen action (and any resolved skill check) to the story engine.
   const runChoiceStory = async (choice, choiceIndex, skillSuccess, tacticalSources, requestId, preCast = null, skillReceipt = null) => {
     const storySequence = ++storyRequestSequenceRef.current;
+    setStoryActionLabel(choice.action_type === 'weapon_attack' ? 'Resolving the authoritative weapon attack…' : 'Resolving the chosen action…');
     setStoryLoading(true);
     try {
       const mechanicalCast = preCast || await maybeCastStorySpell(choice.text, requestId);
@@ -354,7 +358,7 @@ export default function Game() {
         choice_text: choice.text,
         request_id: requestId,
         story_sequence: Date.now() * 1000 + storySequence,
-        choice_context: { check: skillReceipt || { success: skillSuccess === true }, recovery: choice.recovery || null, weapon_attack: buildThrownWeaponContext(choice.text, character, skillSuccess !== false), ambush_intent: classifyPrecisionAmbushIntent(choice.text) },
+        choice_context: { action_type: choice.action_type, check: skillReceipt || { success: skillSuccess === true }, recovery: choice.recovery || null, weapon_attack: choice.action_type === 'weapon_attack' ? choice.weapon_attack : buildThrownWeaponContext(choice.text, character, skillSuccess !== false), ambush_intent: classifyPrecisionAmbushIntent(choice.text) },
         custom_input: (choice.skill_check
           ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}${skillReceipt ? ` (d20 ${skillReceipt.raw_d20} + base ${skillReceipt.modifier_breakdown.base_skill} + effects ${skillReceipt.modifier_breakdown.effect_bonus} = ${skillReceipt.final_total})` : ''}]`
           : choice.text) + mechanicsContext + tacticalContext,
@@ -384,17 +388,20 @@ export default function Game() {
     } catch (err) {
       console.error('Failed to process choice:', err);
       await loadState().catch(() => null);
-      setChoices([]);
-      setNarrative(prev => [...prev, { type: 'narration', text: `${getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry.')} The latest authoritative scene was restored; retry your last action.` }]);
+      setNarrative(prev => [...prev, { type: choice.action_type === 'weapon_attack' ? 'action_error' : 'narration', text: `${getFunctionErrorMessage(err, 'The action could not be resolved.')} The authoritative scene and choice were preserved; retry when ready.` }]);
     } finally {
+      choiceDispatchInFlightRef.current = false;
+      setStoryActionLabel(null);
       setStoryLoading(false);
     }
   };
 
   const handleChoice = async (choiceIndex) => {
-    const sourceChoice = choices[choiceIndex];
-    const normalizedCheck = normalizeChoiceCheckDisplay(sourceChoice, { logConflicts: true });
-    const choice = { ...sourceChoice, skill_check: normalizedCheck.skillLabel || sourceChoice?.skill_check, dc: normalizedCheck.dc ?? sourceChoice?.dc, text: stripGeneratedChoiceAnnotations(sourceChoice?.text) };
+    if (choiceDispatchInFlightRef.current) return;
+    choiceDispatchInFlightRef.current = true;
+    const sourceChoice = normalizeChoiceActionContract(choices[choiceIndex]);
+    const normalizedCheck = sourceChoice.action_type === 'skill_check' ? normalizeChoiceCheckDisplay(sourceChoice, { logConflicts: true }) : { skillLabel: null, dc: null };
+    const choice = { ...sourceChoice, skill_check: normalizedCheck.skillLabel, dc: normalizedCheck.dc, text: stripGeneratedChoiceAnnotations(sourceChoice?.text) };
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
     setChoices([]);
 
@@ -402,13 +409,21 @@ export default function Game() {
     let preCast = null;
     try { preCast = await maybeCastStorySpell(choice.text, requestId); }
     catch (err) {
-      setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'That spell could not be cast, so the action was not resolved as buffed.'), success: false }]);
+      choiceDispatchInFlightRef.current = false;
+      setNarrative(prev => [...prev, { type: 'action_error', text: getFunctionErrorMessage(err, 'That spell could not be cast, so the action was not resolved.') }]);
       return;
     }
     const checkCharacter = preCast ? { ...character, spell_slots: preCast.spell_slots, active_modifiers: preCast.active_modifiers } : character;
 
-    // No skill check — go straight to the story.
-    if (!choice.skill_check || !choice.dc) {
+    // Only explicitly typed canonical skill checks may invoke resolveStorySkillCheck.
+    // Weapon attacks and every other action type bypass that endpoint entirely.
+    if (choice.action_type === 'skill_check' && (!choice.skill_check || !Number.isFinite(Number(choice.dc)))) {
+      choiceDispatchInFlightRef.current = false;
+      setChoices(choices);
+      setNarrative(prev => [...prev, { type: 'action_error', text: 'This skill choice is missing a canonical skill or DC. Refresh the scene before retrying.' }]);
+      return;
+    }
+    if (choice.action_type !== 'skill_check') {
       await runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast);
       return;
     }
@@ -418,7 +433,7 @@ export default function Game() {
     const resolvedAdvantageSources = [...(equipAdv.sources || [])];
     let prepared;
     try { prepared = await prepareStorySkillCheck({ sessionId, characterId: checkCharacter?.id, skill: choice.skill_check, dc: choice.dc, requestId }); }
-    catch (err) { setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'The skill check could not be prepared.'), success: false }]); return; }
+    catch (err) { choiceDispatchInFlightRef.current = false; setNarrative(prev => [...prev, { type: 'action_error', text: getFunctionErrorMessage(err, 'The skill check could not be prepared.') }]); return; }
     const breakdown = prepared.breakdown;
     const modifier = prepared.modifier;
 
@@ -1464,7 +1479,7 @@ export default function Game() {
   const combatPending = !!(session?.in_combat && validCombatId && !combat && !combatSyncError);
 
   return (
-    <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" data-story-transition-version={STORY_TRANSITION_VERSION} data-camp-rest-transition-version={CAMP_REST_TRANSITION_VERSION} style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
+    <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" data-story-transition-version={STORY_TRANSITION_VERSION} data-choice-action-transition-version={CHOICE_ACTION_FRONTEND_VERSION} data-camp-rest-transition-version={CAMP_REST_TRANSITION_VERSION} style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
       {/* HUD */}
       <HUD character={character} session={session} />
 
@@ -1561,7 +1576,7 @@ export default function Game() {
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden min-h-0">
               <div className={`overflow-hidden flex flex-col min-h-0 ${combatViewTab !== 'story' ? 'hidden lg:flex' : ''}`}
                 style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
-                <StoryPanel narrative={narrative} choices={[]} loading={storyLoading}
+                <StoryPanel narrative={narrative} choices={[]} loading={storyLoading} loadingLabel={storyActionLabel}
                   onChoice={() => {}} customInput={customInput}
                   setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} sessionId={sessionId} />
               </div>
@@ -1638,6 +1653,7 @@ export default function Game() {
                       narrative={narrative} 
                       choices={character?.hp_current <= 0 ? [] : choices} 
                       loading={storyLoading}
+                      loadingLabel={storyActionLabel}
                       onChoice={character?.hp_current <= 0 ? () => {} : handleChoice} 
                       customInput={customInput}
                       setCustomInput={character?.hp_current <= 0 ? () => {} : setCustomInput} 

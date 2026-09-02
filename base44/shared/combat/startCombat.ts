@@ -46,6 +46,8 @@ export async function handleStartCombat(ctx) {
   const handoffInvariant = validateStorySkillCombatHandoff(session, storyRequestId, storySkillHandoff);
   if (!handoffInvariant.ok) return Response.json({ error: handoffInvariant.error, invalid: true, writes: 0 }, { status: 409 });
 
+  const narrativeRanged=ambushSetup?.type==='narrative_ranged_attack';
+
   // ─── DYNAMIC ENCOUNTER SCALING ──────────────────────────────────────────
   // Keep solo-player encounters balanced and challenging by scaling enemy HP,
   // attack bonus, and participant count to the player's level and current HP.
@@ -84,7 +86,7 @@ export async function handleStartCombat(ctx) {
       if (level >= 11) reinforcements = 2;
       else if (level >= 5) reinforcements = 1;
     }
-    if (reinforcements > 0 && scaled.length > 0) {
+    if (!narrativeRanged && reinforcements > 0 && scaled.length > 0) {
       // Clone the weakest existing enemy as the reinforcement template.
       const template = [...scaled].sort((a, b) => (parseInt(a.hp) || 0) - (parseInt(b.hp) || 0))[0];
       for (let i = 0; i < reinforcements; i++) {
@@ -95,7 +97,6 @@ export async function handleStartCombat(ctx) {
   };
 
   enemies = scaleEnemies(enemies, character);
-  const narrativeRanged=ambushSetup?.type==='narrative_ranged_attack';
   const ambushTargets = ambushSetup ? enemies.filter((enemy) => narrativeRanged?String(enemy?.name||'')===String(ambushSetup.target_name||''):/necromancer|ritual master|ritualist|obsidian circle scout/i.test(String(enemy?.name || ''))) : [];
   if (ambushSetup && (ambushTargets.length !== 1 || Number(ambushTargets[0]?.current_hp ?? ambushTargets[0]?.hp) <= 0)) return Response.json({ error: 'Pending ranged combat requires exactly one living authoritative target.', invalid: true }, { status: 409 });
 

@@ -1,4 +1,4 @@
-export const STORY_TRANSITION_VERSION = 'story-transition-v2.4.0';
+export const STORY_TRANSITION_VERSION = 'story-transition-v2.5.0';
 
 export const normalizeStoryChoices = (value) => Array.isArray(value) ? value : [];
 export const hashStoryValue = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value ?? null))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
