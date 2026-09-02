@@ -10,7 +10,7 @@ import {
 import { finalizeAndPersistCombat } from './persistence.ts';
 import { addStructuredCondition, buildStructuredCondition, concealmentAttributions, consumeBreakOnAttackConditions, getAttackConcealment, mergeAttackConcealment } from './conditions.ts';
 import { findHuntersMark, rollHuntersMarkBonus, removeHuntersMark } from './huntersMark.ts';
-import { ammoForWeapon, consumeAmmunition } from '../ammunition.ts';
+import { commitAuthoritativeAmmunition, planAmmunitionUse } from '../ammunitionTransaction.ts';
 import { rollWeaponBaseDamage } from './weaponDamage.ts';
 import { appendRecoverableItem, buildRecoverableItem } from '../story/recoveryTransaction.ts';
 import { resolveExplicitThrownWeapon } from '../story/projectileLifecycle.ts';
@@ -534,14 +534,9 @@ export async function handlePlayerAttack(ctx) {
     }
     if (isRanged && usesAmmo) {
       if (!request_id) return Response.json({ error: 'Ammunition attacks require request_id.', invalid: true, writes: 0 }, { status: 400 });
-      const ammoName = ammoForWeapon(weapon.name) || 'Arrows';
-      const priorAmmoReceipt = (character.long_rest_abilities?.__ammo_attack_receipts || []).find((entry) => entry.request_id === request_id);
-      if (priorAmmoReceipt) ammunitionCommit = { ...priorAmmoReceipt, inventory: character.inventory || [], already_committed: true };
-      else {
-        const ammo = consumeAmmunition(character.inventory || [], ammoName);
-        if (!ammo.ok) return Response.json({ error: `Out of ammunition (${ammoName}). Restock before firing.`, invalid: true }, { status: 400 });
-        ammunitionCommit = { request_id: request_id || null, ammo_name: ammoName, consumed: 1, remaining: ammo.remaining, consumed_index: ammo.consumed_index, inventory: ammo.inventory };
-      }
+      const ammoPlan=planAmmunitionUse(character.inventory||[],weapon,1);
+      if(!ammoPlan.ok)return Response.json({error:ammoPlan.error,invalid:true,writes:0},{status:ammoPlan.status||400});
+      ammunitionCommit=ammoPlan;
     }
     const isFinesse = (weapon.properties || []).includes('finesse');
     const strMod = statMod(character.strength);
@@ -1117,16 +1112,10 @@ export async function handlePlayerAttack(ctx) {
   }
 
   if (ammunitionCommit) {
-    const ammoReceipt = { request_id: request_id || null, ammo_name: ammunitionCommit.ammo_name, consumed: 1, remaining: ammunitionCommit.remaining, consumed_index: ammunitionCommit.consumed_index };
-    logEntry.ammunition = ammoReceipt;
-    newWorldState.__ammo_receipts = [...(newWorldState.__ammo_receipts || []).filter((entry) => entry.request_id !== request_id).slice(-49), ammoReceipt];
-    if (!ammunitionCommit.already_committed) {
-      const abilities = { ...(character.long_rest_abilities || {}), __ammo_attack_receipts: [...(character.long_rest_abilities?.__ammo_attack_receipts || []).filter((entry) => entry.request_id !== request_id).slice(-49), ammoReceipt] };
-      const attackSession = await base44.asServiceRole.entities.GameSession.get(session_id);
-      const recoverable = buildRecoverableItem({ originRequestId: request_id, characterId: character_id, sessionId: session_id, combatId: combat_id, location: combatLog.location || attackSession?.current_location, canonicalName: ammunitionCommit.ammo_name, quantity: 1, sourceAction: 'fired_ammunition', itemSnapshot: { name: ammunitionCommit.ammo_name, category: 'Ammunition', quantity: 1, unit: ammunitionCommit.ammo_name === 'Arrows' ? 'arrow' : 'bolt', stack_semantics: 'individual' } });
-      const nextAbilities = appendRecoverableItem(abilities, recoverable);
-      await base44.asServiceRole.entities.Character.update(character_id, { inventory: ammunitionCommit.inventory, long_rest_abilities: nextAbilities });
-    }
+    const committed=await commitAuthoritativeAmmunition({base44,characterId:character_id,sessionId:session_id,combatId:combat_id,requestId:request_id,weapon,attackRolls:1,attackResults:[{target_id,target:target.name,raw_d20:attackResult.roll,all_rolls:attackResult.rolls,hit,advantage:attackResult.advantage,advantage_sources:concealmentAttributions(attackConcealment),feature:isHordeBreakerAttack?'Horde Breaker':null}],source:'structured_combat_attack',location:combatLog.location});
+    if(committed.status>=400)return Response.json(committed.body,{status:committed.status});
+    const ammoReceipt=committed.body.receipt;logEntry.ammunition=ammoReceipt;
+    newWorldState.__ammo_receipts=[...(newWorldState.__ammo_receipts||[]).filter((entry)=>entry.request_id!==request_id).slice(-49),ammoReceipt];
   }
 
   // Self/ally concentration break (computed during damage application above).

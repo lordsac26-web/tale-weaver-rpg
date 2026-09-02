@@ -95,8 +95,9 @@ export async function handleStartCombat(ctx) {
   };
 
   enemies = scaleEnemies(enemies, character);
-  const ambushTargets = ambushSetup ? enemies.filter((enemy) => /necromancer|ritual master|ritualist|obsidian circle scout/i.test(String(enemy?.name || ''))) : [];
-  if (ambushSetup && (ambushTargets.length !== 1 || Number(ambushTargets[0]?.current_hp ?? ambushTargets[0]?.hp) <= 0)) return Response.json({ error: 'Pending ambush combat requires exactly one living authoritative ritual target.', invalid: true }, { status: 409 });
+  const narrativeRanged=ambushSetup?.type==='narrative_ranged_attack';
+  const ambushTargets = ambushSetup ? enemies.filter((enemy) => narrativeRanged?String(enemy?.name||'')===String(ambushSetup.target_name||''):/necromancer|ritual master|ritualist|obsidian circle scout/i.test(String(enemy?.name || ''))) : [];
+  if (ambushSetup && (ambushTargets.length !== 1 || Number(ambushTargets[0]?.current_hp ?? ambushTargets[0]?.hp) <= 0)) return Response.json({ error: 'Pending ranged combat requires exactly one living authoritative target.', invalid: true }, { status: 409 });
 
   // Roll initiative for all combatants
   const combatants = [];
@@ -143,7 +144,7 @@ export async function handleStartCombat(ctx) {
     hp_max: character.hp_max,
     ac: character.armor_class,
     speed: playerSpeed,
-    conditions: character.conditions || [],
+    conditions: ambushSetup?.concealed?[...(character.conditions||[]),{id:`story_concealment_${String(ambushSetup.request_id||'').replace(/[^a-z0-9]/gi,'_')}`,name:'stealthed',display_name:'Stealthed',source:'Successful story Stealth setup',target_id:character.id,applied_at:new Date().toISOString(),duration_type:'persistent',break_on_attack:true,concentration:false,metadata:{source_request_id:ambushSetup.request_id,skill_receipt_id:ambushSetup.setup_receipt_id,advantage_attribution:'Attacking from Stealthed/concealed'}}]:character.conditions || [],
     // Rogue defensive passives (surfaced for condition/save checks in the engine)
     has_evasion: (character.class === 'Rogue' && (character.level || 1) >= 7),
     has_uncanny_dodge: (character.class === 'Rogue' && (character.level || 1) >= 5),

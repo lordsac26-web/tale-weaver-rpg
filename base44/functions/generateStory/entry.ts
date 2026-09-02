@@ -8,7 +8,7 @@ import { isPwt, repairPostRestNarration } from '../../shared/story/postRestResid
 import { executePwtCompoundAction } from '../../shared/story/compoundPwtAction.ts';
 import { executeLongRestStoryAction } from '../../shared/story/longRestStoryAction.ts';
 import { executeThrownWeaponAction, recoverThrownWeapon } from '../../shared/story/thrownWeaponAction.ts';
-import { classifyPrecisionAmbushIntent, normalizePendingAmbushRoster, pendingAmbushNarrative, stripGeneratedChoiceAnnotations } from '../../shared/story/generatedChoiceIntent.js';
+import { classifyNarrativeRangedAttackIntent, classifyPrecisionAmbushIntent, normalizePendingAmbushRoster, pendingAmbushNarrative, pendingNarrativeRangedAttack, stripGeneratedChoiceAnnotations } from '../../shared/story/generatedChoiceIntent.js';
 import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkillCheck.ts';
 import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
 import { recoveryAnnotation } from '../../shared/story/projectileLifecycle.ts';
@@ -36,7 +36,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.5.1';
+const GENERATE_STORY_VERSION = 'generate-story-v2.6.0';
 
 Deno.serve(async (req) => {
   try {
@@ -73,6 +73,7 @@ Deno.serve(async (req) => {
       ? authoritativeChoiceContext.completed_combat : null);
     const selectedChoice = action === 'choice' ? stripGeneratedChoiceAnnotations(choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`) : '';
     const ambushIntent = action === 'choice' ? classifyPrecisionAmbushIntent(selectedChoice) : null;
+    const narrativeRangedIntent=action==='choice'&&!ambushIntent?classifyNarrativeRangedAttackIntent(selectedChoice):null;
     const stealthSetupIntent = action === 'choice' ? classifyStealthSetupIntent(selectedChoice || custom_input, authoritativeChoiceContext?.check) : null;
     if (ambushIntent && (!authoritativeChoiceContext?.check || !Number.isFinite(Number(authoritativeChoiceContext.check.raw_d20)) || !Number.isFinite(Number(authoritativeChoiceContext.check.final_total)))) return Response.json({ error: 'Precision stealth strikes require a fresh persisted Stealth setup receipt before narration.', invalid: true }, { status: 409 });
     let authoritativeWait=null;
@@ -257,6 +258,7 @@ ${scenePickup ? `AUTHORITATIVE SCENE PICKUP: exactly one ${scenePickup.recovery.
 ${completedCombat ? `COMPLETED COMBAT CONTEXT: Combat ${completedCombat.combat_id} ended in ${completedCombat.result}. Dead enemies: ${(completedCombat.defeated_enemies || completedCombat.dead_enemies || []).map((enemy) => enemy.name || enemy.id).join(', ') || 'all listed enemies'}. This is aftermath narration only: combat_trigger MUST be false, enemies MUST be [], and no dead enemy may escape or re-engage.` : ''}
 ${authoritativeChoiceContext?.authoritative_skill_resolution ? `AUTHORITATIVE SKILL CHECK: ${authoritativeChoiceContext.check.skill} DC${authoritativeChoiceContext.check.dc}; original d20 ${authoritativeChoiceContext.check.raw_d20} + authoritative modifier ${authoritativeChoiceContext.check.modifier_total} = ${authoritativeChoiceContext.check.final_total}; ${authoritativeChoiceContext.check.success ? 'SUCCESS' : 'FAILURE'}. The narration, condition update, HP change, and combat trigger must honor this exact receipt.` : ''}
 ${ambushIntent ? `PENDING AMBUSH CONTRACT: This action resolves ONLY the Stealth setup phase. Do not narrate an arrow release, weapon attack, hit, damage, target defeat, concentration break, or death. If combat starts, the living ritual target must appear exactly once in enemies with complete HP and AC; the actual strike will be resolved later through player_attack.` : ''}
+${narrativeRangedIntent ? `AUTHORITATIVE RANGED ATTACK CONTRACT: This is an attempted ranged weapon attack. Set combat_trigger true and provide complete living enemy stat blocks. Do not narrate a release, attack roll, hit, miss, damage, death, arrow count, or ammunition change; those resolve only through player_attack after combat starts.` : ''}
 ${Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested ? 'POST-REST FACT: the character is fully rested and alert. Do not describe fatigue, tiredness, weariness, raggedness, sleeplessness, or exhaustion unless a new structured mechanic explicitly causes it.' : ''}
 ${Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested ? 'POST-REST FACT: the character completed a successful rest and is not exhausted. Do not describe fatigue, tiredness, weariness, raggedness, sleeplessness, or impaired focus unless a new mechanical effect explicitly causes it.' : ''}
       `;
@@ -394,6 +396,11 @@ Write a gripping 1-2 paragraph combat narrative.`;
       const setupSucceeded = authoritativeChoiceContext.check.success === true;
       const roster = setupSucceeded && result.combat_trigger ? normalizePendingAmbushRoster(result.enemies) : { ok: false, enemies: [] };
       result = { ...result, narrative: pendingAmbushNarrative(ambushIntent.target_hint, setupSucceeded), key_event: '', combat_trigger: setupSucceeded && result.combat_trigger && roster.ok, enemies: roster.ok ? roster.enemies : [], pending_ambush_attack: setupSucceeded && roster.ok ? { request_id: storyRequestId, target_name: roster.target.name, setup_receipt_id: authoritativeChoiceContext.check.id || authoritativeChoiceContext.check.request_id, setup_success: true } : null };
+    } else if(narrativeRangedIntent){
+      const enemies=Array.isArray(result.enemies)?result.enemies.filter((enemy)=>Number(enemy?.hp)>0&&Number(enemy?.ac)>0):[];
+      if(!enemies.length)return Response.json({error:'A narrative ranged attack requires a structured living target before any shot can resolve.',invalid:true,writes:0,requires_structured_combat:true},{status:409});
+      const stealthReceipt=authoritativeChoiceContext?.check?.skill==='Stealth'&&authoritativeChoiceContext.check.success===true?authoritativeChoiceContext.check:null,target=enemies[0];
+      result={...result,narrative:pendingNarrativeRangedAttack(target.name),key_event:'',hp_change:0,xp_earned:0,loot:[],combat_trigger:true,enemies,pending_ambush_attack:{type:'narrative_ranged_attack',request_id:storyRequestId,target_name:target.name,setup_receipt_id:stealthReceipt?.id||null,setup_success:true,concealed:!!stealthReceipt,advantage_attribution:stealthReceipt?'Attacking from Stealthed/concealed':null,attack_resolved:false}};
     }
 
     let recoveryResolution = null;

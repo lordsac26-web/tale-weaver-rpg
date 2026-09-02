@@ -36,6 +36,15 @@ export const normalizePendingAmbushRoster = (enemies) => {
   return { ok: true, enemies: rows.map((enemy) => enemy === matches[0] ? target : enemy), target };
 };
 
+export const classifyNarrativeRangedAttackIntent=(value)=>{
+  const text=stripGeneratedChoiceAnnotations(value).toLowerCase();
+  const release=/\b(loose|shoot|fire|release|launch)\b/.test(text),ranged=/\b(arrow|arrows|bow|longbow|shortbow|crossbow|bolt|bolts)\b/.test(text),flavorOnly=/\b(?:hear|heard|echo|aftermath|after)\b[^.]{0,50}\bvolley\b/.test(text);
+  if(!release||!ranged||flavorOnly)return null;
+  return {type:'narrative_ranged_attack',weapon_hint:/crossbow|bolt/.test(text)?'Crossbow':'Longbow',declared_attack_count:null,requires_structured_resolution:true};
+};
+
+export const pendingNarrativeRangedAttack=(targetName)=>`You secure a firing line on ${targetName||'the hostile figures'}, but the shot has not yet been rolled or released. Combat begins so every attack roll, target, advantage source, damage result, and projectile is resolved authoritatively.`;
+
 export const pendingAmbushNarrative = (targetName, success = true) => success
   ? `Your stealth approach succeeds and you secure a clear line on the ${targetName}. The weapon strike itself is still pending and no hit, damage, or defeat has been resolved.`
   : `Your stealth approach fails to secure a clean line on the ${targetName}. No weapon attack, damage, or defeat has been resolved.`;
