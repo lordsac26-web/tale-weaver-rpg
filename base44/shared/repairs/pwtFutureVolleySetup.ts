@@ -6,7 +6,7 @@ import { createStaleChoiceApplyToken, verifyStaleChoiceApplyToken } from './stal
 
 export const PWT_FUTURE_VOLLEY_REPAIR_VERSION='pwt-future-volley-setup-repair-v1.0.0';
 export const LIVE_PWT_FUTURE_VOLLEY_SCOPE={characterId:'6a6825cd07a490fa70a46852',sessionId:'6a6825edd695bd65a4322256',requestId:'story-action:6a6825edd695bd65a4322256:1788298091834:fotzng'};
-const LIVE_HASHES={story_log:'e8f821d708fd76a051f15e2414dbf9587fe952758691b6963d2ecd8d925e33ea',result_entry:'30fb527c4d2b3b376b29a6f3a5021f64af87b929993a3a7468c333435c200ced',session:'49bbbb842578724d7249afb0d49b28fa15dd090a312604ad8e2f3c2108157418',character:'b325863d3c8b03d0b15555ceddadae3ec58dee6ca04f79b4a91adcd2cac57612',protected_session:'838c658e1079a15f6c779403cbab8bfb8ec6f857cdfb4fee282669ee36715aac',skill_receipts:'f627d5cec5a413156d5b3aeb3783f96109f3efc1dd610c5510a5befd99b216b9'};
+const LIVE_HASHES={story_log:'e8f821d708fd76a051f15e2414dbf9587fe952758691b6963d2ecd8d925e33ea',result_entry:'30fb527c4d2b3b376b29a6f3a5021f64af87b929993a3a7468c333435c200ced',session:'49bbbb842578724d7249afb0d49b28fa15dd090a312604ad8e2f3c2108157418',character:'b325863d3c8b03d0b15555ceddadae3ec58dee6ca04f79b4a91adcd2cac57612',protected_session:'a02ee862621c0d780f3ab05d745ff68ca49d6d0754d29285818001540e81152a',skill_receipts:'f627d5cec5a413156d5b3aeb3783f96109f3efc1dd610c5510a5befd99b216b9'};
 const receipts=(s)=>s?.world_state?.__skill_check_receipts||[];
 const repairs=(s)=>s?.world_state?.__pwt_future_volley_repairs||[];
 const protectedSession=(s)=>{const {story_log,updated_date,world_state,...rest}=s||{};const {__pwt_future_volley_repairs,...protectedWorld}=world_state||{};return {...rest,world_state:protectedWorld};};
