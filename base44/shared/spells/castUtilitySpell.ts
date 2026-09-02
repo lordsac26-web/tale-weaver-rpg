@@ -1,6 +1,7 @@
 import { characterBelongsToUser } from '../combat/authGuard.ts';
-import { addStructuredCondition, buildStructuredCondition } from '../combat/conditions.ts';
+import { addStructuredCondition, buildStructuredCondition, removeConcentrationConditions } from '../combat/conditions.ts';
 import { normalizeSpellText, resolveKnownTypedSpell } from './typedSpellParser.ts';
+import { resolveCanonicalSpellTarget, SPELL_TARGETING_VERSION } from './spellTargeting.ts';
 import { conditionIdentityKey, isPassWithoutTraceIdentity, preferStructuredCondition } from './conditionIdentity.js';
 import { getMaxSlotsForLevel } from './slotProgression.ts';
 
@@ -16,8 +17,9 @@ const maxSlots = getMaxSlotsForLevel;
 function findKnownSpell(character, actionText, requestedName) {
   return resolveKnownTypedSpell(character, actionText, requestedName);
 }
-function concentrationModifier(spell, now, characterId, expiresAt = null) {
-  const base = { id: `typed_spell_${normalize(spell.name).replace(/ /g, '_')}_${now}`, source: spell.name, effect: 'spell_concentration', concentration: true, caster_id: characterId, character_id: characterId, target_id: characterId, scope: 'self', applied_at: new Date(now).toISOString(), duration: spell.duration || 'Concentration', expiration_rule: expiresAt ? 'timestamp' : 'concentration', ...(expiresAt ? { expires_at: expiresAt } : {}) };
+function concentrationModifier(spell, now, characterId, spellTarget, expiresAt = null) {
+  const targetId = spellTarget?.kind === 'point' ? `scene_point:${normalize(spellTarget.anchor).replace(/ /g, '_')}` : spellTarget?.id || characterId;
+  const base = { id: `typed_spell_${normalize(spell.name).replace(/ /g, '_')}_${now}`, source: spell.name, effect: 'spell_concentration', concentration: true, caster_id: characterId, character_id: characterId, target_id: targetId, scope: spellTarget?.kind === 'point' ? 'area' : 'self', spell_target: spellTarget || null, applied_at: new Date(now).toISOString(), duration: spell.duration || 'Concentration', expiration_rule: expiresAt ? 'timestamp' : 'concentration', ...(expiresAt ? { expires_at: expiresAt } : {}) };
   if (normalize(spell.name) === 'pass without trace') return { ...base, effect: 'skill_bonus', skill: 'Stealth', bonus: 10 };
   if (normalize(spell.name) === 'hunters mark') return { ...base, effect: 'hunters_mark', damage_bonus_dice: '1d6' };
   if (normalize(spell.name) === 'ensnaring strike') return { ...base, effect: 'ensnaring_strike_pending' };
@@ -45,12 +47,15 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
     || spellCandidates[0];
   if (!spell) return respond(404, { error: `Canonical spell data is missing for ${canonicalName}`, invalid: true });
   const normalizedName = normalize(canonicalName);
+  const targetResolution = resolveCanonicalSpellTarget({ spell, actionText: action_text, target });
   const isHealingSpell = spell.attack_type === 'healing' || normalizedName === 'cure wounds';
   if (require_healing && !isHealingSpell) return respond(400, { error: `${canonicalName} is not a self-healing spell supported by the character sheet.`, invalid: true });
   const isHuntersMark = normalizedName === 'hunters mark';
-  const isUtilitySpell = (spell.attack_type === 'utility' || !!spell.is_utility) && !isHuntersMark;
+  const isPointAreaSpell = targetResolution.profile.kind === 'point_area';
+  const isUtilitySpell = ((spell.attack_type === 'utility' || !!spell.is_utility) && !isHuntersMark) || isPointAreaSpell;
   if (isHuntersMark) return respond(400, { error: "Hunter's Mark requires a hostile combat target. Cast it through the combat spell action.", invalid: true, target_required: true });
-  if (!isHealingSpell && !isUtilitySpell) return respond(400, { error: `${canonicalName} requires a valid combat target. Use the combat spell action while an active combat target is available.`, invalid: true, target_required: true });
+  if (!targetResolution.ok) return respond(targetResolution.status, { error: targetResolution.error, code: targetResolution.code, invalid: true, target_required: true, target_profile: targetResolution.profile, writes: 0 });
+  if (!isHealingSpell && !isUtilitySpell) return respond(400, { error: `${canonicalName} requires a specific valid creature target.`, invalid: true, target_required: true, writes: 0 });
   const conditions = (character.conditions || []).map((condition) => normalize(typeof condition === 'string' ? condition : condition?.name));
   if ((conditions.includes('silenced') || conditions.includes('silence')) && String(spell.components || 'V').toUpperCase().includes('V')) return respond(400, { error: `${character.name} is silenced and cannot cast ${canonicalName}, which requires a verbal component.`, invalid: true });
   if (conditions.includes('raging')) return respond(400, { error: `${character.name} cannot cast spells while raging.`, invalid: true });
@@ -66,7 +71,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
     const maximum = maxSlots(character, prior.slot_level);
     const normalizedSlots = normalizeSpellSlots(character.spell_slots);
     const used = Number(normalizedSlots[`level_${prior.slot_level}`]) || 0;
-    return respond(200, { success: true, spell_detected: true, already_processed: true, receipt_id: prior.receipt_id || token, request_id: token, spell_name: prior.spell_name, slot_level: prior.slot_level, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: normalizedSlots, active_modifiers: character.active_modifiers || [], concentration: !!spell.concentration, duration: spell.duration, inventory: character.inventory || [], heal_amount: prior.heal_amount || 0, roll_expression: prior.roll_expression || null, roll_total: Number(prior.roll_total ?? prior.heal_amount ?? 0), hp_before: Number(prior.hp_before ?? character.hp_current), hp_after: Number(prior.hp_after ?? character.hp_current), hp_current: character.hp_current, hp_max: character.hp_max });
+    return respond(200, { success: true, spell_detected: true, already_processed: true, receipt_id: prior.receipt_id || token, request_id: token, spell_name: prior.spell_name, slot_level: prior.slot_level, target: prior.target || targetResolution.target, target_profile: targetResolution.profile, targeting_version: SPELL_TARGETING_VERSION, used_slots: used, max_slots: maximum, remaining_slots: Math.max(0, maximum - used), spell_slots: normalizedSlots, active_modifiers: character.active_modifiers || [], concentration: !!spell.concentration, duration: spell.duration, inventory: character.inventory || [], heal_amount: prior.heal_amount || 0, roll_expression: prior.roll_expression || null, roll_total: Number(prior.roll_total ?? prior.heal_amount ?? 0), hp_before: Number(prior.hp_before ?? character.hp_current), hp_after: Number(prior.hp_after ?? character.hp_current), hp_current: character.hp_current, hp_max: character.hp_max });
   }
   const now = Date.now();
   const concentration = session?.world_state?.active_concentration;
@@ -93,12 +98,12 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   const isPassWithoutTrace = normalizedName === 'pass without trace';
   const expiresAt = isPassWithoutTrace ? new Date(now + 60 * 60 * 1000).toISOString() : null;
   let activeModifiers = active;
-  if (spell.concentration) activeModifiers = [...active.filter((modifier) => !modifier.concentration), concentrationModifier(spell, now, character_id, expiresAt)];
+  if (spell.concentration) activeModifiers = [...active.filter((modifier) => !modifier.concentration), concentrationModifier(spell, now, character_id, targetResolution.target, expiresAt)];
   const isSilence = normalizedName === 'silence';
   const structuredConditions = isPassWithoutTrace
     ? addStructuredCondition((character.conditions || []).filter((condition) => !isPassWithoutTraceIdentity(condition)), buildStructuredCondition({ name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id, duration_type: 'timestamp', expires_at: expiresAt, concentration: true }))
     : isSilence
-      ? (character.conditions || []).filter((condition) => normalize(typeof condition === 'string' ? condition : condition?.name) !== 'pass without trace')
+      ? removeConcentrationConditions(character.conditions || []).filter((condition) => !isPassWithoutTraceIdentity(condition))
       : (character.conditions || []);
   let healAmount = 0;
   const hpBefore = Number(character.hp_current) || 0;
@@ -128,7 +133,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
     else inventory.push({ name: 'Goodberry', category: 'Consumable', quantity: 10, description: 'A transmuted berry that restores 1 Hit Point when eaten and provides enough nourishment to sustain a creature for one day. Expires 24 hours after casting.', expires_at: expires });
     grantedInventory = inventory;
   }
-  abilities.__typed_spell_casts = [...receipts.filter((receipt) => receipt?.token !== token).slice(-24), { token, receipt_id: token, spell_name: canonicalName, slot_level: selectedLevel, target_id: character_id, duration: spell.duration || null, expires_at: expiresAt, concentration: !!spell.concentration, heal_amount: healAmount, roll_expression: rollExpression, roll_total: rollTotal, hp_before: hpBefore, hp_after: hpCurrent, granted_goodberry: grantedGoodberry, at: new Date(now).toISOString() }];
+  abilities.__typed_spell_casts = [...receipts.filter((receipt) => receipt?.token !== token).slice(-24), { token, receipt_id: token, spell_name: canonicalName, slot_level: selectedLevel, target_id: targetResolution.target?.kind === 'point' ? `scene_point:${targetResolution.target.anchor}` : character_id, target: targetResolution.target, duration: spell.duration || null, expires_at: expiresAt, concentration: !!spell.concentration, heal_amount: healAmount, roll_expression: rollExpression, roll_total: rollTotal, hp_before: hpBefore, hp_after: hpCurrent, granted_goodberry: grantedGoodberry, at: new Date(now).toISOString() }];
   const updates = { spell_slots: spellSlots, active_modifiers: activeModifiers, long_rest_abilities: abilities };
   if (isPassWithoutTrace || isSilence) updates.conditions = structuredConditions;
   if (healAmount > 0) updates.hp_current = hpCurrent;
@@ -140,7 +145,8 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
       last_spell_cast: { spell_name: canonicalName, character_id, slot_level: selectedLevel, heal_amount: healAmount, request_id: token, at: new Date(now).toISOString() },
     };
     if (spell.concentration) {
-      sessionWorldState.active_concentration = { spell_name: canonicalName, character_id, caster_id: character_id, target_id: character_id, scope: 'self', duration: spell.duration || 'Concentration', applied_at: new Date(now).toISOString(), expires_at: expiresAt, expiration_rule: expiresAt ? 'timestamp' : 'concentration', concentration: true, request_id: token };
+      const concentrationTargetId = targetResolution.target?.kind === 'point' ? `scene_point:${targetResolution.target.anchor}` : targetResolution.target?.id || character_id;
+      sessionWorldState.active_concentration = { spell_name: canonicalName, character_id, caster_id: character_id, target_id: concentrationTargetId, target: targetResolution.target, scope: targetResolution.target?.kind === 'point' ? 'area' : 'self', duration: spell.duration || 'Concentration', applied_at: new Date(now).toISOString(), expires_at: expiresAt, expiration_rule: expiresAt ? 'timestamp' : 'concentration', concentration: true, request_id: token };
     }
     await base44.asServiceRole.entities.GameSession.update(session_id, { world_state: sessionWorldState });
   }
@@ -151,5 +157,5 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
       await base44.asServiceRole.entities.CombatLog.update(combat.id, { combatants, log_entries: [...(combat.log_entries || []), { type: 'spell_cast', spell_name: canonicalName, actor: character.name, target: character.name, round: combat.round || 0, timestamp: new Date(now).toISOString(), request_id: token, heal_amount: healAmount }], world_state: spell.concentration ? { ...(combat.world_state || {}), concentration_spell: canonicalName, concentration_caster: character.name } : (combat.world_state || {}) });
     }
   }
-  return respond(200, { success: true, spell_detected: true, already_active: false, receipt_id: token, request_id: token, spell_name: canonicalName, slot_level: selectedLevel, base_level: baseLevel, used_slots: usedAfter, max_slots: maximum, remaining_slots: Math.max(0, maximum - usedAfter), spell_slots: spellSlots, active_modifiers: activeModifiers, concentration: !!spell.concentration, duration: spell.duration, attack_type: spell.attack_type, components: spell.components, inventory: grantedInventory || character.inventory || [], heal_amount: healAmount, roll_expression: rollExpression, roll_total: rollTotal, hp_before: hpBefore, hp_after: hpCurrent, hp_current: hpCurrent, hp_max: character.hp_max });
+  return respond(200, { success: true, spell_detected: true, already_active: false, receipt_id: token, request_id: token, spell_name: canonicalName, slot_level: selectedLevel, base_level: baseLevel, used_slots: usedAfter, max_slots: maximum, remaining_slots: Math.max(0, maximum - usedAfter), spell_slots: spellSlots, active_modifiers: activeModifiers, concentration: !!spell.concentration, duration: spell.duration, attack_type: spell.attack_type, components: spell.components, target: targetResolution.target, target_profile: targetResolution.profile, targeting_version: SPELL_TARGETING_VERSION, inventory: grantedInventory || character.inventory || [], heal_amount: healAmount, roll_expression: rollExpression, roll_total: rollTotal, hp_before: hpBefore, hp_after: hpCurrent, hp_current: hpCurrent, hp_max: character.hp_max });
 }

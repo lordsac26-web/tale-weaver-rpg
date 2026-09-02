@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 import { prepareProjectileRecoveryProposal } from '../../shared/story/projectileLifecycle.ts';
+import { preflightCompositeAction } from '../../shared/story/compositeActionPreflight.ts';
 
 Deno.serve(async (req) => {
   try {
@@ -103,6 +104,13 @@ Return ONLY a JSON object:
     }
 
     // ============ EXPLORATION MODE ============
+    const silenceComposite = /\b(?:cast|invoke)\s+silence\b/i.test(String(action || '')) && /\b(?:shoot|fire|loose|release|precision\s+shot|attack\s+with\s+(?:a\s+)?(?:longbow|bow|crossbow))\b/i.test(String(action || ''));
+    if (silenceComposite) {
+      const candidates = await base44.asServiceRole.entities.Spell.filter({ name: 'Silence' }, '-updated_date', 50);
+      const spell = candidates.find((entry) => entry.description && entry.casting_time && entry.range) || candidates[0];
+      const compositePlan = preflightCompositeAction({ text: action, session, character, spell, sceneText: `${session_context || ''}\n${(session.story_log || []).slice(-1)[0]?.text || ''}` });
+      return Response.json({ action, action_type: 'composite_action', composite_plan: compositePlan, valid: compositePlan.valid, alternatives: compositePlan.alternatives, requires_check: false, risk_level: 'high', reasoning: compositePlan.valid ? 'The complete ordered plan passed authoritative preflight.' : 'The complete ordered plan cannot be performed as stated; no spell slot, concentration, ammunition, attack, combat, or story state was changed.', request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.2.0', writes: 0 });
+    }
     const projectileRecovery = await prepareProjectileRecoveryProposal({ base44, session, character, actionText: action });
     if (projectileRecovery.handled) {
       if (projectileRecovery.status >= 400) return Response.json({ error: projectileRecovery.error, writes: 0, combat_id: projectileRecovery.combat_id || null }, { status: projectileRecovery.status });

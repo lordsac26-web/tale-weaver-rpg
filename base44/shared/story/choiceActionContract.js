@@ -1,6 +1,7 @@
 export const CHOICE_ACTION_CONTRACT_VERSION = 'choice-action-contract-v1.0.0';
-export const CHOICE_ACTION_FRONTEND_VERSION = 'choice-action-transition-v1.0.0';
-export const CHOICE_ACTION_TYPES = ['skill_check', 'weapon_attack', 'spell_cast', 'utility', 'social', 'movement', 'rest', 'item_use', 'combat_transition'];
+import { parseCompositeAction } from './compositeActionContract.js';
+export const CHOICE_ACTION_FRONTEND_VERSION = 'choice-action-transition-v1.1.0';
+export const CHOICE_ACTION_TYPES = ['skill_check', 'weapon_attack', 'spell_cast', 'composite_action', 'utility', 'social', 'movement', 'rest', 'item_use', 'combat_transition'];
 export const CANONICAL_SKILLS = ['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival'];
 
 const normalize = (value) => String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -23,6 +24,8 @@ export function classifyLegacyChoiceAction(text) {
 
 export function normalizeChoiceActionContract(choice = {}) {
   const text = String(choice?.text || '').trim();
+  const composite = parseCompositeAction(text);
+  if (composite) return { ...choice, ...composite, text, skill_check: null, dc: null, recovery: null, weapon_attack: null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
   const legacyAttack = classifyLegacyChoiceAction(text);
   if (legacyAttack) return { ...choice, ...legacyAttack, text, skill_check: null, dc: null, recovery: null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
   const requestedType = CHOICE_ACTION_TYPES.includes(choice?.action_type) ? choice.action_type : null;

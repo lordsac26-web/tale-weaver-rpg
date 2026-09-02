@@ -22,6 +22,8 @@ import { executeAuthoritativeShortWait, SHORT_WAIT_VERSION } from '../../shared/
 import { inferUniqueScenePickup, UNIQUE_SCENE_PICKUP_VERSION } from '../../shared/story/uniqueScenePickup.ts';
 import { normalizeChoiceActionContract, CHOICE_ACTION_CONTRACT_VERSION } from '../../shared/story/choiceActionContract.js';
 import { executeStoryWeaponAttack, STORY_WEAPON_ATTACK_VERSION } from '../../shared/story/storyWeaponAttack.ts';
+import { preflightCompositeAction, COMPOSITE_ACTION_PREFLIGHT_VERSION } from '../../shared/story/compositeActionPreflight.ts';
+import { COMPOSITE_ACTION_CONTRACT_VERSION } from '../../shared/story/compositeActionContract.js';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -38,7 +40,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.7.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.8.0';
 
 Deno.serve(async (req) => {
   try {
@@ -77,6 +79,13 @@ Deno.serve(async (req) => {
     const persistedChoice = action === 'choice' && Number.isInteger(Number(choice_index)) ? latestChoices[Number(choice_index)] : null;
     const selectedChoiceContract = normalizeChoiceActionContract(persistedChoice || { text: choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`, ...authoritativeChoiceContext });
     const selectedChoice = action === 'choice' ? stripGeneratedChoiceAnnotations(selectedChoiceContract.text) : '';
+    if (action === 'choice' && selectedChoiceContract.action_type === 'composite_action') {
+      const spellName = selectedChoiceContract.children?.find((child) => child.action_type === 'spell_cast')?.spell_name;
+      const spellCandidates = spellName ? await base44.asServiceRole.entities.Spell.filter({ name: spellName }, '-updated_date', 50) : [];
+      const spell = spellCandidates.find((entry) => entry.description && entry.casting_time && entry.range) || spellCandidates[0];
+      const compositePlan = preflightCompositeAction({ text: selectedChoice, session, character, spell, sceneText: (session.story_log || []).slice(-1)[0]?.text || '' });
+      return Response.json({ error: compositePlan.valid ? 'Composite actions require explicit ordered confirmation before mechanics resolve.' : 'The complete action plan is not legal as stated.', action_type: 'composite_action', composite_plan: compositePlan, alternatives: compositePlan.alternatives, writes: 0, contract_version: COMPOSITE_ACTION_CONTRACT_VERSION, preflight_version: COMPOSITE_ACTION_PREFLIGHT_VERSION, preserve_scene: true }, { status: 409 });
+    }
     const ambushIntent = action === 'choice' && selectedChoiceContract.action_type !== 'weapon_attack' ? classifyPrecisionAmbushIntent(selectedChoice) : null;
     const narrativeRangedIntent=action==='choice'&&!ambushIntent&&selectedChoiceContract.action_type==='weapon_attack'?selectedChoiceContract.weapon_attack:null;
     const stealthSetupIntent = action === 'choice' ? classifyStealthSetupIntent(selectedChoice || custom_input, authoritativeChoiceContext?.check) : null;
@@ -279,7 +288,7 @@ ${adultToneInstruction}
 4. How do I make this opening feel fresh and different from previous sessions?
 5. What sensory details and tone will pull the player in?
 
-Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension. Provide exactly 4 meaningful choices in the structured "choices" field ONLY. Every choice MUST set action_type to one of skill_check, weapon_attack, spell_cast, utility, social, movement, rest, item_use, combat_transition. Only skill_check choices may set skill_check and dc. Weapon attacks must set weapon_attack with target_ref, weapon_hint, attack_mode, declared_attack_count, and intent. Include skill checks + DCs on 2-3 choices. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; a specific tangible item must include {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise recovery must be null. Set location_update. No combat in the opening scene.
+Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension. Provide exactly 4 meaningful choices in the structured "choices" field ONLY. Never combine a spell cast and weapon attack in one choice unless an explicit supported extra action and legal timing are already established; otherwise offer them as separate choices. Every choice MUST set action_type to one of skill_check, weapon_attack, spell_cast, utility, social, movement, rest, item_use, combat_transition. Only skill_check choices may set skill_check and dc. Weapon attacks must set weapon_attack with target_ref, weapon_hint, attack_mode, declared_attack_count, and intent. Include skill checks + DCs on 2-3 choices. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; a specific tangible item must include {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise recovery must be null. Set location_update. No combat in the opening scene.
 
 CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" text itself. The narrative must be pure prose — never include lines like "1. ...", "2. ...", "What do you do?", or any enumerated options. The choices belong solely in the structured choices array.`;
 
@@ -637,7 +646,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
+    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);

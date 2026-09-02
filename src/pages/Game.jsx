@@ -38,6 +38,7 @@ import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '../..
 import { classifyPrecisionAmbushIntent, stripGeneratedChoiceAnnotations } from '../../base44/shared/story/generatedChoiceIntent';
 import { normalizeChoiceCheckDisplay } from '../../base44/shared/story/choiceCheckDisplay';
 import { normalizeChoiceActionContract, CHOICE_ACTION_FRONTEND_VERSION } from '../../base44/shared/story/choiceActionContract';
+import { COMPOSITE_ACTION_FRONTEND_VERSION } from '../../base44/shared/story/compositeActionContract';
 import { prepareStorySkillCheck, resolveStorySkillRoll } from '@/lib/storySkillCheck';
 import { acceptSequencedStoryPayload, hydrateLatestStoryEntry, STORY_TRANSITION_VERSION } from '../../base44/shared/story/storyTransition';
 
@@ -402,6 +403,15 @@ export default function Game() {
     const sourceChoice = normalizeChoiceActionContract(choices[choiceIndex]);
     const normalizedCheck = sourceChoice.action_type === 'skill_check' ? normalizeChoiceCheckDisplay(sourceChoice, { logConflicts: true }) : { skillLabel: null, dc: null };
     const choice = { ...sourceChoice, skill_check: normalizedCheck.skillLabel, dc: normalizedCheck.dc, text: stripGeneratedChoiceAnnotations(sourceChoice?.text) };
+    if (choice.action_type === 'composite_action') {
+      try {
+        const result = await base44.functions.invoke('evaluatePlayerAction', { action: choice.text, request_id: `evaluate-composite:${sessionId}:${crypto.randomUUID()}`, session_id: sessionId, character_id: character?.id, session_context: `${session?.current_location || ''} — ${narrative.filter(e => e.type === 'narration').slice(-1)[0]?.text?.slice(0, 200) || ''}` });
+        setPendingProposal({ ...result.data, action: choice.text });
+      } finally {
+        choiceDispatchInFlightRef.current = false;
+      }
+      return;
+    }
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
     setChoices([]);
 
@@ -623,6 +633,10 @@ export default function Game() {
   const executeProposedAction = async (proposal) => {
     setPendingProposal(null);
     const { action, requires_check, skill, dc, recovery } = proposal;
+    if (proposal.action_type === 'composite_action') {
+      setNarrative(prev => [...prev, { type: 'action_error', text: proposal.valid ? 'The composite plan is validated but must be resolved through its ordered authoritative children.' : `${proposal.reasoning} Choose one of the legal alternatives shown; the scene and choices remain unchanged.` }]);
+      return;
+    }
     const requestId = `story-action:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
 
     setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
@@ -1479,7 +1493,7 @@ export default function Game() {
   const combatPending = !!(session?.in_combat && validCombatId && !combat && !combatSyncError);
 
   return (
-    <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" data-story-transition-version={STORY_TRANSITION_VERSION} data-choice-action-transition-version={CHOICE_ACTION_FRONTEND_VERSION} data-camp-rest-transition-version={CAMP_REST_TRANSITION_VERSION} style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
+    <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" data-story-transition-version={STORY_TRANSITION_VERSION} data-choice-action-transition-version={CHOICE_ACTION_FRONTEND_VERSION} data-composite-action-transition-version={COMPOSITE_ACTION_FRONTEND_VERSION} data-camp-rest-transition-version={CAMP_REST_TRANSITION_VERSION} style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
       {/* HUD */}
       <HUD character={character} session={session} />
 

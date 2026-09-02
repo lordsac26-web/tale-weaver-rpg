@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Dices, X, Swords } from 'lucide-react';
+import CompositeActionPlan from '@/components/game/CompositeActionPlan';
 
 const RISK_COLORS = {
   low:     { bg: 'rgba(10,50,20,0.6)',  border: 'rgba(40,160,80,0.4)',   color: '#86efac' },
@@ -12,6 +13,7 @@ const RISK_COLORS = {
 export default function ActionProposalModal({ proposal, onConfirm, onCancel }) {
   const { action, requires_check, skill, dc, reasoning, risk_level } = proposal;
   const riskColors = RISK_COLORS[risk_level] || RISK_COLORS.low;
+  const invalidComposite = proposal.action_type === 'composite_action' && proposal.valid === false;
 
   return (
     <motion.div
@@ -43,8 +45,10 @@ export default function ActionProposalModal({ proposal, onConfirm, onCancel }) {
             {reasoning}
           </p>
 
+          <CompositeActionPlan proposal={proposal} />
+
           {/* Skill Check Panel */}
-          {requires_check && skill && (
+          {!invalidComposite && requires_check && skill && (
             <div className="p-4 rounded-xl flex items-center gap-3"
               style={{ background: 'rgba(60,40,5,0.6)', border: '1px solid rgba(201,169,110,0.35)' }}>
               <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center"
@@ -69,7 +73,7 @@ export default function ActionProposalModal({ proposal, onConfirm, onCancel }) {
           )}
 
           {/* No check — just proceed */}
-          {!requires_check && (
+          {!invalidComposite && !requires_check && (
             <div className="px-3 py-2 rounded-xl"
               style={{ background: 'rgba(10,50,20,0.4)', border: '1px solid rgba(40,160,80,0.3)' }}>
               <p className="text-xs font-fantasy" style={{ color: '#86efac' }}>✓ No roll needed — this action proceeds automatically.</p>
@@ -78,15 +82,15 @@ export default function ActionProposalModal({ proposal, onConfirm, onCancel }) {
 
           {/* Buttons */}
           <div className="flex gap-2 pt-1">
-            <button onClick={onConfirm}
+            {!invalidComposite && <button onClick={onConfirm}
               className="flex-1 py-3 rounded-xl text-sm font-fantasy flex items-center justify-center gap-2 btn-fantasy">
               {requires_check ? <Dices className="w-4 h-4" /> : <Swords className="w-4 h-4" />}
               {requires_check ? `Roll ${skill}!` : 'Proceed'}
-            </button>
+            </button>}
             <button onClick={onCancel}
               className="px-4 py-3 rounded-xl text-sm flex items-center gap-1"
               style={{ border: '1px solid rgba(180,140,90,0.15)', color: 'rgba(201,169,110,0.4)' }}>
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" /> {invalidComposite ? 'Keep scene' : ''}
             </button>
           </div>
         </div>
