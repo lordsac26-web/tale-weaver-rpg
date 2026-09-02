@@ -21,8 +21,9 @@ import DeathModal from '@/components/game/DeathModal';
 import DeathSavesModal from '@/components/game/DeathSavesModal';
 import LootModal from '@/components/game/LootModal.jsx';
 import CompanionPanel from '@/components/game/CompanionPanel';
-import RestModal from '@/components/game/RestModal';
+import RestFlowContainer from '@/components/game/RestFlowContainer';
 import GameToolbar from '@/components/game/GameToolbar';
+import { CAMP_REST_TRANSITION_VERSION } from '../../base44/shared/rest/campRestFlow';
 import CampaignJournal from '@/components/game/CampaignJournal';
 import { stopAllNarration } from '@/components/game/narrationControl';
 import LevelUpToast from '@/components/game/LevelUpToast';
@@ -79,6 +80,7 @@ export default function Game() {
   const [showDeathModal, setShowDeathModal] = useState(false);
   const [showDeathSaves, setShowDeathSaves] = useState(false);
   const [showRestModal, setShowRestModal] = useState(false);
+  const [restSubmitting, setRestSubmitting] = useState(false);
   const [showAskDM, setShowAskDM] = useState(false);
   const [mainViewTab, setMainViewTab] = useState('story');
   const [combatViewTab, setCombatViewTab] = useState('combat'); // 'story' | 'combat' | 'journal' — for mobile
@@ -198,12 +200,12 @@ export default function Game() {
     };
   }, []);
 
-  // Listen for HUD quick-rest button event (Suggestion #7)
+  // Listen for HUD quick-rest requests without reopening an active/submitting flow.
   useEffect(() => {
-    const handler = () => setShowRestModal(true);
+    const handler = () => { if (!restSubmitting && !session?.in_combat) setShowRestModal(true); };
     window.addEventListener('open-rest-modal', handler);
     return () => window.removeEventListener('open-rest-modal', handler);
-  }, []);
+  }, [restSubmitting, session?.in_combat]);
 
   // Level-up detector: whenever the character's XP crosses the next threshold,
   // surface the level-up notification banner (unless the wizard is already open).
@@ -1462,7 +1464,7 @@ export default function Game() {
   const combatPending = !!(session?.in_combat && validCombatId && !combat && !combatSyncError);
 
   return (
-    <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" data-story-transition-version={STORY_TRANSITION_VERSION} style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
+    <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" data-story-transition-version={STORY_TRANSITION_VERSION} data-camp-rest-transition-version={CAMP_REST_TRANSITION_VERSION} style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
       {/* HUD */}
       <HUD character={character} session={session} />
 
@@ -1504,6 +1506,7 @@ export default function Game() {
             showCompanions={showCompanions}
             setShowCompanions={setShowCompanions}
             setShowRestModal={setShowRestModal}
+            restDisabled={restSubmitting}
             setShowSceneVisualizer={setShowSceneVisualizer}
             setShowPortraitGen={setShowPortraitGen}
             setShowCharSheet={setShowCharSheet}
@@ -1874,97 +1877,19 @@ export default function Game() {
         )}
       </AnimatePresence>
 
-      {/* Rest Modal */}
+      {/* Rest flow — one mounted surface with authoritative refresh and stable request identity. */}
       <AnimatePresence>
         {showRestModal && character && (
-          <RestModal
+          <RestFlowContainer
             character={character}
-            onClose={() => setShowRestModal(false)}
-            onRest={async (restType, hitDiceToSpend) => {
-              const restCharId = character?.id;
-              if (!restCharId) {
-                await loadState();
-                setNarrative(prev => [...prev, { type: 'narration', text: '⚠️ Your character record changed — reloaded the session. Please try resting again.' }]);
-                setShowRestModal(false);
-                return;
-              }
-              // Mark whether this location is safe so the backend can skip the
-              // random-encounter interruption roll while resting in town/inn.
-              const locationSafe = /town|inn|tavern|village|city|camp|home|sanctuary|temple/i.test(session?.current_location || '');
-              const result = await base44.functions.invoke('handleRest', {
-                character_id: restCharId,
-                session_id: sessionId,
-                rest_request_id: `rest:${sessionId}:${restType}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-                rest_type: restType,
-                rest_intent: restType === 'long' ? 'long_rest_8h' : undefined,
-                hit_dice_to_spend: hitDiceToSpend,
-                location_safe: locationSafe,
-              });
-
-              // Check for interrupted rest
-              if (result.data.interrupted) {
-                setNarrative(prev => [...prev, {
-                  type: 'narration',
-                  text: `⚠️ ${result.data.encounter_message}`
-                }]);
-                setShowRestModal(false);
-                // Trigger random encounter
-                const encounterResult = await base44.functions.invoke('generateStory', {
-                  session_id: sessionId,
-                  action: 'generate_event',
-                  custom_input: 'random_encounter'
-                });
-                if (encounterResult.data?.narrative) {
-                  setNarrative(prev => [...prev, { type: 'narration', text: encounterResult.data.narrative }]);
-                }
-                if (encounterResult.data?.combat_trigger && encounterResult.data?.enemies) {
-                  await startCombat(encounterResult.data.enemies);
-                } else if (encounterResult.data?.choices) {
-                  setChoices(encounterResult.data.choices);
-                }
-                return;
-              }
-
-              // Apply the restored character FIRST so the HUD's HP bar updates while the
-              // campfire animation is still on screen — the dwell timer in RestModal keeps
-              // the animation up for ~3s, letting it transition seamlessly into the new HP.
-              setCharacter(prev => prev ? { ...prev, ...result.data.character } : result.data.character);
-              if (result.data.session) setSession(result.data.session);
-
-              // Build a flavorful rest narration. Long rests come with a backend narrative;
-              // short rests get a brief campfire-flavored intro generated here.
-              const shortRestFlavor = [
-                'You catch your breath beside a low fire, tending wounds and steadying your nerves.',
-                'A quiet hour passes. You sharpen your gear, eat a little, and let the ache fade.',
-                'You lean against the stone and rest your eyes for a while, regaining your composure.',
-                'The brief respite does you good — your breathing slows and your strength returns.',
-              ];
-              const intro = restType === 'long'
-                ? (result.data.narrative || 'You sleep through the night and wake restored.')
-                : shortRestFlavor[Math.floor(Math.random() * shortRestFlavor.length)];
-              const icon = restType === 'long' ? '🌙' : '☕';
-
-              // Always surface the actual HP restored up front, then list the
-              // detailed restorations (spell slots, hit dice, abilities, etc.).
-              const updatedChar = result.data.character || {};
-              const healed = result.data.healing || 0;
-              const hpLine = healed > 0
-                ? `❤️ Restored ${healed} HP (now ${updatedChar.hp_current}/${updatedChar.hp_max}).`
-                : (restType === 'long' ? `❤️ Already at full health (${updatedChar.hp_current}/${updatedChar.hp_max}).` : '');
-              const detailLine = (result.data.restorations || []).length > 0
-                ? ` ${result.data.restorations.join(', ')}.`
-                : '';
-              const timeLine = result.data.clock
-                ? ` ${result.data.clock.elapsed_hours} hours passed: ${result.data.clock.before_label} → ${result.data.clock.after_label}${result.data.clock.day_rollover ? ' (next day)' : ''}.`
-                : '';
-
-              setNarrative(prev => [...prev, {
-                type: 'narration',
-                text: `${icon} ${intro} ${hpLine}${detailLine}${timeLine}`.trim()
-              }]);
-              setShowRestModal(false);
-              await loadState();
-            }}
+            session={session}
+            sessionId={sessionId}
+            onClose={() => { if (!restSubmitting) setShowRestModal(false); }}
+            onBusyChange={setRestSubmitting}
+            onRefresh={loadState}
+            onNarrative={(text) => setNarrative((previous) => [...previous, { type: 'narration', text }])}
+            onChoices={setChoices}
+            onStartCombat={startCombat}
           />
         )}
       </AnimatePresence>

@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 import { advanceWorldClock, elapsedHoursForRest, getClockHour } from '../../shared/story/worldClock.ts';
+import { executeCampLongRest } from '../../shared/story/campLongRest.ts';
 
 // Spell slot progression by class
 const SPELL_SLOTS_BY_CLASS = {
@@ -103,6 +104,10 @@ export default async function handleRest(req) {
   const priorRest = rest_type === 'long' && receiptToken ? restReceipts.find((entry) => entry.token === receiptToken) : null;
   if (priorRest?.response) return Response.json({ ...priorRest.response, already_processed: true });
   if (rest_type === 'long' && !['long_rest_8h', 'sleep_until_dawn'].includes(rest_intent)) return Response.json({ error: 'Invalid long-rest intent' }, { status: 400 });
+  if (rest_type === 'long') {
+    const outcome = await executeCampLongRest({ base44, user, character, session, payload: { rest_request_id, rest_intent, location_safe } });
+    return Response.json(outcome.body, { status: outcome.status });
+  }
   const restStartHour = session ? getClockHour({ timeOfDay: session.time_of_day, worldState: session.world_state }) : null;
   const restElapsedHours = rest_type === 'long' ? elapsedHoursForRest({ intent: rest_intent, startHour: restStartHour }) : 0;
   const restClock = rest_type === 'long' && session ? advanceWorldClock({ timeOfDay: session.time_of_day, worldState: session.world_state, elapsedHours: restElapsedHours }) : null;

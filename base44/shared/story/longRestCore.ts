@@ -1,7 +1,7 @@
 import { advanceWorldClock, elapsedHoursForRest, getClockHour } from './worldClock.ts';
 import { deriveCanonicalSpellSlots } from '../spells/slotProgression.ts';
 
-export const LONG_REST_CORE_VERSION='authoritative-long-rest-core-v1.1.0';
+export const LONG_REST_CORE_VERSION='authoritative-long-rest-core-v1.2.0';
 
 export async function executeLongRestCore({ db, ownerId, characterId, sessionId, requestId, intent = 'long_rest_8h', targetPeriod = null, explicitHours = null }) {
   const [character, session] = await Promise.all([db.entities.Character.get(characterId), db.entities.GameSession.get(sessionId)]);
@@ -30,8 +30,12 @@ export async function executeLongRestCore({ db, ownerId, characterId, sessionId,
   if (character.class === 'Bard') { const max = Math.max(1, Math.floor(((Number(character.charisma) || 10) - 10) / 2)); updates.bardic_inspiration_max = max; updates.bardic_inspiration_remaining = max; }
   await db.entities.Character.update(characterId, updates);
   const updatedCharacter = await db.entities.Character.get(characterId);
-  const response = { success: true, function_version:LONG_REST_CORE_VERSION, character: updatedCharacter, time_of_day: clock.time_of_day, clock: clock.clock, receipt_id: requestId, slot_derivation:slotProgression };
-  clock.world_state.__rest_receipts = [...receipts, { token: requestId, response, completed_at: completedAt }].slice(-25);
+  const healing = Number(updatedCharacter.hp_current || 0) - Number(character.hp_current || 0);
+  const restoredHitDice = Number(updatedCharacter.hit_dice_remaining || 0) - Number(character.hit_dice_remaining ?? level);
+  const restorations = ['Full HP restored', ...(slotProgression.max_slots.length ? ['All spell slots recovered'] : []), ...(restoredHitDice > 0 ? [`${restoredHitDice} Hit Dice restored`] : []), 'All abilities recharged'];
+  const response = { success: true, function_version:LONG_REST_CORE_VERSION, character: updatedCharacter, healing, restorations, narrative: 'You sleep deeply and wake restored.', rest_type: 'long', time_of_day: clock.time_of_day, clock: clock.clock, receipt_id: requestId, slot_derivation:slotProgression };
+  clock.world_state.__rest_receipts = [...receipts.filter((entry) => entry.token !== requestId), { token: requestId, response, completed_at: completedAt }].slice(-25);
+  if (Array.isArray(clock.world_state.__rest_requests)) clock.world_state.__rest_requests = clock.world_state.__rest_requests.map((entry) => entry.request_id === requestId ? { ...entry, status: 'committed', completed_at: completedAt } : entry);
   clock.world_state.active_concentration = null;
   clock.world_state.post_rest_continuity = { rested: true, completed_at: completedAt, clock_hour: clock.clock.after_hour, period: clock.clock.after_period };
   const updatedSession = await db.entities.GameSession.update(sessionId, { time_of_day: clock.time_of_day, world_state: clock.world_state });
