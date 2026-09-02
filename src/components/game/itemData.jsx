@@ -34,6 +34,7 @@ export const EQUIP_SLOTS = {
 // ─── Item Category → Default Slot mapping ─────────────────────────────────────
 export const CATEGORY_TO_SLOT = {
   'Weapon':           'mainhand',
+  'Staff':            'mainhand',
   'Armor':            'armor',
   'Shield':           'offhand',
   'Helmet':           'helmet',
@@ -52,15 +53,22 @@ export const CATEGORY_TO_SLOT = {
 };
 
 export const ALL_ITEM_CATEGORIES = [
-  'Weapon', 'Armor', 'Shield', 'Helmet', 'Cloak', 'Gloves', 'Boots', 'Belt',
+  'Weapon', 'Staff', 'Armor', 'Shield', 'Helmet', 'Cloak', 'Gloves', 'Boots', 'Belt',
   'Ring', 'Amulet', 'Wondrous Item', 'Potion', 'Ammunition', 'Tool', 'Adventuring Gear', 'Other'
 ];
 
 export const CATEGORY_ICONS = {
-  Weapon: '⚔️', Armor: '🥋', Shield: '🛡️', Helmet: '⛑️', Cloak: '🧥',
+  Weapon: '⚔️', Staff: '🦯', Armor: '🥋', Shield: '🛡️', Helmet: '⛑️', Cloak: '🧥',
   Gloves: '🧤', Boots: '👢', Belt: '🔗', Ring: '💍', Amulet: '📿',
   'Wondrous Item': '✨', Potion: '🧪', Ammunition: '🏹', Tool: '🔧',
   'Adventuring Gear': '🎒', Other: '📦',
+};
+
+export const getItemDisplayIcon = (item) => {
+  const categoryIcon = CATEGORY_ICONS[item?.category] || item?.icon || '📦';
+  if (item?.is_magic && item?.is_identified === false) return categoryIcon;
+  const rarityIcon = ITEM_RARITY[item?.rarity]?.icon;
+  return rarityIcon ? `${categoryIcon}${rarityIcon}` : categoryIcon;
 };
 
 // ─── Weapon Properties ────────────────────────────────────────────────────────

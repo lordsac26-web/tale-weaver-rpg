@@ -15,8 +15,9 @@ export default function IdentifyModal({ item, character, onIdentified, onClose }
     try {
       const response = await base44.functions.invoke('identifyMagicItemSkillCheck', {
         character_id: character.id,
-        item_id: item.id,
-        skill_type: selectedSkill
+        instance_id: item.instance_id || item.item_id || item.id,
+        skill_type: selectedSkill,
+        request_id: `identify:${character.id}:${item.instance_id || item.item_id || item.id}:${selectedSkill}`
       });
 
       setResult(response.data);

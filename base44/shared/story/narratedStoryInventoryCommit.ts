@@ -1,6 +1,6 @@
 import { executeRecoveryTransaction } from './recoveryTransaction.ts';
 
-export const NARRATED_RECOVERY_PARSER_VERSION = 'narrated-recovery-parser-v2.2.0';
+export const NARRATED_RECOVERY_PARSER_VERSION = 'narrated-recovery-parser-v2.3.0';
 const exactQuantity = (value) => Number.isInteger(Number(value)) && Number(value) > 0;
 
 export const isStructuredNarratedRecovery = (recovery) => {
@@ -12,7 +12,7 @@ export const isStructuredNarratedRecovery = (recovery) => {
 
 const NUMBER_WORDS: Record<string, number> = { one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20 };
 const QUANTITY = '(?:[1-9]\\d?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)';
-const ITEM_KIND = '(?:arrows?|bolts?|sling\\s+bullets?|daggers?|shortswords?|longswords?|bows?|crossbows?|battleaxes?|handaxes?|maces?|spears?|shields?|potions?|elixirs?|scrolls?|wands?|rings?|amulets?|necklaces?|cloaks?|boots?|gloves?|helms?|keys?|gold(?:\\s+pieces?)?|silver(?:\\s+pieces?)?|copper(?:\\s+pieces?)?)';
+const ITEM_KIND = '(?:arrows?|bolts?|sling\\s+bullets?|daggers?|shortswords?|longswords?|bows?|crossbows?|battleaxes?|handaxes?|maces?|spears?|shields?|potions?|elixirs?|scrolls?|staffs?|wands?|rings?|amulets?|necklaces?|cloaks?|boots?|gloves?|helms?|keys?|gold(?:\\s+pieces?)?|silver(?:\\s+pieces?)?|copper(?:\\s+pieces?)?)';
 const POSSESSION_ACQUISITION = '(?:recover|recovered|retrieve|retrieved|collect|collected|salvage|salvaged|obtain|obtained|gain|gained|pick(?:ed)?\\s+up|take|took|stow|stowed)';
 const DISCOVERY = '(?:find|found|discover|discovered|spot|spotted|notice|noticed)';
 const HISTORICAL_OR_EXISTING = /\b(?:remember|remembered|recall|recalled|previously|earlier|yesterday|last time|already|already-carried|carried|holding|held|remains? in|still in|in (?:your|the) (?:hand|pack|satchel|quiver|inventory))\b/i;

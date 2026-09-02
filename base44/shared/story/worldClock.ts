@@ -7,6 +7,7 @@ export const getPeriodForHour = (hour) => {
   if (value < 12) return 'Morning';
   if (value < 17) return 'Afternoon';
   if (value < 20) return 'Dusk';
+  if (value < 23) return 'Evening';
   return 'Night';
 };
 
@@ -28,6 +29,19 @@ export const elapsedHoursForRest = ({ intent = 'long_rest_8h', startHour }) => {
   if (intent !== 'sleep_until_dawn') return 8;
   const toNextDawn = (5 - startHour + 24) % 24;
   return toNextDawn >= 8 ? toNextDawn : toNextDawn + 24;
+};
+
+export const advanceWorldClockForWait = ({ timeOfDay, worldState, elapsedHours = 0, completedAt = new Date().toISOString() }) => {
+  const beforeHour = getClockHour({ timeOfDay, worldState });
+  const hours = Math.max(0, Number(elapsedHours) || 0);
+  const afterAbsolute = beforeHour + hours;
+  const afterHour = afterAbsolute % 24;
+  const dayRollover = Math.floor(afterAbsolute / 24);
+  const priorDay = Number(worldState?.day ?? worldState?.date_day ?? 0) || 0;
+  const baseTimestamp = Date.parse(worldState?.world_clock_timestamp || completedAt);
+  const timestamp = new Date((Number.isFinite(baseTimestamp) ? baseTimestamp : Date.now()) + hours * 60 * 60 * 1000).toISOString();
+  const period = getPeriodForHour(afterHour);
+  return { time_of_day:period, clock:{before_hour:beforeHour,after_hour:afterHour,elapsed_hours:hours,before_day:priorDay,after_day:priorDay+dayRollover,day_rollover:dayRollover,before_period:getPeriodForHour(beforeHour),after_period:period,period,before_label:`${formatWorldTime(beforeHour)} — ${getPeriodForHour(beforeHour)}`,after_label:`${formatWorldTime(afterHour)} — ${period}`,world_clock_timestamp:timestamp}, world_state:{...(worldState||{}),clock_hour:afterHour,day:priorDay+dayRollover,elapsed_hours:(Number(worldState?.elapsed_hours)||0)+hours,world_clock_timestamp:timestamp,last_time_advance_completed_at:completedAt,last_time_advance_duration_hours:hours,last_time_advance_before_hour:beforeHour,last_time_advance_after_hour:afterHour,last_time_advance_day_rollover:dayRollover,last_time_advance_period:period} };
 };
 
 export const advanceWorldClock = ({ timeOfDay, worldState, elapsedHours = 8, completedAt = new Date().toISOString() }) => {

@@ -6,6 +6,7 @@ import { getSpellSlotsForLevel } from './spellData';
 import { ConditionTooltip } from './GameTooltip';
 import XPBar from './XPBar';
 import { deriveConditionBadges } from '../../../base44/shared/spells/conditionIdentity';
+import { getPeriodForHour } from '../../../base44/shared/story/worldClock';
  
 export default function HUD({ character, session }) {
   if (!character) return null;
@@ -24,7 +25,7 @@ export default function HUD({ character, session }) {
   const totalSlotsMax = slotMaxArr.reduce((sum, val) => sum + val, 0);
   const CONDITION_PLACEHOLDERS = new Set(['', 'none', 'normal', 'no condition', 'no conditions', 'n/a', 'null', 'undefined']);
   const clockHour = Number.isInteger(Number(session?.world_state?.clock_hour)) ? Number(session.world_state.clock_hour) : null;
-  const clockPeriod = clockHour == null ? session?.time_of_day : (clockHour < 5 ? 'Midnight' : clockHour < 8 ? 'Dawn' : clockHour < 12 ? 'Morning' : clockHour < 17 ? 'Afternoon' : clockHour < 20 ? 'Dusk' : 'Night');
+  const clockPeriod = clockHour == null ? session?.time_of_day : getPeriodForHour(clockHour);
   const clockLabel = clockHour == null ? `${session?.time_of_day || 'Unknown time'}` : `${clockHour % 12 || 12}:00 ${clockHour >= 12 ? 'PM' : 'AM'} — ${clockPeriod}`;
   const visibleConditions = deriveConditionBadges(character.conditions, character.active_modifiers).filter(cond => {
     const name = String(typeof cond === 'string' ? cond : cond?.display_name || cond?.name || cond?.source || '').trim().toLowerCase();

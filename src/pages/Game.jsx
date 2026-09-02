@@ -358,6 +358,8 @@ export default function Game() {
           : choice.text) + mechanicsContext + tacticalContext,
       });
       const data = result.data;
+      if(data.time_advance?.clock&&data.session)setSession(data.session);
+      if(data.time_advance?.clock&&data.character)setCharacter(data.character);
       const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
       if (!acceptedStory.accepted) throw new Error(acceptedStory.reason === 'persistence_unconfirmed' ? 'The new story was not confirmed by the server.' : 'A newer story response superseded this one.');
 
@@ -560,6 +562,8 @@ export default function Game() {
       ].join('');
       const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', request_id: requestId, story_sequence: Date.now() * 1000 + storySequence, choice_context: { ...outcome, weapon_attack: buildThrownWeaponContext(action, character, outcome?.check?.success !== false) }, custom_input: action + checkResult + mechanicsContext });
       const data = result.data;
+      if(data.time_advance?.clock&&data.session)setSession(data.session);
+      if(data.time_advance?.clock&&data.character)setCharacter(data.character);
       const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
       if (!acceptedStory.accepted) throw new Error(`Story recovery required: ${acceptedStory.reason}.`);
       if (acceptedStory.hydration.text) setNarrative(prev => [...prev, { type: 'narration', text: acceptedStory.hydration.text }]);

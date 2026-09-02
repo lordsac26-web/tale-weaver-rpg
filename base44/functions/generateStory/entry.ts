@@ -18,6 +18,8 @@ import { guardAndCommitNarratedRecovery } from '../../shared/story/storyRecovery
 import { canonicalStoryResponsePayload, commitStoryTransition, hashStoryValue, hydrateLatestStoryEntry, storyPayloadFromCommit, STORY_TRANSITION_VERSION } from '../../shared/story/storyTransition.ts';
 import { buildGameHydration, finalizeGeneratedStoryResult } from '../../shared/story/storyBootstrap.ts';
 import { canonicalStoryStealthedCondition, classifyStealthSetupIntent, STEALTH_SETUP_HANDOFF_VERSION, withCanonicalStoryStealthed } from '../../shared/story/stealthSetupHandoff.ts';
+import { executeAuthoritativeShortWait, SHORT_WAIT_VERSION } from '../../shared/story/shortWait.ts';
+import { inferUniqueScenePickup, UNIQUE_SCENE_PICKUP_VERSION } from '../../shared/story/uniqueScenePickup.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -34,7 +36,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.4.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.5.0';
 
 Deno.serve(async (req) => {
   try {
@@ -49,7 +51,7 @@ Deno.serve(async (req) => {
     const combatState = await reconcileSessionCombat(base44, session_id);
     session = combatState.session;
 
-    const character = await base44.asServiceRole.entities.Character.get(session.character_id);
+    let character = await base44.asServiceRole.entities.Character.get(session.character_id);
     if (!character) return Response.json({ error: 'Character not found' }, { status: 404 });
     if (!characterBelongsToUser(character, user)) {
       return Response.json({ error: 'Session character does not belong to the authenticated user' }, { status: 403 });
@@ -73,6 +75,11 @@ Deno.serve(async (req) => {
     const ambushIntent = action === 'choice' ? classifyPrecisionAmbushIntent(selectedChoice) : null;
     const stealthSetupIntent = action === 'choice' ? classifyStealthSetupIntent(selectedChoice || custom_input, authoritativeChoiceContext?.check) : null;
     if (ambushIntent && (!authoritativeChoiceContext?.check || !Number.isFinite(Number(authoritativeChoiceContext.check.raw_d20)) || !Number.isFinite(Number(authoritativeChoiceContext.check.final_total)))) return Response.json({ error: 'Precision stealth strikes require a fresh persisted Stealth setup receipt before narration.', invalid: true }, { status: 409 });
+    let authoritativeWait=null;
+    if(action==='choice'&&storyRequestId){
+      const wait=await executeAuthoritativeShortWait({base44,ownerId:user.id,sessionId:session_id,characterId:character.id,requestId:storyRequestId,actionText:selectedChoice||custom_input});
+      if(wait.body?.handled){if(wait.status>=400)return Response.json(wait.body,{status:wait.status});authoritativeWait=wait.body;session=wait.body.session;character=wait.body.character;}
+    }
     if (action === 'choice' && storyRequestId) {
       const longRest = await executeLongRestStoryAction({ base44, ownerId: user.id, payload: { session_id, character_id: character.id, action_text: selectedChoice, choice_context: authoritativeChoiceContext, request_id: storyRequestId } });
       if (longRest.body?.handled) return Response.json({ narrative: longRest.body.narration, choices: [], long_rest: longRest.body }, { status: longRest.status });
@@ -106,8 +113,10 @@ Deno.serve(async (req) => {
     }
     let authoritativeRecovery = null;
     let itemRecovery = { applied: false, writes: 0 };
-    if (action === 'choice' && authoritativeChoiceContext?.recovery) {
-      const recovery = authoritativeChoiceContext.recovery;
+    const scenePickup=action==='choice'?inferUniqueScenePickup({actionText:selectedChoice||custom_input,storyLog:session.story_log,requestId:storyRequestId,sessionId:session_id,characterId:character.id,check:authoritativeChoiceContext.check}):null;
+    const requestedRecovery=authoritativeChoiceContext?.recovery||scenePickup?.recovery||null;
+    if (action === 'choice' && requestedRecovery) {
+      const recovery = requestedRecovery;
       const check = authoritativeChoiceContext.check || { success: recovery.rule?.type === 'automatic_recovery' };
       const committed = await guardAndCommitNarratedRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check, narrative:selectedChoice, recovery });
       if (!committed.body?.applied && committed.body?.reason !== 'not_applicable') return Response.json({ error:committed.body?.reason || 'Recovery did not commit.', invalid:true, recovery_transaction:committed.body?.recovery_transaction, writes:0 }, { status:committed.status >= 400 ? committed.status : 409 });
@@ -244,7 +253,9 @@ RECENT EVENTS: ${recentLog}
 ${gameDataContext}
 ${authoritativeSpellCast ? `AUTHORITATIVE SPELL RESULT: ${authoritativeSpellCast.spell_name} ${authoritativeSpellCast.already_processed ? 'was already processed; do not repeat it.' : `was cast at level ${authoritativeSpellCast.slot_level}.`} ${authoritativeSpellCast.concentration ? 'Concentration is active.' : ''} ${String(authoritativeSpellCast.spell_name || '').toLowerCase() === 'pass without trace' ? '+10 Stealth is active for the spell duration; narrate these facts exactly and do not deduct another slot.' : 'Do not deduct another slot or invent a different mechanical outcome.'}` : ''}
 ${authoritativeWeaponAction ? `AUTHORITATIVE THROWN-WEAPON RESULT: exactly one ${authoritativeWeaponAction.weapon_attack.item_name} (${authoritativeWeaponAction.weapon_attack.item_id}) was consumed. Target: ${authoritativeWeaponAction.weapon_attack.target}. Outcome: ${authoritativeWeaponAction.weapon_attack.hit ? 'hit' : 'miss'}${authoritativeWeaponAction.weapon_attack.kill ? ' and confirmed kill' : ''}. Narrate only this result; never invent a kill without confirmed kill.` : ''}
-${authoritativeRecovery ? `AUTHORITATIVE PROJECTILE RECOVERY: ${authoritativeRecovery.annotation} This inventory result is already committed when successful. Never claim any other item or quantity.` : ''}
+${authoritativeRecovery ? `AUTHORITATIVE ITEM RECOVERY: ${authoritativeRecovery.annotation} This inventory result is already committed when successful. Never claim any other item or quantity.` : ''}
+${authoritativeWait ? `AUTHORITATIVE TIME ADVANCE: ${authoritativeWait.time_advance.clock.before_label} to ${authoritativeWait.time_advance.clock.after_label}; exactly ${authoritativeWait.time_advance.clock.elapsed_hours} game hours elapsed. This is not a rest and restored no resources. Expired effects: ${(authoritativeWait.time_advance.expired_effects||[]).map(effect=>effect.name).join(', ')||'none'}. Narrate this exact passage of time without changing it.` : ''}
+${scenePickup ? `AUTHORITATIVE SCENE PICKUP: exactly one ${scenePickup.recovery.item.name} was already added from story entry ${scenePickup.provenance.source_story_index}. Its identity is unresolved; do not reveal rarity, powers, charges, attunement, or a canonical name.` : ''}
 ${completedCombat ? `COMPLETED COMBAT CONTEXT: Combat ${completedCombat.combat_id} ended in ${completedCombat.result}. Dead enemies: ${(completedCombat.defeated_enemies || completedCombat.dead_enemies || []).map((enemy) => enemy.name || enemy.id).join(', ') || 'all listed enemies'}. This is aftermath narration only: combat_trigger MUST be false, enemies MUST be [], and no dead enemy may escape or re-engage.` : ''}
 ${authoritativeChoiceContext?.authoritative_skill_resolution ? `AUTHORITATIVE SKILL CHECK: ${authoritativeChoiceContext.check.skill} DC${authoritativeChoiceContext.check.dc}; original d20 ${authoritativeChoiceContext.check.raw_d20} + authoritative modifier ${authoritativeChoiceContext.check.modifier_total} = ${authoritativeChoiceContext.check.final_total}; ${authoritativeChoiceContext.check.success ? 'SUCCESS' : 'FAILURE'}. The narration, condition update, HP change, and combat trigger must honor this exact receipt.` : ''}
 ${ambushIntent ? `PENDING AMBUSH CONTRACT: This action resolves ONLY the Stealth setup phase. Do not narrate an arrow release, weapon attack, hit, damage, target defeat, concentration break, or death. If combat starts, the living ritual target must appear exactly once in enemies with complete HP and AC; the actual strike will be resolved later through player_attack.` : ''}
@@ -612,7 +623,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json({ ...result, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
+    return Response.json({ ...result, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);

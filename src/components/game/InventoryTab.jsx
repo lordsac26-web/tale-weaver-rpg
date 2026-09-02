@@ -4,7 +4,7 @@ import ConsumableUseModal from './ConsumableUseModal';
 import AddItemForm from './AddItemForm';
 import {
   ITEM_RARITY, EQUIP_SLOTS, CATEGORY_TO_SLOT, ALL_ITEM_CATEGORIES, CATEGORY_ICONS,
-  MAGIC_PROPERTIES, getEquipConstraints, computeAC
+  MAGIC_PROPERTIES, getEquipConstraints, computeAC, getItemDisplayIcon
 } from './itemData';
 import { motion, AnimatePresence } from 'framer-motion';
 import { resolveItemBonuses } from './itemBonuses';
@@ -161,12 +161,12 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
   return (
     <div className="rounded-xl overflow-hidden transition-all" style={rowStyle}>
       <div className="flex items-center gap-2 p-2.5">
-        <span className="text-base flex-shrink-0">{CATEGORY_ICONS[item.category] || '📦'}</span>
+        <span className="text-base flex-shrink-0">{getItemDisplayIcon(item)}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-medium" style={{ color: rarity.color, fontFamily: 'EB Garamond, serif' }}>{formatInventoryItemName(item)}</span>
             {!formatInventoryItemName(item).includes('remaining') && item.quantity > 1 && <span className="text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>×{item.quantity}</span>}
-            <RarityBadge rarity={item.rarity || 'common'} />
+            {!isUnidentifiedMagic && <RarityBadge rarity={item.rarity || 'common'} />}
             {item.requires_attunement && <span className="text-xs px-1 py-0.5 rounded" style={{ background: 'rgba(60,20,80,0.5)', border: '1px solid rgba(160,80,220,0.3)', color: '#c4b5fd', fontSize: '0.58rem' }}>Attune</span>}
             {isEquipped && <span className="text-xs px-1.5 py-0.5 rounded-full badge-green">Equipped</span>}
           </div>
