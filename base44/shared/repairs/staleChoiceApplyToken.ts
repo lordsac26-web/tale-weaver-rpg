@@ -13,8 +13,8 @@ async function signingKey({ scope, receipt, character }) {
   return crypto.subtle.importKey('raw', digest, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
 
-export async function createStaleChoiceApplyToken({ scope, receipt, character, expectedHashes, classification, proposalHash }) {
-  const payload = { issuer: ISSUER, exp: Date.now() + 15 * 60 * 1000, nonce: crypto.randomUUID(), character_id: scope.characterId, session_id: scope.sessionId, request_id: receipt?.request_id, receipt_key: scope.receiptKey, expected_hashes: expectedHashes, classification, proposal_hash: proposalHash };
+export async function createStaleChoiceApplyToken({ scope, receipt, character, expectedHashes, classification, proposalHash, expiresInMs = 15 * 60 * 1000 }) {
+  const payload = { issuer: ISSUER, exp: Date.now() + expiresInMs, nonce: crypto.randomUUID(), character_id: scope.characterId, session_id: scope.sessionId, request_id: receipt?.request_id, receipt_key: scope.receiptKey, expected_hashes: expectedHashes, classification, proposal_hash: proposalHash };
   const body = encode(encoder.encode(JSON.stringify(payload)));
   const key = await signingKey({ scope, receipt, character });
   const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(body)));

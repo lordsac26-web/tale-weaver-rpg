@@ -1,5 +1,7 @@
 import { executeLongRestCore } from './longRestCore.ts';
 
+export const LONG_REST_STORY_VERSION='long-rest-story-action-v1.1.0';
+
 const LONG_REST = /\b(take\s+(?:a\s+)?long\s+rest|long\s+rest|make\s+camp(?:\s+and)?\s+rest(?:\s+for\s+the\s+night)?|sleep\s+until\s+dawn|rest\s+for\s+the\s+night)\b/i;
 const NEGATED = /\b(do\s+not|don't|cannot|can't|should\s+i|can\s+i|how\s+(?:do|can)|what\s+(?:is|does)).{0,40}\b(rest|sleep|camp)\b|\?\s*$/i;
 const ACCEPTED_REQUEST = /^ask\s+if\s+i\s+can\s+(?:stay|remain).{0,40}\blong\s+rest\b.{0,120}\b(?:then|after|when)\b/i;
@@ -35,5 +37,5 @@ export async function executeLongRestStoryAction({ base44, ownerId, payload }) {
     const entry = { timestamp: new Date().toISOString(), action: 'choice', request_id: parentId, player_choice: payload.action_text, text: narration, choices: [], long_rest: { receipt_id: receiptId, intent: parsed.intent, clock: core.body.clock } };
     await base44.asServiceRole.entities.GameSession.update(session.id, { story_log: [...(session.story_log || []), entry].slice(-60) });
   }
-  return { status: 200, body: { handled: true, success: true, already_processed: !!core.body.already_processed, parsed_intent: parsed, parent_id: parentId, receipt_id: receiptId, rest: core.body, character, session, narration: existing?.text || narration } };
+  return { status: 200, body: { handled: true, success: true, already_processed: !!core.body.already_processed, function_version:LONG_REST_STORY_VERSION, parsed_intent: parsed, parent_id: parentId, receipt_id: receiptId, rest: core.body, character, session, narration: existing?.text || narration } };
 }

@@ -17,11 +17,12 @@ const isArcaneSubclass = (subclass = '') => {
 };
 
 export function getClassBreakdown(character = {}) {
+  const secondaryLevels=(character.multiclass||[]).reduce((sum,entry)=>sum+(Number(entry?.levels)||0),0);
   return [
     {
       className: character.class,
       subclass: character.subclass || '',
-      levels: character.level || 1,
+      levels: Math.max(1,(Number(character.level)||1)-secondaryLevels),
       primary: true,
     },
     ...(character.multiclass || []).map(mc => ({

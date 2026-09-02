@@ -1,6 +1,8 @@
 import { advanceWorldClock, elapsedHoursForRest, getClockHour } from './worldClock.ts';
 import { deriveCanonicalSpellSlots } from '../spells/slotProgression.ts';
 
+export const LONG_REST_CORE_VERSION='authoritative-long-rest-core-v1.1.0';
+
 export async function executeLongRestCore({ db, ownerId, characterId, sessionId, requestId, intent = 'long_rest_8h', targetPeriod = null, explicitHours = null }) {
   const [character, session] = await Promise.all([db.entities.Character.get(characterId), db.entities.GameSession.get(sessionId)]);
   if (!character || !session || character.created_by_id !== ownerId || session.character_id !== characterId || session.in_combat) return { status: 403, body: { error: 'Rest ownership chain is invalid.' } };
@@ -28,7 +30,7 @@ export async function executeLongRestCore({ db, ownerId, characterId, sessionId,
   if (character.class === 'Bard') { const max = Math.max(1, Math.floor(((Number(character.charisma) || 10) - 10) / 2)); updates.bardic_inspiration_max = max; updates.bardic_inspiration_remaining = max; }
   await db.entities.Character.update(characterId, updates);
   const updatedCharacter = await db.entities.Character.get(characterId);
-  const response = { success: true, character: updatedCharacter, time_of_day: clock.time_of_day, clock: clock.clock, receipt_id: requestId };
+  const response = { success: true, function_version:LONG_REST_CORE_VERSION, character: updatedCharacter, time_of_day: clock.time_of_day, clock: clock.clock, receipt_id: requestId, slot_derivation:slotProgression };
   clock.world_state.__rest_receipts = [...receipts, { token: requestId, response, completed_at: completedAt }].slice(-25);
   clock.world_state.active_concentration = null;
   clock.world_state.post_rest_continuity = { rested: true, completed_at: completedAt, clock_hour: clock.clock.after_hour, period: clock.clock.after_period };

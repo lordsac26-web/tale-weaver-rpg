@@ -18,6 +18,11 @@ async function inspect(db){
   return {character,session,active,entry,later,wait,waitCount:waits.length,staff,hashes,index};
 }
 
+export function buildLongRestCorrectionUpdate({character,proposal,slotDerivation,proposalHash,completedAt=new Date().toISOString()}){
+  const receipt={token:`${LIVE_LONG_REST_SCOPE.requestId}:long-rest-correction:0`,version:MISCLASSIFIED_LONG_REST_REPAIR_VERSION,immutable:true,parent_request_id:LIVE_LONG_REST_SCOPE.requestId,supersedes_short_wait_request_id:LIVE_LONG_REST_SCOPE.requestId,credited_elapsed_hours:12,clock_advanced:false,narration_rewritten:false,spell_slots_before:proposal.spell_slots_before,spell_slots_after:{},canonical_slot_derivation:slotDerivation,proposal_hash:proposalHash,completed_at:completedAt};
+  return {receipt,updates:{spell_slots:{},long_rest_abilities:{...(character.long_rest_abilities||{}),[CORRECTIONS]:[...((character.long_rest_abilities||{})[CORRECTIONS]||[]).slice(-24),receipt]}}};
+}
+
 export async function auditMisclassifiedLongRestResources({db,mode='dry_run',applyToken=null}){
   const state=await inspect(db);if(!state.character||!state.session)return {status:404,body:{success:false,error:'Protected repair scope is missing.',writes:0}};
   const prior=priorCorrection(state.character);if(prior)return {status:200,body:{success:true,mode,classification:'misclassified_completed_long_rest_resources',safe_to_repair:false,already_processed:true,writes:0,function_version:MISCLASSIFIED_LONG_REST_REPAIR_VERSION,receipt:prior}};
@@ -29,8 +34,8 @@ export async function auditMisclassifiedLongRestResources({db,mode='dry_run',app
   if(mode!=='apply')return {status:200,body:audit};if(!safe)return {status:409,body:{...audit,success:false,error:'Exact repair guards failed.'}};
   const verified=await verifyStaleChoiceApplyToken({token:applyToken,scope:LIVE_LONG_REST_SCOPE,receipt:state.wait,character:state.character});
   if(!verified.ok||verified.payload?.proposal_hash!==proposalHash||JSON.stringify(verified.payload?.expected_hashes)!==JSON.stringify(EXPECTED))return {status:verified.status||409,body:{success:false,error:verified.error||'Apply token payload mismatch.',writes:0}};
-  const at=new Date().toISOString(),receipt={token:`${LIVE_LONG_REST_SCOPE.requestId}:long-rest-correction:0`,version:MISCLASSIFIED_LONG_REST_REPAIR_VERSION,immutable:true,parent_request_id:LIVE_LONG_REST_SCOPE.requestId,supersedes_short_wait_request_id:LIVE_LONG_REST_SCOPE.requestId,credited_elapsed_hours:12,clock_advanced:false,narration_rewritten:false,spell_slots_before:proposal.spell_slots_before,spell_slots_after:{},canonical_slot_derivation:slots,proposal_hash:proposalHash,completed_at:at};
-  const abilities={...(state.character.long_rest_abilities||{}),[CORRECTIONS]:[...((state.character.long_rest_abilities||{})[CORRECTIONS]||[]).slice(-24),receipt]};
-  await db.entities.Character.update(state.character.id,{spell_slots:{},long_rest_abilities:abilities});
+  const correction=buildLongRestCorrectionUpdate({character:state.character,proposal,slotDerivation:slots,proposalHash});
+  await db.entities.Character.update(state.character.id,correction.updates);
+  const {receipt}=correction;
   return {status:200,body:{success:true,mode:'apply',classification:'misclassified_completed_long_rest_resources',safe_to_repair:true,applied:true,writes:1,function_version:MISCLASSIFIED_LONG_REST_REPAIR_VERSION,proposal_hash:proposalHash,receipt}};
 }
