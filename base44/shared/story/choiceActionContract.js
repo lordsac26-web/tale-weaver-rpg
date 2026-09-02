@@ -24,10 +24,10 @@ export function classifyLegacyChoiceAction(text) {
 export function normalizeChoiceActionContract(choice = {}) {
   const text = String(choice?.text || '').trim();
   const legacyAttack = classifyLegacyChoiceAction(text);
-  if (legacyAttack) return { ...choice, ...legacyAttack, text, skill_check: null, dc: null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
+  if (legacyAttack) return { ...choice, ...legacyAttack, text, skill_check: null, dc: null, recovery: null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
   const requestedType = CHOICE_ACTION_TYPES.includes(choice?.action_type) ? choice.action_type : null;
   const skill = canonicalSkill(choice?.skill_check);
   const dc = Number(choice?.dc ?? choice?.skill_check?.dc);
   if (requestedType === 'skill_check' || (!requestedType && skill && Number.isFinite(dc))) return { ...choice, text, action_type: 'skill_check', skill_check: skill, dc: Number.isFinite(dc) ? dc : null, weapon_attack: null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
-  return { ...choice, text, action_type: requestedType || 'utility', skill_check: null, dc: null, weapon_attack: requestedType === 'weapon_attack' ? choice.weapon_attack || null : null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
+  return { ...choice, text, action_type: requestedType || 'utility', skill_check: null, dc: null, recovery: requestedType === 'weapon_attack' ? null : choice.recovery || null, weapon_attack: requestedType === 'weapon_attack' ? choice.weapon_attack || null : null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
 }
