@@ -16,7 +16,8 @@ export async function executePlayerAttackCore({ base44, sessionId, combatId, cha
   }
   const current = combat.combatants?.[combat.current_turn_index];
   if (!current || current.type !== 'player' || current.id !== characterId) return { status: 409, body: { error: 'It is not this character’s turn.', invalid: true } };
-  if (Number(combat.world_state?.actions_used_this_turn || 0) >= getActionsPerTurn(character)) return { status: 409, body: { error: 'No actions remain this turn.', invalid: true } };
+  const attacksUsed = Number.isFinite(Number(combat.world_state?.attacks_used_this_action)) ? Number(combat.world_state.attacks_used_this_action) : Number(combat.world_state?.actions_used_this_turn || 0);
+  if (attacksUsed >= getActionsPerTurn(character)) return { status: 409, body: { error: 'No attacks remain in this Attack action.', invalid: true } };
   const response = await handler({ base44, session_id: sessionId, combat_id: combatId, character_id: characterId, payload, request_id: requestId, ...(rollD20Fn ? { roll_d20: rollD20Fn } : {}) });
   const body = await response.json();
   if (!response.ok || !requestId) return { status: response.status, body };

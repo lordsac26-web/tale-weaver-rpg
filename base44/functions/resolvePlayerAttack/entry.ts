@@ -15,13 +15,14 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { session_id, combat_id, character_id, payload } = await req.json();
+    const { session_id, combat_id, character_id, payload, request_id } = await req.json();
 
     const result = await base44.functions.invoke('combatEngine', {
       action: 'player_attack',
       session_id,
       combat_id,
       character_id,
+      request_id,
       payload,
     });
 

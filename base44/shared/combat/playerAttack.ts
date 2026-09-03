@@ -1052,6 +1052,15 @@ export async function handlePlayerAttack(ctx) {
   const actionsPerTurn = getActionsPerTurn(character);
   const { nextIndex, nextRound, actionsRemaining, worldState: newWorldState } =
     resolveActionAndAdvance(combatLog, updatedCombatants, character, { isQuickened: isQuickenedMain, isHordeBreaker: isHordeBreakerAttack });
+  const attacksUsedThisAction = Math.max(0, actionsPerTurn - actionsRemaining);
+  newWorldState.attacks_used_this_action = actionsRemaining > 0 ? attacksUsedThisAction : 0;
+  newWorldState.attacks_remaining = Math.max(0, actionsRemaining);
+  newWorldState.last_attack_sequence = { request_id: request_id || null, attacks_used_this_action: attacksUsedThisAction, attacks_remaining: Math.max(0, actionsRemaining) };
+  logEntry.attack_sequence = newWorldState.last_attack_sequence;
+  if (combatLog.world_state?.pending_ambush_attack) {
+    newWorldState.pending_ambush_attack = false;
+    newWorldState.ambush_setup = { ...(combatLog.world_state?.ambush_setup || {}), attack_resolved: true, consumed_by_request_id: request_id || null };
+  }
   // Mark Sneak Attack consumed for this turn so it can't trigger again until next turn
   if (sneakAttackApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.sneak_attack_used = true;
   // Clear Channel Divinity: Guided Strike bonus (consumed by this attack)

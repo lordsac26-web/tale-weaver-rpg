@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import HUD from '@/components/game/HUD';
 import StoryPanel from '@/components/game/StoryPanel';
 import CombatPanel from '@/components/game/CombatPanel';
+import CombatActionError from '@/components/game/CombatActionError';
 import CharacterSheet from '@/components/game/CharacterSheet';
 import DiceRoller from '@/components/game/DiceRoller';
 import SceneVisualizerModal from '@/components/game/SceneVisualizerModal';
@@ -41,6 +42,7 @@ import { normalizeChoiceActionContract, CHOICE_ACTION_FRONTEND_VERSION } from '.
 import { acceptCompositePreflightResponse, buildCompositePreflightRequest, COMPOSITE_UI_TRANSITION_VERSION, routeStoryAction } from '../../base44/shared/story/compositeActionTransition';
 import { prepareStorySkillCheck, resolveStorySkillRoll } from '@/lib/storySkillCheck';
 import { acceptSequencedStoryPayload, hydrateLatestStoryEntry, STORY_TRANSITION_VERSION } from '../../base44/shared/story/storyTransition';
+import { beginCombatIntent, buildCombatRequestKey, COMBAT_FOLLOWUP_TRANSITION_VERSION, finishCombatIntent, oneEphemeralCombatError } from '../../base44/shared/combat/combatFollowupTransition';
 
 const getFunctionErrorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.response?.data?.message ||
@@ -89,6 +91,8 @@ export default function Game() {
   const [mainViewTab, setMainViewTab] = useState('story');
   const [combatViewTab, setCombatViewTab] = useState('combat'); // 'story' | 'combat' | 'journal' — for mobile
   const [combatSyncError, setCombatSyncError] = useState(null);
+  const [combatActionError, setCombatActionError] = useState(null);
+  const combatIntentRef = useRef({ requestId: null, inFlight: false });
   const [showLevelUpToast, setShowLevelUpToast] = useState(false);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   // Manual dice-roll prompt: when set, a pre-configured roll modal is shown and
@@ -939,6 +943,9 @@ export default function Game() {
   const handlePlayerAttack = async (targetId, actionType, weaponOrSpell, modifiers = {}) => {
     if (!combat?.id && !session?.combat_state?.combat_id) return false;
     const combatId = combat?.id || session?.combat_state?.combat_id;
+    const attackRequestId = modifiers?.request_id || buildCombatRequestKey({ combat:{...combat,id:combatId}, sessionId, characterId:character?.id, targetId, actionType });
+    if (!beginCombatIntent(combatIntentRef, attackRequestId)) return false;
+    setCombatActionError(null);
     setCombatLoading(true);
 
     const isSpell = actionType === 'spell';
@@ -950,22 +957,23 @@ export default function Game() {
 
     let result;
     try {
-      const attackRequestId = modifiers?.request_id || `player-attack:${combatId}:${combat?.round || 1}:${combat?.current_turn_index || 0}:${combat?.world_state?.actions_used_this_turn || 0}:${targetId}:${actionType}`;
       result = await base44.functions.invoke('combatEngine', {
         action: 'player_attack', session_id: sessionId, combat_id: combatId,
         character_id: character?.id, request_id: attackRequestId, payload: { target_id: targetId, weapon, spell, modifiers, twin_target_id: twinTargetId }
       });
     } catch (err) {
-      setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'That action could not be resolved.'), success: false }]);
+      setCombatActionError(current => oneEphemeralCombatError(current, getFunctionErrorMessage(err, 'That action could not be resolved.')));
+      finishCombatIntent(combatIntentRef, attackRequestId);
       setCombatLoading(false);
       return false;
     }
 
     const data = result.data;
+    finishCombatIntent(combatIntentRef, attackRequestId);
 
     // Invalid action (e.g. out of ammunition) — surface message, don't consume the turn
     if (data?.invalid) {
-      setNarrative(prev => [...prev, { type: 'roll_result', text: data.error || 'That action is not available.', success: false }]);
+      setCombatActionError(current => oneEphemeralCombatError(current, data.error || 'That action is not available.'));
       if (data.target_defeated) await reloadCombat(combatId);
       setCombatLoading(false);
       return false;
@@ -1505,7 +1513,7 @@ export default function Game() {
   const combatPending = !!(session?.in_combat && validCombatId && !combat && !combatSyncError);
 
   return (
-    <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" data-story-transition-version={STORY_TRANSITION_VERSION} data-choice-action-transition-version={CHOICE_ACTION_FRONTEND_VERSION} data-composite-action-transition-version={COMPOSITE_UI_TRANSITION_VERSION} data-camp-rest-transition-version={CAMP_REST_TRANSITION_VERSION} style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
+    <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" data-story-transition-version={STORY_TRANSITION_VERSION} data-choice-action-transition-version={CHOICE_ACTION_FRONTEND_VERSION} data-composite-action-transition-version={COMPOSITE_UI_TRANSITION_VERSION} data-camp-rest-transition-version={CAMP_REST_TRANSITION_VERSION} data-combat-followup-transition-version={COMBAT_FOLLOWUP_TRANSITION_VERSION} style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
       {/* HUD */}
       <HUD character={character} session={session} />
 
@@ -1556,6 +1564,7 @@ export default function Game() {
       </div>
 
       {showAskDM && <AskDMDialog sessionId={sessionId} characterId={character?.id} combatId={inCombat ? validCombatId : null} onClose={() => setShowAskDM(false)} />}
+      <CombatActionError message={combatActionError} onClose={() => setCombatActionError(null)} />
 
       {/* Main Game Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">

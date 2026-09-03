@@ -239,7 +239,7 @@ export async function handleStartCombat(ctx) {
     log_entries: [{ round: 1, text: `⚔️ Combat begins! Initiative: ${combatants.map(c => `${c.name} (${c.initiative_total})`).join(' → ')}` }],
     is_active: true,
     result: 'ongoing',
-    world_state: { actions_used_this_turn: 0, bonus_action_used: false, reaction_used: false, concentration_spell: activeConcentration?.source || null, concentration_caster: activeConcentration ? character.name : null, ...(ambushSetup ? { pending_ambush_attack: true, ambush_setup: ambushSetup, ambush_source_target: combatants.find((entry) => entry.type === 'enemy' && /necromancer|ritual master|ritualist|obsidian circle scout/i.test(entry.name)) } : {}) }
+    world_state: { actions_used_this_turn: 0, attacks_used_this_action: 0, attacks_remaining: 0, bonus_action_used: false, reaction_used: false, concentration_spell: activeConcentration?.source || null, concentration_caster: activeConcentration ? character.name : null, ...(ambushSetup ? { pending_ambush_attack: true, ambush_setup: ambushSetup, ambush_source_target: combatants.find((entry) => entry.type === 'enemy' && /necromancer|ritual master|ritualist|obsidian circle scout/i.test(entry.name)) } : {}) }
     });
     await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: combatLog.id } });
   } catch (error) {

@@ -204,7 +204,7 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'player_attack') {
-    const result = await executePlayerAttackCore({ base44, sessionId: session_id, combatId: combat_id, characterId: character_id, payload, requestId, handler: handlePlayerAttack, ownerId: user.id });
+    const result = await executePlayerAttackCore({ base44, sessionId: session_id, combatId: combat_id, characterId: character_id, payload, requestId: request_id, handler: handlePlayerAttack, ownerId: user.id });
     return Response.json(result.body, { status: result.status });
   }
   const response = await handler(ctx);

@@ -23,6 +23,7 @@ import CombatStatusDashboard from './CombatStatusDashboard';
 import SmiteSlotPicker from './SmiteSlotPicker';
 import CombatActWindow from './CombatActWindow';
 import { ammoStatusForWeapon } from '@/lib/ammunition';
+import { buildCombatRequestKey } from '../../../base44/shared/combat/combatFollowupTransition';
 
 export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent, onCharacterUpdate, onCombatAct, actEvaluating }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
@@ -112,6 +113,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const handleAction = () => {
     const details = action === 'spell' && selectedSpell ? (SPELL_DETAILS[selectedSpell] || {}) : {};
     const effectiveTarget = details.is_utility ? (player?.id || selectedTarget) : selectedTarget;
+    const request_id = buildCombatRequestKey({ combat, sessionId:combat?.session_id, characterId:character?.id, targetId:effectiveTarget, actionType:action });
     if (!effectiveTarget) return;
     if (action === 'spell' && selectedSpell) {
       // Warn player if they're replacing concentration
@@ -130,7 +132,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         special_effects: details.special_effects || [],
         slot_level: selectedSpellLevel || selectedSpellBaseLevel || 1,
         base_level: selectedSpellBaseLevel || 1,
-      }, { ...combatModifiers, metamagic, twin_target_id: metamagic.twinned ? twinTargetId : null });
+      }, { ...combatModifiers, request_id, metamagic, twin_target_id: metamagic.twinned ? twinTargetId : null });
     } else if (action === 'attack') {
       const weapon = getActiveWeapon() || { 
         name: 'Unarmed Strike',
@@ -140,9 +142,9 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         type: 'melee',
         properties: []
       };
-      onPlayerAttack(selectedTarget, 'attack', weapon, { ...combatModifiers, smite_slot_level: smiteSlotLevel || undefined });
+      onPlayerAttack(selectedTarget, 'attack', weapon, { ...combatModifiers, request_id, smite_slot_level: smiteSlotLevel || undefined });
     } else {
-      onPlayerAttack(selectedTarget, action, null, combatModifiers);
+      onPlayerAttack(selectedTarget, action, null, { ...combatModifiers, request_id });
     }
   };
 
@@ -155,6 +157,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         session_id: combat?.session_id,
         combat_id: combat?.id,
         character_id: character?.id,
+        request_id: buildCombatRequestKey({ combat, sessionId:combat?.session_id, characterId:character?.id, actionType:'dodge' }),
         payload: {},
       });
       if (res.data?.success) {
@@ -175,6 +178,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         session_id: combat?.session_id,
         combat_id: combat?.id,
         character_id: character?.id,
+        request_id: buildCombatRequestKey({ combat, sessionId:combat?.session_id, characterId:character?.id, targetId:selectedTarget, actionType:'grapple' }),
         payload: { target_id: selectedTarget },
       });
       if (res.data?.log_entry) {
