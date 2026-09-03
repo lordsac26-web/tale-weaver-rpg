@@ -1087,7 +1087,9 @@ export default function Game() {
     setCombatLoading(true);
     const result = await base44.functions.invoke('combatEngine', {
       action: 'offhand_attack', session_id: sessionId, combat_id: combatId,
-      character_id: character?.id, payload: { target_id: targetId, modifiers }
+      character_id: character?.id,
+      request_id: modifiers?.request_id || buildCombatRequestKey({ combat:{...combat,id:combatId}, sessionId, characterId:character?.id, targetId, actionType:'offhand_attack' }),
+      payload: { target_id: targetId, modifiers }
     });
     const data = result.data;
     if (data?.invalid) {
@@ -1132,7 +1134,8 @@ export default function Game() {
       safety++;
       const res = await base44.functions.invoke('combatEngine', {
         action: 'legendary_action', session_id: sessionId, combat_id: combatId,
-        character_id: character?.id, payload: {}
+        character_id: character?.id,
+        request_id: buildCombatRequestKey({ combat:log, sessionId, characterId:character?.id, actionType:'legendary_action', suffix:String(safety) }), payload: {}
       });
       if (res.data?.skipped || (res.data?.legendary_actions_remaining ?? 0) < 0) break;
       if (res.data?.log_entry) {
@@ -1179,7 +1182,8 @@ export default function Game() {
         if (current?.type === 'enemy' && current?.is_conscious) {
           await new Promise(resolve => setTimeout(resolve, 600));
           const downedRes = await base44.functions.invoke('combatEngine', {
-            action: 'enemy_turn', session_id: sessionId, combat_id: combatId, character_id: character?.id, payload: {}
+            action: 'enemy_turn', session_id: sessionId, combat_id: combatId, character_id: character?.id,
+            request_id: buildCombatRequestKey({ combat:log, sessionId, characterId:character?.id, targetId:current?.id, actionType:'enemy_turn', suffix:'downed' }), payload: {}
           });
           if (downedRes.data?.log_entry) {
             setNarrative(prev => [...prev, { type: 'roll_result', text: downedRes.data.log_entry.text, success: !downedRes.data.hit }]);
@@ -1197,7 +1201,8 @@ export default function Game() {
         await new Promise(resolve => setTimeout(resolve, 800));
         
         const result = await base44.functions.invoke('combatEngine', {
-          action: 'enemy_turn', session_id: sessionId, combat_id: combatId, character_id: character?.id, payload: {}
+          action: 'enemy_turn', session_id: sessionId, combat_id: combatId, character_id: character?.id,
+          request_id: buildCombatRequestKey({ combat:log, sessionId, characterId:character?.id, targetId:current?.id, actionType:'enemy_turn' }), payload: {}
         });
         const data = result.data;
         if (data.log_entry) {
@@ -1224,7 +1229,8 @@ export default function Game() {
       } else {
         await new Promise(resolve => setTimeout(resolve, 500));
         await base44.functions.invoke('combatEngine', {
-          action: 'next_turn', session_id: sessionId, combat_id: combatId, character_id: character?.id, payload: {}
+          action: 'next_turn', session_id: sessionId, combat_id: combatId, character_id: character?.id,
+          request_id: buildCombatRequestKey({ combat:log, sessionId, characterId:character?.id, targetId:current?.id, actionType:'next_turn' }), payload: {}
         });
         await reloadCombat(combatId);
       }
@@ -1343,6 +1349,7 @@ export default function Game() {
       session_id: sessionId,
       combat_id: combatId,
       character_id: character?.id,
+      request_id: buildCombatRequestKey({ combat:{...combat,id:combatId}, sessionId, characterId:character?.id, actionType:'end_turn' }),
       payload: {}
     });
     

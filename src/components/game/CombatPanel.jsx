@@ -407,6 +407,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
                         session_id: combat?.session_id,
                         combat_id: combat?.id,
                         character_id: character?.id,
+                        request_id: buildCombatRequestKey({ combat, sessionId:combat?.session_id, characterId:character?.id, actionType:'action_surge' }),
                         payload: {},
                       });
                       if (res.data?.success) {
