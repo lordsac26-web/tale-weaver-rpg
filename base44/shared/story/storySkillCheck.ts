@@ -40,7 +40,6 @@ export function applyAuthoritativeStorySkillOutcome(result, actionText, resoluti
   if (!resolution.success) return authoritative;
   return {
     ...authoritative,
-    narrative: 'You remain still and patient, preserving your concealed vantage without betraying your position. The threat continues toward the bait, unaware of you, and no further action is taken.',
     combat_trigger: false,
     enemies: [],
     hp_change: 0,

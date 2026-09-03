@@ -25,7 +25,9 @@ export function normalizeGeneratedChoices(value) {
 }
 
 const validChoiceSet = (choices) => choices.length === 4 && new Set(choices.map((choice) => choice.text.toLowerCase())).size === 4 && choices.every((choice) => choice.text && (choice.action_type !== 'skill_check' || (choice.skill_check && Number.isFinite(Number(choice.dc)))));
-const sameChoices = (left, right) => JSON.stringify(normalizeGeneratedChoices(left)) === JSON.stringify(normalizeGeneratedChoices(right));
+const choiceTokens=(value)=>new Set(normalizeGeneratedChoices(value).flatMap((choice)=>String(choice.text||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/ +/).filter((token)=>token.length>2)));
+const choiceSimilarity=(left,right)=>{const a=choiceTokens(left),b=choiceTokens(right),intersection=[...a].filter((token)=>b.has(token)).length,union=new Set([...a,...b]).size;return union?intersection/union:0;};
+const sameChoices = (left, right) => JSON.stringify(normalizeGeneratedChoices(left)) === JSON.stringify(normalizeGeneratedChoices(right)) || choiceSimilarity(left,right)>=.82;
 
 export function groundedFallbackChoices({ location = 'the current area', requestId = '', previousChoices = [] } = {}) {
   const seed = [...String(requestId)].reduce((sum, char) => sum + char.charCodeAt(0), 0);

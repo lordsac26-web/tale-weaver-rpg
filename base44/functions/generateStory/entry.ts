@@ -25,6 +25,7 @@ import { executeStoryWeaponAttack, STORY_WEAPON_ATTACK_VERSION } from '../../sha
 import { preflightCompositeAction, COMPOSITE_ACTION_PREFLIGHT_VERSION } from '../../shared/story/compositeActionPreflight.ts';
 import { COMPOSITE_ACTION_CONTRACT_VERSION } from '../../shared/story/compositeActionContract.js';
 import { craftingNarrationNeedsReceipt, CRAFTING_TRANSACTION_VERSION, executeCraftingTransaction } from '../../shared/craftingTransaction.ts';
+import { buildInfiltrationSessionUpdate, guardInfiltrationBeat, INFILTRATION_ADVANCEMENT_VERSION, planInfiltrationAdvancement } from '../../shared/story/infiltrationSuccessAdvancement.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -41,7 +42,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.8.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.9.0';
 
 Deno.serve(async (req) => {
   try {
@@ -90,6 +91,7 @@ Deno.serve(async (req) => {
     const ambushIntent = action === 'choice' && selectedChoiceContract.action_type !== 'weapon_attack' ? classifyPrecisionAmbushIntent(selectedChoice) : null;
     const narrativeRangedIntent=action==='choice'&&!ambushIntent&&selectedChoiceContract.action_type==='weapon_attack'?selectedChoiceContract.weapon_attack:null;
     const stealthSetupIntent = action === 'choice' ? classifyStealthSetupIntent(selectedChoice || custom_input, authoritativeChoiceContext?.check) : null;
+    const infiltrationPlan = action === 'choice' ? planInfiltrationAdvancement({ session, actionText:selectedChoice||custom_input, check:authoritativeChoiceContext?.check, requestId:storyRequestId }) : null;
     if (ambushIntent && (!authoritativeChoiceContext?.check || !Number.isFinite(Number(authoritativeChoiceContext.check.raw_d20)) || !Number.isFinite(Number(authoritativeChoiceContext.check.final_total)))) return Response.json({ error: 'Precision stealth strikes require a fresh persisted Stealth setup receipt before narration.', invalid: true }, { status: 409 });
     let authoritativeWait=null;
     if (action === 'choice' && storyRequestId) {
@@ -272,6 +274,7 @@ ${authoritativeWait ? `AUTHORITATIVE TIME ADVANCE: ${authoritativeWait.time_adva
 ${scenePickup ? `AUTHORITATIVE SCENE PICKUP: exactly one ${scenePickup.recovery.item.name} was already added from story entry ${scenePickup.provenance.source_story_index}. Its identity is unresolved; do not reveal rarity, powers, charges, attunement, or a canonical name.` : ''}
 ${completedCombat ? `COMPLETED COMBAT CONTEXT: Combat ${completedCombat.combat_id} ended in ${completedCombat.result}. Dead enemies: ${(completedCombat.defeated_enemies || completedCombat.dead_enemies || []).map((enemy) => enemy.name || enemy.id).join(', ') || 'all listed enemies'}. This is aftermath narration only: combat_trigger MUST be false, enemies MUST be [], and no dead enemy may escape or re-engage.` : ''}
 ${authoritativeChoiceContext?.authoritative_skill_resolution ? `AUTHORITATIVE SKILL CHECK: ${authoritativeChoiceContext.check.skill} DC${authoritativeChoiceContext.check.dc}; original d20 ${authoritativeChoiceContext.check.raw_d20} + authoritative modifier ${authoritativeChoiceContext.check.modifier_total} = ${authoritativeChoiceContext.check.final_total}; ${authoritativeChoiceContext.check.success ? 'SUCCESS' : 'FAILURE'}. The narration, condition update, HP change, and combat trigger must honor this exact receipt.` : ''}
+${infiltrationPlan ? `INFILTRATION ADVANCEMENT CONTRACT: ${infiltrationPlan.success ? `The successful action must advance from stage ${infiltrationPlan.before.stage} to ${infiltrationPlan.after.stage}, move the threat from ${infiltrationPlan.before.threat_position} to ${infiltrationPlan.after.threat_position}, move the player to ${infiltrationPlan.after.player_position}, keep awareness ${infiltrationPlan.after.guard_awareness}, and produce materially new choices. Never say no further action is taken.` : 'The failed action must produce a distinct bounded consequence without advancing infiltration progress.'}` : ''}
 ${ambushIntent ? `PENDING AMBUSH CONTRACT: This action resolves ONLY the Stealth setup phase. Do not narrate an arrow release, weapon attack, hit, damage, target defeat, concentration break, or death. If combat starts, the living ritual target must appear exactly once in enemies with complete HP and AC; the actual strike will be resolved later through player_attack.` : ''}
 ${narrativeRangedIntent ? `AUTHORITATIVE RANGED ATTACK CONTRACT: This is an attempted ranged weapon attack. Set combat_trigger true and provide complete living enemy stat blocks. Do not narrate a release, attack roll, hit, miss, damage, death, arrow count, or ammunition change; those resolve only through player_attack after combat starts.` : ''}
 ${Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested ? 'POST-REST FACT: the character is fully rested and alert. Do not describe fatigue, tiredness, weariness, raggedness, sleeplessness, or exhaustion unless a new structured mechanic explicitly causes it.' : ''}
@@ -447,6 +450,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
     const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
     if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0, parser_version:NARRATED_RECOVERY_PARSER_VERSION, recovery_diagnostics:result.recovery_diagnostics }, { status: 409 });
     result = skillInvariant.result;
+    const infiltrationBeat=await guardInfiltrationBeat({candidate:result,previousEntry:(session.story_log||[]).at(-1),plan:infiltrationPlan,regenerate:({metrics,plan})=>generateNarrative(`${prompt}\n\nDUPLICATE-BEAT CORRECTION: The prior candidate was static or too similar (narration ${metrics.narrative_similarity.toFixed(3)}, choices ${metrics.choice_similarity.toFixed(3)}). Rewrite once so the ${plan.success?'successful':'failed'} infiltration action creates a distinct consequence, advances to the contracted structured state when successful, and offers four materially different choices. Never reuse the prior beat or say no further action is taken.`)});
+    result={...infiltrationBeat.result,infiltration_guard:infiltrationBeat.guard};
     if (stealthSetupIntent?.establishes_concealment) result = { ...result, combat_trigger:false, enemies:[], condition_update:{target:'player',add:'Stealthed',remove:[],duration:'persistent'}, stealth_handoff:{version:STEALTH_SETUP_HANDOFF_VERSION,request_id:storyRequestId,classification_evidence:stealthSetupIntent,attack_resolved:false,advantage_attribution:'Attacking from Stealthed/concealed'} };
     if (!authoritativeRecovery && !craftingTransaction && action === 'choice') {
       const committed = await guardAndCommitNarratedRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check:authoritativeChoiceContext.check, narrative:result.narrative, recovery:result.current_recovery });
@@ -498,6 +503,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
         ...(result.recovery_transaction ? { recovery_transaction: result.recovery_transaction } : {}),
         ...(craftingTransaction ? { crafting_transaction: { receipt:craftingTransaction.receipt, already_processed:!!craftingTransaction.already_processed } } : {}),
         ...(result.stealth_handoff ? { stealth_handoff: result.stealth_handoff } : {}),
+        ...(result.scene_advancement ? { scene_advancement: result.scene_advancement, infiltration_guard: result.infiltration_guard } : {}),
         ...(result.authoritative_weapon_attack ? { authoritative_weapon_attack: result.authoritative_weapon_attack, action_contract: selectedChoiceContract } : {})
       };
       result = { ...result, previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash };
@@ -506,7 +512,9 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...result, choices: completedEntry.choices, story_sequence: incomingStorySequence || null, ...storyPayloadFromCommit(committedTransition) };
 
       const updateData = { story_log: updatedLog };
-      if (incomingStorySequence > 0) updateData.world_state = { ...(commitSession.world_state || {}), __story_transition_sequence: incomingStorySequence };
+      const infiltrationUpdate=buildInfiltrationSessionUpdate({session:commitSession,plan:infiltrationPlan});
+      if(infiltrationUpdate){updateData.time_of_day=infiltrationUpdate.time_of_day;updateData.world_state=infiltrationUpdate.world_state;}
+      if (incomingStorySequence > 0) updateData.world_state = { ...(updateData.world_state || commitSession.world_state || {}), __story_transition_sequence: incomingStorySequence };
 
       // Campaign Memory Refresh — keep a persistent running log of key events so
       // deliberate player actions are never forgotten. A player's custom action is
@@ -658,7 +666,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
+    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);

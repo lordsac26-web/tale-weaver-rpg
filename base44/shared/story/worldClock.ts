@@ -13,16 +13,18 @@ export const getPeriodForHour = (hour) => {
 
 export const formatWorldTime = (hour) => {
   const value = ((Number(hour) % 24) + 24) % 24;
-  const suffix = value >= 12 ? 'PM' : 'AM';
-  const displayHour = value % 12 || 12;
-  return `${displayHour}:00 ${suffix}`;
+  const wholeHour = Math.floor(value);
+  const minutes = Math.round((value - wholeHour) * 60) % 60;
+  const suffix = wholeHour >= 12 ? 'PM' : 'AM';
+  const displayHour = wholeHour % 12 || 12;
+  return `${displayHour}:${String(minutes).padStart(2, '0')} ${suffix}`;
 };
 
 const legacyHour = (timeOfDay) => ({ Midnight: 0, Dawn: 6, Morning: 9, Midday: 12, Afternoon: 14, Dusk: 18, Evening: 21, Night: 21 })[String(timeOfDay || '')] ?? 9;
 
 export const getClockHour = ({ timeOfDay, worldState }) => {
   const stored = Number(worldState?.clock_hour);
-  return Number.isInteger(stored) && stored >= 0 && stored < 24 ? stored : legacyHour(timeOfDay);
+  return Number.isFinite(stored) && stored >= 0 && stored < 24 ? stored : legacyHour(timeOfDay);
 };
 
 export const elapsedHoursForRest = ({ intent = 'long_rest_8h', startHour, targetPeriod = null, explicitHours = null }) => {
