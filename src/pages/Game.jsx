@@ -1620,7 +1620,7 @@ export default function Game() {
                 style={{ borderRight: '1px solid rgba(180,30,30,0.2)' }}>
                 <StoryPanel narrative={narrative} choices={[]} loading={storyLoading} loadingLabel={storyActionLabel}
                   onChoice={() => {}} customInput={customInput}
-                  setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} sessionId={sessionId} />
+                  setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} sessionId={sessionId} characterId={character?.id} combatId={validCombatId} />
               </div>
               <div className={`overflow-hidden ${combatViewTab !== 'combat' ? 'hidden lg:block' : ''}`}>
                 <CombatPanel combat={combat} character={character}
@@ -1699,7 +1699,7 @@ export default function Game() {
                       onChoice={character?.hp_current <= 0 ? () => {} : handleChoice} 
                       customInput={customInput}
                       setCustomInput={character?.hp_current <= 0 ? () => {} : setCustomInput} 
-                      onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} sessionId={sessionId} />
+                      onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} sessionId={sessionId} characterId={character?.id} />
                   )}
                 </div>
               </div>

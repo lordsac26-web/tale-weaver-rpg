@@ -25,7 +25,7 @@ function truncateForNarration(text, maxChars = 800) {
   return lastPeriod > 100 ? slice.slice(0, lastPeriod + 1) : slice;
 }
  
-export default function StoryPanel({ narrative, choices, loading, loadingLabel, onChoice, customInput, setCustomInput, onCustomSubmit, sessionId }) {
+export default function StoryPanel({ narrative, choices, loading, loadingLabel, onChoice, customInput, setCustomInput, onCustomSubmit, sessionId, characterId, combatId }) {
   const endRef = useRef(null);
   const [showAskDM, setShowAskDM] = useState(false);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
@@ -610,7 +610,7 @@ export default function StoryPanel({ narrative, choices, loading, loadingLabel, 
           </div>
         </div>
       </div>
-      {showAskDM && <AskDMDialog sessionId={sessionId} onClose={() => setShowAskDM(false)} />}
+      {showAskDM && <AskDMDialog sessionId={sessionId} characterId={characterId} combatId={combatId} onClose={() => setShowAskDM(false)} />}
     </div>
   );
 }

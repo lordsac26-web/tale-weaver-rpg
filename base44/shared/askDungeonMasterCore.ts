@@ -1,4 +1,5 @@
 import { answerAskDMQuestion, buildAskDMContext } from './askDMContext.ts';
+import { ASK_DM_CONTEXT_VERSION } from './askDMRecentTransactions.ts';
 
 const invalidRequest = { error: 'Invalid Ask the DM request.' };
 
@@ -10,7 +11,7 @@ export async function executeAskDungeonMasterCore(base44, input) {
   return {
     status: 200,
     authorizationStage: 'accepted',
-    body: { ...answerAskDMQuestion(question, context.playerVisibleContext), request_id: String(input?.request_id || '').slice(0, 120), read_only: true },
+    body: { ...answerAskDMQuestion(question, context.playerVisibleContext), request_id: String(input?.request_id || '').slice(0, 120), read_only: true, context_version: ASK_DM_CONTEXT_VERSION },
   };
 }
 

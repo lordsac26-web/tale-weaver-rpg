@@ -24,6 +24,7 @@ import { normalizeChoiceActionContract, CHOICE_ACTION_CONTRACT_VERSION } from '.
 import { executeStoryWeaponAttack, STORY_WEAPON_ATTACK_VERSION } from '../../shared/story/storyWeaponAttack.ts';
 import { preflightCompositeAction, COMPOSITE_ACTION_PREFLIGHT_VERSION } from '../../shared/story/compositeActionPreflight.ts';
 import { COMPOSITE_ACTION_CONTRACT_VERSION } from '../../shared/story/compositeActionContract.js';
+import { craftingNarrationNeedsReceipt, CRAFTING_TRANSACTION_VERSION, executeCraftingTransaction } from '../../shared/craftingTransaction.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -333,7 +334,7 @@ ${adultToneInstruction}
 5. Should combat be triggered? Only when dramatically justified.
 6. How do environment (season, time, weather) and current conditions influence the scene?
 
-Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Every choice MUST carry action_type; only skill_check choices may carry skill_check and dc, while weapon_attack choices carry target_ref, weapon_hint, attack_mode, declared_attack_count, and intent inside weapon_attack. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. For a concrete item gained by the CURRENT action, set current_recovery to an exact structured object: {type:"arrows", quantity:1-20} or {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise current_recovery must be null. Never claim that an item was found or recovered unless current_recovery is exact and the authoritative check succeeded. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null.
+Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Every choice MUST carry action_type; only skill_check choices may carry skill_check and dc, while weapon_attack choices carry target_ref, weapon_hint, attack_mode, declared_attack_count, and intent inside weapon_attack. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. For a concrete item gained by the CURRENT action, set current_recovery to an exact structured object: {type:"arrows", quantity:1-20} or {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise current_recovery must be null. Never claim that an item was found or recovered unless current_recovery is exact and the authoritative check succeeded. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null. For completed crafting, set crafting_outcome with an exact recipe_id, completed:true, time_minutes, tool provenance, exact yield_quantity, mechanically_identical, output ammunition identity/compatibility, ingredient quantities and inventory or scene-resource provenance. A passed check alone is progress, not an award. If any recipe, yield, ingredient, tool, time, or provenance fact is absent, crafting_outcome must be null and narration must not say ammunition was received, completed, or added.
 
 CONDITION CONTRACT: condition_update is ONLY for a real mechanical status affecting the PLAYER CHARACTER. Set target to "player" only when the player is actually affected; use "other" for an enemy/NPC effect and "none" when no player condition changes. Never use placeholder labels such as "None", "Normal", or "N/A". Use the remove field when a prior player condition ends. Choose duration "scene", "combat", or "persistent" accurately. Enemy conditions that begin combat belong in that enemy's starting_conditions, never on the player.
 
@@ -354,6 +355,7 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
           loot: { type: 'array', items: { type: 'object', properties: { name:{type:'string'}, type:{type:'string'}, quantity:{type:'number'}, description:{type:'string'}, value:{type:'number'} } } },
           loot_coins: { type: 'object', properties: { gold:{type:'number'}, silver:{type:'number'}, copper:{type:'number'} } },
           current_recovery: { type:'object', properties:{ type:{type:'string',enum:['arrows','item']}, quantity:{type:'number'}, item:{type:'object',properties:{name:{type:'string'},quantity:{type:'number'},stackable:{type:'boolean'},category:{type:'string'},rarity:{type:'string'},description:{type:'string'},source:{type:'string'},item_id:{type:'string'}}} } },
+          crafting_outcome:{type:'object',properties:{recipe_id:{type:'string'},completed:{type:'boolean'},time_minutes:{type:'number'},mechanically_identical:{type:'boolean'},invocation_type:{type:'string'},tool:{type:'object',properties:{name:{type:'string'},provenance:{type:'string'}}},yield_quantity:{type:'number'},output:{type:'object',properties:{name:{type:'string'},unit:{type:'string'},rarity:{type:'string'},compatible_ammo_type:{type:'string'},compatible_weapon:{type:'string'},crafting_identity:{type:'string'},source:{type:'string'}}},ingredients:{type:'array',items:{type:'object',properties:{name:{type:'string'},quantity:{type:'number'},source:{type:'string'},provenance_id:{type:'string'},consumed:{type:'boolean'}}}},provenance:{type:'object'}}},
           location_update: { type: 'string' },
           quest_update: { type: 'object', properties: { new_quest:{type:'string'}, completed_quest:{type:'string'} } },
           condition_update: {
@@ -420,8 +422,17 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result={...result,narrative:attack.narrative,key_event:'',hp_change:0,xp_earned:0,loot:[],combat_trigger:attack.combat_active,enemies:attack.combat_active?enemies:[],authoritative_weapon_attack:attack,pending_ambush_attack:null};
     }
 
+    let craftingTransaction = null;
+    if (action === 'choice' && result?.crafting_outcome) {
+      const crafted = await executeCraftingTransaction({ base44, ownerId:user.id, characterId:character.id, sessionId:session_id, requestId:storyRequestId, recipe:result.crafting_outcome, check:authoritativeChoiceContext.check });
+      if (crafted.status >= 400 || !crafted.body?.applied) return Response.json({ error:crafted.body?.reason || 'Crafting did not establish a complete transaction.', invalid:true, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, writes:0 },{status:crafted.status||409});
+      craftingTransaction=crafted.body;
+      const receipt=crafted.body.receipt;
+      result={...result,narrative:`${result.narrative}\n\nCrafting confirmed: you received exactly ${receipt.yield_quantity} ${receipt.canonical_item}. The inventory transaction is complete.`,current_recovery:null};
+    }
+    if (action === 'choice' && craftingNarrationNeedsReceipt(selectedChoice||custom_input,result?.narrative) && !craftingTransaction?.applied) return Response.json({error:'The exact crafting yield was not established; no ammunition was added.',invalid:true,crafting_transaction_version:CRAFTING_TRANSACTION_VERSION,writes:0},{status:409});
     let recoveryResolution = null;
-    if (!authoritativeRecovery && action === 'choice') {
+    if (!authoritativeRecovery && !craftingTransaction && action === 'choice') {
       recoveryResolution = await resolveGeneratedRecoveryCandidate({
         candidate: result,
         action: selectedChoice || custom_input,
@@ -437,7 +448,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
     if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0, parser_version:NARRATED_RECOVERY_PARSER_VERSION, recovery_diagnostics:result.recovery_diagnostics }, { status: 409 });
     result = skillInvariant.result;
     if (stealthSetupIntent?.establishes_concealment) result = { ...result, combat_trigger:false, enemies:[], condition_update:{target:'player',add:'Stealthed',remove:[],duration:'persistent'}, stealth_handoff:{version:STEALTH_SETUP_HANDOFF_VERSION,request_id:storyRequestId,classification_evidence:stealthSetupIntent,attack_resolved:false,advantage_attribution:'Attacking from Stealthed/concealed'} };
-    if (!authoritativeRecovery && action === 'choice') {
+    if (!authoritativeRecovery && !craftingTransaction && action === 'choice') {
       const committed = await guardAndCommitNarratedRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check:authoritativeChoiceContext.check, narrative:result.narrative, recovery:result.current_recovery });
       result = { ...result, recovery_transaction: committed.body?.recovery_transaction || { status: committed.body?.reason || 'unknown', ...generatedRecoveryDiagnostics(result) } };
       if (!committed.body?.applied && committed.body?.reason !== 'not_applicable') {
@@ -449,7 +460,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
         authoritativeRecovery = { recovery:result.current_recovery, check:authoritativeChoiceContext.check, applied:true, recovered_items:itemRecovery.recovered_items, annotation:recoveryAnnotation({recovery:result.current_recovery,resolution:authoritativeChoiceContext.check,applied:true,recoveredItems:itemRecovery.recovered_items}) };
       }
     }
-    if (!narrationMayPublishRecovery({ narrative:result.narrative, committed:authoritativeRecovery?.applied === true })) return Response.json({error:'Exact item-recovery narration requires a committed structured receipt.',invalid:true,parser_version:NARRATED_RECOVERY_PARSER_VERSION,recovery_diagnostics:result.recovery_diagnostics,writes:0},{status:409});
+    if (!narrationMayPublishRecovery({ narrative:result.narrative, committed:authoritativeRecovery?.applied === true || craftingTransaction?.applied === true })) return Response.json({error:'Exact item-recovery narration requires a committed structured receipt.',invalid:true,parser_version:NARRATED_RECOVERY_PARSER_VERSION,recovery_diagnostics:result.recovery_diagnostics,writes:0},{status:409});
 
     // ====================== POST-PROCESSING ======================
     if (authoritativeRecovery) {
@@ -485,6 +496,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
         ...(result.item_recovery ? { item_recovery: result.item_recovery } : {}),
         ...(result.recovery_resolution ? { recovery_resolution: result.recovery_resolution } : {}),
         ...(result.recovery_transaction ? { recovery_transaction: result.recovery_transaction } : {}),
+        ...(craftingTransaction ? { crafting_transaction: { receipt:craftingTransaction.receipt, already_processed:!!craftingTransaction.already_processed } } : {}),
         ...(result.stealth_handoff ? { stealth_handoff: result.stealth_handoff } : {}),
         ...(result.authoritative_weapon_attack ? { authoritative_weapon_attack: result.authoritative_weapon_attack, action_contract: selectedChoiceContract } : {})
       };
@@ -646,7 +658,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
+    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);
