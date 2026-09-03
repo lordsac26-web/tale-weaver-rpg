@@ -4,9 +4,12 @@ import { getMaxSlotsForLevel } from '../spells/slotProgression.ts';
 import { planAmmunitionUse } from '../ammunitionTransaction.ts';
 import { normalizeSpellText } from '../spells/typedSpellParser.ts';
 
-export const COMPOSITE_ACTION_PREFLIGHT_VERSION='composite-action-preflight-v1.0.0';
+export const COMPOSITE_ACTION_PREFLIGHT_VERSION='composite-action-preflight-v1.0.1';
 export function preflightCompositeAction({text,session,character,spell,sceneText='',extraActions=0,sequentialTiming=null}:any){
   const plan=parseCompositeAction(text);if(!plan)return {handled:false};
+  const frozenSession=structuredClone(session||{}),frozenCharacter=structuredClone(character||{});
+  Object.freeze(frozenSession);Object.freeze(frozenCharacter);
+  session=frozenSession;character=frozenCharacter;
   const errors:any[]=[];
   if(!session||!character||session.character_id!==character.id)errors.push({code:'binding_invalid',message:'The session and character binding is invalid.'});
   if(session?.in_combat)errors.push({code:'story_combat_conflict',message:'This story plan cannot run while an authoritative combat is active.'});
@@ -28,5 +31,5 @@ export function preflightCompositeAction({text,session,character,spell,sceneText
   const legalSequence=sequentialTiming&&sequentialTiming.allowed===true&&Number(sequentialTiming.elapsed_rounds)>0;
   if(actionCost>1&&!legalExtra&&!legalSequence)errors.push({code:'action_economy_conflict',message:'Casting Silence and firing the bow each require an action; no supported extra action or legal sequential timing was supplied.'});
   const alternatives=[{action_type:'spell_cast',label:'Cast Silence at a fixed point covering the escape route',consequence:'This concentration spell would replace Pass without Trace only if the cast commits.'},{action_type:'weapon_attack',label:'Take the precision shot now',consequence:'Resolve one ranged weapon attack; hit or miss consumes one arrow.'}];
-  return {handled:true,valid:errors.length===0,version:COMPOSITE_ACTION_CONTRACT_VERSION,preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION,plan:{...plan,children:plan.children.map((child:any)=>child.action_type==='spell_cast'?{...child,canonical_spell:canonical?{name:canonical.name,level,casting_time:canonical.casting_time,components:canonical.components,range:canonical.range,duration:canonical.duration,concentration:!!canonical.concentration}:null,target_result:target}:child),action_economy:{required_actions:actionCost,extra_actions:Number(extraActions)||0,sequential_timing:sequentialTiming||null,legal:actionCost<=1||legalExtra||legalSequence},receipt_chain:{parent_key:plan.parent_key,child_keys:plan.children.map((child:any)=>child.key),committed:false}},errors,alternatives,writes:0};
+  return {handled:true,valid:errors.length===0,version:COMPOSITE_ACTION_CONTRACT_VERSION,preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION,plan:{...plan,children:plan.children.map((child:any)=>child.action_type==='spell_cast'?{...child,canonical_spell:canonical?{name:canonical.name,level,casting_time:canonical.casting_time,components:canonical.components,range:canonical.range,duration:canonical.duration,concentration:!!canonical.concentration}:null,target_result:target}:child),action_economy:{required_actions:actionCost,extra_actions:Number(extraActions)||0,sequential_timing:sequentialTiming||null,legal:Boolean(actionCost<=1||legalExtra||legalSequence)},receipt_chain:{parent_key:plan.parent_key,child_keys:plan.children.map((child:any)=>child.key),committed:false}},errors,alternatives,writes:0};
 }

@@ -2,7 +2,7 @@ import { hashValue } from '../tests/liveProtection.ts';
 import { preflightCompositeAction } from '../story/compositeActionPreflight.ts';
 import { AMMO_RECEIPTS } from '../ammunitionTransaction.ts';
 import { normalizeSpellText } from '../spells/typedSpellParser.ts';
-export const SILENCE_ARROW_AUDIT_VERSION='silence-arrow-precision-shot-audit-v1.0.0';
+export const SILENCE_ARROW_AUDIT_VERSION='silence-arrow-precision-shot-audit-v1.1.0';
 export const EXACT_SILENCE_ARROW_INPUT='cast silence on the arrow and shoot the guard with a precision shot';
 export async function auditSilenceArrowPrecisionShotAttempt({db,character,session}:any){
  const spells=await db.entities.Spell.filter({name:'Silence'},'-updated_date',50);const spell=spells.find((item:any)=>item.description&&item.casting_time&&item.range)||spells[0];

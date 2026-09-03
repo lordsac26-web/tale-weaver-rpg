@@ -1,5 +1,5 @@
-export const COMPOSITE_ACTION_CONTRACT_VERSION='composite-action-contract-v1.0.0';
-export const COMPOSITE_ACTION_FRONTEND_VERSION='composite-action-transition-v1.0.0';
+export const COMPOSITE_ACTION_CONTRACT_VERSION='composite-action-contract-v1.0.1';
+export const COMPOSITE_ACTION_FRONTEND_VERSION='composite-action-transition-v1.0.1';
 const normalize=(value)=>String(value||'').toLowerCase().replace(/[’']/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 const stableKey=(value)=>{let hash=2166136261;for(const char of normalize(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return (hash>>>0).toString(36);};
 

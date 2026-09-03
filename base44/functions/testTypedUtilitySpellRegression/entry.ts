@@ -1,4 +1,5 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+const TEST_VERSION = 'typed-utility-regression-v1.1.0';
 import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
 import { resolveKnownTypedSpell } from '../../shared/spells/typedSpellParser.ts';
 import { executePwtCompoundAction, parsePwtCompoundIntent } from '../../shared/story/compoundPwtAction.ts';
@@ -114,7 +115,7 @@ export default async function testTypedUtilitySpellRegression(req) {
     results.push({ name: 'compound wrong Character Session linkage rejects before writes', pass: wrongLinkCompound.outcome.status === 400 && wrongLinkCompound.afterCharacter.spell_slots?.level_2 === undefined && compoundModifierCount(wrongLinkCompound.afterCharacter) === 0 });
     results.push({ name: 'compound plain non-spell Hide remains a non-cast control', pass: parsePwtCompoundIntent('hide behind the wall') === null });
     const passed = results.filter((result) => result.pass).length;
-    output = { passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, live_state: { protected_ids: [...LIVE_IDS], read_or_mutated: false } };
+    output = { function_version: TEST_VERSION, transaction_version: 'authoritative-spell-transaction-v1.1.0', passed, failed: results.length - passed, total: results.length, all_pass: passed === results.length, results, diagnostics: { session_heal: { expected:{status:200,used_before:0,used_after:1,replayed:true,writes:[1,0]}, actual:{status:sheetCast.status,body:sheetCast.body,replay:sheetReplay.body,character:{hp:sheetAfter.hp_current,slots:sheetAfter.spell_slots,receipts:sheetAfter.long_rest_abilities?.__typed_spell_casts},session_last_cast:sheetSession.world_state?.last_spell_cast} }, sessionless_heal:{expected:{status:200,used_after:(beforeNoSession.spell_slots?.level_1||0)+1,writes:1},actual:{status:noSession.status,body:noSession.body,before:{hp:beforeNoSession.hp_current,slots:beforeNoSession.spell_slots},after:{hp:afterNoSession.hp_current,slots:afterNoSession.spell_slots}}} }, live_state: { protected_ids: [...LIVE_IDS], read_or_mutated: false } };
   } catch (error) {
     output = { error: error.message || 'Typed utility regression failed', results };
   } finally {
