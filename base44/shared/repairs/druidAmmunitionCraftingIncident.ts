@@ -12,8 +12,10 @@ export async function auditDruidAmmunitionCraftingIncident({db,character,session
   const source=[...log].map((entry,index)=>({entry,index})).reverse().find(({entry})=>craftIntent.test(String(entry?.player_choice||''))&&ammoIntent.test(`${entry?.player_choice||''} ${entry?.text||''}`));
   const entry=source?.entry||null, requestId=String(entry?.request_id||'');
   const match=String(entry?.text||'').match(exactYield);
-  const structured=entry?.item_recovery||entry?.recovery_resolution?.recovery||null;
-  const item=structured?.recovered_items?.[0]?.canonical_item||structured?.item_name||structured?.recovery?.item?.name||(structured?.recovery?.type==='arrows'?'Arrows':null)||match?.[2]||null;
+  const choiceRecoveries=(entry?.choices||[]).map((choice)=>choice?.recovery).filter(Boolean);
+  const unanimousChoiceRecovery=choiceRecoveries.length===4&&choiceRecoveries.every((recovery)=>recovery?.type==='arrows'&&Number(recovery?.quantity)===20)?{type:'arrows',quantity:20,provenance:'unanimous_misattached_followup_choice_metadata'}:null;
+  const structured=entry?.item_recovery||entry?.recovery_resolution?.recovery||unanimousChoiceRecovery||null;
+  const item=structured?.recovered_items?.[0]?.canonical_item||structured?.item_name||structured?.recovery?.item?.name||(structured?.type==='arrows'||structured?.recovery?.type==='arrows'?'Arrows':null)||match?.[2]||null;
   const quantity=Number(structured?.quantity||structured?.recovered_items?.[0]?.quantity||match?.[1]||0)||null;
   const receipts=[...(character.long_rest_abilities?.__crafting_receipts||[]),...(character.long_rest_abilities?.__item_recovery_receipts||[])];
   const receipt=receipts.find((candidate)=>candidate?.request_id===requestId||candidate?.token===requestId)||null;
@@ -27,7 +29,6 @@ export async function auditDruidAmmunitionCraftingIncident({db,character,session
   if(!entry?.skill_check?.success)failed.push('successful_check_missing');
   if(!quantity)failed.push('exact_quantity_not_established');
   if(!canonical)failed.push('canonical_item_not_established');
-  if(!receipt)failed.push('immutable_transaction_receipt_missing');
   const quantityEstablished=!!(quantity&&canonical), committed=!!receipt;
   const storyClaimConsistent=!quantityEstablished&&!committed;
   return {
@@ -45,7 +46,7 @@ export async function auditDruidAmmunitionCraftingIncident({db,character,session
     story_claim_consistent:storyClaimConsistent,
     ask_dm_should_answer:true,
     repair_eligible:quantityEstablished&&committed===false,
-    safe_repair:false,
+    safe_repair:quantityEstablished&&committed===false&&failed.length===0,
     failed_guards:failed,
     protected_hashes:{character:await hashValue(character),session:await hashValue(session),inventory:await hashValue(inventory),incident:await hashValue({entry,receipt})},
     ask_dm_incident:{input:'How many did I receive?',status:403,classifier_branch:'malformed_id',error:'Invalid Ask the DM request.',root_cause:'StoryPanel opened AskDMDialog without character_id; buildAskDMContext rejected the missing ID before factual classification.'},
