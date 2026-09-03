@@ -38,7 +38,7 @@ import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '../..
 import { classifyPrecisionAmbushIntent, stripGeneratedChoiceAnnotations } from '../../base44/shared/story/generatedChoiceIntent';
 import { normalizeChoiceCheckDisplay } from '../../base44/shared/story/choiceCheckDisplay';
 import { normalizeChoiceActionContract, CHOICE_ACTION_FRONTEND_VERSION } from '../../base44/shared/story/choiceActionContract';
-import { COMPOSITE_ACTION_FRONTEND_VERSION } from '../../base44/shared/story/compositeActionContract';
+import { acceptCompositePreflightResponse, buildCompositePreflightRequest, COMPOSITE_UI_TRANSITION_VERSION, routeStoryAction } from '../../base44/shared/story/compositeActionTransition';
 import { prepareStorySkillCheck, resolveStorySkillRoll } from '@/lib/storySkillCheck';
 import { acceptSequencedStoryPayload, hydrateLatestStoryEntry, STORY_TRANSITION_VERSION } from '../../base44/shared/story/storyTransition';
 
@@ -401,12 +401,16 @@ export default function Game() {
     if (choiceDispatchInFlightRef.current) return;
     choiceDispatchInFlightRef.current = true;
     const sourceChoice = normalizeChoiceActionContract(choices[choiceIndex]);
-    const normalizedCheck = sourceChoice.action_type === 'skill_check' ? normalizeChoiceCheckDisplay(sourceChoice, { logConflicts: true }) : { skillLabel: null, dc: null };
+    const choiceRoute = routeStoryAction(sourceChoice);
+    const normalizedCheck = choiceRoute === 'resolve_story_skill_check' ? normalizeChoiceCheckDisplay(sourceChoice, { logConflicts: true }) : { skillLabel: null, dc: null };
     const choice = { ...sourceChoice, skill_check: normalizedCheck.skillLabel, dc: normalizedCheck.dc, text: stripGeneratedChoiceAnnotations(sourceChoice?.text) };
-    if (choice.action_type === 'composite_action') {
+    if (choiceRoute === 'composite_preflight') {
       try {
-        const result = await base44.functions.invoke('evaluatePlayerAction', { action: choice.text, request_id: `evaluate-composite:${sessionId}:${crypto.randomUUID()}`, session_id: sessionId, character_id: character?.id, session_context: `${session?.current_location || ''} — ${narrative.filter(e => e.type === 'narration').slice(-1)[0]?.text?.slice(0, 200) || ''}` });
-        setPendingProposal({ ...result.data, action: choice.text });
+        const transition = buildCompositePreflightRequest({ text:choice.text, classifier:choice, sessionId, characterId:character?.id, source:'generated_choice' });
+        const result = await base44.functions.invoke(transition.endpoint, { ...transition.payload, session_context: `${session?.current_location || ''} — ${narrative.filter(e => e.type === 'narration').slice(-1)[0]?.text?.slice(0, 200) || ''}` });
+        const acceptance = acceptCompositePreflightResponse(result.data, transition.parent_key);
+        if (!acceptance.accepted) throw new Error(`Composite preflight response rejected: ${acceptance.reason}`);
+        setPendingProposal({ ...result.data, action: choice.text, parent_key:transition.parent_key });
       } finally {
         choiceDispatchInFlightRef.current = false;
       }
@@ -427,13 +431,13 @@ export default function Game() {
 
     // Only explicitly typed canonical skill checks may invoke resolveStorySkillCheck.
     // Weapon attacks and every other action type bypass that endpoint entirely.
-    if (choice.action_type === 'skill_check' && (!choice.skill_check || !Number.isFinite(Number(choice.dc)))) {
+    if (choiceRoute === 'resolve_story_skill_check' && (!choice.skill_check || !Number.isFinite(Number(choice.dc)))) {
       choiceDispatchInFlightRef.current = false;
       setChoices(choices);
       setNarrative(prev => [...prev, { type: 'action_error', text: 'This skill choice is missing a canonical skill or DC. Refresh the scene before retrying.' }]);
       return;
     }
-    if (choice.action_type !== 'skill_check') {
+    if (choiceRoute !== 'resolve_story_skill_check') {
       await runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast);
       return;
     }
@@ -477,15 +481,23 @@ export default function Game() {
     setEvaluatingAction(true);
 
     try {
-      const result = await base44.functions.invoke('evaluatePlayerAction', {
+      const compositeTransition = buildCompositePreflightRequest({ text, sessionId, characterId:character?.id, source:'free_text' });
+      const endpoint = compositeTransition?.endpoint || 'evaluatePlayerAction';
+      const result = await base44.functions.invoke(endpoint, {
+        ...(compositeTransition?.payload || {}),
         action: text,
-        request_id: `evaluate-action:${sessionId}:${crypto.randomUUID()}`,
+        request_id: compositeTransition?.request_id || `evaluate-action:${sessionId}:${crypto.randomUUID()}`,
         session_id: sessionId,
         character_id: character?.id,
         character,
         session_context: `${session?.current_location || ''} — ${narrative.filter(e => e.type === 'narration').slice(-1)[0]?.text?.slice(0, 200) || ''}`
       });
-      setPendingProposal({ ...result.data, action: text });
+      if (result.data?.action_type === 'composite_action') {
+        const expectedKey = compositeTransition?.parent_key || result.data?.composite_plan?.plan?.parent_key;
+        const acceptance = acceptCompositePreflightResponse(result.data, expectedKey);
+        if (!acceptance.accepted) throw new Error(`Composite preflight response rejected: ${acceptance.reason}`);
+      }
+      setPendingProposal({ ...result.data, action: text, ...(compositeTransition ? {parent_key:compositeTransition.parent_key} : {}) });
     } catch (err) {
       console.error('Failed to evaluate action:', err);
       setCustomInput(text); // restore the player's input so they don't lose it
@@ -1493,7 +1505,7 @@ export default function Game() {
   const combatPending = !!(session?.in_combat && validCombatId && !combat && !combatSyncError);
 
   return (
-    <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" data-story-transition-version={STORY_TRANSITION_VERSION} data-choice-action-transition-version={CHOICE_ACTION_FRONTEND_VERSION} data-composite-action-transition-version={COMPOSITE_ACTION_FRONTEND_VERSION} data-camp-rest-transition-version={CAMP_REST_TRANSITION_VERSION} style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
+    <div className="flex flex-col parchment-bg overflow-hidden min-h-0 game-viewport" data-story-transition-version={STORY_TRANSITION_VERSION} data-choice-action-transition-version={CHOICE_ACTION_FRONTEND_VERSION} data-composite-action-transition-version={COMPOSITE_UI_TRANSITION_VERSION} data-camp-rest-transition-version={CAMP_REST_TRANSITION_VERSION} style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
       {/* HUD */}
       <HUD character={character} session={session} />
 

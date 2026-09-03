@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { action, character: incomingCharacter, session_id, character_id, session_context, in_combat, combat_context, combat_enemies, request_id } = await req.json();
+    const { action, character: incomingCharacter, session_id, character_id, session_context, in_combat, combat_context, combat_enemies, request_id, action_type: incomingActionType, composite_plan: incomingCompositePlan, parent_key: incomingParentKey } = await req.json();
     if (!session_id || !character_id) return Response.json({ error: 'session_id and character_id are required' }, { status: 400 });
     const [session, character] = await Promise.all([
       base44.asServiceRole.entities.GameSession.get(session_id).catch(() => null),
@@ -105,11 +105,16 @@ Return ONLY a JSON object:
 
     // ============ EXPLORATION MODE ============
     const silenceComposite = /\b(?:cast|invoke)\s+silence\b/i.test(String(action || '')) && /\b(?:shoot|fire|loose|release|precision\s+shot|attack\s+with\s+(?:a\s+)?(?:longbow|bow|crossbow))\b/i.test(String(action || ''));
-    if (silenceComposite) {
-      const candidates = await base44.asServiceRole.entities.Spell.filter({ name: 'Silence' }, '-updated_date', 50);
+    const compositeRequested = incomingActionType === 'composite_action' || !!incomingCompositePlan || silenceComposite;
+    if (compositeRequested) {
+      const declaredSpell = incomingCompositePlan?.children?.find((child) => child?.action_type === 'spell_cast')?.spell_name || 'Silence';
+      const canonicalLookupName = String(declaredSpell).toLowerCase() === 'silence' ? 'Silence' : declaredSpell;
+      const candidates = await base44.asServiceRole.entities.Spell.filter({ name: canonicalLookupName }, '-updated_date', 50);
       const spell = candidates.find((entry) => entry.description && entry.casting_time && entry.range) || candidates[0];
       const compositePlan = preflightCompositeAction({ text: action, session, character, spell, sceneText: `${session_context || ''}\n${(session.story_log || []).slice(-1)[0]?.text || ''}` });
-      return Response.json({ action, action_type: 'composite_action', composite_plan: compositePlan, valid: compositePlan.valid, alternatives: compositePlan.alternatives, requires_check: false, risk_level: 'high', reasoning: compositePlan.valid ? 'The complete ordered plan passed authoritative preflight.' : 'The complete ordered plan cannot be performed as stated; no spell slot, concentration, ammunition, attack, combat, or story state was changed.', request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.2.0', writes: 0 });
+      const authoritativeParentKey = compositePlan.plan?.parent_key || null;
+      if (incomingParentKey && authoritativeParentKey !== incomingParentKey) return Response.json({ error:'Composite parent key does not match the authoritative parse.', action_type:'composite_action', parent_key:authoritativeParentKey, writes:0, function_version:'evaluate-player-action-v2.3.0' }, { status:409 });
+      return Response.json({ action, action_type: 'composite_action', parent_key: authoritativeParentKey, composite_plan: compositePlan, valid: compositePlan.valid, alternatives: compositePlan.alternatives, requires_check: false, risk_level: 'high', reasoning: compositePlan.valid ? 'The complete ordered plan passed authoritative preflight.' : 'The complete ordered plan cannot be performed as stated; no spell slot, concentration, ammunition, attack, combat, or story state was changed.', request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.3.0', writes: 0 });
     }
     const projectileRecovery = await prepareProjectileRecoveryProposal({ base44, session, character, actionText: action });
     if (projectileRecovery.handled) {
