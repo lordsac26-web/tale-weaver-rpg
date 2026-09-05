@@ -1,0 +1,273 @@
+{
+  "name": "Nightly P0 P1 Internal Sweep",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "5 6 * * *",
+      "one_time_date": null,
+      "timezone": "UTC",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "description": "Runs all mandatory Tale Weaver P0/P1 regression suites inside the app and stores one daily aggregate.",
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "nightly_p0_p1_internal_sweep",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "long_rest": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testLongRestRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "narrative_continuity",
+          "x-base44": {
+            "title": "Test long rest"
+          }
+        }
+      },
+      {
+        "narrative_continuity": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testNarrativeContinuityRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "victory_handoff",
+          "x-base44": {
+            "title": "Test narrative continuity"
+          }
+        }
+      },
+      {
+        "victory_handoff": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testVictoryHandoffRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "p1_spell_conditions",
+          "x-base44": {
+            "title": "Test victory handoff"
+          }
+        }
+      },
+      {
+        "p1_spell_conditions": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "runP1SpellConditionRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "scout",
+          "x-base44": {
+            "title": "Test spell conditions"
+          }
+        }
+      },
+      {
+        "scout": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testScoutRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "typed_utility",
+          "x-base44": {
+            "title": "Test scout behavior"
+          }
+        }
+      },
+      {
+        "typed_utility": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testTypedUtilitySpellRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "arrow_recovery",
+          "x-base44": {
+            "title": "Test utility spells"
+          }
+        }
+      },
+      {
+        "arrow_recovery": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testArrowRecoveryRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "story_session_sync",
+          "x-base44": {
+            "title": "Test arrow recovery"
+          }
+        }
+      },
+      {
+        "story_session_sync": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testStorySessionSyncRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "skeleton_turn",
+          "x-base44": {
+            "title": "Test story synchronization"
+          }
+        }
+      },
+      {
+        "skeleton_turn": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testSkeletonEnemyTurnRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "hunters_mark",
+          "x-base44": {
+            "title": "Test skeleton turns"
+          }
+        }
+      },
+      {
+        "hunters_mark": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testHuntersMarkRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "item_recovery",
+          "x-base44": {
+            "title": "Test Hunter's Mark"
+          }
+        }
+      },
+      {
+        "item_recovery": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testItemRecoveryRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "content_detail",
+          "x-base44": {
+            "title": "Test item recovery"
+          }
+        }
+      },
+      {
+        "content_detail": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testContentDetailRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "vendor_economy",
+          "x-base44": {
+            "title": "Test content details"
+          }
+        }
+      },
+      {
+        "vendor_economy": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testVendorEconomyRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "ask_dm",
+          "x-base44": {
+            "title": "Test vendor economy"
+          }
+        }
+      },
+      {
+        "ask_dm": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testAskDMRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "write_result",
+          "x-base44": {
+            "title": "Test Ask DM"
+          }
+        }
+      },
+      {
+        "write_result": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "writeNightlySweepResult",
+            "args": {
+              "environment": "production",
+              "suite_results": {
+                "testLongRestRegression": "${ .long_rest }",
+                "testNarrativeContinuityRegression": "${ .narrative_continuity }",
+                "testVictoryHandoffRegression": "${ .victory_handoff }",
+                "runP1SpellConditionRegression": "${ .p1_spell_conditions }",
+                "testScoutRegression": "${ .scout }",
+                "testTypedUtilitySpellRegression": "${ .typed_utility }",
+                "testArrowRecoveryRegression": "${ .arrow_recovery }",
+                "testStorySessionSyncRegression": "${ .story_session_sync }",
+                "testSkeletonEnemyTurnRegression": "${ .skeleton_turn }",
+                "testHuntersMarkRegression": "${ .hunters_mark }",
+                "testItemRecoveryRegression": "${ .item_recovery }",
+                "testContentDetailRegression": "${ .content_detail }",
+                "testVendorEconomyRegression": "${ .vendor_economy }",
+                "testAskDMRegression": "${ .ask_dm }"
+              }
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Store nightly result",
+            "description": "One idempotent daily aggregate"
+          }
+        }
+      }
+    ]
+  }
+}
