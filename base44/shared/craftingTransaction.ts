@@ -1,7 +1,7 @@
 import { canonicalAmmoName } from './ammunition.ts';
 import { hashValue } from './tests/liveProtection.ts';
 
-export const CRAFTING_TRANSACTION_VERSION='authoritative-crafting-transaction-v1.0.0';
+export const CRAFTING_TRANSACTION_VERSION='authoritative-crafting-transaction-v1.0.1';
 export const CRAFTING_RECEIPTS_KEY='__crafting_receipts';
 const icons={Ammunition:{common:'🏹⚪',uncommon:'🏹🟢',rare:'🏹🔵',legendary:'🏹🟠'}};
 const norm=(value)=>String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -12,7 +12,7 @@ const findStacks=(inventory,name)=>inventory.map((item,index)=>({item,index})).f
 export function craftingNarrationNeedsReceipt(actionText,narration){return /\b(?:craft|make|shape|knap|fletch)\w*\b/i.test(actionText||'')&&/\b(?:ammunition|arrows?|bolts?)\b/i.test(`${actionText||''} ${narration||''}`)&&/\b(?:final arrow|received|added to (?:your|the) (?:inventory|quiver)|crafted|produced|secured the means)\b/i.test(narration||'');}
 
 export function planCraftingTransaction({character,session,requestId,recipe,check}){
-  if(!requestId||!recipe||!positive(recipe.yield_quantity)||!recipe.output?.name)return {ok:false,status:400,reason:'exact_recipe_and_yield_required'};
+  if(!requestId||!recipe?.recipe_id||!positive(recipe.yield_quantity)||!recipe.output?.name)return {ok:false,status:400,reason:'exact_recipe_and_yield_required'};
   if(recipe.invocation_type==='druidcraft_cantrip')return {ok:false,status:409,reason:'druidcraft_cantrip_cannot_create_combat_ammunition'};
   if(check?.success!==true)return {ok:false,status:409,reason:'successful_check_required'};
   if(recipe.completed!==true)return {ok:false,status:409,reason:'crafting_progress_is_not_completed_output'};

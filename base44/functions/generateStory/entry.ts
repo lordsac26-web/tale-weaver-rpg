@@ -26,6 +26,7 @@ import { preflightCompositeAction, COMPOSITE_ACTION_PREFLIGHT_VERSION } from '..
 import { COMPOSITE_ACTION_CONTRACT_VERSION } from '../../shared/story/compositeActionContract.js';
 import { craftingNarrationNeedsReceipt, CRAFTING_TRANSACTION_VERSION, executeCraftingTransaction } from '../../shared/craftingTransaction.ts';
 import { buildInfiltrationSessionUpdate, guardInfiltrationBeat, INFILTRATION_ADVANCEMENT_VERSION, planInfiltrationAdvancement } from '../../shared/story/infiltrationSuccessAdvancement.ts';
+import { classifyCraftingAwardIntent, normalizeDeclaredRecovery, CHOICE_AWARD_ROUTING_VERSION } from '../../shared/story/choiceAwardRouting.js';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -42,7 +43,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.9.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.9.1';
 
 Deno.serve(async (req) => {
   try {
@@ -80,6 +81,7 @@ Deno.serve(async (req) => {
     const latestChoices = hydrateLatestStoryEntry(session).choices;
     const persistedChoice = action === 'choice' && Number.isInteger(Number(choice_index)) ? latestChoices[Number(choice_index)] : null;
     const selectedChoiceContract = normalizeChoiceActionContract(persistedChoice || { text: choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`, ...authoritativeChoiceContext });
+    authoritativeChoiceContext = { ...authoritativeChoiceContext, recovery: normalizeDeclaredRecovery(authoritativeChoiceContext.recovery ?? selectedChoiceContract.recovery) };
     const selectedChoice = action === 'choice' ? stripGeneratedChoiceAnnotations(selectedChoiceContract.text) : '';
     if (action === 'choice' && selectedChoiceContract.action_type === 'composite_action') {
       const spellName = selectedChoiceContract.children?.find((child) => child.action_type === 'spell_cast')?.spell_name;
@@ -426,8 +428,9 @@ Write a gripping 1-2 paragraph combat narrative.`;
     }
 
     let craftingTransaction = null;
-    if (action === 'choice' && result?.crafting_outcome) {
-      const crafted = await executeCraftingTransaction({ base44, ownerId:user.id, characterId:character.id, sessionId:session_id, requestId:storyRequestId, recipe:result.crafting_outcome, check:authoritativeChoiceContext.check });
+    const craftingIntent = classifyCraftingAwardIntent({ actionText:selectedChoice||custom_input, craftingOutcome:result?.crafting_outcome, narrative:result?.narrative });
+    if (action === 'choice' && craftingIntent.requires_validation) {
+      const crafted = await executeCraftingTransaction({ base44, ownerId:user.id, characterId:character.id, sessionId:session_id, requestId:storyRequestId, recipe:result?.crafting_outcome || {}, check:authoritativeChoiceContext.check });
       if (crafted.status >= 400 || !crafted.body?.applied) return Response.json({ error:crafted.body?.reason || 'Crafting did not establish a complete transaction.', invalid:true, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, writes:0 },{status:crafted.status||409});
       craftingTransaction=crafted.body;
       const receipt=crafted.body.receipt;
@@ -666,7 +669,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
+    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);

@@ -1,6 +1,7 @@
 export const CHOICE_ACTION_CONTRACT_VERSION = 'choice-action-contract-v1.0.0';
 import { parseCompositeAction } from './compositeActionContract.js';
-export const CHOICE_ACTION_FRONTEND_VERSION = 'choice-action-transition-v1.1.0';
+import { normalizeDeclaredRecovery } from './choiceAwardRouting.js';
+export const CHOICE_ACTION_FRONTEND_VERSION = 'choice-action-transition-v1.2.0';
 export const CHOICE_ACTION_TYPES = ['skill_check', 'weapon_attack', 'spell_cast', 'composite_action', 'utility', 'social', 'movement', 'rest', 'item_use', 'combat_transition'];
 export const CANONICAL_SKILLS = ['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival'];
 
@@ -31,6 +32,6 @@ export function normalizeChoiceActionContract(choice = {}) {
   const requestedType = CHOICE_ACTION_TYPES.includes(choice?.action_type) ? choice.action_type : null;
   const skill = canonicalSkill(choice?.skill_check);
   const dc = Number(choice?.dc ?? choice?.skill_check?.dc);
-  if (requestedType === 'skill_check' || (!requestedType && skill && Number.isFinite(dc))) return { ...choice, text, action_type: 'skill_check', skill_check: skill, dc: Number.isFinite(dc) ? dc : null, weapon_attack: null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
-  return { ...choice, text, action_type: requestedType || 'utility', skill_check: null, dc: null, recovery: requestedType === 'weapon_attack' ? null : choice.recovery || null, weapon_attack: requestedType === 'weapon_attack' ? choice.weapon_attack || null : null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
+  if (requestedType === 'skill_check' || (!requestedType && skill && Number.isFinite(dc))) return { ...choice, text, action_type: 'skill_check', skill_check: skill, dc: Number.isFinite(dc) ? dc : null, recovery: normalizeDeclaredRecovery(choice.recovery), weapon_attack: null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
+  return { ...choice, text, action_type: requestedType || 'utility', skill_check: null, dc: null, recovery: normalizeDeclaredRecovery(choice.recovery), weapon_attack: requestedType === 'weapon_attack' ? choice.weapon_attack || null : null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
 }
