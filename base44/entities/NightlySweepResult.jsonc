@@ -1,0 +1,77 @@
+{
+  "name": "NightlySweepResult",
+  "type": "object",
+  "properties": {
+    "run_key": {
+      "type": "string",
+      "description": "Unique date-based idempotency key for one nightly sweep.",
+      "indexed": true,
+      "unique": true
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "running",
+        "passed",
+        "failed"
+      ]
+    },
+    "functions_run": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "passed": {
+      "type": "number"
+    },
+    "failed": {
+      "type": "number"
+    },
+    "total": {
+      "type": "number"
+    },
+    "all_pass": {
+      "type": "boolean"
+    },
+    "suite_details": {
+      "type": "object",
+      "description": "Per-suite counts, status, cleanup evidence, and protected-state hashes."
+    },
+    "cleanup_verified": {
+      "type": "boolean"
+    },
+    "protected_unchanged": {
+      "type": "boolean"
+    },
+    "environment": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_key",
+    "started_at",
+    "completed_at",
+    "status",
+    "functions_run",
+    "passed",
+    "failed",
+    "total",
+    "all_pass",
+    "suite_details",
+    "cleanup_verified",
+    "protected_unchanged",
+    "environment"
+  ]
+}
