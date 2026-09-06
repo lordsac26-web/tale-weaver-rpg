@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 import MarketCurrency from './MarketCurrency';
 import MarketFilters from './MarketFilters';
 import MarketItemRow from './MarketItemRow';
-import { marketCategories, marketCategoryMatches, marketRequestId, marketSearchMatches, mergeCatalogPages } from '../../../base44/shared/marketUxContract';
+import { buildSellQuotesRequest, marketCategories, marketCategoryMatches, marketRequestId, marketSearchMatches, mergeCatalogPages } from '../../../base44/shared/marketUxContract';
 
 const errorMessage = (error) => error?.response?.data?.error || error?.data?.error || error?.message || 'The trade could not be completed.';
 
@@ -46,7 +46,7 @@ export default function VendorShop({ vendor, character, sessionId, visitId, onCl
   useEffect(() => {
     if (mode !== 'sell' || !sellItems.length) return;
     let cancelled = false;
-    base44.functions.invoke('vendorTrade', { action: 'sell_quotes', vendor_id: vendor.id, character_id: currentCharacter.id })
+    base44.functions.invoke('vendorTrade', buildSellQuotesRequest(vendor.id, currentCharacter.id))
       .then((response) => {
         const entries = (response.data?.quotes || []).map((entry) => [entry.item_name, entry.quote]);
         if (!cancelled) setQuotes((previous) => ({ ...previous, ...Object.fromEntries(entries) }));
@@ -81,7 +81,7 @@ export default function VendorShop({ vendor, character, sessionId, visitId, onCl
     if (quote?.status !== 'ok') return;
     pendingRef.current = key; setPendingKey(key); setError('');
     try {
-      const response = await base44.functions.invoke('vendorTrade', { vendor_id: vendor.id, character_id: currentCharacter.id, session_id: sessionId, item_name: item.name, direction, quantity: quantities[item.name] || 1, quote_id: quote.quote_id, request_id: marketRequestId(direction, vendor.id, item.name) });
+      const response = await base44.functions.invoke('vendorTrade', { action: 'trade', request_kind: 'trade', vendor_id: vendor.id, character_id: currentCharacter.id, session_id: sessionId, item_name: item.name, direction, quantity: quantities[item.name] || 1, quote_id: quote.quote_id, request_id: marketRequestId(direction, vendor.id, item.name) });
       const data = response.data;
       if (!data?.success) throw new Error(data?.error || 'Trade failed.');
       setCurrentCharacter((previous) => ({ ...previous, ...(data.character_after || {}), inventory: data.inventory || previous.inventory }));

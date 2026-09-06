@@ -1,4 +1,4 @@
-export const MARKET_UX_BUNDLE_VERSION = 'market-ux-v1.0.0';
+export const MARKET_UX_BUNDLE_VERSION = 'market-ux-v1.1.0';
 
 export function formatCharacterFunds(character = {}) {
   const parts = [];
@@ -36,6 +36,10 @@ export function marketSearchMatches(item, search) {
 
 export function clampTradeQuantity(value, available) {
   return Math.max(1, Math.min(Math.max(1, Number(available) || 1), Math.floor(Number(value) || 1)));
+}
+
+export function buildSellQuotesRequest(vendorId, characterId) {
+  return { action: 'sell_quotes', request_kind: 'sell_quotes', vendor_id: vendorId, character_id: characterId };
 }
 
 export function marketRequestId(direction, vendorId, itemName) {

@@ -3,7 +3,8 @@ import { currencyCopper, quoteInventoryForVendor, quoteItem, VENDOR_ECONOMY_VERS
 import { executeVendorTrade } from '../../shared/vendorTradeCore.ts';
 import { quotedVendorCatalog } from '../../shared/vendorCatalog.ts';
 import { resolveVendorHaggle, VENDOR_HAGGLE_VERSION } from '../../shared/vendorHaggle.ts';
-import { formatCharacterFunds, marketCategories, mergeCatalogPages, MARKET_UX_BUNDLE_VERSION } from '../../shared/marketUxContract.js';
+import { buildSellQuotesRequest, formatCharacterFunds, marketCategories, mergeCatalogPages, MARKET_UX_BUNDLE_VERSION } from '../../shared/marketUxContract.js';
+import { handleVendorTradeRequest, VENDOR_TRADE_REQUEST_VERSION } from '../../shared/vendorTradeRequest.ts';
 
 const PROTECTED = { Character: ['6a6825cd07a490fa70a46852'], GameSession: ['6a6825edd695bd65a4322256'], CombatLog: ['6a767f23ec36fe219063ae49', '6a77463582a26b50018110ea'] };
 const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -45,6 +46,12 @@ export default async function(req) {
     const inventoryQuotes = quoteInventoryForVendor(vendor, character.inventory);
     const quoteFor = (name) => inventoryQuotes.find((entry) => entry.item_name === name)?.quote;
     record('live-shaped sell list prices every item independently without a blanket failure', inventoryQuotes.length === liveShapeInventory.length && quoteFor('Goodberry')?.reason === 'no_vendor_value' && quoteFor('Unidentified Staff')?.reason === 'unidentified_item' && quoteFor('Club')?.unit_copper === 5 && quoteFor('Club')?.unit_display === '5 cp' && quoteFor('Torch')?.unit_display === '5 sp' && quoteFor('Longbow')?.unit_display === '25 gp' && quoteFor('Arrows')?.status === 'ok');
+    const sellPanelPayload = buildSellQuotesRequest(vendor.id, character.id);
+    const beforeSellPanel = JSON.stringify({ character: await db.entities.Character.get(character.id), vendor: await db.entities.Vendor.get(vendor.id) });
+    const sellPanel = await handleVendorTradeRequest({ payload: sellPanelPayload, db, user, catalogItems: catalog });
+    const afterSellPanel = JSON.stringify({ character: await db.entities.Character.get(character.id), vendor: await db.entities.Vendor.get(vendor.id) });
+    const routedQuote = (name) => sellPanel.body?.quotes?.find((entry) => entry.item_name === name)?.quote;
+    record('exact frontend sell-panel request passes the production dispatcher with zero writes', sellPanel.status === 200 && sellPanel.body?.success === true && sellPanel.body?.quotes?.length === liveShapeInventory.length && routedQuote('Goodberry')?.reason === 'no_vendor_value' && routedQuote('Unidentified Staff')?.reason === 'unidentified_item' && routedQuote('Club')?.unit_display === '5 cp' && beforeSellPanel === afterSellPanel, { request_version: sellPanel.body?.request_version });
     const quoted = quotedVendorCatalog(vendor, catalog);
     const pages = [0, 1].map((page) => ({ items: quoted.slice(page * 40, (page + 1) * 40) }));
     const merged = mergeCatalogPages(pages, quoted.length);
@@ -84,5 +91,5 @@ export default async function(req) {
   record('protected live records untouched', beforeProtected === await hash(await protectedState(db)));
   const passed = tests.filter((test) => test.pass).length;
   const allPass = passed === tests.length;
-  return Response.json({ function_version: 'test-market-ux-contract-v1.1.0', bundle_version: MARKET_UX_BUNDLE_VERSION, vendor_economy_version: VENDOR_ECONOMY_VERSION, haggle_version: VENDOR_HAGGLE_VERSION, passed, failed: tests.length - passed, total: tests.length, all_pass: allPass, tests, cleanup, cleanup_verified: cleanup.every((item) => item.verified_absent), protected_ids: PROTECTED }, { status: allPass ? 200 : 500 });
+  return Response.json({ function_version: 'test-market-ux-contract-v1.2.0', bundle_version: MARKET_UX_BUNDLE_VERSION, request_version: VENDOR_TRADE_REQUEST_VERSION, vendor_economy_version: VENDOR_ECONOMY_VERSION, haggle_version: VENDOR_HAGGLE_VERSION, passed, failed: tests.length - passed, total: tests.length, all_pass: allPass, tests, cleanup, cleanup_verified: cleanup.every((item) => item.verified_absent), protected_ids: PROTECTED }, { status: allPass ? 200 : 500 });
 }
