@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
-import { currencyCopper, quoteItem } from '../../shared/vendorEconomy.ts';
+import { currencyCopper, quoteInventoryForVendor, quoteItem, VENDOR_ECONOMY_VERSION } from '../../shared/vendorEconomy.ts';
 import { executeVendorTrade } from '../../shared/vendorTradeCore.ts';
 import { quotedVendorCatalog } from '../../shared/vendorCatalog.ts';
 import { resolveVendorHaggle, VENDOR_HAGGLE_VERSION } from '../../shared/vendorHaggle.ts';
@@ -23,7 +23,16 @@ export default async function(req) {
   try {
     const tag = `MarketUxQA_${Date.now()}`;
     const dagger = { name: 'Dagger', category: 'Weapon', rarity: 'common', base_price: '2 gp', stock: 4, quantity: 2, stackable: false };
-    let character = await base44.entities.Character.create({ name: tag, race: 'Human', class: 'Rogue', level: 3, charisma: 16, wisdom: 14, proficiency_bonus: 2, skills: { Persuasion: true, Insight: true }, gold: 20, silver: 5, copper: 2, inventory: [{ ...dagger, stock: undefined }], long_rest_abilities: {}, is_active: false });
+    const liveShapeInventory = [
+      { ...dagger, stock: undefined },
+      { name: 'Goodberry', category: 'Consumable', expires_at: '2026-08-15T00:27:01.843Z', quantity: 10 },
+      { name: 'Unidentified Staff', category: 'Staff', is_magic: true, identification_status: 'unidentified', quantity: 1, stackable: false, acquisition_request_id: `${tag}:pickup` },
+      { name: 'Club', category: 'Weapon', rarity: 'common', cost: 1, cost_unit: 'sp', value: 1, source: 'Equipment Database', quantity: 1 },
+      { name: 'Torch', category: 'Adventuring Gear', rarity: 'common', cost: 1, cost_unit: 'gp', value: 1, source: 'Loot Table', quantity: 1 },
+      { name: 'Longbow', category: 'Weapon', rarity: 'common', cost: 50, cost_unit: 'gp', value: 50, source: 'Equipment Database', quantity: 1 },
+      { name: 'Arrows', category: 'Ammunition', rarity: 'common', cost: 1, cost_unit: 'gp', quantity: 36, stackable: true },
+    ];
+    let character = await base44.entities.Character.create({ name: tag, race: 'Human', class: 'Rogue', level: 3, charisma: 16, wisdom: 14, proficiency_bonus: 2, skills: { Persuasion: true, Insight: true }, gold: 20, silver: 5, copper: 2, inventory: liveShapeInventory, long_rest_abilities: {}, is_active: false });
     fixtures.push(['Character', character.id]);
     const session = await db.entities.GameSession.create({ character_id: character.id, title: tag, current_location: 'Market Square', story_log: [], is_active: false });
     fixtures.push(['GameSession', session.id]);
@@ -33,6 +42,9 @@ export default async function(req) {
 
     const sellQuote = quoteItem({ vendor, item: character.inventory[0], direction: 'sell_to_vendor' });
     record('authoritative sell quote displays half value and never flat five gold', sellQuote.unit_copper === 100 && sellQuote.unit_display === '1 gp' && sellQuote.unit_display !== '5 gp');
+    const inventoryQuotes = quoteInventoryForVendor(vendor, character.inventory);
+    const quoteFor = (name) => inventoryQuotes.find((entry) => entry.item_name === name)?.quote;
+    record('live-shaped sell list prices every item independently without a blanket failure', inventoryQuotes.length === liveShapeInventory.length && quoteFor('Goodberry')?.reason === 'no_vendor_value' && quoteFor('Unidentified Staff')?.reason === 'unidentified_item' && quoteFor('Club')?.unit_copper === 5 && quoteFor('Club')?.unit_display === '5 cp' && quoteFor('Torch')?.unit_display === '5 sp' && quoteFor('Longbow')?.unit_display === '25 gp' && quoteFor('Arrows')?.status === 'ok');
     const quoted = quotedVendorCatalog(vendor, catalog);
     const pages = [0, 1].map((page) => ({ items: quoted.slice(page * 40, (page + 1) * 40) }));
     const merged = mergeCatalogPages(pages, quoted.length);
@@ -72,5 +84,5 @@ export default async function(req) {
   record('protected live records untouched', beforeProtected === await hash(await protectedState(db)));
   const passed = tests.filter((test) => test.pass).length;
   const allPass = passed === tests.length;
-  return Response.json({ function_version: 'test-market-ux-contract-v1.0.0', bundle_version: MARKET_UX_BUNDLE_VERSION, haggle_version: VENDOR_HAGGLE_VERSION, passed, failed: tests.length - passed, total: tests.length, all_pass: allPass, tests, cleanup, cleanup_verified: cleanup.every((item) => item.verified_absent), protected_ids: PROTECTED }, { status: allPass ? 200 : 500 });
+  return Response.json({ function_version: 'test-market-ux-contract-v1.1.0', bundle_version: MARKET_UX_BUNDLE_VERSION, vendor_economy_version: VENDOR_ECONOMY_VERSION, haggle_version: VENDOR_HAGGLE_VERSION, passed, failed: tests.length - passed, total: tests.length, all_pass: allPass, tests, cleanup, cleanup_verified: cleanup.every((item) => item.verified_absent), protected_ids: PROTECTED }, { status: allPass ? 200 : 500 });
 }

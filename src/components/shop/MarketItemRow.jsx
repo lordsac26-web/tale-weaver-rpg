@@ -14,7 +14,7 @@ export default function MarketItemRow({ item, mode, quote, quantity = 1, onQuant
         <div className="min-w-0 flex-1">
           <h3 className="break-words text-base font-semibold leading-snug">{item.name}</h3>
           <p className="mt-1 text-sm text-fantasy-parchment-dim">{item.category || 'Misc'} · {item.rarity || 'common'}{mode === 'buy' ? ` · ${Number(item.stock) || 0} in stock` : ` · ${available} owned`}</p>
-          <p className="mt-2 font-semibold tabular-nums text-fantasy-brass">{quote?.status === 'ok' ? quote.unit_display : 'Quote unavailable'}</p>
+          <p className="mt-2 font-semibold tabular-nums text-fantasy-brass">{quote?.status === 'ok' ? quote.unit_display : quote?.reason === 'unidentified_item' ? 'Unidentified — cannot price' : quote?.reason === 'no_vendor_value' ? 'No vendor value' : 'Loading quote…'}</p>
           {haggle && <p className={`mt-1 text-sm ${haggle.success ? 'text-green-300' : 'text-fantasy-parchment-dim'}`}>{haggle.success ? `${haggle.discount_percent}% discount applied` : 'Haggle used · listed price stands'}</p>}
         </div>
       </div>

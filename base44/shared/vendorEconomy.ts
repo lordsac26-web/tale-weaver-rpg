@@ -1,4 +1,5 @@
 const COPPER = { cp: 1, sp: 10, ep: 50, gp: 100, pp: 1000 };
+export const VENDOR_ECONOMY_VERSION = 'vendor-economy-v1.1.0';
 
 export const VENDOR_CATEGORIES = {
   alchemist: ['Potion', 'Bomb', 'Poison', 'Component', 'Tool'], blacksmith: ['Weapon', 'Ammunition', 'Tool'], armorer: ['Armor', 'Shield', 'Tool'], general: ['Tool', 'Clothing', 'Trinket', 'Misc', 'Ammunition', 'Food'], tavern_inn: ['Food', 'Drink', 'Service'], tavern_pub: ['Food', 'Drink'], brothel: ['Service', 'Misc'], traveling: ['Weapon', 'Armor', 'Potion', 'Tool', 'Trinket', 'Misc', 'Clothing', 'Scroll'],
@@ -35,7 +36,11 @@ export function parseCopper(value) {
 
 export function canonicalValueCopper(item) {
   for (const field of ['base_price', 'price', 'cost', 'value']) {
-    const copper = parseCopper(item?.[field]);
+    const rawValue = item?.[field];
+    const declaredUnit = item?.[`${field}_unit`] || (field === 'cost' ? item?.cost_unit : null);
+    const copper = declaredUnit && (typeof rawValue === 'number' || /^\d+(?:\.\d+)?$/.test(String(rawValue || '').trim()))
+      ? parseCopper({ amount: rawValue, unit: declaredUnit })
+      : parseCopper(rawValue);
     if (Number.isInteger(copper) && copper > 0) return copper;
   }
   return null;
@@ -50,8 +55,10 @@ export function formatCopper(copper) {
 }
 
 export function quoteItem({ vendor, item, direction }) {
+  const unidentified = item?.is_magic === true && String(item?.identification_status || '').toLowerCase() === 'unidentified';
   const canonicalCopper = canonicalValueCopper(item);
-  if (!canonicalCopper) return { status: 'price_unavailable', direction, item_name: item?.name || null };
+  if (unidentified) return { status: 'price_unavailable', reason: 'unidentified_item', direction, item_name: item?.name || null };
+  if (!canonicalCopper) return { status: 'price_unavailable', reason: 'no_vendor_value', direction, item_name: item?.name || null };
   const modifier = Math.round(Number(vendor?.reputation_modifier) || 0);
   const baseCopper = direction === 'sell_to_vendor' ? Math.floor(canonicalCopper / 2) : canonicalCopper;
   const totalCopper = Math.max(1, baseCopper + Math.round((baseCopper * modifier) / 100));
@@ -60,6 +67,10 @@ export function quoteItem({ vendor, item, direction }) {
     unit_copper: totalCopper, unit_display: formatCopper(totalCopper),
     quote_id: `${vendor.id}|${direction}|${item.name}|${canonicalCopper}|${Number(item.stock) || 0}|${modifier}`,
   };
+}
+
+export function quoteInventoryForVendor(vendor, inventory = []) {
+  return (inventory || []).map((item) => ({ item_name: item?.name || null, quote: quoteItem({ vendor, item, direction: 'sell_to_vendor' }) }));
 }
 
 export function eligibleCatalogItems(vendor, items) {

@@ -46,10 +46,12 @@ export default function VendorShop({ vendor, character, sessionId, visitId, onCl
   useEffect(() => {
     if (mode !== 'sell' || !sellItems.length) return;
     let cancelled = false;
-    Promise.all(sellItems.map(async (item) => {
-      const response = await base44.functions.invoke('vendorTrade', { action: 'quote', vendor_id: vendor.id, character_id: currentCharacter.id, item_name: item.name, direction: 'sell_to_vendor' });
-      return [item.name, response.data?.quote || null];
-    })).then((entries) => { if (!cancelled) setQuotes((previous) => ({ ...previous, ...Object.fromEntries(entries) })); }).catch((nextError) => { if (!cancelled) setError(errorMessage(nextError)); });
+    base44.functions.invoke('vendorTrade', { action: 'sell_quotes', vendor_id: vendor.id, character_id: currentCharacter.id })
+      .then((response) => {
+        const entries = (response.data?.quotes || []).map((entry) => [entry.item_name, entry.quote]);
+        if (!cancelled) setQuotes((previous) => ({ ...previous, ...Object.fromEntries(entries) }));
+      })
+      .catch((nextError) => { if (!cancelled) setError(errorMessage(nextError)); });
     return () => { cancelled = true; };
   }, [mode, vendor.id, currentCharacter?.id, JSON.stringify(sellItems.map((item) => [item.name, item.quantity, item.base_price, item.cost, item.value]))]);
 

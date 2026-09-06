@@ -1,5 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { iconForItem, quoteItem } from '../../shared/vendorEconomy.ts';
+import { iconForItem, quoteInventoryForVendor, quoteItem, VENDOR_ECONOMY_VERSION } from '../../shared/vendorEconomy.ts';
+
+const VENDOR_TRADE_VERSION = 'vendor-trade-v1.1.0';
 import { quotedVendorCatalog, catalogItemForTrade } from '../../shared/vendorCatalog.ts';
 import { resolveVendorHaggle } from '../../shared/vendorHaggle.ts';
 import { executeVendorTrade } from '../../shared/vendorTradeCore.ts';
@@ -17,11 +19,17 @@ export default async function vendorTrade(req) {
       const pageSize = Math.min(40, Math.max(1, Number(payload.page_size) || 24)); const page = Math.max(0, Number(payload.page) || 0);
       return Response.json({ success: true, eligible_count: eligible.length, reachable_count: eligible.length, page, page_size: pageSize, items: eligible.slice(page * pageSize, (page + 1) * pageSize).map((item) => ({ ...item, icon: iconForItem(item) })) });
     }
+    if (payload.action === 'sell_quotes') {
+      const [vendor, character] = await Promise.all([db.entities.Vendor.get(payload.vendor_id), db.entities.Character.get(payload.character_id)]);
+      if (!vendor || !character) return Response.json({ error: 'unknown_market_context' }, { status: 404 });
+      return Response.json({ success: true, quotes: quoteInventoryForVendor(vendor, character.inventory || []), vendor_trade_version: VENDOR_TRADE_VERSION, vendor_economy_version: VENDOR_ECONOMY_VERSION });
+    }
     if (payload.action === 'quote') {
       const [vendor, character] = await Promise.all([db.entities.Vendor.get(payload.vendor_id), db.entities.Character.get(payload.character_id)]);
       const source = payload.direction === 'buy_from_vendor' ? catalogItemForTrade(vendor, catalog, payload.item_name) : (character?.inventory || []).find((item) => item.name === payload.item_name);
       if (!vendor || !source) return Response.json({ error: 'unknown_item' }, { status: 404 });
-      const quote = quoteItem({ vendor, item: source, direction: payload.direction }); return Response.json({ quote }, { status: quote.status === 'ok' ? 200 : 400 });
+      const quote = quoteItem({ vendor, item: source, direction: payload.direction });
+      return Response.json({ quote, vendor_trade_version: VENDOR_TRADE_VERSION, vendor_economy_version: VENDOR_ECONOMY_VERSION });
     }
     if (payload.action === 'haggle') {
       const result = await resolveVendorHaggle({ db, user, characterId: payload.character_id, sessionId: payload.session_id, vendorId: payload.vendor_id, itemName: payload.item_name, visitId: payload.visit_id, skill: payload.skill, catalogItems: catalog });
