@@ -1555,6 +1555,7 @@ export default function Game() {
           <GameToolbar
             sessionId={sessionId}
             characterId={character?.id}
+            currentLocation={session?.current_location}
             inCombat={inCombat}
             started={started}
             showDiceRoller={showDiceRoller}

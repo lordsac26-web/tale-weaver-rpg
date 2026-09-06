@@ -1,279 +1,117 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShoppingCart, Coins, TrendingUp, TrendingDown, Package, Search } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Package, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import MarketCurrency from './MarketCurrency';
+import MarketFilters from './MarketFilters';
+import MarketItemRow from './MarketItemRow';
+import { marketCategories, marketRequestId, mergeCatalogPages } from '../../../base44/shared/marketUxContract';
 
+const errorMessage = (error) => error?.response?.data?.error || error?.data?.error || error?.message || 'The trade could not be completed.';
 
-export default function VendorShop({ vendor, character, sessionId, onClose, onTransaction }) {
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [selectedQuote, setSelectedQuote] = useState(null);
+export default function VendorShop({ vendor, character, sessionId, visitId, onClose, onTransaction }) {
   const [mode, setMode] = useState('buy');
-  const [processing, setProcessing] = useState(false);
+  const [catalog, setCatalog] = useState([]);
+  const [currentCharacter, setCurrentCharacter] = useState(character);
+  const [quotes, setQuotes] = useState({});
+  const [haggles, setHaggles] = useState({});
+  const [quantities, setQuantities] = useState({});
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
+  const [category, setCategory] = useState('All');
+  const [loading, setLoading] = useState(true);
+  const [pendingKey, setPendingKey] = useState(null);
+  const [error, setError] = useState('');
+  const pendingRef = useRef(null);
 
-  const playerGold = character.gold || 0;
-  const playerInventory = character.inventory || [];
+  useEffect(() => setCurrentCharacter(character), [character]);
 
-  const selectItem = async (item) => {
-    setSelectedItem(item);
-    setSelectedQuote(null);
-    const direction = mode === 'buy' ? 'buy_from_vendor' : 'sell_to_vendor';
-    const response = await base44.functions.invoke('vendorTrade', { action: 'quote', vendor_id: vendor.id, character_id: character.id, item_name: item.name, direction });
-    setSelectedQuote(response.data?.quote || null);
+  const loadCatalog = useCallback(async () => {
+    setLoading(true);
+    const pages = [];
+    let page = 0;
+    let eligibleCount = 0;
+    do {
+      const response = await base44.functions.invoke('vendorTrade', { action: 'catalog', vendor_id: vendor.id, page, page_size: 40 });
+      pages.push(response.data);
+      eligibleCount = Number(response.data?.eligible_count || 0);
+      page += 1;
+    } while (pages.flatMap((entry) => entry?.items || []).length < eligibleCount && page < 20);
+    setCatalog(mergeCatalogPages(pages, eligibleCount).items);
+    setLoading(false);
+  }, [vendor.id]);
+
+  useEffect(() => { loadCatalog().catch((nextError) => { setError(errorMessage(nextError)); setLoading(false); }); }, [loadCatalog]);
+
+  const sellItems = currentCharacter?.inventory || [];
+  useEffect(() => {
+    if (mode !== 'sell' || !sellItems.length) return;
+    let cancelled = false;
+    Promise.all(sellItems.map(async (item) => {
+      const response = await base44.functions.invoke('vendorTrade', { action: 'quote', vendor_id: vendor.id, character_id: currentCharacter.id, item_name: item.name, direction: 'sell_to_vendor' });
+      return [item.name, response.data?.quote || null];
+    })).then((entries) => { if (!cancelled) setQuotes((previous) => ({ ...previous, ...Object.fromEntries(entries) })); }).catch((nextError) => { if (!cancelled) setError(errorMessage(nextError)); });
+    return () => { cancelled = true; };
+  }, [mode, vendor.id, currentCharacter?.id, JSON.stringify(sellItems.map((item) => [item.name, item.quantity, item.base_price, item.cost, item.value]))]);
+
+  const activeItems = mode === 'buy' ? catalog : sellItems;
+  const categories = useMemo(() => marketCategories(activeItems), [activeItems]);
+  useEffect(() => { if (!categories.includes(category)) setCategory('All'); }, [categories, category]);
+  const filteredItems = activeItems.filter((item) => {
+    const matchesSearch = `${item.name} ${item.category || ''} ${item.rarity || ''}`.toLowerCase().includes(search.toLowerCase());
+    return matchesSearch && (category === 'All' || (item.category || 'Misc') === category);
+  });
+
+  const haggle = async (item) => {
+    const key = `haggle:${item.name}`;
+    if (pendingRef.current || haggles[item.name]) return;
+    pendingRef.current = key; setPendingKey(key); setError('');
+    try {
+      const response = await base44.functions.invoke('vendorTrade', { action: 'haggle', vendor_id: vendor.id, character_id: currentCharacter.id, session_id: sessionId, item_name: item.name, visit_id: visitId, skill: 'Persuasion' });
+      const receipt = response.data?.receipt;
+      setHaggles((previous) => ({ ...previous, [item.name]: receipt }));
+      setQuotes((previous) => ({ ...previous, [item.name]: response.data?.quote }));
+    } catch (nextError) { setError(errorMessage(nextError)); }
+    finally { pendingRef.current = null; setPendingKey(null); }
   };
 
-  const handleTrade = async () => {
-    if (!selectedItem || !selectedQuote || !sessionId) return;
-    setProcessing(true);
+  const trade = async (item) => {
     const direction = mode === 'buy' ? 'buy_from_vendor' : 'sell_to_vendor';
-    const response = await base44.functions.invoke('vendorTrade', { vendor_id: vendor.id, character_id: character.id, session_id: sessionId, item_name: selectedItem.name, direction, quantity: 1, quote_id: selectedQuote.quote_id, request_id: `${vendor.id}-${Date.now()}-${Math.random().toString(36).slice(2)}` });
-    if (response.data?.success) {
+    const key = `${direction}:${item.name}`;
+    if (pendingRef.current) return;
+    const quote = mode === 'buy' ? (quotes[item.name] || item.quote) : quotes[item.name];
+    if (quote?.status !== 'ok') return;
+    pendingRef.current = key; setPendingKey(key); setError('');
+    try {
+      const response = await base44.functions.invoke('vendorTrade', { vendor_id: vendor.id, character_id: currentCharacter.id, session_id: sessionId, item_name: item.name, direction, quantity: quantities[item.name] || 1, quote_id: quote.quote_id, request_id: marketRequestId(direction, vendor.id, item.name) });
+      const data = response.data;
+      if (!data?.success) throw new Error(data?.error || 'Trade failed.');
+      setCurrentCharacter((previous) => ({ ...previous, ...(data.character_after || {}), inventory: data.inventory || previous.inventory }));
+      setQuantities((previous) => ({ ...previous, [item.name]: 1 }));
+      if (mode === 'buy') setQuotes((previous) => { const next = { ...previous }; delete next[item.name]; return next; });
       await onTransaction();
-      setSelectedItem(null);
-      setSelectedQuote(null);
-    }
-    setProcessing(false);
+      if (mode === 'buy') await loadCatalog();
+    } catch (nextError) { setError(errorMessage(nextError)); }
+    finally { pendingRef.current = null; setPendingKey(null); }
   };
 
-  const vendorItems = vendor.items || [];
-  const activeItems = mode === 'buy' ? vendorItems : playerInventory;
-  const filteredItems = activeItems.filter((item) => `${item.name} ${item.category || ''} ${item.rarity || ''}`.toLowerCase().includes(search.toLowerCase()));
-  const pageSize = 18;
-  const visibleItems = filteredItems.slice(page * pageSize, (page + 1) * pageSize);
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(8px)' }}
-      onClick={onClose}>
-      
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        onClick={e => e.stopPropagation()}
-        className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl overflow-hidden rune-border"
-        style={{
-          background: 'rgba(12,8,4,0.98)',
-          border: '1px solid rgba(180,140,90,0.35)',
-          boxShadow: '0 0 60px rgba(0,0,0,0.9)',
-        }}>
-        
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 flex-shrink-0"
-          style={{ background: 'rgba(30,20,8,0.7)', borderBottom: '1px solid rgba(180,140,90,0.2)' }}>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl"
-              style={{ background: 'rgba(60,40,10,0.6)', border: '1px solid rgba(201,169,110,0.3)' }}>
-              {vendor.portrait_emoji || '🏪'}
-            </div>
-            <div>
-              <h2 className="font-fantasy font-bold text-lg" style={{ color: '#f0c040' }}>{vendor.name}</h2>
-              <p className="text-xs italic" style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'EB Garamond, serif' }}>
-                {vendor.greeting || 'Welcome, traveler!'}
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-lg" style={{ color: 'rgba(201,169,110,0.4)' }}>
-            <X className="w-5 h-5" />
-          </button>
+    <div className="fixed inset-0 z-30 flex min-h-0 items-stretch justify-center bg-black/90 sm:p-4" onClick={onClose}>
+      <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={(event) => event.stopPropagation()} className="flex h-full min-h-0 w-full max-w-4xl flex-col overflow-hidden bg-fantasy-wood-deep text-fantasy-parchment sm:h-[calc(100dvh-2rem)] sm:rounded-2xl sm:border sm:border-fantasy-brass" aria-label={`${vendor.name} market`}>
+        <header className="flex shrink-0 items-start gap-3 border-b border-fantasy-brass bg-fantasy-wood-dark p-3 sm:p-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-fantasy-brass bg-fantasy-wood-deep text-xl">{vendor.portrait_emoji || '🏪'}</div>
+          <div className="min-w-0 flex-1"><h2 className="break-words font-fantasy text-lg font-bold text-fantasy-brass">{vendor.name}</h2><p className="text-sm text-fantasy-parchment-dim">{vendor.greeting || 'Welcome, traveler.'}</p></div>
+          <button type="button" onClick={onClose} aria-label="Close market" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-fantasy-wood-mid focus-visible:ring-2 focus-visible:ring-fantasy-brass"><X className="h-5 w-5" /></button>
+        </header>
+        <div className="shrink-0 space-y-3 border-b border-fantasy-brass bg-fantasy-wood-deep p-3">
+          <MarketCurrency character={currentCharacter} />
+          <div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => { setMode('buy'); setSearch(''); setCategory('All'); }} className={`min-h-11 rounded-lg border font-semibold focus-visible:ring-2 focus-visible:ring-fantasy-brass ${mode === 'buy' ? 'border-fantasy-brass bg-fantasy-wood-mid' : 'border-fantasy-wood-mid bg-fantasy-wood-dark'}`}>Buy Stock</button><button type="button" onClick={() => { setMode('sell'); setSearch(''); setCategory('All'); }} className={`min-h-11 rounded-lg border font-semibold focus-visible:ring-2 focus-visible:ring-fantasy-brass ${mode === 'sell' ? 'border-fantasy-brass bg-fantasy-wood-mid' : 'border-fantasy-wood-mid bg-fantasy-wood-dark'}`}>Sell Items</button></div>
         </div>
-
-        {/* Player Gold */}
-        <div className="px-5 py-2 flex items-center justify-between flex-shrink-0"
-          style={{ background: 'rgba(8,5,2,0.7)', borderBottom: '1px solid rgba(180,140,90,0.1)' }}>
-          <span className="text-sm" style={{ color: 'rgba(180,140,90,0.5)' }}>Your Gold:</span>
-          <div className="flex items-center gap-1.5 font-fantasy font-bold" style={{ color: '#fbbf24' }}>
-            <Coins className="w-4 h-4" />
-            {playerGold} gp
-          </div>
+        <MarketFilters search={search} onSearch={setSearch} categories={categories} category={category} onCategory={setCategory} />
+        {error && <div className="shrink-0 border-b border-red-700 bg-red-950 p-3 text-sm text-red-100" role="alert">{error} Try refreshing the quote or choosing another item.</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {loading && mode === 'buy' ? <p className="py-10 text-center text-fantasy-parchment-dim">Loading all stock…</p> : filteredItems.length ? <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{filteredItems.map((item) => <MarketItemRow key={item.id || item.name} item={item} mode={mode} quote={mode === 'buy' ? (quotes[item.name] || item.quote) : quotes[item.name]} quantity={quantities[item.name] || 1} onQuantity={(quantity) => setQuantities((previous) => ({ ...previous, [item.name]: quantity }))} onTrade={() => trade(item)} onHaggle={() => haggle(item)} pending={pendingKey === `${mode === 'buy' ? 'buy_from_vendor' : 'sell_to_vendor'}:${item.name}` || pendingKey === `haggle:${item.name}`} haggle={haggles[item.name]} />)}</div> : <div className="py-12 text-center text-fantasy-parchment-dim"><Package className="mx-auto mb-3 h-10 w-10" /><p>{search || category !== 'All' ? 'No items match these filters.' : mode === 'buy' ? 'No items in stock.' : 'You have nothing to sell.'}</p></div>}
         </div>
-
-        {/* Mode Tabs */}
-        <div className="flex gap-2 px-5 py-3 flex-shrink-0" style={{ background: 'rgba(10,6,3,0.8)' }}>
-          <button onClick={() => setMode('buy')}
-            className="flex-1 py-2 rounded-lg font-fantasy text-sm transition-all flex items-center justify-center gap-2"
-            style={mode === 'buy' ? {
-              background: 'rgba(60,40,10,0.8)',
-              border: '1px solid rgba(201,169,110,0.5)',
-              color: '#f0c040',
-            } : {
-              background: 'rgba(20,13,5,0.5)',
-              border: '1px solid rgba(180,140,90,0.15)',
-              color: 'rgba(180,140,90,0.5)',
-            }}>
-            <TrendingDown className="w-4 h-4" />
-            Buy from {vendor.name}
-          </button>
-          <button onClick={() => setMode('sell')}
-            className="flex-1 py-2 rounded-lg font-fantasy text-sm transition-all flex items-center justify-center gap-2"
-            style={mode === 'sell' ? {
-              background: 'rgba(60,40,10,0.8)',
-              border: '1px solid rgba(201,169,110,0.5)',
-              color: '#f0c040',
-            } : {
-              background: 'rgba(20,13,5,0.5)',
-              border: '1px solid rgba(180,140,90,0.15)',
-              color: 'rgba(180,140,90,0.5)',
-            }}>
-            <TrendingUp className="w-4 h-4" />
-            Sell Your Items
-          </button>
-        </div>
-
-        {/* Searchable, paged trade catalog */}
-        <div className="px-5 pt-3 flex-shrink-0" style={{ background: 'rgba(8,5,2,0.8)' }}>
-          <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: 'rgba(0,0,0,0.28)', border: '1px solid rgba(180,140,90,0.18)' }}>
-            <Search className="w-4 h-4" style={{ color: 'rgba(201,169,110,0.45)' }} />
-            <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search items" className="flex-1 bg-transparent text-sm outline-none" style={{ color: '#e8d5b7' }} />
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5 min-h-0" style={{ background: 'rgba(8,5,2,0.8)' }}>
-          {mode === 'buy' ? (
-            vendorItems.length === 0 ? (
-              <div className="text-center py-12">
-                <Package className="w-12 h-12 mx-auto mb-3 opacity-20" style={{ color: '#c9a96e' }} />
-                <p className="text-sm" style={{ color: 'rgba(180,140,90,0.4)' }}>No items in stock</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {visibleItems.map((item, idx) => (
-                  <ItemCard
-                    key={idx}
-                    item={item}
-                    mode="buy"
-                    playerGold={playerGold}
-                    onClick={() => selectItem(item)}
-                  />
-                ))}
-              </div>
-            )
-          ) : (
-            playerInventory.length === 0 ? (
-              <div className="text-center py-12">
-                <Package className="w-12 h-12 mx-auto mb-3 opacity-20" style={{ color: '#c9a96e' }} />
-                <p className="text-sm" style={{ color: 'rgba(180,140,90,0.4)' }}>Nothing to sell</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {visibleItems.map((item, idx) => (
-                  <ItemCard
-                    key={idx}
-                    item={item}
-                    mode="sell"
-                    onClick={() => selectItem(item)}
-                  />
-                ))}
-              </div>
-            )
-          )}
-        </div>
-
-        {filteredItems.length > pageSize && (
-          <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ background: 'rgba(8,5,2,0.92)', borderTop: '1px solid rgba(180,140,90,0.12)' }}>
-            <button onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0} className="text-xs disabled:opacity-30" style={{ color: '#f0c040' }}>Previous</button>
-            <span className="text-xs" style={{ color: 'rgba(201,169,110,0.55)' }}>Page {page + 1} of {totalPages}</span>
-            <button onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))} disabled={page >= totalPages - 1} className="text-xs disabled:opacity-30" style={{ color: '#f0c040' }}>Next</button>
-          </div>
-        )}
-
-        {/* Item Detail Modal */}
-        <AnimatePresence>
-          {selectedItem && (
-            <div className="absolute inset-0 flex items-center justify-center p-4"
-              style={{ background: 'rgba(0,0,0,0.8)' }}
-              onClick={() => setSelectedItem(null)}>
-              <motion.div
-                initial={{ scale: 0.9 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0.9 }}
-                onClick={e => e.stopPropagation()}
-                className="w-full max-w-sm rounded-xl p-5"
-                style={{ background: 'rgba(20,13,5,0.98)', border: '1px solid rgba(180,140,90,0.3)' }}>
-                
-                <div className="flex items-start gap-3 mb-4">
-                  <span className="text-3xl">{selectedItem.icon || '📦'}</span>
-                  <div className="flex-1">
-                    <h3 className="font-fantasy font-bold text-lg" style={{ color: '#f0c040' }}>
-                      {selectedItem.name}
-                    </h3>
-                    {selectedItem.rarity && (
-                      <div className="text-xs capitalize mt-1" style={{ color: 'rgba(180,140,90,0.6)' }}>
-                        {selectedItem.rarity}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {selectedItem.description && (
-                  <p className="text-sm mb-4 leading-relaxed" 
-                    style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
-                    {selectedItem.description}
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between mb-4 p-3 rounded-lg"
-                  style={{ background: 'rgba(60,40,10,0.4)', border: '1px solid rgba(201,169,110,0.2)' }}>
-                  <span className="text-sm" style={{ color: 'rgba(180,140,90,0.6)' }}>
-                    {mode === 'buy' ? 'Price:' : 'Sell for:'}
-                  </span>
-                  <div className="flex items-center gap-1.5 font-fantasy font-bold text-lg" style={{ color: '#fbbf24' }}>
-                    <Coins className="w-4 h-4" />
-                    {selectedQuote?.status === 'ok' ? selectedQuote.unit_display : 'Loading quote…'}
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button onClick={() => setSelectedItem(null)}
-                    className="flex-1 py-2 rounded-lg text-sm font-fantasy"
-                    style={{ background: 'rgba(20,13,5,0.6)', border: '1px solid rgba(180,140,90,0.2)', color: 'rgba(201,169,110,0.6)' }}>
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleTrade}
-                    disabled={processing || !selectedQuote || selectedQuote.status !== 'ok' || !sessionId}
-                    className="flex-1 py-2 rounded-lg text-sm font-fantasy btn-fantasy disabled:opacity-50">
-                    {processing ? 'Processing...' : mode === 'buy' ? 'Buy' : 'Sell'}
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+      </motion.section>
     </div>
-  );
-}
-
-function ItemCard({ item, mode, playerGold, onClick }) {
-  const canAfford = true;
-
-  return (
-    <button
-      onClick={onClick}
-      className="p-3 rounded-xl text-left transition-all"
-      style={{
-        background: canAfford ? 'rgba(20,13,5,0.7)' : 'rgba(40,10,10,0.5)',
-        border: `1px solid ${canAfford ? 'rgba(180,140,90,0.2)' : 'rgba(180,50,50,0.3)'}`,
-        opacity: canAfford ? 1 : 0.6,
-      }}>
-      <div className="flex items-start justify-between mb-2">
-        <span className="text-2xl">{item.icon || '📦'}</span>
-        {item.quantity > 1 && (
-          <span className="px-1.5 py-0.5 rounded-full text-xs font-fantasy"
-            style={{ background: 'rgba(80,50,10,0.6)', color: '#e8d5b7' }}>
-            ×{item.quantity}
-          </span>
-        )}
-      </div>
-      <div className="font-fantasy text-sm font-bold truncate mb-1" style={{ color: '#f0c040' }}>
-        {item.name}
-      </div>
-      <div className="flex items-center gap-1 text-xs" style={{ color: '#fbbf24' }}>
-        <Coins className="w-3 h-3" />
-        Quote on selection
-      </div>
-    </button>
   );
 }

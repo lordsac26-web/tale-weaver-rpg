@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ShoppingBag, Store, Coins } from 'lucide-react';
+import { ChevronLeft, ShoppingBag, Store } from 'lucide-react';
 import VendorCard from '@/components/shop/VendorCard';
 import VendorShop from '@/components/shop/VendorShop';
-import MagicItemMarket from '@/components/shop/MagicItemMarket';
+import MarketCurrency from '@/components/shop/MarketCurrency';
 import { AnimatePresence } from 'framer-motion';
+import { MARKET_UX_BUNDLE_VERSION } from '../../base44/shared/marketUxContract';
 
 export default function Market() {
   const navigate = useNavigate();
@@ -15,7 +16,8 @@ export default function Market() {
   const characterId = searchParams.get('character_id');
   const queryClient = useQueryClient();
 
-  const [selectedVendor, setSelectedVendor] = useState(null);
+  const [selectedVendorId, setSelectedVendorId] = useState(null);
+  const [visitId] = useState(() => `visit:${sessionId || 'market'}:${crypto.randomUUID()}`);
 
   const { data: vendors = [], isLoading: vendorsLoading } = useQuery({
     queryKey: ['vendors'],
@@ -52,9 +54,10 @@ export default function Market() {
   const localVendors = vendors.filter(v => 
     !v.location || v.location === session?.current_location || v.is_traveling
   );
+  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) || null;
 
   return (
-    <div className="min-h-screen parchment-bg flex flex-col" style={{ color: '#e8d5b7' }}>
+    <div className="game-viewport min-h-0 overflow-hidden parchment-bg flex flex-col" data-market-ux-version={MARKET_UX_BUNDLE_VERSION} style={{ color: '#e8d5b7', height: '100dvh', maxHeight: '100dvh' }}>
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0"
         style={{ background: 'rgba(8,5,2,0.95)', borderBottom: '1px solid rgba(180,140,90,0.2)' }}>
@@ -70,15 +73,7 @@ export default function Market() {
             {session?.current_location || 'Local merchants'}
           </p>
         </div>
-        {character && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
-            style={{ background: 'rgba(60,40,10,0.5)', border: '1px solid rgba(201,169,110,0.3)' }}>
-            <Coins className="w-4 h-4" style={{ color: '#fbbf24' }} />
-            <span className="font-fantasy font-bold text-sm" style={{ color: '#fbbf24' }}>
-              {character.gold || 0} gp
-            </span>
-          </div>
-        )}
+        {character && <MarketCurrency character={character} />}
       </div>
 
       {/* Vendors List */}
@@ -97,18 +92,12 @@ export default function Market() {
                 <VendorCard
                   key={vendor.id}
                   vendor={vendor}
-                  onVisit={setSelectedVendor}
+                  onVisit={(vendor) => setSelectedVendorId(vendor.id)}
                 />
               ))}
             </div>
           )}
 
-          {character && (
-            <MagicItemMarket
-              character={character}
-              onTransaction={handleTransaction}
-            />
-          )}
         </div>
       </div>
 
@@ -119,7 +108,8 @@ export default function Market() {
             vendor={selectedVendor}
             character={character}
             sessionId={sessionId}
-            onClose={() => setSelectedVendor(null)}
+            visitId={visitId}
+            onClose={() => setSelectedVendorId(null)}
             onTransaction={handleTransaction}
           />
         )}

@@ -1,5 +1,6 @@
 import { addAmmunition } from './ammunition.ts';
 import { canonicalValueCopper, currencyCopper, currencyFields, quoteItem } from './vendorEconomy.ts';
+import { catalogItemForTrade } from './vendorCatalog.ts';
 
 const normal = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const owns = (character, user) => character?.created_by_id === user?.id || character?.created_by_id === user?.email;
@@ -22,24 +23,27 @@ function removeInventory(inventory, itemName, quantity) {
   return copy;
 }
 
-export async function executeVendorTrade({ db, user, characterId, sessionId, vendorId, itemName, direction, quantity, quoteId, requestId }) {
+export async function executeVendorTrade({ db, user, characterId, sessionId, vendorId, itemName, direction, quantity, quoteId, requestId, catalogItems = [] }) {
   if (!Number.isInteger(quantity) || quantity <= 0 || !['buy_from_vendor', 'sell_to_vendor'].includes(direction) || !requestId) return { status: 400, body: { error: 'invalid_trade_request' } };
   const [character, session, vendor] = await Promise.all([db.entities.Character.get(characterId), db.entities.GameSession.get(sessionId), db.entities.Vendor.get(vendorId)]);
   if (!character || !session || !vendor || !owns(character, user) || session.character_id !== characterId) return { status: 403, body: { error: 'linkage_mismatch' } };
   const receipts = Array.isArray(character.long_rest_abilities?.__vendor_trade_receipts) ? character.long_rest_abilities.__vendor_trade_receipts : [];
   const prior = receipts.find((receipt) => receipt.request_id === requestId);
   if (prior) return { status: 200, body: { success: true, already_processed: true, receipt: prior } };
-  const source = direction === 'buy_from_vendor' ? stockItem(vendor, itemName) : inventoryItem(character, itemName);
+  const source = direction === 'buy_from_vendor' ? (stockItem(vendor, itemName) || catalogItemForTrade(vendor, catalogItems, itemName)) : inventoryItem(character, itemName);
   if (!source) return { status: 404, body: { error: 'unknown_item' } };
   if (!canonicalValueCopper(source)) return { status: 400, body: { error: 'price_unavailable' } };
-  const quote = quoteItem({ vendor, item: source, direction });
+  const baseQuote = quoteItem({ vendor, item: source, direction });
+  const haggleReceipts = Array.isArray(character.long_rest_abilities?.__vendor_haggle_receipts) ? character.long_rest_abilities.__vendor_haggle_receipts : [];
+  const haggleReceipt = direction === 'buy_from_vendor' ? haggleReceipts.find((receipt) => receipt.vendor_id === vendorId && normal(receipt.item_name) === normal(itemName) && receipt.adjusted_quote?.quote_id === quoteId && receipt.base_quote_id === baseQuote.quote_id) : null;
+  const quote = haggleReceipt?.adjusted_quote || baseQuote;
   if (quote.status !== 'ok' || quote.quote_id !== quoteId) return { status: 409, body: { error: 'stale_quote' } };
   const totalCopper = quote.unit_copper * quantity;
   const characterBefore = currencyCopper(character); const reserveBefore = Math.round(Number(vendor.gold_reserve || 0) * 100);
   if (direction === 'buy_from_vendor' && ((Number(source.stock) || 0) < quantity || characterBefore < totalCopper)) return { status: 400, body: { error: (Number(source.stock) || 0) < quantity ? 'insufficient_stock' : 'insufficient_funds' } };
   if (direction === 'sell_to_vendor' && (reserveBefore < totalCopper || !removeInventory(character.inventory, itemName, quantity))) return { status: 400, body: { error: reserveBefore < totalCopper ? 'insufficient_reserve' : 'insufficient_inventory' } };
   const inventoryAfter = direction === 'buy_from_vendor' ? addInventory(character.inventory, source, quantity) : removeInventory(character.inventory, itemName, quantity);
-  const vendorItemsAfter = direction === 'buy_from_vendor' ? (vendor.items || []).map((item) => normal(item.name) === normal(itemName) ? { ...item, stock: (Number(item.stock) || 0) - quantity } : item) : (() => { const existing = stockItem(vendor, itemName); return existing ? (vendor.items || []).map((item) => normal(item.name) === normal(itemName) ? { ...item, stock: (Number(item.stock) || 0) + quantity } : item) : [...(vendor.items || []), { ...source, stock: quantity }]; })();
+  const vendorItemsAfter = direction === 'buy_from_vendor' ? (() => { const existing = stockItem(vendor, itemName); return existing ? (vendor.items || []).map((item) => normal(item.name) === normal(itemName) ? { ...item, stock: (Number(item.stock) || 0) - quantity } : item) : [...(vendor.items || []), { ...source, stock: (Number(source.stock) || 0) - quantity }]; })() : (() => { const existing = stockItem(vendor, itemName); return existing ? (vendor.items || []).map((item) => normal(item.name) === normal(itemName) ? { ...item, stock: (Number(item.stock) || 0) + quantity } : item) : [...(vendor.items || []), { ...source, stock: quantity }]; })();
   const characterAfter = direction === 'buy_from_vendor' ? characterBefore - totalCopper : characterBefore + totalCopper;
   const reserveAfter = direction === 'buy_from_vendor' ? reserveBefore + totalCopper : reserveBefore - totalCopper;
   const receipt = { request_id: requestId, vendor_id: vendorId, item_name: source.name, direction, quantity, quote, total_copper: totalCopper, at: new Date().toISOString() };

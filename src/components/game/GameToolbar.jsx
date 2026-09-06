@@ -11,7 +11,7 @@ import { getManualRollEnabled, setManualRollEnabled } from './rollPreferences';
  * Shows primary actions inline; overflow actions behind a "More" menu.
  */
 export default function GameToolbar({
-  sessionId, characterId, inCombat, started,
+  sessionId, characterId, currentLocation, inCombat, started,
   showDiceRoller, setShowDiceRoller,
   showCompanions, setShowCompanions,
   setShowRestModal, setShowSceneVisualizer, setShowPortraitGen, setShowCharSheet, restDisabled = false,
@@ -39,8 +39,12 @@ export default function GameToolbar({
     }
   }, [showMore]);
 
+  const marketNearby = /market|bazaar|vendor|merchant|shop|district|quarter/i.test(String(currentLocation || ''));
+  const openMarket = () => navigate(`/Market?session_id=${sessionId}&character_id=${characterId}`);
+
   // Primary buttons (always visible)
   const primaryActions = [
+    ...(marketNearby && !inCombat ? [{ icon: ShoppingBag, label: 'Market', onClick: openMarket, color: 'rgba(240,192,64,0.8)', activeColor: '#f0c040' }] : []),
     { icon: Dices, label: 'Dice', active: showDiceRoller, onClick: () => setShowDiceRoller(v => !v), color: 'rgba(201,169,110,0.6)', activeColor: '#f0c040' },
     { emoji: '🐾', label: 'Pets', active: showCompanions, onClick: () => setShowCompanions(v => !v), color: 'rgba(201,169,110,0.6)', activeColor: '#f0c040' },
     ...(!inCombat ? [{ icon: Moon, label: 'Rest', disabled: restDisabled, onClick: () => { if (!restDisabled) setShowRestModal(true); }, color: 'rgba(168,139,253,0.6)', activeColor: '#c4b5fd' }] : []),
@@ -50,7 +54,7 @@ export default function GameToolbar({
   // Overflow menu items
   const overflowActions = [
     { icon: BookMarked, label: 'Combat History', onClick: () => navigate(createPageUrl('CombatHistory')), color: 'rgba(252,165,165,0.7)' },
-    { icon: ShoppingBag, label: 'Market', onClick: () => navigate(createPageUrl('Market') + `?session_id=${sessionId}&character_id=${characterId}`), color: 'rgba(240,192,64,0.7)' },
+    ...(!marketNearby ? [{ icon: ShoppingBag, label: 'Market', onClick: openMarket, color: 'rgba(240,192,64,0.7)' }] : []),
     { icon: Map, label: 'Travel', onClick: () => navigate(createPageUrl('WorldMap') + `?session_id=${sessionId}&character_id=${characterId}`), color: 'rgba(192,132,252,0.7)' },
     ...(started && !inCombat ? [{ icon: Eye, label: 'Visualize Scene', onClick: () => { setShowSceneVisualizer(true); setShowMore(false); }, color: 'rgba(216,180,254,0.7)' }] : []),
     { icon: Paintbrush, label: 'Portrait', onClick: () => { setShowPortraitGen(true); setShowMore(false); }, color: 'rgba(201,169,110,0.7)' },
