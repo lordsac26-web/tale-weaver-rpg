@@ -1,4 +1,4 @@
-import { eligibleCatalogItems, quoteItem } from './vendorEconomy.ts';
+import { eligibleCatalogItems, iconForItem, quoteItem } from './vendorEconomy.ts';
 
 const normal = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
@@ -19,5 +19,5 @@ export function catalogItemForTrade(vendor, catalogItems, itemName) {
 }
 
 export function quotedVendorCatalog(vendor, catalogItems = []) {
-  return materializeVendorCatalog(vendor, catalogItems).map((item) => ({ ...item, quote: quoteItem({ vendor, item, direction: 'buy_from_vendor' }) }));
+  return materializeVendorCatalog(vendor, catalogItems).map((item) => ({ ...item, icon: iconForItem(item), quote: quoteItem({ vendor, item, direction: 'buy_from_vendor' }) }));
 }

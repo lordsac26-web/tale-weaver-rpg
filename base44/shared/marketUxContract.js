@@ -14,8 +14,24 @@ export function mergeCatalogPages(pages = [], eligibleCount = 0) {
   return { items: unique, complete: unique.length >= Number(eligibleCount || 0), reachable_count: unique.length };
 }
 
+export const normalizeMarketText = (value) => String(value || '').toLowerCase().trim();
+
 export function marketCategories(items = []) {
-  return ['All', ...new Set(items.map((item) => item.category || 'Misc').filter(Boolean))];
+  const categories = new Map();
+  for (const item of items) {
+    const label = String(item?.category || 'Misc').trim() || 'Misc';
+    categories.set(normalizeMarketText(label), label);
+  }
+  return ['All', ...categories.values()];
+}
+
+export function marketCategoryMatches(item, category) {
+  return category === 'All' || normalizeMarketText(item?.category || 'Misc') === normalizeMarketText(category);
+}
+
+export function marketSearchMatches(item, search) {
+  const haystack = normalizeMarketText(`${item?.name || ''} ${item?.category || ''} ${item?.rarity || ''}`);
+  return haystack.includes(normalizeMarketText(search));
 }
 
 export function clampTradeQuantity(value, available) {

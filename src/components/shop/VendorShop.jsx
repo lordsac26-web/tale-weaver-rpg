@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 import MarketCurrency from './MarketCurrency';
 import MarketFilters from './MarketFilters';
 import MarketItemRow from './MarketItemRow';
-import { marketCategories, marketRequestId, mergeCatalogPages } from '../../../base44/shared/marketUxContract';
+import { marketCategories, marketCategoryMatches, marketRequestId, marketSearchMatches, mergeCatalogPages } from '../../../base44/shared/marketUxContract';
 
 const errorMessage = (error) => error?.response?.data?.error || error?.data?.error || error?.message || 'The trade could not be completed.';
 
@@ -56,10 +56,7 @@ export default function VendorShop({ vendor, character, sessionId, visitId, onCl
   const activeItems = mode === 'buy' ? catalog : sellItems;
   const categories = useMemo(() => marketCategories(activeItems), [activeItems]);
   useEffect(() => { if (!categories.includes(category)) setCategory('All'); }, [categories, category]);
-  const filteredItems = activeItems.filter((item) => {
-    const matchesSearch = `${item.name} ${item.category || ''} ${item.rarity || ''}`.toLowerCase().includes(search.toLowerCase());
-    return matchesSearch && (category === 'All' || (item.category || 'Misc') === category);
-  });
+  const filteredItems = activeItems.filter((item) => marketSearchMatches(item, search) && marketCategoryMatches(item, category));
 
   const haggle = async (item) => {
     const key = `haggle:${item.name}`;
