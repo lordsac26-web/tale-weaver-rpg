@@ -26,7 +26,7 @@ import { preflightCompositeAction, COMPOSITE_ACTION_PREFLIGHT_VERSION } from '..
 import { COMPOSITE_ACTION_CONTRACT_VERSION } from '../../shared/story/compositeActionContract.js';
 import { craftingNarrationNeedsReceipt, CRAFTING_TRANSACTION_VERSION, executeCraftingTransaction } from '../../shared/craftingTransaction.ts';
 import { buildInfiltrationSessionUpdate, guardInfiltrationBeat, INFILTRATION_ADVANCEMENT_VERSION, planInfiltrationAdvancement } from '../../shared/story/infiltrationSuccessAdvancement.ts';
-import { classifyCraftingAwardIntent, normalizeDeclaredRecovery, CHOICE_AWARD_ROUTING_VERSION } from '../../shared/story/choiceAwardRouting.js';
+import { normalizeDeclaredRecovery, routeChoiceAward, CHOICE_AWARD_ROUTING_VERSION } from '../../shared/story/choiceAwardRouting.js';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -43,7 +43,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.9.1';
+const GENERATE_STORY_VERSION = 'generate-story-v2.10.0';
 
 Deno.serve(async (req) => {
   try {
@@ -294,7 +294,7 @@ ${adultToneInstruction}
 4. How do I make this opening feel fresh and different from previous sessions?
 5. What sensory details and tone will pull the player in?
 
-Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension. Provide exactly 4 meaningful choices in the structured "choices" field ONLY. Never combine a spell cast and weapon attack in one choice unless an explicit supported extra action and legal timing are already established; otherwise offer them as separate choices. Every choice MUST set action_type to one of skill_check, weapon_attack, spell_cast, utility, social, movement, rest, item_use, combat_transition. Only skill_check choices may set skill_check and dc. Weapon attacks must set weapon_attack with target_ref, weapon_hint, attack_mode, declared_attack_count, and intent. Include skill checks + DCs on 2-3 choices. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; a specific tangible item must include {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise recovery must be null. Set location_update. No combat in the opening scene.
+Write a rich, atmospheric 3-4 paragraph opening narrative. End with clear tension. Provide exactly 4 meaningful choices in the structured "choices" field ONLY. Never combine a spell cast and weapon attack in one choice unless an explicit supported extra action and legal timing are already established; otherwise offer them as separate choices. Every choice MUST set action_type to one of skill_check, weapon_attack, spell_cast, crafting, utility, social, movement, rest, item_use, combat_transition. Use crafting only when the choice explicitly attempts a recipe-based craft. Only skill_check choices may set skill_check and dc. Weapon attacks must set weapon_attack with target_ref, weapon_hint, attack_mode, declared_attack_count, and intent. Include skill checks + DCs on 2-3 choices. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; a specific tangible item must include {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise recovery must be null. Set location_update. No combat in the opening scene.
 
 CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" text itself. The narrative must be pure prose — never include lines like "1. ...", "2. ...", "What do you do?", or any enumerated options. The choices belong solely in the structured choices array.`;
 
@@ -306,12 +306,12 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
             type: 'object',
             properties: {
                            text: { type: 'string' },
-                           action_type: { type: 'string', enum: ['skill_check','weapon_attack','spell_cast','utility','social','movement','rest','item_use','combat_transition'] },
+                           action_type: { type: 'string', enum: ['skill_check','weapon_attack','spell_cast','crafting','utility','social','movement','rest','item_use','combat_transition'] },
                            weapon_attack: { type: 'object', properties: { target_ref: { type: 'string' }, weapon_hint: { type: 'string' }, attack_mode: { type: 'string' }, declared_attack_count: { type: 'number' }, intent: { type: 'string' } } },
                            skill_check: { type: 'string' },
                            dc: { type: 'number' },
                            risk_level: { type: 'string', enum: ['low','medium','high','extreme'] },
-                           recovery: { type: 'object', properties: { type: { type: 'string', enum: ['arrows', 'item'] }, quantity: { type: 'number' }, item: { type: 'object', properties: { item_id: { type: 'string' }, name: { type: 'string' }, quantity: { type: 'number' }, stackable: { type: 'boolean' }, category: { type: 'string' }, rarity: { type: 'string' }, description: { type: 'string' }, source: { type: 'string' } } } } }
+                           recovery: { type: 'object', properties: { type: { type: 'string', enum: ['arrows', 'item'] }, quantity: { type: 'number', minimum: 1 }, item: { type: 'object', properties: { item_id: { type: 'string' }, name: { type: 'string' }, quantity: { type: 'number' }, stackable: { type: 'boolean' }, category: { type: 'string' }, rarity: { type: 'string' }, description: { type: 'string' }, source: { type: 'string' } } } } }
                          }
           }},
           location_update: { type: 'string' },
@@ -339,7 +339,7 @@ ${adultToneInstruction}
 5. Should combat be triggered? Only when dramatically justified.
 6. How do environment (season, time, weather) and current conditions influence the scene?
 
-Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Every choice MUST carry action_type; only skill_check choices may carry skill_check and dc, while weapon_attack choices carry target_ref, weapon_hint, attack_mode, declared_attack_count, and intent inside weapon_attack. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. For a concrete item gained by the CURRENT action, set current_recovery to an exact structured object: {type:"arrows", quantity:1-20} or {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise current_recovery must be null. Never claim that an item was found or recovered unless current_recovery is exact and the authoritative check succeeded. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null. For completed crafting, set crafting_outcome with an exact recipe_id, completed:true, time_minutes, tool provenance, exact yield_quantity, mechanically_identical, output ammunition identity/compatibility, ingredient quantities and inventory or scene-resource provenance. A passed check alone is progress, not an award. If any recipe, yield, ingredient, tool, time, or provenance fact is absent, crafting_outcome must be null and narration must not say ammunition was received, completed, or added.
+Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Every choice MUST carry action_type; only skill_check choices may carry skill_check and dc, while weapon_attack choices carry target_ref, weapon_hint, attack_mode, declared_attack_count, and intent inside weapon_attack. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. For a concrete item gained by the CURRENT action, set current_recovery to an exact structured object: {type:"arrows", quantity:1-20} or {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise current_recovery must be null. Never claim that an item was found or recovered unless current_recovery is exact and the authoritative check succeeded. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null. Never emit a recovery object with quantity 0. For completed crafting, set crafting_outcome with an exact recipe_id, completed:true, time_minutes, tool provenance, exact yield_quantity, mechanically_identical, output ammunition identity/compatibility, ingredient quantities and inventory or scene-resource provenance. A passed check alone is progress, not an award. If any recipe, yield, ingredient, tool, time, or provenance fact is absent, crafting_outcome must be null and narration must not say ammunition was received, completed, or added.
 
 CONDITION CONTRACT: condition_update is ONLY for a real mechanical status affecting the PLAYER CHARACTER. Set target to "player" only when the player is actually affected; use "other" for an enemy/NPC effect and "none" when no player condition changes. Never use placeholder labels such as "None", "Normal", or "N/A". Use the remove field when a prior player condition ends. Choose duration "scene", "combat", or "persistent" accurately. Enemy conditions that begin combat belong in that enemy's starting_conditions, never on the player.
 
@@ -351,7 +351,7 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
         type: 'object',
         properties: {
           narrative: { type: 'string' },
-          choices: { type: 'array', items: { type: 'object', properties: { text: {type:'string'}, action_type:{type:'string',enum:['skill_check','weapon_attack','spell_cast','utility','social','movement','rest','item_use','combat_transition']}, weapon_attack:{type:'object',properties:{target_ref:{type:'string'},weapon_hint:{type:'string'},attack_mode:{type:'string'},declared_attack_count:{type:'number'},intent:{type:'string'}}}, skill_check:{type:'string'}, dc:{type:'number'}, risk_level:{type:'string', enum:['low','medium','high','extreme']}, recovery:{ type:'object', properties:{ type:{type:'string', enum:['arrows']}, quantity:{type:'number'} } } } } },
+          choices: { type: 'array', items: { type: 'object', properties: { text: {type:'string'}, action_type:{type:'string',enum:['skill_check','weapon_attack','spell_cast','utility','social','movement','rest','item_use','combat_transition']}, weapon_attack:{type:'object',properties:{target_ref:{type:'string'},weapon_hint:{type:'string'},attack_mode:{type:'string'},declared_attack_count:{type:'number'},intent:{type:'string'}}}, skill_check:{type:'string'}, dc:{type:'number'}, risk_level:{type:'string', enum:['low','medium','high','extreme']}, recovery:{ type:'object', properties:{ type:{type:'string', enum:['arrows']}, quantity:{type:'number',minimum:1} } } } } },
           combat_trigger: { type: 'boolean' },
           enemies: { type: 'array', items: { type: 'object', properties: { name:{type:'string'}, hp:{type:'number'}, current_hp:{type:'number'}, starting_conditions:{type:'array', items:{type:'string'}}, ac:{type:'number'}, attack_bonus:{type:'number'}, damage_dice:{type:'string'}, damage_bonus:{type:'number'}, dexterity:{type:'number'}, cr:{type:'number'}, xp:{type:'number'} } } },
           reputation_change: { type: 'number' },
@@ -359,7 +359,7 @@ CRITICAL: Do NOT list, number, or restate the choices inside the "narrative" tex
           xp_earned: { type: 'number' },
           loot: { type: 'array', items: { type: 'object', properties: { name:{type:'string'}, type:{type:'string'}, quantity:{type:'number'}, description:{type:'string'}, value:{type:'number'} } } },
           loot_coins: { type: 'object', properties: { gold:{type:'number'}, silver:{type:'number'}, copper:{type:'number'} } },
-          current_recovery: { type:'object', properties:{ type:{type:'string',enum:['arrows','item']}, quantity:{type:'number'}, item:{type:'object',properties:{name:{type:'string'},quantity:{type:'number'},stackable:{type:'boolean'},category:{type:'string'},rarity:{type:'string'},description:{type:'string'},source:{type:'string'},item_id:{type:'string'}}} } },
+          current_recovery: { type:'object', properties:{ type:{type:'string',enum:['arrows','item']}, quantity:{type:'number',minimum:1}, item:{type:'object',properties:{name:{type:'string'},quantity:{type:'number'},stackable:{type:'boolean'},category:{type:'string'},rarity:{type:'string'},description:{type:'string'},source:{type:'string'},item_id:{type:'string'}}} } },
           crafting_outcome:{type:'object',properties:{recipe_id:{type:'string'},completed:{type:'boolean'},time_minutes:{type:'number'},mechanically_identical:{type:'boolean'},invocation_type:{type:'string'},tool:{type:'object',properties:{name:{type:'string'},provenance:{type:'string'}}},yield_quantity:{type:'number'},output:{type:'object',properties:{name:{type:'string'},unit:{type:'string'},rarity:{type:'string'},compatible_ammo_type:{type:'string'},compatible_weapon:{type:'string'},crafting_identity:{type:'string'},source:{type:'string'}}},ingredients:{type:'array',items:{type:'object',properties:{name:{type:'string'},quantity:{type:'number'},source:{type:'string'},provenance_id:{type:'string'},consumed:{type:'boolean'}}}},provenance:{type:'object'}}},
           location_update: { type: 'string' },
           quest_update: { type: 'object', properties: { new_quest:{type:'string'}, completed_quest:{type:'string'} } },
@@ -428,15 +428,16 @@ Write a gripping 1-2 paragraph combat narrative.`;
     }
 
     let craftingTransaction = null;
-    const craftingIntent = classifyCraftingAwardIntent({ actionText:selectedChoice||custom_input, craftingOutcome:result?.crafting_outcome, narrative:result?.narrative });
-    if (action === 'choice' && craftingIntent.requires_validation) {
+    const awardRoute = routeChoiceAward({ actionType:selectedChoiceContract.action_type, actionText:selectedChoice||custom_input, recovery:result?.current_recovery, craftingOutcome:result?.crafting_outcome, narrative:result?.narrative });
+    console.info('Story award route', JSON.stringify({ request_id:storyRequestId, action_type:selectedChoiceContract.action_type, route:awardRoute.route, routing_version:CHOICE_AWARD_ROUTING_VERSION }));
+    if (action === 'choice' && awardRoute.route === 'crafting') {
       const crafted = await executeCraftingTransaction({ base44, ownerId:user.id, characterId:character.id, sessionId:session_id, requestId:storyRequestId, recipe:result?.crafting_outcome || {}, check:authoritativeChoiceContext.check });
       if (crafted.status >= 400 || !crafted.body?.applied) return Response.json({ error:crafted.body?.reason || 'Crafting did not establish a complete transaction.', invalid:true, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, writes:0 },{status:crafted.status||409});
       craftingTransaction=crafted.body;
       const receipt=crafted.body.receipt;
       result={...result,narrative:`${result.narrative}\n\nCrafting confirmed: you received exactly ${receipt.yield_quantity} ${receipt.canonical_item}. The inventory transaction is complete.`,current_recovery:null};
     }
-    if (action === 'choice' && craftingNarrationNeedsReceipt(selectedChoice||custom_input,result?.narrative) && !craftingTransaction?.applied) return Response.json({error:'The exact crafting yield was not established; no ammunition was added.',invalid:true,crafting_transaction_version:CRAFTING_TRANSACTION_VERSION,writes:0},{status:409});
+    if (action === 'choice' && awardRoute.route === 'crafting' && craftingNarrationNeedsReceipt(selectedChoice||custom_input,result?.narrative) && !craftingTransaction?.applied) return Response.json({error:'The exact crafting yield was not established; no ammunition was added.',invalid:true,crafting_transaction_version:CRAFTING_TRANSACTION_VERSION,writes:0},{status:409});
     let recoveryResolution = null;
     if (!authoritativeRecovery && !craftingTransaction && action === 'choice') {
       recoveryResolution = await resolveGeneratedRecoveryCandidate({

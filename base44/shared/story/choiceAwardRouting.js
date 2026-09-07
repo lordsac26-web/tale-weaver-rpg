@@ -1,4 +1,4 @@
-export const CHOICE_AWARD_ROUTING_VERSION = 'choice-award-routing-v1.0.0';
+export const CHOICE_AWARD_ROUTING_VERSION = 'choice-award-routing-v1.1.0';
 
 const positiveInteger = (value) => Number.isInteger(Number(value)) && Number(value) > 0;
 const craftingLanguage = (value) => /\b(?:craft|crafting|make|making|shape|shaping|knap|knapping|fletch|fletching)\w*\b/i.test(String(value || ''));
@@ -26,4 +26,18 @@ export function classifyCraftingAwardIntent({ actionText, craftingOutcome, narra
     nonzero_declared_yield: nonzeroDeclaredYield,
     narrated_completed_craft: narratedCompletedCraft,
   };
+}
+
+export function isExplicitCraftingAction({ actionType, actionText } = {}) {
+  if (actionType === 'crafting') return true;
+  return /^\s*(?:craft|make|fletch|knap|shape)\b/i.test(String(actionText || ''));
+}
+
+export function routeChoiceAward({ actionType, actionText, recovery, craftingOutcome, narrative } = {}) {
+  const normalizedRecovery = normalizeDeclaredRecovery(recovery);
+  const explicitCrafting = isExplicitCraftingAction({ actionType, actionText });
+  const crafting = classifyCraftingAwardIntent({ actionText, craftingOutcome, narrative });
+  if (explicitCrafting) return { route: 'crafting', recovery: null, crafting, version: CHOICE_AWARD_ROUTING_VERSION };
+  if (normalizedRecovery) return { route: 'structured_recovery', recovery: normalizedRecovery, crafting: { ...crafting, requires_validation: false }, version: CHOICE_AWARD_ROUTING_VERSION };
+  return { route: 'none', recovery: null, crafting: { ...crafting, requires_validation: false }, version: CHOICE_AWARD_ROUTING_VERSION };
 }

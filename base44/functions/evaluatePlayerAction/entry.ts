@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 import { prepareProjectileRecoveryProposal } from '../../shared/story/projectileLifecycle.ts';
 import { preflightCompositeAction } from '../../shared/story/compositeActionPreflight.ts';
+import { isExplicitCraftingAction } from '../../shared/story/choiceAwardRouting.js';
 
 Deno.serve(async (req) => {
   try {
@@ -119,7 +120,7 @@ Return ONLY a JSON object:
     const projectileRecovery = await prepareProjectileRecoveryProposal({ base44, session, character, actionText: action });
     if (projectileRecovery.handled) {
       if (projectileRecovery.status >= 400) return Response.json({ error: projectileRecovery.error, writes: 0, combat_id: projectileRecovery.combat_id || null }, { status: projectileRecovery.status });
-      return Response.json({ action, request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.1.0', requires_check: projectileRecovery.requires_check, skill: projectileRecovery.skill, dc: projectileRecovery.dc, reasoning: projectileRecovery.reasoning, risk_level: projectileRecovery.risk_level, recovery: projectileRecovery.recovery, recovery_rule: projectileRecovery.recovery.rule, combat_id: projectileRecovery.combat_id });
+      return Response.json({ action, action_type: 'utility', request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.4.0', requires_check: projectileRecovery.requires_check, skill: projectileRecovery.skill, dc: projectileRecovery.dc, reasoning: projectileRecovery.reasoning, risk_level: projectileRecovery.risk_level, recovery: projectileRecovery.recovery, recovery_rule: projectileRecovery.recovery.rule, combat_id: projectileRecovery.combat_id });
     }
     const prompt = `You are a Dungeon Master evaluating a player's proposed action in a D&D 5e game.
     
@@ -141,7 +142,7 @@ Return a JSON object with these fields only:
 - dc: integer (5-25 range) or null
 - reasoning: string (1-2 sentences of in-character GM flavor text explaining the ruling)
 - risk_level: string ("low", "medium", "high", or "extreme")
-- recovery: object or null — only for a genuine structured recovery action. Use { type: "arrows", quantity: integer 1-20 } for arrows, or { type: "item", item: { item_id?, name, quantity, stackable, category, rarity, description, source } } for a specific tangible item that the scene explicitly establishes. Never infer any recovery from descriptive prose, ambiguous mentions, or generic searches.`;
+- recovery: object or null — only for a genuine structured recovery action. Use { type: "arrows", quantity: integer 1-20 } for arrows, or { type: "item", item: { item_id?, name, quantity, stackable, category, rarity, description, source } } for a specific tangible item that the scene explicitly establishes. Never infer any recovery from descriptive prose, ambiguous mentions, or generic searches, and never return quantity 0.`;
 
     const result = await base44.integrations.Core.InvokeLLM({
       prompt,
@@ -153,13 +154,14 @@ Return a JSON object with these fields only:
           dc: { type: 'number' },
           reasoning: { type: 'string' },
           risk_level: { type: 'string' },
-          recovery: { type: 'object', properties: { type: { type: 'string', enum: ['arrows', 'item'] }, quantity: { type: 'number' }, item: { type: 'object', properties: { item_id: { type: 'string' }, name: { type: 'string' }, quantity: { type: 'number' }, stackable: { type: 'boolean' }, category: { type: 'string' }, rarity: { type: 'string' }, description: { type: 'string' }, source: { type: 'string' } } } } }
+          recovery: { type: 'object', properties: { type: { type: 'string', enum: ['arrows', 'item'] }, quantity: { type: 'number', minimum: 1 }, item: { type: 'object', properties: { item_id: { type: 'string' }, name: { type: 'string' }, quantity: { type: 'number' }, stackable: { type: 'boolean' }, category: { type: 'string' }, rarity: { type: 'string' }, description: { type: 'string' }, source: { type: 'string' } } } } }
           },
         required: ['requires_check', 'reasoning', 'risk_level']
       }
     });
 
-    return Response.json({ ...result, action, request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.1.0' });
+    const actionType = isExplicitCraftingAction({ actionText: action }) ? 'crafting' : result.requires_check ? 'skill_check' : 'utility';
+    return Response.json({ ...result, action, action_type: actionType, request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.4.0' });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

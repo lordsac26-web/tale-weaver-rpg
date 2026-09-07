@@ -1,8 +1,8 @@
 export const CHOICE_ACTION_CONTRACT_VERSION = 'choice-action-contract-v1.0.0';
 import { parseCompositeAction } from './compositeActionContract.js';
 import { normalizeDeclaredRecovery } from './choiceAwardRouting.js';
-export const CHOICE_ACTION_FRONTEND_VERSION = 'choice-action-transition-v1.2.0';
-export const CHOICE_ACTION_TYPES = ['skill_check', 'weapon_attack', 'spell_cast', 'composite_action', 'utility', 'social', 'movement', 'rest', 'item_use', 'combat_transition'];
+export const CHOICE_ACTION_FRONTEND_VERSION = 'choice-action-transition-v1.3.0';
+export const CHOICE_ACTION_TYPES = ['skill_check', 'weapon_attack', 'spell_cast', 'composite_action', 'crafting', 'utility', 'social', 'movement', 'rest', 'item_use', 'combat_transition'];
 export const CANONICAL_SKILLS = ['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival'];
 
 const normalize = (value) => String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();

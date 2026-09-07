@@ -634,7 +634,7 @@ export default function Game() {
   };
 
   // Records a custom action's skill-check entry, then continues the story.
-  const continueProposalWithRoll = async (action, skill, dc, recovery, requestId, preCast, rollData) => {
+  const continueProposalWithRoll = async (action, actionType, skill, dc, recovery, requestId, preCast, rollData) => {
     const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources } = rollData;
     const resolved = rollData.receipt || rollData.modifier_breakdown
       ? rollData
@@ -643,12 +643,12 @@ export default function Game() {
     const feedback = getSkillFeedback(skill, success, final, dc, raw);
     setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, breakdown, final, success, feedback, character_name: character?.name }]);
     const checkResult = ` [Skill Check: ${skill} DC${dc} — ${success ? 'SUCCESS' : 'FAILURE'} (d20 ${raw} + base ${breakdown.base_skill} + effects ${breakdown.effect_bonus} = ${final}${hadAdvantage ? ', with advantage' : ''}${hadDisadvantage ? ', with disadvantage' : ''}${advantageSources?.length ? `; source: ${advantageSources.join(', ')}` : ''})]`;
-    await runProposalStory(action, checkResult, { check: receipt, recovery: recovery || null }, requestId, preCast);
+    await runProposalStory(action, checkResult, { action_type: actionType, check: receipt, recovery: recovery || null }, requestId, preCast);
   };
 
   const executeProposedAction = async (proposal) => {
     setPendingProposal(null);
-    const { action, requires_check, skill, dc, recovery } = proposal;
+    const { action, action_type: actionType, requires_check, skill, dc, recovery } = proposal;
     if (proposal.action_type === 'composite_action') {
       setNarrative(prev => [...prev, { type: 'action_error', text: proposal.valid ? 'The composite plan is validated but must be resolved through its ordered authoritative children.' : `${proposal.reasoning} Choose one of the legal alternatives shown; the scene and choices remain unchanged.` }]);
       return;
@@ -667,7 +667,7 @@ export default function Game() {
 
     // No check required — straight to the story.
     if (!requires_check || !skill || !dc) {
-      await runProposalStory(action, '', { check: { success: true }, recovery: recovery || null }, requestId, preCast);
+      await runProposalStory(action, '', { action_type: actionType || 'utility', check: { success: true }, recovery: recovery || null }, requestId, preCast);
       return;
     }
 
@@ -684,11 +684,11 @@ export default function Game() {
         skill, dc, modifier, breakdown,
         advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, advantageSources: equipAdv.sources,
         resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: equipAdv.sources }),
-        onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { ...rollData, advantageSources: equipAdv.sources }); },
+        onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, actionType || 'skill_check', skill, dc, recovery, requestId, preCast, { ...rollData, advantageSources: equipAdv.sources }); },
         onCancel: async () => {
           setPendingRoll(null);
           const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, advantageSources: equipAdv.sources, advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
-          continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { ...resolved, advantageSources: equipAdv.sources });
+          continueProposalWithRoll(action, actionType || 'skill_check', skill, dc, recovery, requestId, preCast, { ...resolved, advantageSources: equipAdv.sources });
         },
       });
       return;
@@ -696,7 +696,7 @@ export default function Game() {
 
     // Auto mode: resolve and persist through the same authoritative server transaction.
     const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, advantageSources: equipAdv.sources, advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
-    await continueProposalWithRoll(action, skill, dc, recovery, requestId, preCast, { ...resolved, advantageSources: equipAdv.sources });
+    await continueProposalWithRoll(action, actionType || 'skill_check', skill, dc, recovery, requestId, preCast, { ...resolved, advantageSources: equipAdv.sources });
   };
 
   // ===== Free-text "Act" during combat — DM adjudicates first =====
