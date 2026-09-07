@@ -10,6 +10,7 @@ import { executeLongRestStoryAction } from '../../shared/story/longRestStoryActi
 import { executeThrownWeaponAction, recoverThrownWeapon } from '../../shared/story/thrownWeaponAction.ts';
 import { classifyNarrativeRangedAttackIntent, classifyPrecisionAmbushIntent, normalizePendingAmbushRoster, pendingAmbushNarrative, pendingNarrativeRangedAttack, stripGeneratedChoiceAnnotations } from '../../shared/story/generatedChoiceIntent.js';
 import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkillCheck.ts';
+import { matchPersistedStorySkillReceipt, STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION } from '../../shared/story/storySkillReceiptCompatibility.ts';
 import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
 import { recoveryAnnotation } from '../../shared/story/projectileLifecycle.ts';
 import { narrationMayPublishRecovery, NARRATED_RECOVERY_PARSER_VERSION } from '../../shared/story/narratedStoryInventoryCommit.ts';
@@ -43,7 +44,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.10.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.11.0';
 
 Deno.serve(async (req) => {
   try {
@@ -72,9 +73,10 @@ Deno.serve(async (req) => {
     let authoritativeChoiceContext = incomingChoiceContext && typeof incomingChoiceContext === 'object' ? incomingChoiceContext : {};
     if (action === 'choice' && authoritativeChoiceContext?.check?.raw_d20 != null) {
       const incomingCheck = authoritativeChoiceContext.check;
-      const persistedCheck = (session.world_state?.__skill_check_receipts || []).find((entry) => entry?.request_id === incomingCheck.request_id && entry?.unified_story_skill_resolution === true);
-      if (!persistedCheck || persistedCheck.request_id !== storyRequestId || JSON.stringify(persistedCheck) !== JSON.stringify(incomingCheck)) return Response.json({ error: 'The story skill receipt is not the persisted authoritative resolution.', invalid: true, writes: 0 }, { status: 409 });
-      authoritativeChoiceContext = { ...authoritativeChoiceContext, check: persistedCheck, authoritative_skill_resolution: resolutionFromReceipt(persistedCheck) };
+      const persistedCheck = (session.world_state?.__skill_check_receipts || []).find((entry) => entry?.request_id === storyRequestId && entry?.unified_story_skill_resolution === true);
+      const receiptMatch = matchPersistedStorySkillReceipt({ persisted: persistedCheck, incoming: incomingCheck, requestId: storyRequestId });
+      if (!receiptMatch.ok) return Response.json({ error: 'The story skill receipt is not the persisted authoritative resolution.', error_code: receiptMatch.reason, invalid: true, writes: 0, compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION }, { status: 409 });
+      authoritativeChoiceContext = { ...authoritativeChoiceContext, check: receiptMatch.receipt, authoritative_skill_resolution: resolutionFromReceipt(receiptMatch.receipt), receipt_format: receiptMatch.format };
     }
     const completedCombat = await readCompletedCombatContext(base44, session) || (authoritativeChoiceContext?.completed_combat && typeof authoritativeChoiceContext.completed_combat === 'object'
       ? authoritativeChoiceContext.completed_combat : null);
@@ -670,7 +672,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION });
+    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);

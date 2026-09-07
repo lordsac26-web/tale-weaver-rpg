@@ -3,6 +3,7 @@ import { normalizeChoiceActionContract } from '../../shared/story/choiceActionCo
 import { classifyCraftingAwardIntent, routeChoiceAward, CHOICE_AWARD_ROUTING_VERSION } from '../../shared/story/choiceAwardRouting.js';
 import { executeCraftingTransaction, CRAFTING_TRANSACTION_VERSION } from '../../shared/craftingTransaction.ts';
 import { commitStoryTransition } from '../../shared/story/storyTransition.ts';
+import { matchPersistedStorySkillReceipt, STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION } from '../../shared/story/storySkillReceiptCompatibility.ts';
 import { hashValue, readProtectedDndState } from '../../shared/tests/liveProtection.ts';
 
 const nextChoices = (label) => [1, 2, 3, 4].map((index) => ({ text: `${label} option ${index}`, action_type: 'utility', recovery: null }));
@@ -28,11 +29,14 @@ export default async function(req) {
     const skill = normalizeChoiceActionContract({ text: 'Examine the merchant ledger.', action_type: 'skill_check', skill_check: 'Investigation', dc: 14, recovery: { type: 'arrows', quantity: 0 } });
     const skillIntent = classifyCraftingAwardIntent({ actionText: skill.text, craftingOutcome: {}, narrative: 'The ledger reveals a useful connection.' });
     const liveStoryAction = { request_id: `story-action:${session.id}:1788769445129:m98nh3`, action: 'choice', choice_context: { action_type: 'skill_check', check: { success: true, raw_d20: 15, modifier_total: 0, final_total: 15, dc: 14, skill: 'Investigation' }, recovery: { type: 'arrows', quantity: 0 } } };
-    const oldStoryChoice = { ...liveStoryAction, request_id: `story-choice:${session.id}:fixture` };
+    const oldStoryChoice = { ...liveStoryAction, request_id: `story-choice:${session.id}:fixture`, choice_index: 1, choice_text: 'Examine the merchant ledger.', choice_context: { action_type: 'skill_check', check: { skill: 'Investigation', dc: 14, raw_d20: 16, modifier_total: 0, final_total: 16, success: true, receipt_timestamp: '2026-09-07T19:06:51.397Z' }, recovery: { type: 'arrows', quantity: 0 } } };
+    const persistedPublishedReceipt = { id: oldStoryChoice.request_id, request_id: oldStoryChoice.request_id, skill: 'Investigation', raw_d20: 16, all_rolls: [16], dc: 14, modifier_total: 0, final_total: 16, success: true, modifier_breakdown: { base_skill: 0, effect_bonus: 0 }, advantage_sources: [], at: '2026-09-07T19:06:51.397Z', had_advantage: false, had_disadvantage: false, roll_origin: 'server', resolution_id: `story-skill:${oldStoryChoice.request_id}`, unified_story_skill_resolution: true };
+    const publishedReceiptMatch = matchPersistedStorySkillReceipt({ persisted: persistedPublishedReceipt, incoming: oldStoryChoice.choice_context.check, requestId: oldStoryChoice.request_id });
     const newRoute = routeChoiceAward({ actionType: liveStoryAction.choice_context.action_type, actionText: skill.text, recovery: liveStoryAction.choice_context.recovery, craftingOutcome: { completed: false, yield_quantity: 0 }, narrative: 'The ledger reveals a useful connection.' });
     const oldRoute = routeChoiceAward({ actionType: oldStoryChoice.choice_context.action_type, actionText: skill.text, recovery: oldStoryChoice.choice_context.recovery, craftingOutcome: { completed: false, yield_quantity: 0 }, narrative: 'The ledger reveals a useful connection.' });
     record('skill check zero recovery becomes no award and bypasses crafting', skill.recovery === null && !skillIntent.requires_validation && newRoute.route === 'none');
     record('story-action and story-choice request formats share one award route', newRoute.route === oldRoute.route && newRoute.version === oldRoute.version);
+    record('published compact story-choice receipt resolves to persisted authority', publishedReceiptMatch.ok && publishedReceiptMatch.format === 'legacy_compact' && publishedReceiptMatch.receipt === persistedPublishedReceipt);
     const skillEntry = { request_id: liveStoryAction.request_id, action: 'choice', player_choice: skill.text, text: 'The ledger reveals a useful connection.', choices: nextChoices('skill'), skill_check: { ...liveStoryAction.choice_context.check, request_id: liveStoryAction.request_id, unified_story_skill_resolution: true } };
     const skillCommit = commitStoryTransition(session.story_log, skillEntry, liveStoryAction.request_id);
     await db.entities.GameSession.update(session.id, { story_log: skillCommit.story_log });
@@ -77,5 +81,5 @@ export default async function(req) {
   record('protected live records unchanged', protectedBefore === await hashValue(await readProtectedDndState(db)));
   const passed = results.filter((result) => result.pass).length;
   const allPass = passed === results.length;
-  return Response.json({ function_version: 'test-zero-quantity-recovery-routing-v1.1.0', routing_version: CHOICE_AWARD_ROUTING_VERSION, crafting_version: CRAFTING_TRANSACTION_VERSION, passed, failed: results.length - passed, total: results.length, all_pass: allPass, results, cleanup, cleanup_verified: cleanup.every((item) => item.verified_absent) }, { status: allPass ? 200 : 500 });
+  return Response.json({ function_version: 'test-zero-quantity-recovery-routing-v1.2.0', routing_version: CHOICE_AWARD_ROUTING_VERSION, crafting_version: CRAFTING_TRANSACTION_VERSION, receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION, passed, failed: results.length - passed, total: results.length, all_pass: allPass, results, cleanup, cleanup_verified: cleanup.every((item) => item.verified_absent) }, { status: allPass ? 200 : 500 });
 }
