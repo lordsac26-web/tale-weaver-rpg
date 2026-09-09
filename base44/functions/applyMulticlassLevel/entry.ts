@@ -1,11 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
-import { applyRogueExpertise, MULTICLASS_RULES_VERSION, proficiencyForLevel, ROGUE_ONE_FEATURES, SUBCLASS_LEVEL, validateMulticlassApplication } from '../../shared/multiclassRules.ts';
-
-const featureName = (feature) => String(typeof feature === 'string' ? feature : feature?.name || '');
-const uniqueFeatures = (features, additions) => {
-  const names = new Set((features || []).map(feature => featureName(feature).toLowerCase()));
-  return [...(features || []), ...additions.filter(feature => !names.has(featureName(feature).toLowerCase()))];
-};
+import { applyRogueExpertise, buildMulticlassClassUpdates, MULTICLASS_RULES_VERSION, SUBCLASS_LEVEL, validateMulticlassApplication } from '../../shared/multiclassRules.ts';
 
 export default async function(req) {
   try {
@@ -34,26 +28,10 @@ export default async function(req) {
 
     if (action !== 'apply_class') return Response.json({ error: 'Unsupported action' }, { status: 400 });
     if (!className || className === character.class || (character.multiclass || []).some(entry => entry?.class === className)) return Response.json({ error: 'Choose a new class not already on this character.' }, { status: 400 });
-    const validation = validateMulticlassApplication(character, className, subclass, 1);
-    if (!validation.ok) return Response.json({ error: validation.reason, validation }, { status: 400 });
-    let skills = character.skills || {};
-    let additions = [];
-    if (className === 'Rogue') {
-      const expertise = applyRogueExpertise(skills, payload.expertise_choices, []);
-      if (!expertise.ok) return Response.json({ error: expertise.reason }, { status: 400 });
-      skills = expertise.skills;
-      additions = ROGUE_ONE_FEATURES;
-    }
-    const totalLevel = Number(character.level || 1) + 1;
-    const updates = {
-      level: totalLevel,
-      multiclass: [...(character.multiclass || []), { class: className, subclass: subclass || '', levels: 1 }],
-      proficiency_bonus: proficiencyForLevel(totalLevel),
-      features: uniqueFeatures(character.features || [], additions),
-      ...(className === 'Rogue' ? { skills } : {}),
-    };
-    await base44.asServiceRole.entities.Character.update(character.id, updates);
-    return Response.json({ success: true, character: { ...character, ...updates }, granted_features: additions, rules_version: MULTICLASS_RULES_VERSION });
+    const plan = buildMulticlassClassUpdates(character, className, payload.expertise_choices || [], subclass);
+    if (!plan.ok) return Response.json({ error: plan.reason, validation: plan }, { status: 400 });
+    await base44.asServiceRole.entities.Character.update(character.id, plan.updates);
+    return Response.json({ success: true, character: { ...character, ...plan.updates }, granted_features: plan.granted_features, rules_version: MULTICLASS_RULES_VERSION });
   } catch (error) {
     return Response.json({ error: error.message || 'Multiclass update failed' }, { status: 500 });
   }

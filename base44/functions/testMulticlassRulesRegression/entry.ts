@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
-import { applyRogueExpertise, proficiencyForLevel, ROGUE_ONE_FEATURES, validateMulticlassApplication } from '../../shared/multiclassRules.ts';
+import { applyRogueExpertise, buildMulticlassClassUpdates, proficiencyForLevel, ROGUE_ONE_FEATURES, validateMulticlassApplication } from '../../shared/multiclassRules.ts';
 import { resolveSneakAttack } from '../../shared/combat/sneakAttack.ts';
 
 const hashValue = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map(byte => byte.toString(16).padStart(2, '0')).join('');
@@ -12,6 +12,8 @@ export default async function(req) {
     if (!user || user.role !== 'admin') return Response.json({ error: 'Admin access required' }, { status: 403 });
     const before = await hashValue(await protectedState(base44.asServiceRole));
     const results = [];
+    const fixtureName=`MulticlassRules_${Date.now()}`;
+    const fixture=await base44.asServiceRole.entities.Character.create({name:fixtureName,race:'Human',class:'Ranger',level:5,strength:10,dexterity:16,wisdom:14,skills:{Stealth:'proficient','Sleight of Hand':'proficient'},features:[],multiclass:[],is_active:false});
     const ranger = { class:'Ranger', strength:10, dexterity:16, wisdom:14, level:5, features:[], skills:{Stealth:'proficient','Sleight of Hand':'proficient'} };
     results.push({ name:'Rogue blocked below Dexterity 13', pass: !validateMulticlassApplication({...ranger,dexterity:12},'Rogue').ok });
     results.push({ name:'Rogue allowed at Dexterity 13+', pass: validateMulticlassApplication(ranger,'Rogue').ok });
@@ -28,6 +30,13 @@ export default async function(req) {
     results.push({ name:'expertise doubles proficiency to plus six at PB three', pass:expertise.skills.Stealth==='expert'&&3*2===6 });
     results.push({ name:'non-caster level leaves Ranger 5 slots at four and two', pass:[4,2].join(',')==='4,2' });
     results.push({ name:'character level six proficiency is plus three', pass:proficiencyForLevel(6)===3 });
+    const plan=buildMulticlassClassUpdates(fixture,'Rogue',['Stealth','Sleight of Hand']);
+    await base44.asServiceRole.entities.Character.update(fixture.id,plan.updates);
+    const applied=await base44.asServiceRole.entities.Character.get(fixture.id);
+    results.push({name:'disposable Ranger 5 to Rogue 1 application persists exact grants',pass:plan.ok&&applied.level===6&&applied.multiclass?.[0]?.class==='Rogue'&&!applied.multiclass?.[0]?.subclass&&applied.features?.includes('Sneak Attack (1d6)')&&applied.features?.includes("Thieves' Cant")&&applied.skills?.Stealth==='expert'&&applied.skills?.['Sleight of Hand']==='expert'});
+    await base44.asServiceRole.entities.Character.delete(fixture.id);
+    const fixtureAbsent=(await base44.asServiceRole.entities.Character.filter({id:fixture.id},'-created_date',1)).length===0;
+    results.push({name:'disposable multiclass fixture cleanup verified',pass:fixtureAbsent});
     const after = await hashValue(await protectedState(base44.asServiceRole));
     results.push({ name:'live protected records untouched by fixtures', pass:before===after });
     const passed=results.filter(result=>result.pass).length;

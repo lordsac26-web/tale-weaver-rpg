@@ -59,3 +59,25 @@ export function applyRogueExpertise(skills = {}, choices = [], previousChoices =
   unique.forEach(skill => { next[skill] = 'expert'; });
   return { ok: true, skills: next, choices: unique };
 }
+
+export function buildMulticlassClassUpdates(character, className, expertiseChoices = [], subclass = '') {
+  const validation = validateMulticlassApplication(character, className, subclass, 1);
+  if (!validation.ok) return validation;
+  let skills = character.skills || {};
+  let additions = [];
+  if (className === 'Rogue') {
+    const expertise = applyRogueExpertise(skills, expertiseChoices, []);
+    if (!expertise.ok) return expertise;
+    skills = expertise.skills;
+    additions = ROGUE_ONE_FEATURES;
+  }
+  const names = new Set((character.features || []).map(feature => String(typeof feature === 'string' ? feature : feature?.name || '').toLowerCase()));
+  const totalLevel = Number(character.level || 1) + 1;
+  return { ok: true, updates: {
+    level: totalLevel,
+    multiclass: [...(character.multiclass || []), { class: className, subclass: subclass || '', levels: 1 }],
+    proficiency_bonus: proficiencyForLevel(totalLevel),
+    features: [...(character.features || []), ...additions.filter(feature => !names.has(feature.toLowerCase()))],
+    ...(className === 'Rogue' ? { skills } : {}),
+  }, granted_features: additions };
+}

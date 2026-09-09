@@ -781,10 +781,16 @@ export async function handlePlayerAttack(ctx) {
   let attackRoll = attackResult.roll;
   let isCritical = attackResult.isCritical;
   let isMiss = attackResult.isMiss;
+  const adjacentAlly = (combatLog.combatants || []).find(combatant => {
+    if (combatant?.type !== 'ally' || combatant?.is_conscious === false || Number(combatant?.hp_current || 0) <= 0) return false;
+    const adjacentTargets = Array.isArray(combatant.adjacent_to) ? combatant.adjacent_to : [];
+    const distance = combatant.distance_to_targets?.[target.id] ?? (combatant.target_id === target.id ? combatant.distance_to_target : null);
+    return adjacentTargets.includes(target.id) || (Number.isFinite(Number(distance)) && Number(distance) <= 5);
+  });
   const sneakAttack = !spell ? resolveSneakAttack({
     character, weapon, advantage: attackResult.advantage, disadvantage: attackResult.disadvantage,
-    allyAdjacent: modifiers.ally_adjacent === true,
-    adjacentAllyIncapacitated: modifiers.adjacent_ally_incapacitated === true,
+    allyAdjacent: !!adjacentAlly,
+    adjacentAllyIncapacitated: !adjacentAlly,
     alreadyUsed: combatLog.world_state?.sneak_attack_used === true,
   }) : { eligible: false, attribution: null };
   if (sneakAttack.eligible) {
