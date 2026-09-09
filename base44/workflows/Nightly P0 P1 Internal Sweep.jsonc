@@ -1,5 +1,6 @@
 {
   "name": "Nightly P0 P1 Internal Sweep",
+  "description": "Runs all mandatory Tale Weaver P0/P1 regression suites inside the app and stores one daily aggregate.",
   "trigger": {
     "condition": null,
     "config": {
@@ -17,12 +18,11 @@
       "ends_after_count": null
     }
   },
-  "description": "Runs all mandatory Tale Weaver P0/P1 regression suites inside the app and stores one daily aggregate.",
   "definition": {
     "document": {
       "dsl": "1.0.0",
       "name": "nightly_p0_p1_internal_sweep",
-      "version": "1.0",
+      "version": "1.1",
       "namespace": "base44"
     },
     "do": [
@@ -200,9 +200,39 @@
               "nightly_internal": true
             }
           },
-          "then": "vendor_economy",
+          "then": "spell_catalog_quality",
           "x-base44": {
             "title": "Test content details"
+          }
+        }
+      },
+      {
+        "spell_catalog_quality": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testSpellCatalogDataQualityRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "multiclass_rules",
+          "x-base44": {
+            "title": "Test spell catalog quality"
+          }
+        }
+      },
+      {
+        "multiclass_rules": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testMulticlassRulesRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "vendor_economy",
+          "x-base44": {
+            "title": "Test multiclass rules"
           }
         }
       },
@@ -256,6 +286,8 @@
                 "testHuntersMarkRegression": "${ .hunters_mark }",
                 "testItemRecoveryRegression": "${ .item_recovery }",
                 "testContentDetailRegression": "${ .content_detail }",
+                "testSpellCatalogDataQualityRegression": "${ .spell_catalog_quality }",
+                "testMulticlassRulesRegression": "${ .multiclass_rules }",
                 "testVendorEconomyRegression": "${ .vendor_economy }",
                 "testAskDMRegression": "${ .ask_dm }"
               }

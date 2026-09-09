@@ -4,6 +4,8 @@ import { Star, TrendingUp, Heart, Shield, Sparkles, Award, X, ChevronRight } fro
 import { CLASSES, calcStatMod, PROFICIENCY_BY_LEVEL } from './gameData';
 import SpellSelectionStep, { getRequiredSpellCounts } from './SpellSelectionStep';
 import ClassSelector from './levelup/ClassSelector';
+import { base44 } from '@/api/base44Client';
+import { getClassBreakdown } from './multiclassUtils';
 
 const XP_THRESHOLDS = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
 
@@ -20,12 +22,9 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
 
   // ── Multiclass class picker ──────────────────────────────────────────────
   // Build the list of classes the character holds (primary + any multiclass).
-  const classOptions = [
-    { class: character.class, level: character.level || 1, isPrimary: true },
-    ...(character.multiclass || []).map(mc => ({
-      class: mc.class, level: mc.levels || 1, isPrimary: false,
-    })),
-  ];
+  const classOptions = getClassBreakdown(character).map(entry => ({
+    class: entry.className, level: entry.levels, subclass: entry.subclass, isPrimary: entry.primary,
+  }));
   const isMulticlass = classOptions.length > 1;
   // Default to advancing the primary class.
   const [receivingClass, setReceivingClass] = useState(character.class);
@@ -53,8 +52,8 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
   
   // Subclass selection / ASI / features all key off the RECEIVING class's
   // per-class level, not the total character level.
-  const needsSubclass = receivingClass === character.class &&
-    !character.subclass && newClassLevel >= 3 && classData.subclasses?.length > 0;
+  const subclassGate = ['Cleric','Sorcerer','Warlock'].includes(receivingClass) ? 1 : ['Druid','Wizard'].includes(receivingClass) ? 2 : 3;
+  const needsSubclass = !receivingOption.subclass && newClassLevel >= subclassGate && classData.subclasses?.length > 0;
 
   // Check if this level grants ASI/Feat (based on the receiving class's level)
   const asiLevels = ['Fighter', 'Rogue'].includes(receivingClass) ? FIGHTER_ROGUE_ASI : ASI_LEVELS;
@@ -88,6 +87,12 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
   };
   
   const confirmLevelUp = async () => {
+    try {
+      await base44.functions.invoke('applyMulticlassLevel', { action:'validate', character_id:character.id, class_name:receivingClass, class_level:newClassLevel, subclass:selectedSubclass||receivingOption.subclass||'' });
+    } catch (error) {
+      alert(error?.response?.data?.error || error.message);
+      return;
+    }
     if (needsSubclass && !selectedSubclass) {
       alert('Please select a subclass to continue.');
       return;
@@ -124,17 +129,16 @@ export default function LevelUpModal({ character, onLevelUp, onClose }) {
     };
 
     // Write the gained level into the correct class slot.
-    if (receivingClass === character.class) {
-      updates.level = newClassLevel;
-    } else {
+    updates.level = Number(character.level || 1) + 1;
+    if (receivingClass !== character.class) {
       const mc = (character.multiclass || []).map(m => ({ ...m }));
       const idx = mc.findIndex(m => m.class === receivingClass);
-      if (idx >= 0) mc[idx].levels = (mc[idx].levels || 0) + 1;
-      else mc.push({ class: receivingClass, subclass: '', levels: 1 });
+      if (idx >= 0) {
+        mc[idx].levels = (mc[idx].levels || 0) + 1;
+        if (needsSubclass) mc[idx].subclass = selectedSubclass;
+      }
       updates.multiclass = mc;
-    }
-
-    if (needsSubclass) {
+    } else if (needsSubclass) {
       updates.subclass = selectedSubclass;
     }
     

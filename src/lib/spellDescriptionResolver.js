@@ -16,6 +16,7 @@ const sourceRank = (spell) => {
   const source = String(spell?.source || spell?.raw_data?.source || spell?.raw_data?.document__title || '').toLowerCase();
   return /phb|basic rules|srd|core|2014/.test(source) ? 2 : source ? 1 : 0;
 };
+const completeness = (spell) => ['description','components','casting_time','range','duration','school'].reduce((score, key) => score + Number(Boolean(text(spell?.[key]))), 0) + Number(typeof spell?.concentration === 'boolean');
 
 export function selectCanonicalSpell(source, candidates = []) {
   const sourceItem = sourceObject(source);
@@ -28,7 +29,7 @@ export function selectCanonicalSpell(source, candidates = []) {
     const bRaw = text(b?.raw_data?.data?.desc) || text(b?.raw_data?.desc);
     const aDesc = text(a?.desc);
     const bDesc = text(b?.desc);
-    return Number(Boolean(bDescription)) - Number(Boolean(aDescription)) || Number(Boolean(bRaw)) - Number(Boolean(aRaw)) || Number(Boolean(bDesc)) - Number(Boolean(aDesc)) || sourceRank(b) - sourceRank(a) || String(a?.id || '').localeCompare(String(b?.id || ''));
+    return Number(Boolean(bDescription)) - Number(Boolean(aDescription)) || completeness(b) - completeness(a) || Number(Boolean(bRaw)) - Number(Boolean(aRaw)) || Number(Boolean(bDesc)) - Number(Boolean(aDesc)) || sourceRank(b) - sourceRank(a) || String(a?.id || '').localeCompare(String(b?.id || ''));
   })[0] || null;
 }
 

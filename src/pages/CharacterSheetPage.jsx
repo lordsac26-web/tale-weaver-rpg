@@ -422,7 +422,7 @@ export default function CharacterSheetPage() {
             {/* MULTICLASS */}
             {tab === 'multiclass' && (
               <div className="p-5">
-                <MulticlassManager character={character} onUpdate={handleUpdate} />
+                <MulticlassManager character={character} onAuthoritativeUpdate={setCharacter} />
               </div>
             )}
 
@@ -463,11 +463,14 @@ export default function CharacterSheetPage() {
                 {(character.features || []).length === 0 ? (
                   <div className="text-center py-8 text-sm" style={{ color: 'rgba(200,165,115,0.78)', fontFamily: 'EB Garamond, serif' }}>No features recorded</div>
                 ) : (
-                  (character.features || []).map((feat, i) => (
-                    <div key={i} className="p-3 rounded-xl" style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.12)' }}>
-                      <div className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{feat}</div>
-                    </div>
-                  ))
+                  (character.features || []).map((feat, i) => {
+                    const name=typeof feat==='string'?feat:(feat?.name||'Feature');
+                    const description=typeof feat==='object'?(feat?.description||feat?.desc||''):'';
+                    return <div key={i} className="p-3 rounded-xl" style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.12)' }}>
+                      <div className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{name}</div>
+                      {description&&<p className="text-xs mt-1" style={{color:'rgba(210,178,128,0.78)',fontFamily:'EB Garamond, serif'}}>{description}</p>}
+                    </div>;
+                  })
                 )}
                 {character.backstory && (
                   <div className="mt-4">

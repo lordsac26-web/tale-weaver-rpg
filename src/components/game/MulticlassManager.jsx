@@ -1,161 +1,52 @@
-import React, { useState } from 'react';
-import { CLASSES } from './gameData';
+import React, { useEffect, useState } from 'react';
+import { Plus, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Plus, Trash2, Info } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { base44 } from '@/api/base44Client';
+import { CLASSES } from './gameData';
+import MulticlassClassPreview from './MulticlassClassPreview';
+import MulticlassExpertiseEditor from './MulticlassExpertiseEditor';
 
-export default function MulticlassManager({ character, onUpdate }) {
-  const [adding, setAdding] = useState(false);
-  const [newClass, setNewClass] = useState('');
-  const [newSubclass, setNewSubclass] = useState('');
+export default function MulticlassManager({ character, onAuthoritativeUpdate }) {
+  const [adding,setAdding]=useState(false); const [newClass,setNewClass]=useState('');
+  const [validation,setValidation]=useState(null); const [expertise,setExpertise]=useState([]);
+  const [saving,setSaving]=useState(false); const [error,setError]=useState('');
+  const multiclass=character.multiclass||[];
+  const primaryLevels=Math.max(1,Number(character.level||1)-multiclass.reduce((sum,entry)=>sum+Number(entry.levels||0),0));
+  const proficient=Object.entries(character.skills||{}).filter(([,level])=>['proficient','expert',true].includes(level)).map(([name])=>name);
 
-  const multiclass = character.multiclass || [];
-  const totalLevels = character.level + multiclass.reduce((sum, mc) => sum + (mc.levels || 1), 0);
+  useEffect(()=>{
+    if(!newClass){setValidation(null);return;}
+    let active=true;
+    base44.functions.invoke('applyMulticlassLevel',{action:'preview',character_id:character.id,class_name:newClass,class_level:1})
+      .then(response=>active&&setValidation(response.data))
+      .catch(err=>active&&setValidation({ok:false,reason:err?.response?.data?.error||err.message}));
+    return()=>{active=false;};
+  },[character.id,newClass]);
 
-  const handleAdd = () => {
-    if (!newClass) return;
-    const updated = [
-      ...multiclass,
-      { class: newClass, subclass: newSubclass || '', levels: 1 }
-    ];
-    onUpdate({ multiclass: updated });
-    setNewClass('');
-    setNewSubclass('');
-    setAdding(false);
-  };
+  const addClass=async()=>{setSaving(true);setError('');try{
+    const response=await base44.functions.invoke('applyMulticlassLevel',{action:'apply_class',character_id:character.id,class_name:newClass,expertise_choices:newClass==='Rogue'?expertise:[]});
+    onAuthoritativeUpdate?.(response.data.character); setAdding(false); setNewClass(''); setExpertise([]);
+  }catch(err){setError(err?.response?.data?.error||err.message);}finally{setSaving(false);}};
+  const saveExpertise=async(choices,previous)=>{setSaving(true);setError('');try{
+    const response=await base44.functions.invoke('applyMulticlassLevel',{action:'set_expertise',character_id:character.id,expertise_choices:choices,previous_choices:previous});
+    onAuthoritativeUpdate?.({...character,skills:response.data.skills});
+  }catch(err){setError(err?.response?.data?.error||err.message);}finally{setSaving(false);}};
 
-  const handleRemove = (index) => {
-    const updated = multiclass.filter((_, i) => i !== index);
-    onUpdate({ multiclass: updated });
-  };
-
-  const handleLevelChange = (index, delta) => {
-    const updated = [...multiclass];
-    updated[index].levels = Math.max(1, (updated[index].levels || 1) + delta);
-    onUpdate({ multiclass: updated });
-  };
-
-  const handlePrimaryLevelChange = (delta) => {
-    onUpdate({ level: Math.max(1, character.level + delta) });
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-fantasy text-lg" style={{ color: 'var(--brass-gold)' }}>
-          Multiclassing
-        </h3>
-        <div className="text-xs" style={{ color: 'rgba(201,169,110,0.5)' }}>
-          Total Level: {totalLevels}
-        </div>
-      </div>
-
-      {/* Primary Class */}
-      <div className="glass-panel-light rounded-lg p-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="font-fantasy text-sm" style={{ color: 'var(--brass-gold)' }}>
-            {character.class} {character.subclass && `(${character.subclass})`}
-          </div>
-          <div className="text-xs badge-gold px-2 py-0.5 rounded">Primary</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs" style={{ color: 'rgba(201,169,110,0.6)' }}>Level:</span>
-          <button onClick={() => handlePrimaryLevelChange(-1)}
-            className="px-2 py-0.5 rounded text-xs btn-fantasy"
-            disabled={character.level <= 1}>−</button>
-          <span className="font-fantasy text-sm px-2" style={{ color: '#f0c040' }}>{character.level}</span>
-          <button onClick={() => handlePrimaryLevelChange(1)}
-            className="px-2 py-0.5 rounded text-xs btn-fantasy">+</button>
-        </div>
-      </div>
-
-      {/* Multiclass Classes */}
-      {multiclass.map((mc, idx) => (
-        <div key={idx} className="glass-panel-light rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <div className="font-fantasy text-sm" style={{ color: 'var(--brass-gold)' }}>
-              {mc.class} {mc.subclass && `(${mc.subclass})`}
-            </div>
-            <button onClick={() => handleRemove(idx)}
-              className="p-1 rounded text-xs hover:bg-red-900/30 transition-colors"
-              style={{ color: 'rgba(252,165,165,0.7)' }}>
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs" style={{ color: 'rgba(201,169,110,0.6)' }}>Level:</span>
-            <button onClick={() => handleLevelChange(idx, -1)}
-              className="px-2 py-0.5 rounded text-xs btn-fantasy"
-              disabled={mc.levels <= 1}>−</button>
-            <span className="font-fantasy text-sm px-2" style={{ color: '#f0c040' }}>{mc.levels}</span>
-            <button onClick={() => handleLevelChange(idx, 1)}
-              className="px-2 py-0.5 rounded text-xs btn-fantasy">+</button>
-          </div>
-        </div>
-      ))}
-
-      {/* Add New Multiclass */}
-      {adding ? (
-        <div className="glass-panel-light rounded-lg p-3 space-y-3">
-          <div>
-            <label className="text-xs mb-1 block" style={{ color: 'rgba(201,169,110,0.6)' }}>Class</label>
-            <Select value={newClass} onValueChange={setNewClass}>
-              <SelectTrigger className="select-fantasy">
-                <SelectValue placeholder="Choose class..." />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.keys(CLASSES)
-                  .filter(c => c !== character.class && !multiclass.find(mc => mc.class === c))
-                  .map(c => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {newClass && CLASSES[newClass]?.subclasses?.length > 0 && (
-            <div>
-              <label className="text-xs mb-1 block" style={{ color: 'rgba(201,169,110,0.6)' }}>Subclass (Optional)</label>
-              <Select value={newSubclass} onValueChange={setNewSubclass}>
-                <SelectTrigger className="select-fantasy">
-                  <SelectValue placeholder="Choose subclass..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {CLASSES[newClass].subclasses.map(sc => (
-                    <SelectItem key={sc.name} value={sc.name}>{sc.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <Button onClick={handleAdd} className="btn-fantasy flex-1" disabled={!newClass}>
-              Add Class
-            </Button>
-            <Button onClick={() => { setAdding(false); setNewClass(''); setNewSubclass(''); }}
-              className="btn-fantasy flex-1"
-              style={{ background: 'rgba(60,20,20,0.5)' }}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <button onClick={() => setAdding(true)}
-          className="w-full py-2 rounded-lg border border-dashed text-sm font-fantasy transition-all"
-          style={{ borderColor: 'rgba(201,169,110,0.3)', color: 'rgba(201,169,110,0.6)' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.6)'; e.currentTarget.style.color = '#c9a96e'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(201,169,110,0.3)'; e.currentTarget.style.color = 'rgba(201,169,110,0.6)'; }}>
-          <Plus className="w-4 h-4 inline mr-1" /> Add Multiclass
-        </button>
-      )}
-
-      <div className="flex items-start gap-2 p-3 rounded-lg" style={{ background: 'rgba(60,30,100,0.2)', border: '1px solid rgba(140,80,220,0.2)' }}>
-        <Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'rgba(192,132,252,0.6)' }} />
-        <p className="text-xs" style={{ color: 'rgba(192,132,252,0.5)' }}>
-          Multiclassing combines features from multiple classes. HP, proficiency bonus, and spell slots are calculated based on total character level.
-        </p>
-      </div>
-    </div>
-  );
+  return <div className="space-y-4">
+    <div className="flex items-center justify-between"><h3 className="font-fantasy text-lg" style={{color:'var(--brass-gold)'}}>Multiclassing</h3><span className="text-xs text-amber-100/60">Total Level: {character.level}</span></div>
+    <ClassSummary label="Primary" className={character.class} levels={primaryLevels}/>
+    {multiclass.map((entry,index)=><ClassSummary key={`${entry.class}-${index}`} label="Multiclass" className={entry.class} levels={entry.levels} subclass={entry.subclass}/>)}
+    {multiclass.some(entry=>entry.class==='Rogue'&&Number(entry.levels)>=1)&&<MulticlassExpertiseEditor character={character} onSave={saveExpertise} saving={saving}/>}
+    {adding?<div className="space-y-3">
+      <Select value={newClass} onValueChange={value=>{setNewClass(value);setExpertise([]);setError('');}}><SelectTrigger className="select-fantasy"><SelectValue placeholder="Choose class..."/></SelectTrigger><SelectContent>{Object.keys(CLASSES).filter(name=>name!==character.class&&!multiclass.some(entry=>entry.class===name)).map(name=><SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent></Select>
+      <MulticlassClassPreview className={newClass} validation={validation}/>
+      {newClass==='Rogue'&&<ExpertiseChoices skills={proficient} value={expertise} onChange={setExpertise}/>} {error&&<p className="text-xs text-red-300">{error}</p>}
+      <div className="flex gap-2"><Button onClick={addClass} disabled={saving||!validation?.ok||(newClass==='Rogue'&&(expertise.length!==2||expertise[0]===expertise[1]))} className="btn-fantasy flex-1">{saving?'Applying…':'Apply Class'}</Button><Button onClick={()=>{setAdding(false);setNewClass('');setError('');}} className="btn-fantasy flex-1">Cancel</Button></div>
+    </div>:<button onClick={()=>setAdding(true)} className="w-full py-2 rounded-lg border border-dashed text-sm font-fantasy text-amber-200/70"><Plus className="w-4 h-4 inline mr-1"/>Add Multiclass</button>}
+    <div className="flex items-start gap-2 p-3 rounded-lg bg-purple-950/20 border border-purple-800/30"><Info className="w-4 h-4 text-purple-300 flex-shrink-0"/><p className="text-xs text-purple-200/70">Prerequisites and subclass levels are checked before any class is applied.</p></div>
+  </div>;
 }
+
+function ClassSummary({label,className,levels,subclass}){const data=CLASSES[className]||{};return <div className="glass-panel-light rounded-lg p-3"><div className="font-fantasy text-sm text-amber-200">{label}: {className} {levels}{subclass?` · ${subclass}`:''}</div><p className="text-xs text-amber-100/60 mt-1">{data.description}</p><div className="mt-2">{Object.entries(data.features||{}).filter(([level])=>Number(level)<=Number(levels)).flatMap(([level,features])=>features.map(feature=><p key={`${level}-${feature}`} className="text-xs text-amber-100/70">Lv.{level} · {feature}</p>))}</div></div>;}
+function ExpertiseChoices({skills,value,onChange}){return <div><p className="text-xs text-amber-100/70 mb-2">Choose exactly two proficient skills for Expertise.</p><div className="grid grid-cols-2 gap-2">{[0,1].map(index=><select key={index} value={value[index]||''} onChange={event=>onChange(current=>{const next=[...current];next[index]=event.target.value;return next;})} className="select-fantasy rounded px-2 py-2 text-xs"><option value="">Choose skill</option>{skills.map(name=><option key={name} value={name} disabled={value[1-index]===name}>{name}</option>)}</select>)}</div></div>;}
