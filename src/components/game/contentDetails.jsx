@@ -47,20 +47,34 @@ export function useCanonicalSpell(spell, fallback) {
   return { ...query, detail: enrichSpell(source, [...spells, fallback].map(unwrapRecord).filter(Boolean)) };
 }
 
+export function selectPopulatedRecord(records = []) {
+  return [...records].sort((a, b) => Number(usableText(b?.description)) - Number(usableText(a?.description)) || String(a?.id || '').localeCompare(String(b?.id || '')))[0] || null;
+}
+
 export function useCanonicalMagicItem(item) {
   const itemId = item?.magic_item_id || item?.id;
   const query = useQuery({
     queryKey: ['magic-item-detail', itemId || item?.name],
     queryFn: async () => {
       const matches = itemId
-        ? await base44.entities.MagicItem.filter({ id: itemId }, 'name', 1)
-        : await base44.entities.MagicItem.filter({ name: item.name }, 'name', 1);
-      return matches[0] || null;
+        ? await base44.entities.MagicItem.filter({ id: itemId }, 'name', 10)
+        : await base44.entities.MagicItem.filter({ name: item.name }, 'name', 50);
+      return selectPopulatedRecord(matches);
     },
     enabled: !!item?.is_magic && !!(itemId || item?.name),
     staleTime: 5 * 60 * 1000,
   });
   return { ...query, detail: mergeCanonicalDetail(item, query.data) };
+}
+
+export function useEquipmentDescription(item) {
+  const query = useQuery({
+    queryKey: ['equipment-description', item?.name],
+    queryFn: async () => selectPopulatedRecord(await base44.entities.Equipment.filter({ name: item.name }, 'name', 50)),
+    enabled: !!item?.name && !usableText(item?.description),
+    staleTime: 5 * 60 * 1000,
+  });
+  return usableText(item?.description) ? item.description : query.data?.description || 'No description available';
 }
 
 export function hasUsableItemContent(item) {

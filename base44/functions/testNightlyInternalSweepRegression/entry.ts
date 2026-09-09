@@ -20,7 +20,7 @@ export default async function(req) {
     const first = await writeNightlySweepAggregate({ db, suiteResults: payload.suite_results, runKey, environment: 'test', protectedBeforeHash: before, protectedAfterHash: before });
     testRecordId = first.id;
     const records = await db.entities.NightlySweepResult.filter({ run_key: runKey }, '-created_date', 10);
-    results.push({ name: 'genuine internal suite outputs aggregate to all_pass and one record', pass: first.all_pass === true && records.length === 1 && first.functions_run?.length === 14 && first.total > 0 });
+    results.push({ name: 'genuine internal suite outputs aggregate to all_pass and one record', pass: first.all_pass === true && records.length === 1 && first.functions_run?.length === 16 && first.total > 0 });
     const replay = await writeNightlySweepAggregate({ db, suiteResults: payload.suite_results, runKey, environment: 'test', protectedBeforeHash: before, protectedAfterHash: before });
     const replayRecords = await db.entities.NightlySweepResult.filter({ run_key: runKey }, '-created_date', 10);
     results.push({ name: 'same-day run-key replay is idempotent with no duplicate', pass: replay.already_processed === true && replayRecords.length === 1 && replayRecords[0].id === records[0].id });

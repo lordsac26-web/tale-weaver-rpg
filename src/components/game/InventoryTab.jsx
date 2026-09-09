@@ -8,7 +8,7 @@ import {
 } from './itemData';
 import { motion, AnimatePresence } from 'framer-motion';
 import { resolveItemBonuses } from './itemBonuses';
-import { hasUsableItemContent, useCanonicalMagicItem } from './contentDetails';
+import { useEquipmentDescription } from './contentDetails';
 import { addInventoryItemAtAcquisition, formatInventoryItemName, normalizeAmmoForDisplay } from '@/lib/ammunition';
 
 const RARITIES = Object.keys(ITEM_RARITY);
@@ -147,6 +147,7 @@ const isConsumableItem = (item) => {
 
 function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onUseConsumable }) {
   const [expanded, setExpanded] = useState(false);
+  const displayDescription = useEquipmentDescription(item);
   const rarity = ITEM_RARITY[item.rarity] || ITEM_RARITY.common;
   const slot = item.equip_slot || CATEGORY_TO_SLOT[item.category];
   const canEquip = !!slot;
@@ -181,11 +182,9 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
           </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          {(item.magic_properties?.length > 0 || item.description) && (
-            <button onClick={() => setExpanded(v => !v)} className="p-1 rounded" style={{ color: 'rgba(180,140,90,0.4)' }}>
+          <button onClick={() => setExpanded(v => !v)} className="p-1 rounded" style={{ color: 'rgba(180,140,90,0.4)' }}>
               {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
-          )}
           {isUnidentifiedMagic && (
            <button onClick={() => onIdentify?.(item)}
              className="p-1.5 rounded-lg text-xs border transition-all"
@@ -233,11 +232,9 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
                 {item.magic_properties.map(p => <MagicPropBadge key={p} propKey={p} />)}
               </div>
             )}
-            {item.description && (
-              <p className="text-xs leading-relaxed" style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'EB Garamond, serif' }}>
-                {item.description}
-              </p>
-            )}
+            <p className="text-xs leading-relaxed" style={{ color: 'rgba(201,169,110,0.5)', fontFamily: 'EB Garamond, serif' }}>
+              {displayDescription}
+            </p>
           </motion.div>
         )}
       </AnimatePresence>

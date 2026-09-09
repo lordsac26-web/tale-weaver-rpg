@@ -14,6 +14,7 @@ import { commitAuthoritativeAmmunition, planAmmunitionUse } from '../ammunitionT
 import { rollWeaponBaseDamage } from './weaponDamage.ts';
 import { appendRecoverableItem, buildRecoverableItem } from '../story/recoveryTransaction.ts';
 import { resolveExplicitThrownWeapon } from '../story/projectileLifecycle.ts';
+import { resolveSneakAttack } from './sneakAttack.ts';
 
 export async function handlePlayerAttack(ctx) {
   const { base44, session_id, combat_id, character_id, payload, request_id, roll_d20 = rollD20 } = ctx;
@@ -649,25 +650,8 @@ export async function handlePlayerAttack(ctx) {
       advSources.push(true);
     }
 
-    // Rogue Sneak Attack (PHB p.96) — server-authoritative validation:
-    //  • once per TURN (tracked in world_state.sneak_attack_used)
-    //  • requires a finesse or ranged weapon
-    //  • requires advantage on the attack OR an ally adjacent to the target (modifiers.ally_adjacent)
-    //    (advantage is negated if the attacker has disadvantage — handled by the cancel rule)
-    if (modifiers.sneak_attack_ready && character.class === 'Rogue') {
-      const alreadyUsed = combatLog.world_state?.sneak_attack_used;
-      const weaponProps = (weapon?.properties || []).map(p => p.toLowerCase());
-      const isFinesseOrRanged = weaponProps.includes('finesse') || weapon?.type === 'ranged';
-      // Rakish Audacity (Swashbuckler, XGtE p.47): Sneak Attack in a 1-on-1 duel
-      // without needing advantage or an adjacent ally (M-S fix)
-      const isSwashbuckler = (character.subclass || '').toLowerCase().includes('swashbuckler');
-      const hasSneakCondition = (modifiers.advantage && !modifiers.disadvantage) || modifiers.ally_adjacent || isSwashbuckler;
-      if (!alreadyUsed && isFinesseOrRanged && hasSneakCondition) {
-        const sneakDice = Math.ceil((character.level || 1) / 2);
-        extraDamageDice.push({ dice: `${sneakDice}d6`, type: 'sneak', label: 'Sneak Attack' });
-        sneakAttackApplied = true;
-      }
-    }
+    // Sneak Attack eligibility is resolved after the centralized attack roll so
+    // concealment, target conditions, and advantage/disadvantage cancellation are authoritative.
 
     // Lucky feat (PHB p.167): spend a luck point to reroll one attack d20 and take
     // either result. Flag it here; applied AFTER the centralized roll resolves below.
@@ -797,6 +781,16 @@ export async function handlePlayerAttack(ctx) {
   let attackRoll = attackResult.roll;
   let isCritical = attackResult.isCritical;
   let isMiss = attackResult.isMiss;
+  const sneakAttack = !spell ? resolveSneakAttack({
+    character, weapon, advantage: attackResult.advantage, disadvantage: attackResult.disadvantage,
+    allyAdjacent: modifiers.ally_adjacent === true,
+    adjacentAllyIncapacitated: modifiers.adjacent_ally_incapacitated === true,
+    alreadyUsed: combatLog.world_state?.sneak_attack_used === true,
+  }) : { eligible: false, attribution: null };
+  if (sneakAttack.eligible) {
+    extraDamageDice.push({ dice: sneakAttack.dice, type: 'sneak', label: 'Sneak Attack' });
+    sneakAttackApplied = true;
+  }
 
   // Champion Fighter — Improved Critical (PHB p.72): weapon attacks crit on
   // 19-20 (Superior Critical: 18-20 at level 15). Applied automatically.
@@ -1024,9 +1018,10 @@ export async function handlePlayerAttack(ctx) {
     logEntry.base_damage = baseDamage;
     logEntry.hunters_mark_bonus = huntersMarkDamage;
     logEntry.hunters_mark_rolls = huntersMarkRolls;
+    if (sneakAttackApplied) logEntry.sneak_attack = { dice: sneakAttack.dice, attribution: sneakAttack.attribution };
     const actionLabel = spell ? `casts ${spell.name} at` : (isCritical ? 'CRITICALLY strikes' : 'hits');
     const attackDisplay = attackResult.advantage ? `Advantage [${attackResult.rolls.join(', ')}] → ${attackRoll}; ${attackRoll}+${attackMod}=${totalAttack}` : attackResult.disadvantage ? `Disadvantage [${attackResult.rolls.join(', ')}] → ${attackRoll}; ${attackRoll}+${attackMod}=${totalAttack}` : `${attackRoll}+${attackMod}=${totalAttack}`;
-    logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage!${huntersMark ? ` Base ${baseDamage} + Hunter's Mark ${huntersMarkDamage} (${huntersMarkRolls.join('+') || 0}) = ${damage}.` : ''} (Roll: ${attackDisplay} vs AC ${target.ac})${advantageSources.length ? ` Advantage source: ${advantageSources.join('; ')}.` : ''}${stormRuneBonus ? ` ⛈️ Storm Rune guided the strike (+${stormRuneBonus} to hit).` : ''}${fireRuneText}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
+    logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage!${huntersMark ? ` Base ${baseDamage} + Hunter's Mark ${huntersMarkDamage} (${huntersMarkRolls.join('+') || 0}) = ${damage}.` : ''}${sneakAttackApplied ? ` ${sneakAttack.attribution}; +${sneakAttack.dice}.` : ''} (Roll: ${attackDisplay} vs AC ${target.ac})${advantageSources.length ? ` Advantage source: ${advantageSources.join('; ')}.` : ''}${stormRuneBonus ? ` ⛈️ Storm Rune guided the strike (+${stormRuneBonus} to hit).` : ''}${fireRuneText}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
   } else {
     logEntry.hit = false;
     logEntry.attack_roll = totalAttack;
@@ -1062,7 +1057,7 @@ export async function handlePlayerAttack(ctx) {
     newWorldState.ambush_setup = { ...(combatLog.world_state?.ambush_setup || {}), attack_resolved: true, consumed_by_request_id: request_id || null };
   }
   // Mark Sneak Attack consumed for this turn so it can't trigger again until next turn
-  if (sneakAttackApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.sneak_attack_used = true;
+  if (hit && sneakAttackApplied && newWorldState.actions_used_this_turn !== 0) newWorldState.sneak_attack_used = true;
   // Clear Channel Divinity: Guided Strike bonus (consumed by this attack)
   if (combatLog.world_state?.guided_strike_bonus) newWorldState.guided_strike_bonus = 0;
   // Horde Breaker is a free, different-target attack once per turn.

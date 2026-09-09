@@ -73,7 +73,7 @@ export const ADVENTURING_GEAR = [
   { name: 'Bedroll', category: 'Adventuring Gear', weight: 7, cost: 1, cost_unit: 'gp', rarity: 'common', quantity: 1 },
   { name: 'Rope (50 ft, hemp)', category: 'Adventuring Gear', weight: 10, cost: 1, cost_unit: 'gp', rarity: 'common', quantity: 1 },
   { name: 'Rope (50 ft, silk)', category: 'Adventuring Gear', weight: 5, cost: 10, cost_unit: 'gp', rarity: 'common', quantity: 1 },
-  { name: 'Torch', category: 'Adventuring Gear', weight: 1, cost: 0.01, cost_unit: 'gp', rarity: 'common', quantity: 10 },
+  { name: 'Torch', category: 'Adventuring Gear', weight: 1, cost: 0.01, cost_unit: 'gp', rarity: 'common', quantity: 10, description: 'A torch burns for 1 hour, shedding bright light in a 20-foot radius and dim light for an additional 20 feet. If you make a melee attack with a burning torch and hit, it deals 1 fire damage.' },
   { name: 'Lantern (hooded)', category: 'Adventuring Gear', weight: 2, cost: 5, cost_unit: 'gp', rarity: 'common', quantity: 1 },
   { name: 'Oil (flask)', category: 'Adventuring Gear', weight: 1, cost: 0.1, cost_unit: 'gp', rarity: 'common', quantity: 1 },
   { name: 'Rations (1 day)', category: 'Adventuring Gear', weight: 2, cost: 0.5, cost_unit: 'gp', rarity: 'common', quantity: 10 },

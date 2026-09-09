@@ -13,6 +13,8 @@ export const MANDATORY_NIGHTLY_SUITES = [
   'testHuntersMarkRegression',
   'testItemRecoveryRegression',
   'testContentDetailRegression',
+  'testSpellCatalogDataQualityRegression',
+  'testMulticlassRulesRegression',
   'testVendorEconomyRegression',
   'testAskDMRegression',
 ];
