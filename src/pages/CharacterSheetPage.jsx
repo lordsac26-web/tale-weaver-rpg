@@ -11,6 +11,7 @@ import { CLASSES, calcStatMod, calcModDisplay, PROFICIENCY_BY_LEVEL, SKILL_STAT_
 import InventoryTab from '@/components/game/InventoryTab';
 import SpellbookTab from '@/components/game/SpellbookTab';
 import MulticlassManager from '@/components/game/MulticlassManager';
+import { featureDescription } from '@/components/game/featureDescriptions';
 import CharacterGrowthTab from '@/components/game/CharacterGrowthTab';
 
 const SPELLCASTING_CLASSES = ['Wizard', 'Sorcerer', 'Warlock', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Artificer'];
@@ -465,7 +466,7 @@ export default function CharacterSheetPage() {
                 ) : (
                   (character.features || []).map((feat, i) => {
                     const name=typeof feat==='string'?feat:(feat?.name||'Feature');
-                    const description=typeof feat==='object'?(feat?.description||feat?.desc||''):'';
+                    const description=featureDescription(feat);
                     return <div key={i} className="p-3 rounded-xl" style={{ background: 'rgba(20,13,5,0.5)', border: '1px solid rgba(180,140,90,0.12)' }}>
                       <div className="text-sm" style={{ color: 'rgba(232,213,183,0.85)', fontFamily: 'EB Garamond, serif' }}>{name}</div>
                       {description&&<p className="text-xs mt-1" style={{color:'rgba(210,178,128,0.78)',fontFamily:'EB Garamond, serif'}}>{description}</p>}

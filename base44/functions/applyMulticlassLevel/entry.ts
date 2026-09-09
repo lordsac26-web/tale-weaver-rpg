@@ -4,7 +4,7 @@ import { applyRogueExpertise, MULTICLASS_RULES_VERSION, proficiencyForLevel, ROG
 const featureName = (feature) => String(typeof feature === 'string' ? feature : feature?.name || '');
 const uniqueFeatures = (features, additions) => {
   const names = new Set((features || []).map(feature => featureName(feature).toLowerCase()));
-  return [...(features || []), ...additions.filter(feature => !names.has(feature.name.toLowerCase()))];
+  return [...(features || []), ...additions.filter(feature => !names.has(featureName(feature).toLowerCase()))];
 };
 
 export default async function(req) {

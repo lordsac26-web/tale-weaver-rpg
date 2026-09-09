@@ -16,7 +16,7 @@ export default async function(req) {
     results.push({ name:'Rogue blocked below Dexterity 13', pass: !validateMulticlassApplication({...ranger,dexterity:12},'Rogue').ok });
     results.push({ name:'Rogue allowed at Dexterity 13+', pass: validateMulticlassApplication(ranger,'Rogue').ok });
     results.push({ name:'Rogue subclass blocked below level 3', pass: !validateMulticlassApplication(ranger,'Rogue','Assassin',1).ok });
-    results.push({ name:'Rogue 1 grant set is Sneak Attack, Expertise two, and Thieves Cant', pass: ROGUE_ONE_FEATURES.map(item=>item.name).join('|')==="Sneak Attack (1d6)|Thieves' Cant" && applyRogueExpertise(ranger.skills,['Stealth','Sleight of Hand']).choices?.length===2 });
+    results.push({ name:'Rogue 1 grant set is Sneak Attack, Expertise two, and Thieves Cant', pass: ROGUE_ONE_FEATURES.join('|')==="Sneak Attack (1d6)|Thieves' Cant" && applyRogueExpertise(ranger.skills,['Stealth','Sleight of Hand']).choices?.length===2 });
     const rogue={...ranger,level:6,multiclass:[{class:'Rogue',levels:1}],features:ROGUE_ONE_FEATURES};
     const bow={name:'Longbow',type:'ranged',properties:['Ammunition','Heavy','Two-Handed']};
     const adv=resolveSneakAttack({character:rogue,weapon:bow,advantage:true});

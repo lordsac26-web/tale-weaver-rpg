@@ -15,10 +15,7 @@ export const SUBCLASS_LEVEL = {
   Paladin: 3, Ranger: 3, Rogue: 3,
 };
 
-export const ROGUE_ONE_FEATURES = [
-  { name: 'Sneak Attack (1d6)', description: 'Once per turn, deal an extra 1d6 damage with a finesse or ranged weapon when you have advantage, or when an active ally is within 5 feet of the target and you do not have disadvantage.' },
-  { name: "Thieves' Cant", description: 'You know the secret mix of dialect, jargon, and code used by rogues to hide messages in ordinary conversation.' },
-];
+export const ROGUE_ONE_FEATURES = ['Sneak Attack (1d6)', "Thieves' Cant"];
 
 const scoreLabel = (key) => ({ strength: 'Strength', dexterity: 'Dexterity', constitution: 'Constitution', intelligence: 'Intelligence', wisdom: 'Wisdom', charisma: 'Charisma' }[key] || key);
 const optionPasses = (character, option) => option.every(([ability, minimum]) => Number(character?.[ability] || 0) >= minimum);
