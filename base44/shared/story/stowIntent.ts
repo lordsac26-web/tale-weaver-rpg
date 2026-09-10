@@ -64,10 +64,17 @@ export async function executeStowAction({ base44, ownerId = null, payload }) {
   if (!parsed) return { status: 200, body: { handled: false } };
   const token = String(payload?.request_id || '').slice(0, 120);
   if (!token) return { status: 400, body: { handled: true, error: 'request_id is required.', writes: 0 } };
-  const [session, character] = await Promise.all([
-    base44.asServiceRole.entities.GameSession.get(payload.session_id),
-    base44.asServiceRole.entities.Character.get(payload.character_id),
-  ]);
+  let session = null;
+  let character = null;
+  try {
+    [session, character] = await Promise.all([
+      base44.asServiceRole.entities.GameSession.get(payload.session_id),
+      base44.asServiceRole.entities.Character.get(payload.character_id),
+    ]);
+  } catch {
+    // Deleted or malformed identifiers must fail closed, not crash with a 500.
+    return { status: 403, body: { handled: true, error: 'Character and Session linkage is invalid.', writes: 0 } };
+  }
   if (!session || !character || session.character_id !== character.id || (ownerId && character.created_by_id !== ownerId)) return { status: 403, body: { handled: true, error: 'Character and Session linkage is invalid.', writes: 0 } };
   const abilities = { ...(character.long_rest_abilities || {}) };
   const receipts = Array.isArray(abilities[STOW_RECEIPTS_KEY]) ? abilities[STOW_RECEIPTS_KEY] : [];
