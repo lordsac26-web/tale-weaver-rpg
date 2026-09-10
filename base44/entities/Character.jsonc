@@ -179,6 +179,13 @@
         "type": "object"
       }
     },
+    "stowed_items": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Items stowed inside containers (e.g. Bag of Holding): {name, quantity, category, description, container, is_identified, stowed_at, stow_request_id, provenance: {source, story_request_id, acquired_at}}"
+    },
     "equipped": {
       "type": "object",
       "description": "Slot-based equipment: {weapon, offhand, head, chest, hands, ring1, ring2, feet, neck, mainhand, shoulders, cloak, trinket}"

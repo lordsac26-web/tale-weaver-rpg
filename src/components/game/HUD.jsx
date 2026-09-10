@@ -1,5 +1,7 @@
-import React from 'react';
-import { Shield, Heart, Star, MapPin, Clock, Swords, Sparkles, Moon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Shield, Heart, Star, MapPin, Clock, Swords, Sparkles, Moon, Activity, Backpack } from 'lucide-react';
+import StatusTruthPanel from './StatusTruthPanel';
+import StowedItemsPane from './StowedItemsPane';
 import { CONDITIONS } from './gameData';
 import { motion } from 'framer-motion';
 import { getSpellSlotsForLevel } from './spellData';
@@ -9,8 +11,9 @@ import { deriveConditionBadges } from '../../../base44/shared/spells/conditionId
 import { getPeriodForHour } from '../../../base44/shared/story/worldClock';
  
 export default function HUD({ character, session }) {
+  const [openPanel, setOpenPanel] = useState(null);
   if (!character) return null;
- 
+
   const hpPct = character.hp_max > 0 ? Math.max(0, Math.min(100, (character.hp_current / character.hp_max) * 100)) : 0;
   const hpBarClass = hpPct > 60 ? 'hp-bar-high' : hpPct > 30 ? 'hp-bar-mid' : 'hp-bar-low';
  
@@ -106,6 +109,22 @@ export default function HUD({ character, session }) {
           <span className="text-xs" style={{ color: 'rgba(170,205,255,0.85)', fontFamily: 'EB Garamond, serif' }}>AC</span>
         </div>
  
+        {/* Full-time status truth + Bag of Holding panes */}
+        <button onClick={() => setOpenPanel(openPanel === 'status' ? null : 'status')}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg stat-box transition-all"
+          title="Status Truth"
+          style={{ cursor: 'pointer', ...(openPanel === 'status' ? { borderColor: 'rgba(232,184,109,0.6)' } : {}) }}>
+          <Activity className="w-3.5 h-3.5" style={{ color: '#86efac' }} />
+          <span className="text-xs font-fantasy hidden md:inline" style={{ color: 'rgba(220,185,135,0.8)' }}>Status</span>
+        </button>
+        <button onClick={() => setOpenPanel(openPanel === 'bag' ? null : 'bag')}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg stat-box transition-all"
+          title="Bag of Holding"
+          style={{ cursor: 'pointer', ...(openPanel === 'bag' ? { borderColor: 'rgba(232,184,109,0.6)' } : {}) }}>
+          <Backpack className="w-3.5 h-3.5" style={{ color: 'var(--brass-gold)' }} />
+          <span className="text-xs font-fantasy hidden md:inline" style={{ color: 'rgba(220,185,135,0.8)' }}>Bag</span>
+        </button>
+
         {/* Quick Rest in HUD — Suggestion #7 */}
         {!session?.in_combat && (
           <button onClick={() => window.dispatchEvent(new CustomEvent('open-rest-modal'))}
@@ -160,6 +179,9 @@ export default function HUD({ character, session }) {
         )}
       </div>
  
+      {openPanel === 'status' && <StatusTruthPanel character={character} session={session} onClose={() => setOpenPanel(null)} />}
+      {openPanel === 'bag' && <StowedItemsPane character={character} onClose={() => setOpenPanel(null)} />}
+
       {/* Bottom rune line */}
       <div className="absolute bottom-0 left-0 right-0 h-px" style={{
         background: 'linear-gradient(90deg, transparent, rgba(201,169,110,0.2) 40%, rgba(201,169,110,0.2) 60%, transparent)'

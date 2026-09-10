@@ -3,7 +3,8 @@ import { acceptSequencedStoryPayload, commitStoryTransition, hydrateLatestStoryE
 import { failedChoiceTransitionRepairCore } from '../../shared/repairs/failedChoiceTransition.ts';
 import { executeAskDungeonMasterCore } from '../../shared/askDungeonMasterCore.ts';
 import { hashValue, readProtectedDndState } from '../../shared/tests/liveProtection.ts';
-import { commitNarratedStoryInventoryRecovery, containsExactRecoveryClaim, narrationMayPublishRecovery } from '../../shared/story/narratedStoryInventoryCommit.ts';
+import { commitNarratedStoryInventoryRecovery, containsExactRecoveryClaim, narrationMayPublishRecovery, validateNarratedRecovery } from '../../shared/story/narratedStoryInventoryCommit.ts';
+import { guardAndCommitNarratedRecovery } from '../../shared/story/storyRecoveryGuard.ts';
 
 const choices = (prefix) => [1,2,3,4].map((n) => ({ text: `${prefix} option ${n}`, skill_check: n % 2 ? 'Athletics' : 'Perception', dc: 10 + n, risk_level: 'medium' }));
 
@@ -28,6 +29,16 @@ export default async function testFailedSkillChoiceRefreshRegression(req) {
       const recoveryReplay = await commitNarratedStoryInventoryRecovery({ base44, sessionId: session.id, characterId: character.id, requestId: 'structured-seven-arrows', check: { success: true }, recovery: { type: 'arrows', quantity: 7 } });
       const recoveredCharacter = await base44.asServiceRole.entities.Character.get(character.id);
       record('structured plus seven arrows commits once', recoveryOnce.body?.writes === 1 && recoveryReplay.body?.writes === 0 && recoveryReplay.body?.already_processed === true && recoveredCharacter.inventory?.find((item)=>item.name === 'Arrows')?.quantity === 7);
+      // P0 live incident 2026-09-09: post-combat "retrieve my arrows and loot the bodies
+      // for items" hard-failed as mismatched_exact_structured_recovery after a passed DC 12.
+      const livePhrase = 'retrieve my arrows and loot the bodies for items';
+      const liveCommit = await guardAndCommitNarratedRecovery({ base44, sessionId: session.id, characterId: character.id, requestId: 'live-phrase-arrows', check: { success: true }, narrative: livePhrase, recovery: { type: 'arrows', quantity: 9 } });
+      const liveReplay = await guardAndCommitNarratedRecovery({ base44, sessionId: session.id, characterId: character.id, requestId: 'live-phrase-arrows', check: { success: true }, narrative: livePhrase, recovery: { type: 'arrows', quantity: 9 } });
+      const afterLivePhrase = await base44.asServiceRole.entities.Character.get(character.id);
+      record('live post-combat recovery phrasing commits structured arrows after a passed check', liveCommit.body?.applied === true && liveCommit.body?.writes === 1 && liveReplay.body?.writes === 0 && liveReplay.body?.already_processed === true && afterLivePhrase.inventory?.find((item)=>item.name === 'Arrows')?.quantity === 16);
+      record('explicit contradictory recovery quantity still fails closed', validateNarratedRecovery({ narrative: 'You retrieve exactly five arrows from the mud.', recovery: { type: 'arrows', quantity: 9 } }).ok === false);
+      record('narrated loot claims covered by structured loot pass', validateNarratedRecovery({ narrative: 'You retrieve your arrows and claim a ritual vial from the corpses.', recovery: { type: 'arrows', quantity: 9 }, loot: [{ name: 'ritual vial', quantity: 1 }] }).ok === true);
+      record('narrated loot claim with no structured coverage fails closed', validateNarratedRecovery({ narrative: 'You retrieve exactly three scrolls from the corpses.', recovery: null, loot: [] }).ok === false);
       const failedEntry = { timestamp: '2026-08-14T00:00:01.000Z', request_id: 'dash-failed', action: 'choice', player_choice: 'Dash rapidly through the ruins', text: 'The failed dash changes the scene.', choices: failedChoices, skill_check: failedReceipt };
       const failedCommit = commitStoryTransition(session.story_log, failedEntry, 'dash-failed');
       await base44.asServiceRole.entities.GameSession.update(session.id, { story_log: failedCommit.story_log });

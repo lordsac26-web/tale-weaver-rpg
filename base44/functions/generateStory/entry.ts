@@ -22,6 +22,9 @@ import { canonicalStoryStealthedCondition, classifyStealthSetupIntent, STEALTH_S
 import { executeAuthoritativeShortWait, SHORT_WAIT_VERSION } from '../../shared/story/shortWait.ts';
 import { inferUniqueScenePickup, UNIQUE_SCENE_PICKUP_VERSION } from '../../shared/story/uniqueScenePickup.ts';
 import { normalizeChoiceActionContract, CHOICE_ACTION_CONTRACT_VERSION } from '../../shared/story/choiceActionContract.js';
+import { executeStowAction } from '../../shared/story/stowIntent.ts';
+import { canonicalStoryConditionName, evaluateActiveEffects, normalizeStoryConditions } from '../../shared/story/activeEffects.ts';
+import { buildCorpseContractLine, FAILED_CHECK_CORRECTION_INSTRUCTION, failedCheckFallbackNarrative, findFailedCheckSuccessContradictions } from '../../shared/story/narrationTruth.ts';
 import { executeStoryWeaponAttack, STORY_WEAPON_ATTACK_VERSION } from '../../shared/story/storyWeaponAttack.ts';
 import { preflightCompositeAction, COMPOSITE_ACTION_PREFLIGHT_VERSION } from '../../shared/story/compositeActionPreflight.ts';
 import { COMPOSITE_ACTION_CONTRACT_VERSION } from '../../shared/story/compositeActionContract.js';
@@ -44,7 +47,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.11.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.12.0';
 
 Deno.serve(async (req) => {
   try {
@@ -115,6 +118,15 @@ Deno.serve(async (req) => {
         return Response.json({ narrative: compound.body.narration, choices: [], compound_action: compound.body });
       }
     }
+    let authoritativeStow = null;
+    let recoveryAttention = null;
+    if (action === 'choice') {
+      const stowOutcome = await executeStowAction({ base44, user, payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId } });
+      if (stowOutcome.body?.handled) {
+        if (stowOutcome.status >= 400) return Response.json(stowOutcome.body, { status: stowOutcome.status });
+        authoritativeStow = stowOutcome.body;
+      }
+    }
     let authoritativeWeaponAction = null;
     if (action === 'choice') {
       const thrownOutcome = await executeThrownWeaponAction({
@@ -139,7 +151,12 @@ Deno.serve(async (req) => {
       const recovery = requestedRecovery;
       const check = authoritativeChoiceContext.check || { success: recovery.rule?.type === 'automatic_recovery' };
       const committed = await guardAndCommitNarratedRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check, narrative:selectedChoice, recovery });
-      if (!committed.body?.applied && committed.body?.reason !== 'not_applicable') return Response.json({ error:committed.body?.reason || 'Recovery did not commit.', invalid:true, recovery_transaction:committed.body?.recovery_transaction, writes:0 }, { status:committed.status >= 400 ? committed.status : 409 });
+      if (!committed.body?.applied && committed.body?.reason !== 'not_applicable') {
+        // Never hard-error after a passed check: reroute to an actionable in-narration
+        // alternative. The bounded post-narration gate still guards exact claims.
+        recoveryAttention = committed.body?.reason || 'Recovery did not commit.';
+        console.warn('Pre-commit structured recovery rerouted to narrative attention', JSON.stringify({ request_id: storyRequestId, reason: recoveryAttention, recovery_transaction: committed.body?.recovery_transaction }));
+      }
       if (committed.body?.applied) {
         itemRecovery = { applied:true, already_processed:!!committed.body.already_processed, recovered_items:committed.body.recovered_items || [], item_recovery:{ request_id:storyRequestId, recovered_items:committed.body.recovered_items || [], quantity:(committed.body.recovered_items || []).reduce((sum,item)=>sum+Number(item.quantity || 0),0), item_name:(committed.body.recovered_items || []).map((item)=>item.canonical_item).join(' and '), inventory_result:committed.body.receipt?.inventory_result }, writes:committed.body.writes };
         authoritativeRecovery = { recovery, check, applied:true, recovered_items:itemRecovery.recovered_items, annotation:recoveryAnnotation({ recovery, resolution:check, applied:true, recoveredItems:itemRecovery.recovered_items }) };
@@ -260,6 +277,12 @@ Deno.serve(async (req) => {
     let prompt = '';
     let responseSchema = null;
 
+    const activeEffectsTruth = evaluateActiveEffects({ character, session });
+    const activeEffectsLine = activeEffectsTruth.active.length
+      ? `AUTHORITATIVE ACTIVE EFFECTS (the only mechanical bonuses or penalties currently in force — never apply any other, expired, or lingering bonus): ${activeEffectsTruth.active.map((effect) => `${effect.name} (${effect.mechanical_effect}; ${effect.remaining_duration})`).join('; ')}.`
+      : 'AUTHORITATIVE ACTIVE EFFECTS: none — no buffs or spell effects are currently active. Never narrate concealment bonuses, lingering spell magic, or any expired effect.';
+    const corpseContractLine = buildCorpseContractLine([...(character.spells_known || []), ...(character.spells_prepared || [])]);
+
     const baseContext = `
 You are a masterful, reactive Dungeon Master running a living, cinematic campaign.
 
@@ -283,6 +306,12 @@ ${ambushIntent ? `PENDING AMBUSH CONTRACT: This action resolves ONLY the Stealth
 ${narrativeRangedIntent ? `AUTHORITATIVE RANGED ATTACK CONTRACT: This is an attempted ranged weapon attack. Set combat_trigger true and provide complete living enemy stat blocks. Do not narrate a release, attack roll, hit, miss, damage, death, arrow count, or ammunition change; those resolve only through player_attack after combat starts.` : ''}
 ${Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested ? 'POST-REST FACT: the character is fully rested and alert. Do not describe fatigue, tiredness, weariness, raggedness, sleeplessness, or exhaustion unless a new structured mechanic explicitly causes it.' : ''}
 ${Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested ? 'POST-REST FACT: the character completed a successful rest and is not exhausted. Do not describe fatigue, tiredness, weariness, raggedness, sleeplessness, or impaired focus unless a new mechanical effect explicitly causes it.' : ''}
+${authoritativeStow ? (authoritativeStow.clarification_required
+  ? `STOW CLARIFICATION REQUIRED: the player tried to stow "${authoritativeStow.item_phrase}" into ${authoritativeStow.container}, but the item identity is ambiguous${authoritativeStow.candidates?.length ? ` (carried candidates: ${authoritativeStow.candidates.join(', ')})` : ''}. In the narration, ask which carried item they mean and offer clarifying choices. Do not invent an item, an acquisition, or a mechanical change.`
+  : `AUTHORITATIVE STOW RESULT: exactly ${authoritativeStow.stow.quantity} ${authoritativeStow.stow.item_name} (${authoritativeStow.stow.item_id}) was moved into ${authoritativeStow.stow.container}${authoritativeStow.already_processed ? ' (this stow was already processed; do not repeat it)' : ''}. Narrate only this result; never claim another item was stowed.`) : ''}
+${activeEffectsLine}
+${corpseContractLine}
+${recoveryAttention ? `RECOVERY ATTENTION: the player's request to recover items did not commit (${recoveryAttention}). Do not claim any item was recovered; narrate the attempt falling short and offer an actionable alternative way to recover the items.` : ''}
       `;
 
     if (action === 'start') {
@@ -456,11 +485,20 @@ Write a gripping 1-2 paragraph combat narrative.`;
     const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
     if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0, parser_version:NARRATED_RECOVERY_PARSER_VERSION, recovery_diagnostics:result.recovery_diagnostics }, { status: 409 });
     result = skillInvariant.result;
+    if (authoritativeChoiceContext?.check?.success === false && result.narrative) {
+      const failedCheckContradictions = findFailedCheckSuccessContradictions(result.narrative);
+      if (failedCheckContradictions.length) {
+        result = await generateNarrative(`${prompt}\n\nFAILED-CHECK CORRECTION: The authoritative check FAILED, but the prior candidate narrated the task as completed (${failedCheckContradictions.join(', ')}). ${FAILED_CHECK_CORRECTION_INSTRUCTION}`);
+        if (findFailedCheckSuccessContradictions(result?.narrative || '').length) {
+          result = { ...result, narrative: failedCheckFallbackNarrative(selectedChoice || custom_input) };
+        }
+      }
+    }
     const infiltrationBeat=await guardInfiltrationBeat({candidate:result,previousEntry:(session.story_log||[]).at(-1),plan:infiltrationPlan,regenerate:({metrics,plan})=>generateNarrative(`${prompt}\n\nDUPLICATE-BEAT CORRECTION: The prior candidate was static or too similar (narration ${metrics.narrative_similarity.toFixed(3)}, choices ${metrics.choice_similarity.toFixed(3)}). Rewrite once so the ${plan.success?'successful':'failed'} infiltration action creates a distinct consequence, advances to the contracted structured state when successful, and offers four materially different choices. Never reuse the prior beat or say no further action is taken.`)});
     result={...infiltrationBeat.result,infiltration_guard:infiltrationBeat.guard};
     if (stealthSetupIntent?.establishes_concealment) result = { ...result, combat_trigger:false, enemies:[], condition_update:{target:'player',add:'Stealthed',remove:[],duration:'persistent'}, stealth_handoff:{version:STEALTH_SETUP_HANDOFF_VERSION,request_id:storyRequestId,classification_evidence:stealthSetupIntent,attack_resolved:false,advantage_attribution:'Attacking from Stealthed/concealed'} };
     if (!authoritativeRecovery && !craftingTransaction && action === 'choice') {
-      const committed = await guardAndCommitNarratedRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check:authoritativeChoiceContext.check, narrative:result.narrative, recovery:result.current_recovery });
+      const committed = await guardAndCommitNarratedRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check:authoritativeChoiceContext.check, narrative:result.narrative, recovery:result.current_recovery, loot:result.loot });
       result = { ...result, recovery_transaction: committed.body?.recovery_transaction || { status: committed.body?.reason || 'unknown', ...generatedRecoveryDiagnostics(result) } };
       if (!committed.body?.applied && committed.body?.reason !== 'not_applicable') {
         console.warn('Story recovery validation rejected after bounded repair', JSON.stringify({ request_id:storyRequestId, generate_story_version:GENERATE_STORY_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, narrative:result.narrative, current_recovery:result.current_recovery, recovery_transaction:committed.body?.recovery_transaction }));
@@ -505,6 +543,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
         choice_evidence: { previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash, guard: result.choice_guard },
         ...(result.combat_handoff ? { combat_handoff: result.combat_handoff } : {}),
         ...(result.item_recovery ? { item_recovery: result.item_recovery } : {}),
+        ...(authoritativeStow ? { stow_transaction: { receipt: authoritativeStow.receipt || authoritativeStow.stow || null, clarification_required: !!authoritativeStow.clarification_required, already_processed: !!authoritativeStow.already_processed } } : {}),
         ...(result.recovery_resolution ? { recovery_resolution: result.recovery_resolution } : {}),
         ...(result.recovery_transaction ? { recovery_transaction: result.recovery_transaction } : {}),
         ...(craftingTransaction ? { crafting_transaction: { receipt:craftingTransaction.receipt, already_processed:!!craftingTransaction.already_processed } } : {}),
@@ -625,7 +664,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
           const stealthCondition=canonicalStoryStealthedCondition({characterId:character.id,sessionId:session_id,requestId:storyRequestId,receipt:authoritativeChoiceContext.check});
           nextConditions=withCanonicalStoryStealthed(nextConditions,stealthCondition);
         } else if (incoming.target === 'player' && validConditionName(incoming.add)) {
-          const name = conditionName(incoming.add);
+          const name = canonicalStoryConditionName(conditionName(incoming.add));
           const key = name.toLowerCase();
           // Exhaustion is a mechanical level, not a free-form story badge. Never
           // let narrative output add Exhausted while the authoritative level is 0.
@@ -649,6 +688,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
             });
           }
         }
+        nextConditions = normalizeStoryConditions(nextConditions);
         if (JSON.stringify(nextConditions) !== JSON.stringify(originalConditions)) {
           await base44.asServiceRole.entities.Character.update(character.id, { conditions: nextConditions });
         }

@@ -22,7 +22,7 @@
     "document": {
       "dsl": "1.0.0",
       "name": "nightly_p0_p1_internal_sweep",
-      "version": "1.1",
+      "version": "1.2",
       "namespace": "base44"
     },
     "do": [
@@ -260,9 +260,39 @@
               "nightly_internal": true
             }
           },
-          "then": "write_result",
+          "then": "stow_intent",
           "x-base44": {
             "title": "Test Ask DM"
+          }
+        }
+      },
+      {
+        "stow_intent": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testStowIntentRoutingRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "status_truth",
+          "x-base44": {
+            "title": "Test stow intent routing"
+          }
+        }
+      },
+      {
+        "status_truth": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testStatusTruthRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "write_result",
+          "x-base44": {
+            "title": "Test status truth"
           }
         }
       },
@@ -289,7 +319,9 @@
                 "testSpellCatalogDataQualityRegression": "${ .spell_catalog_quality }",
                 "testMulticlassRulesRegression": "${ .multiclass_rules }",
                 "testVendorEconomyRegression": "${ .vendor_economy }",
-                "testAskDMRegression": "${ .ask_dm }"
+                "testAskDMRegression": "${ .ask_dm }",
+                "testStowIntentRoutingRegression": "${ .stow_intent }",
+                "testStatusTruthRegression": "${ .status_truth }"
               }
             }
           },

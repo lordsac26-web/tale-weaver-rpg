@@ -17,6 +17,8 @@ export const MANDATORY_NIGHTLY_SUITES = [
   'testMulticlassRulesRegression',
   'testVendorEconomyRegression',
   'testAskDMRegression',
+  'testStowIntentRoutingRegression',
+  'testStatusTruthRegression',
 ];
 
 export const PROTECTED_NIGHTLY_IDS = {
@@ -25,8 +27,8 @@ export const PROTECTED_NIGHTLY_IDS = {
   CombatLog: ['6a767f23ec36fe219063ae49', '6a77463582a26b50018110ea'],
 };
 
-const THRESHOLDS = { testLongRestRegression: 26, testTypedUtilitySpellRegression: 19, testAskDMRegression: 9 };
-const QA_MARKER = /(?:LongRestQA|NarrativeContinuityQA|VictoryHandoffQA|P1QA_|SkeletonQA_|HuntersMarkQA_|ArrowRecoveryQA|StorySyncQA|ItemRecoveryQA|TypedUtilityQA|VendorQA_|AskDMQA_)/;
+const THRESHOLDS = { testLongRestRegression: 26, testTypedUtilitySpellRegression: 19, testAskDMRegression: 9, testStowIntentRoutingRegression: 13, testStatusTruthRegression: 13 };
+const QA_MARKER = /(?:LongRestQA|NarrativeContinuityQA|VictoryHandoffQA|P1QA_|SkeletonQA_|HuntersMarkQA_|ArrowRecoveryQA|StorySyncQA|ItemRecoveryQA|TypedUtilityQA|VendorQA_|AskDMQA_|StowQA_|StatusTruthQA_)/;
 
 const hashValue = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 const dateKey = (date = new Date()) => `nightly-sweep-${date.toISOString().slice(0, 10).replaceAll('-', '')}`;

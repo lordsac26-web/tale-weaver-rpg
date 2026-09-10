@@ -1,4 +1,5 @@
 import { appendRecoverableItem, buildRecoverableItem, executeRecoveryTransaction } from './recoveryTransaction.ts';
+import { classifyStowIntent } from './stowIntent.ts';
 
 const RECEIPTS = '__thrown_weapon_actions';
 const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -8,6 +9,8 @@ const isThrown = (item) => properties(item).some((property) => property === 'thr
 const parseName = (text) => String(text || '').match(/\b(?:throw|throws|threw|hurl|hurls|hurled|toss|tosses|tossed)\s+(?:my|the|a|an)?\s*([a-z][a-z -]{1,40}?)(?:\s+(?:at|toward|towards|into)\b)/i)?.[1]?.trim() || null;
 
 export function parseThrownWeaponIntent(actionText) {
+  // "toss/throw X into (my) bag/container/pack" is a STOW intent, never a thrown attack.
+  if (classifyStowIntent(actionText)) return null;
   const itemName = parseName(actionText);
   return itemName ? { type: 'thrown_weapon_attack', item_name: itemName } : null;
 }

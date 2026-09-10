@@ -1,4 +1,5 @@
 import { ASK_DM_CONTEXT_VERSION, answerRecentTransactionQuestion, buildRecentTransactionContext } from './askDMRecentTransactions.ts';
+import { evaluateActiveEffects } from './story/activeEffects.ts';
 
 const idPattern = /^[a-f0-9]{24}$/i;
 const invalid = () => Response.json({ error: 'Invalid Ask the DM request.' }, { status: 403 });
@@ -35,17 +36,49 @@ export async function buildAskDMContext(base44, input) {
     public_quests: (session.active_quests || []).map((quest) => ({ title: text(quest?.title || quest?.name, 160), status: text(quest?.status, 80) })).filter((quest) => quest.title),
     combat: combat ? { round: Number.isFinite(Number(combat.round)) ? Number(combat.round) : null, visible_combatants: visibleCombatants } : null,
     recent_transaction: buildRecentTransactionContext(character, session),
+    player_state: evaluateActiveEffects({ character, session }),
     context_version: ASK_DM_CONTEXT_VERSION,
   };
   const supportingKeys = Object.entries(playerVisibleContext).filter(([, value]) => Array.isArray(value) ? value.length : value && typeof value === 'object' ? true : Boolean(value)).map(([key]) => key);
   return { error: null, authorizationStage: 'accepted', playerVisibleContext, supportingKeys };
 }
 
+const listEffects = (effects) => (effects || []).map((entry) => `${entry.name} (${entry.source}; ${entry.mechanical_effect}${entry.remaining_duration ? `; ${entry.remaining_duration}` : ''})`).join('; ');
+
+/** Authoritative, read-only player-state answers (conditions, spells, slots, attunements). */
+export function answerPlayerStateQuestion(question, playerState) {
+  if (!playerState) return null;
+  if (/attunement|attuned/i.test(question)) {
+    const items = playerState.attunements || [];
+    return { classification: 'established_fact', supporting_fact_keys: ['player_state.attunements'], answer: items.length ? `You are attuned to: ${items.join(', ')}.` : 'You are not attuned to any magic items.' };
+  }
+  if (/spell\s*slot|slots?\s*(?:left|remaining|available|do i have)|how many slots/i.test(question)) {
+    const slots = playerState.spell_slots || [];
+    if (!slots.length) return { classification: 'established_fact', supporting_fact_keys: ['player_state.spell_slots'], answer: 'You have no spell slots from your current classes.' };
+    return { classification: 'established_fact', supporting_fact_keys: ['player_state.spell_slots'], answer: `Spell slots remaining: ${slots.map((slot) => `level ${slot.level}: ${slot.remaining}/${slot.max} available (${slot.used} used)`).join(', ')}.` };
+  }
+  if (/hinder|debuff|penal|afflict|what.s wrong with me/i.test(question)) {
+    const hindrances = playerState.hindrances || [];
+    return { classification: 'established_fact', supporting_fact_keys: ['player_state.hindrances'], answer: hindrances.length ? `Currently hindering you: ${listEffects(hindrances)}.` : 'Nothing is currently hindering you.' };
+  }
+  if (/active spells?|concentration|spell effects?|what spells? (?:are|do)/i.test(question)) {
+    const spellEffects = (playerState.active || []).filter((entry) => /pass without trace|hunter.s mark|longstrider|silence|detect magic|faerie fire|bless|spell/i.test(String(entry.source || '')));
+    return { classification: 'established_fact', supporting_fact_keys: ['player_state.active'], answer: spellEffects.length ? `Active spell effects: ${listEffects(spellEffects)}.` : 'You have no active spell effects.' };
+  }
+  if (/buffs?|under the effect|effects? (?:am i under|do i have)|current conditions?|what affects? me|my status/i.test(question)) {
+    const active = playerState.active || [];
+    return { classification: 'established_fact', supporting_fact_keys: ['player_state.active'], answer: active.length ? `Your current active effects: ${listEffects(active)}.` : 'You are under no active effects.' };
+  }
+  return null;
+}
+
 export function answerAskDMQuestion(question, playerVisibleContext) {
   const normalized = text(question, 600).toLowerCase();
   const refused = /ignore (?:previous|all)|override|system prompt|developer prompt|api key|secret|hidden (?:dm )?notes?|future (?:plan|encounter)|hidden (?:dc|stats?|stat)|internal id|chain.?of.?thought|unrelated record/i.test(normalized);
   if (refused) return { classification: 'refused', supporting_fact_keys: [], answer: 'I can only clarify player-visible facts already established in this session.' };
-  if (/\b(roll|attack|cast|spell|rest|heal|advance time|process (?:combat|turn)|take an action|spend resources?)\b/i.test(normalized)) return { classification: 'clarification_only', supporting_fact_keys: [], answer: 'This is an out-of-character clarification only. Use the normal action controls to roll, act, cast, rest, or advance the story.' };
+  const stateAnswer = answerPlayerStateQuestion(normalized, playerVisibleContext.player_state);
+  if (stateAnswer) return stateAnswer;
+  if (/\b(roll|attack|cast|spell|rest|heal|advance time|process (?:combat|turn)|take an action|spend resources?)\b/i.test(normalized) && !/\b(have|current|active|left|remaining|status|effect|buff|hindering|attun)\w*\b/i.test(normalized)) return { classification: 'clarification_only', supporting_fact_keys: [], answer: 'This is an out-of-character clarification only. Use the normal action controls to roll, act, cast, rest, or advance the story.' };
   const recentTransactionAnswer = answerRecentTransactionQuestion(normalized, playerVisibleContext.recent_transaction);
   if (recentTransactionAnswer) return recentTransactionAnswer;
   if (/how many.{0,40}patrol|patrol.{0,40}how many/i.test(normalized)) return { classification: 'not_established', supporting_fact_keys: [], answer: 'The patrol count is not established in the player-visible facts.' };

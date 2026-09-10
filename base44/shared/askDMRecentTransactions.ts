@@ -1,6 +1,6 @@
 import { canonicalAmmoName } from './ammunition.ts';
 
-export const ASK_DM_CONTEXT_VERSION='ask-dm-context-v2.1.0';
+export const ASK_DM_CONTEXT_VERSION='ask-dm-context-v2.2.0';
 const clean=(value,max=600)=>String(value||'').replace(/\s+/g,' ').trim().slice(0,max);
 const quantityQuestion=(q)=>/\bhow many\b|\bwhat ammunition\b|\bwhat (?:did|was) (?:i )?(?:receive|received|crafted|made)\b|\bdid (?:that|it).{0,30}(?:inventory|added)\b/i.test(q);
 const craftingText=(value)=>/\b(?:craft|crafted|crafting|make|made|shape|shaped|knap|knapped|fletch|fletched|ammunition|arrows?|bolts?)\b/i.test(value);

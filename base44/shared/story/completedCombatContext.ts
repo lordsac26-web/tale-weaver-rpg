@@ -1,5 +1,5 @@
 const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-const DEAD_ACTIONS = ['thrash', 'writhe', 'struggle', 'breathe', 'speak', 'crawl', 'flee', 'attack', 'stand', 'recover'];
+const DEAD_ACTIONS = ['thrash', 'writhe', 'struggle', 'breathe', 'speak', 'answer', 'reveal', 'crawl', 'flee', 'attack', 'stand', 'recover'];
 
 export function buildCompletedCombatContext(combat) {
   const combatants = (combat?.combatants || []).map((entry) => {

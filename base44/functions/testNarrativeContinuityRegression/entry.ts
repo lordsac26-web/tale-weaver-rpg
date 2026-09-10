@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { buildCompletedCombatContext, factualAftermathFallback, findDeadCombatantContradictions, persistCompletedCombatContext } from '../../shared/story/completedCombatContext.ts';
 import { hasPostRestResidualNarration, repairPostRestNarration } from '../../shared/story/postRestResiduals.ts';
+import { buildCorpseContractLine, failedCheckFallbackNarrative, findFailedCheckSuccessContradictions } from '../../shared/story/narrationTruth.ts';
 
 export default async function testNarrativeContinuityRegression(req) {
   const cleanup = [];
@@ -90,6 +91,12 @@ export default async function testNarrativeContinuityRegression(req) {
     const duplicateStoryLog = [...indexedStoryLog, { timestamp: 'duplicate', choices: [], text: lingeringMagicFrom }];
     const duplicateMatches = scanTargets(duplicateStoryLog);
     cases.push({ name: 'duplicate target sentences across entries fail closed instead of selecting either entry', pass: duplicateMatches.length === 2 && duplicateMatches.reduce((total, match) => total + match.occurrenceCountWithinText, 0) === 2 });
+    cases.push({ name: 'failed check narration claiming task success is detected', pass: findFailedCheckSuccessContradictions('The bodies are fed to the fen, leaving no trail behind.').length > 0 });
+    cases.push({ name: 'failed check narration of real failure consequences is accepted', pass: findFailedCheckSuccessContradictions('The attempt fails; the bodies slip from your grasp and remain half-hidden in the shallows.').length === 0 });
+    cases.push({ name: 'failed-check fallback never claims completion', pass: findFailedCheckSuccessContradictions(failedCheckFallbackNarrative('Dispose of the bodies in the fen')).length === 0 });
+    cases.push({ name: 'dead combatant answering questions is a contradiction', pass: findDeadCombatantContradictions('The Obsidian Circle Agent answers the druid’s questions from beyond.', context).length > 0 });
+    cases.push({ name: 'corpse contract requires Speak with Dead and lists authoritative spells', pass: buildCorpseContractLine(['Speak with Animals']).includes('Speak with Dead') && buildCorpseContractLine(['Speak with Animals']).includes('Speak with Animals') });
+    cases.push({ name: 'corpse contract grants dialogue only when the spell is known', pass: buildCorpseContractLine(['Speak with Animals']).includes('does NOT know Speak with Dead') && !buildCorpseContractLine(['Speak with Dead']).includes('does NOT know Speak with Dead') });
     const passed = cases.filter(entry => entry.pass).length;
     return Response.json({ passed, failed: cases.length - passed, total: cases.length, all_pass: passed === cases.length, results: cases, cleanup, live_state: { protected_ids: ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49'], read_or_mutated: false } });
   } catch (error) {
