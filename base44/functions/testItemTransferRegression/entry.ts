@@ -3,7 +3,7 @@ import { classifyItemTransferIntent, executeItemTransferAction } from '../../sha
 import { hashValue, readProtectedDndState } from '../../shared/tests/liveProtection.ts';
 
 export default async function(req) {
-  const fixtures=[]; const results=[]; const record=(name,pass)=>results.push({name,pass:!!pass});
+  const fixtures=[]; const results=[]; let diagnostics=null; const record=(name,pass)=>results.push({name,pass:!!pass});
   try {
     const base44=createClientFromRequest(req); const user=await base44.auth.me();
     if(!user||user.role!=='admin')return Response.json({error:'Admin access required'},{status:403});
@@ -23,6 +23,7 @@ export default async function(req) {
       const replay=await executeItemTransferAction({base44,ownerId:user.id,payload});
       const [afterCharacter,afterSession]=await Promise.all([base44.asServiceRole.entities.Character.get(character.id),base44.asServiceRole.entities.GameSession.get(session.id)]);
       const tomb=(afterSession.world_state?.world_items||[]).filter((item)=>item.name==="Inquisitor Leader's Corpse"&&/tomb/i.test(item.container));
+      diagnostics={first:first.body,replay:replay.body,tomb,stowed:afterCharacter.stowed_items,world_items:afterSession.world_state?.world_items};
       record('successful placement commits exactly once from bag to tomb',first.body?.writes===2&&!afterCharacter.stowed_items.some((item)=>item.name==="Inquisitor Leader's Corpse")&&tomb.length===1);
       record('transfer retains corpse death state and provenance',tomb[0]?.alive===false&&tomb[0]?.death_provenance?.combat_id==='fixture-combat'&&tomb[0]?.provenance?.source==='fixture-stow');
       record('ledger and unidentified staff remain untouched',afterCharacter.stowed_items.some((item)=>item.name==="Weaver's Ledger")&&afterCharacter.stowed_items.some((item)=>item.name==='Unidentified Staff'&&item.is_identified===false));
@@ -37,6 +38,6 @@ export default async function(req) {
     const protectedAfter=await hashValue(await readProtectedDndState(base44.asServiceRole));
     record('fixtures clean up and protected records remain unchanged',protectedBefore===protectedAfter);
     const passed=results.filter((item)=>item.pass).length,all_pass=passed===results.length;
-    return Response.json({function_version:'test-item-transfer-v1.0.0',passed,failed:results.length-passed,total:results.length,all_pass,results},{status:all_pass?200:500});
+    return Response.json({function_version:'test-item-transfer-v1.0.0',passed,failed:results.length-passed,total:results.length,all_pass,results,diagnostics:all_pass?undefined:diagnostics},{status:all_pass?200:500});
   } catch(error) { return Response.json({error:error.message||'Item transfer regression failed',results,all_pass:false},{status:500}); }
 }
