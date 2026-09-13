@@ -13,7 +13,7 @@ export function buildStowedContentsTruth(character) {
 export function buildStowedContentsTruthLine(character) {
   const contents = buildStowedContentsTruth(character);
   if (!contents.length) return 'AUTHORITATIVE STOWED CONTENTS: no itemized contents are recorded.';
-  return `AUTHORITATIVE STOWED CONTENTS: ${contents.map((item) => `${item.container}: ${item.quantity} ${item.name} [${item.alive === false ? 'DEAD CORPSE; deceased and incapable of action' : item.status}]`).join('; ')}. Narration about containers must match this itemized state exactly and must never infer that a corpse is alive.`;
+  return `AUTHORITATIVE STOWED CONTENTS: ${contents.map((item) => `${item.container}: ${item.quantity} ${item.name} [${item.alive === false ? 'DEAD CORPSE; deceased and incapable of action' : item.status}]`).join('; ')}. Narration about containers must match this itemized state exactly and must never give a corpse agency or prisoner status.`;
 }
 
 // Applied ONLY when the authoritative skill check FAILED: narration must show the
