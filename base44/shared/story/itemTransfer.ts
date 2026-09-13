@@ -8,7 +8,7 @@ const DESTINATION = /\b(?:into|inside|within|in|to|at)\s+(?:the\s+|a\s+|an\s+|my
 const INSPECTION_ONLY = /\b(?:look|inspect|examine|study|read)\b/i;
 const BAG = /^(?:bag of holding|bag|backpack|pack|satchel|pouch|case|container)$/i;
 const STOP = new Set(['the','a','an','my','your','his','her','their','body','remains','item','items','corpse','dead','of','from','out','bag','holding']);
-const tokens = (value) => normalize(value).split(' ').filter((word) => word.length > 2 && !STOP.has(word));
+const tokens = (value) => normalize(value).split(' ').filter((word) => word.length > 2 && !STOP.has(word)).map((word) => word.length > 4 && word.endsWith('s') ? word.slice(0, -1) : word);
 const identity = (item) => String(item?.instance_id || item?.item_id || item?.equipment_id || '').trim() || `name:${normalize(item?.name)}`;
 const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 
