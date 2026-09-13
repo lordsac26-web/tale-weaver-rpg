@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 import MarketCurrency from './MarketCurrency';
 import MarketFilters from './MarketFilters';
 import MarketItemRow from './MarketItemRow';
-import { buildSellQuotesRequest, marketCategories, marketCategoryMatches, marketRequestId, marketSearchMatches, mergeCatalogPages } from '../../../base44/shared/marketUxContract';
+import { buildSellQuotesRequest, marketCategories, marketCategoryMatches, marketRequestId, marketSearchMatches, mergeCatalogPages } from '@/lib/marketUx';
 
 const errorMessage = (error) => error?.response?.data?.error || error?.data?.error || error?.message || 'The trade could not be completed.';
 

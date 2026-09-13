@@ -1,6 +1,6 @@
 import React from 'react';
 import { Loader2, ShoppingCart, Tags } from 'lucide-react';
-import { clampTradeQuantity } from '../../../base44/shared/marketUxContract';
+import { clampTradeQuantity } from '@/lib/marketUx';
 import { formatPackQuote, formatQuoteAmount } from '@/lib/currencyFormat';
 
 const rarityMarks = { common: '○', uncommon: '●', rare: '◆', legendary: '★' };

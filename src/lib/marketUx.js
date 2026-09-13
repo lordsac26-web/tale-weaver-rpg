@@ -1,0 +1,7 @@
+export function mergeCatalogPages(pages,eligibleCount){const seen=new Set(),items=[];for(const page of pages||[])for(const item of page?.items||[]){const key=item.id||item.name;if(!seen.has(key)){seen.add(key);items.push(item)}}return{items,eligible_count:Number(eligibleCount||items.length),all_loaded:items.length>=Number(eligibleCount||items.length)}}
+export const marketCategories=items=>['All',...Array.from(new Set((items||[]).map(item=>item.category||'Misc'))).sort()];
+export const marketSearchMatches=(item,search)=>!String(search||'').trim()||`${item?.name||''} ${item?.description||''} ${item?.category||''}`.toLowerCase().includes(String(search).trim().toLowerCase());
+export const marketCategoryMatches=(item,category)=>!category||category==='All'||(item?.category||'Misc')===category;
+export const clampTradeQuantity=(value,max)=>Math.max(1,Math.min(Math.max(1,Number(max)||1),Math.floor(Number(value)||1)));
+export const marketRequestId=(direction,vendorId,itemName)=>`market:${direction}:${vendorId}:${itemName}:${Math.floor(Date.now()/60000)}`;
+export const buildSellQuotesRequest=(vendorId,characterId)=>({action:'sell_quotes',request_kind:'sell_quotes',vendor_id:vendorId,character_id:characterId});
