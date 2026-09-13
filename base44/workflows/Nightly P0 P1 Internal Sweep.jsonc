@@ -22,7 +22,7 @@
     "document": {
       "dsl": "1.0.0",
       "name": "nightly_p0_p1_internal_sweep",
-      "version": "1.3",
+      "version": "1.4",
       "namespace": "base44"
     },
     "do": [
@@ -300,9 +300,54 @@
               "nightly_internal": true
             }
           },
-          "then": "write_result",
+          "then": "item_transfer",
           "x-base44": {
             "title": "Test status truth"
+          }
+        }
+      },
+      {
+        "item_transfer": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testItemTransferRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "overnight_repair_guard",
+          "x-base44": {
+            "title": "Test item transfers"
+          }
+        }
+      },
+      {
+        "overnight_repair_guard": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testOvernightPlaytestRepairRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "class_choice_review",
+          "x-base44": {
+            "title": "Test repair guards"
+          }
+        }
+      },
+      {
+        "class_choice_review": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testClassChoiceReviewRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "write_result",
+          "x-base44": {
+            "title": "Test class choices"
           }
         }
       },
@@ -331,7 +376,10 @@
                 "testVendorEconomyRegression": "${ .vendor_economy }",
                 "testAskDMRegression": "${ .ask_dm }",
                 "testStowIntentRoutingRegression": "${ .stow_intent }",
-                "testStatusTruthRegression": "${ .status_truth }"
+                "testStatusTruthRegression": "${ .status_truth }",
+                "testItemTransferRegression": "${ .item_transfer }",
+                "testOvernightPlaytestRepairRegression": "${ .overnight_repair_guard }",
+                "testClassChoiceReviewRegression": "${ .class_choice_review }"
               }
             }
           },
