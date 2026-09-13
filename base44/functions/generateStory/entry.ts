@@ -24,7 +24,7 @@ import { inferUniqueScenePickup, UNIQUE_SCENE_PICKUP_VERSION } from '../../share
 import { normalizeChoiceActionContract, CHOICE_ACTION_CONTRACT_VERSION } from '../../shared/story/choiceActionContract.js';
 import { executeStowAction } from '../../shared/story/stowIntent.ts';
 import { canonicalStoryConditionName, evaluateActiveEffects, normalizeStoryConditions } from '../../shared/story/activeEffects.ts';
-import { buildCorpseContractLine, FAILED_CHECK_CORRECTION_INSTRUCTION, failedCheckFallbackNarrative, findFailedCheckSuccessContradictions } from '../../shared/story/narrationTruth.ts';
+import { buildCorpseContractLine, buildStowedContentsTruthLine, FAILED_CHECK_CORRECTION_INSTRUCTION, failedCheckFallbackNarrative, findFailedCheckSuccessContradictions } from '../../shared/story/narrationTruth.ts';
 import { executeStoryWeaponAttack, STORY_WEAPON_ATTACK_VERSION } from '../../shared/story/storyWeaponAttack.ts';
 import { preflightCompositeAction, COMPOSITE_ACTION_PREFLIGHT_VERSION } from '../../shared/story/compositeActionPreflight.ts';
 import { COMPOSITE_ACTION_CONTRACT_VERSION } from '../../shared/story/compositeActionContract.js';
@@ -282,6 +282,7 @@ Deno.serve(async (req) => {
       ? `AUTHORITATIVE ACTIVE EFFECTS (the only mechanical bonuses or penalties currently in force — never apply any other, expired, or lingering bonus): ${activeEffectsTruth.active.map((effect) => `${effect.name} (${effect.mechanical_effect}; ${effect.remaining_duration})`).join('; ')}.`
       : 'AUTHORITATIVE ACTIVE EFFECTS: none — no buffs or spell effects are currently active. Never narrate concealment bonuses, lingering spell magic, or any expired effect.';
     const corpseContractLine = buildCorpseContractLine([...(character.spells_known || []), ...(character.spells_prepared || [])]);
+    const stowedContentsLine = buildStowedContentsTruthLine(character);
 
     const baseContext = `
 You are a masterful, reactive Dungeon Master running a living, cinematic campaign.
@@ -310,6 +311,7 @@ ${authoritativeStow ? (authoritativeStow.clarification_required
   ? `STOW CLARIFICATION REQUIRED: the player tried to stow "${authoritativeStow.item_phrase}" into ${authoritativeStow.container}, but the item identity is ambiguous${authoritativeStow.candidates?.length ? ` (carried candidates: ${authoritativeStow.candidates.join(', ')})` : ''}. In the narration, ask which carried item they mean and offer clarifying choices. Do not invent an item, an acquisition, or a mechanical change.`
   : `AUTHORITATIVE STOW RESULT: exactly ${authoritativeStow.stow.quantity} ${authoritativeStow.stow.item_name} (${authoritativeStow.stow.item_id}) was moved into ${authoritativeStow.stow.container}${authoritativeStow.already_processed ? ' (this stow was already processed; do not repeat it)' : ''}. Narrate only this result; never claim another item was stowed.`) : ''}
 ${activeEffectsLine}
+${stowedContentsLine}
 ${corpseContractLine}
 ${recoveryAttention ? `RECOVERY ATTENTION: the player's request to recover items did not commit (${recoveryAttention}). Do not claim any item was recovered; narrate the attempt falling short and offer an actionable alternative way to recover the items.` : ''}
       `;

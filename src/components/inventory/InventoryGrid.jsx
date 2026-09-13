@@ -14,7 +14,7 @@ import { canonicalAmmoName, formatInventoryItemName, formatWeaponProperty } from
  * Enhanced InventoryGrid with detailed item information,
  * weight tracking, value display, and improved interactions.
  */
-export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, onSell, equippedSlots = {} }) {
+export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, onSell, onSelectItem, equippedSlots = {} }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
 
@@ -99,7 +99,7 @@ export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, on
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div
-                      onClick={() => { setSelectedItem(item); setShowDetails(true); }}
+                      onClick={() => { setSelectedItem(item); setShowDetails(true); onSelectItem?.(item); }}
                       className="aspect-square rounded-xl border-2 p-3 cursor-pointer transition-all fantasy-card"
                       style={{
                         background: rarityStyle.bg,

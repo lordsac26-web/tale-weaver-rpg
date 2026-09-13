@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { buildCompletedCombatContext, factualAftermathFallback, findDeadCombatantContradictions, persistCompletedCombatContext } from '../../shared/story/completedCombatContext.ts';
 import { hasPostRestResidualNarration, repairPostRestNarration } from '../../shared/story/postRestResiduals.ts';
-import { buildCorpseContractLine, failedCheckFallbackNarrative, findFailedCheckSuccessContradictions } from '../../shared/story/narrationTruth.ts';
+import { buildCorpseContractLine, buildStowedContentsTruth, buildStowedContentsTruthLine, failedCheckFallbackNarrative, findFailedCheckSuccessContradictions } from '../../shared/story/narrationTruth.ts';
 
 export default async function testNarrativeContinuityRegression(req) {
   const cleanup = [];
@@ -97,6 +97,11 @@ export default async function testNarrativeContinuityRegression(req) {
     cases.push({ name: 'dead combatant answering questions is a contradiction', pass: findDeadCombatantContradictions('The Obsidian Circle Agent answers the druid’s questions from beyond.', context).length > 0 });
     cases.push({ name: 'corpse contract requires Speak with Dead and lists authoritative spells', pass: buildCorpseContractLine(['Speak with Animals']).includes('Speak with Dead') && buildCorpseContractLine(['Speak with Animals']).includes('Speak with Animals') });
     cases.push({ name: 'corpse contract grants dialogue only when the spell is known', pass: buildCorpseContractLine(['Speak with Animals']).includes('does NOT know Speak with Dead') && !buildCorpseContractLine(['Speak with Dead']).includes('does NOT know Speak with Dead') });
+    const stowedFixture = { stowed_items: [{ name: "Inquisitor Leader's Corpse", quantity: 1, category: 'Corpse', container: 'Bag of Holding', alive: false, status: 'dead', death_provenance: { source: 'combat_victory' } }, { name: "Weaver's Ledger", quantity: 1, category: 'Book', container: 'Bag of Holding' }] };
+    const stowedTruth = buildStowedContentsTruth(stowedFixture);
+    const stowedLine = buildStowedContentsTruthLine(stowedFixture);
+    cases.push({ name: 'stowed dead NPC fixture is authoritative as a corpse, never alive or imprisoned', pass: stowedTruth[0]?.alive === false && stowedTruth[0]?.status === 'dead' && /DEAD CORPSE/.test(stowedLine) && !/\b(?:alive|living prisoner|imprisoned)\b/i.test(stowedLine) });
+    cases.push({ name: 'container narration truth matches the complete itemized stowed state', pass: stowedTruth.length === 2 && stowedTruth.every((item) => stowedLine.includes(item.name) && stowedLine.includes(item.container)) });
     const passed = cases.filter(entry => entry.pass).length;
     return Response.json({ passed, failed: cases.length - passed, total: cases.length, all_pass: passed === cases.length, results: cases, cleanup, live_state: { protected_ids: ['6a6825cd07a490fa70a46852', '6a6825edd695bd65a4322256', '6a767f23ec36fe219063ae49'], read_or_mutated: false } });
   } catch (error) {

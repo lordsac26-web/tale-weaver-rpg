@@ -7,6 +7,7 @@ import InventoryGrid from '@/components/inventory/InventoryGrid';
 import EncumbranceBar from '@/components/inventory/EncumbranceBar';
 import GoldHeader from '@/components/inventory/GoldHeader';
 import SellItemModal from '@/components/inventory/SellItemModal';
+import StowedItemsPane from '@/components/game/StowedItemsPane';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function InventoryPage() {
@@ -16,6 +17,7 @@ export default function InventoryPage() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState('all'); // all, weapons, armor, consumables
   const [sellingItem, setSellingItem] = useState(null);
+  const [showStowedContents, setShowStowedContents] = useState(false);
 
   const { data: character, isLoading } = useQuery({
     queryKey: ['character', characterId],
@@ -187,8 +189,10 @@ export default function InventoryPage() {
             onDelete={handleDelete}
             onUse={handleUse}
             onSell={setSellingItem}
+            onSelectItem={(item) => setShowStowedContents(/bag of holding/i.test(item?.name || ''))}
             equippedSlots={equipped}
           />
+          {showStowedContents && <StowedItemsPane character={character} onClose={() => setShowStowedContents(false)} />}
         </div>
       </div>
 

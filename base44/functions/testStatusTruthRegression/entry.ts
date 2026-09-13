@@ -37,7 +37,7 @@ export default async function testStatusTruthRegression(req) {
       record('hindrances classify from authoritative state', truth.hindrances.some((entry) => entry.name === 'Wanted'));
 
       const tag = `StatusTruthQA_${Date.now()}`;
-      const c = await base44.entities.Character.create({ name: tag, race: 'Human', class: 'Ranger', level: 6, multiclass: [{ class: 'Rogue', subclass: '', levels: 1 }], spell_slots: {}, conditions, active_modifiers: [], attuned_items: ['Ring of Protection'], is_active: false });
+      const c = await base44.entities.Character.create({ name: tag, race: 'Human', class: 'Ranger', level: 6, multiclass: [{ class: 'Rogue', subclass: '', levels: 1 }], spell_slots: {}, conditions, active_modifiers: [], attuned_items: ['Ring of Protection'], stowed_items: [{ name: "Weaver's Ledger", quantity: 1, category: 'Book', container: 'Bag of Holding' }, { name: "Inquisitor Leader's Corpse", quantity: 1, category: 'Corpse', container: 'Bag of Holding', alive: false, status: 'dead' }], is_active: false });
       fixtures.push(['Character', c.id]);
       const s = await base44.entities.GameSession.create({ character_id: c.id, title: tag, story_log: [{ request_id: `${tag}:seed`, text: 'The reeds whisper.', choices: [{ text: 'Watch' }] }], world_state: { active_concentration: { spell_name: 'Pass without Trace', concentration: true, expires_at: expiredAt } }, is_active: false });
       fixtures.push(['GameSession', s.id]);
@@ -48,12 +48,14 @@ export default async function testStatusTruthRegression(req) {
       const slots = await ask('How many spell slots do I have left?', 'slots');
       const spells = await ask('What active spells do I have?', 'spells');
       const attuned = await ask('What am I attuned to?', 'attuned');
+      const bag = await ask('What is inside my bag of holding right now?', 'bag');
       const stateAfter = await hashValue([await base44.asServiceRole.entities.Character.get(c.id), await base44.asServiceRole.entities.GameSession.get(s.id)]);
       record('buffs answer matches authoritative active effects exactly', buffs.body?.classification === 'established_fact' && /Longstrider/.test(buffs.body.answer) && /Protected by the Circle of the Reeds/.test(buffs.body.answer) && /Wanted/.test(buffs.body.answer) && !/Pass without Trace/i.test(buffs.body.answer));
       record('hindrance query answers from authoritative state', hindering.body?.classification === 'established_fact' && /Wanted/.test(hindering.body.answer) && !/Longstrider/.test(hindering.body.answer));
       record('spell slot query is explicit max and used per level', slots.body?.classification === 'established_fact' && /level 1: 4\/4 available \(0 used\)/i.test(slots.body.answer) && /level 2: 2\/2 available \(0 used\)/i.test(slots.body.answer));
       record('active spell query answers none without live concentration', /no active spell effects/i.test(spells.body.answer));
       record('attunement query answers authoritative attunements', attuned.body?.classification === 'established_fact' && /Ring of Protection/.test(attuned.body.answer));
+      record('bag query answers complete itemized stowed contents and corpse status', bag.body?.classification === 'established_fact' && /Weaver's Ledger/.test(bag.body.answer) && /Inquisitor Leader's Corpse \(dead corpse\)/.test(bag.body.answer));
       record('state queries are zero-write and leave choices unchanged', stateBefore === stateAfter);
     } finally {
       for (const [entity, id] of fixtures.reverse()) { try { await base44.asServiceRole.entities[entity].delete(id); } catch {} }

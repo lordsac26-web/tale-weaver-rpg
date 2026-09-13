@@ -1,4 +1,20 @@
-export const NARRATION_TRUTH_VERSION = 'narration-truth-v1.0.0';
+export const NARRATION_TRUTH_VERSION = 'narration-truth-v1.1.0';
+
+export function buildStowedContentsTruth(character) {
+  return (Array.isArray(character?.stowed_items) ? character.stowed_items : []).map((item) => ({
+    name: String(item?.name || 'Unknown item'), quantity: Number(item?.quantity) || 1,
+    container: String(item?.container || 'Container'), category: String(item?.category || 'Item'),
+    alive: item?.alive === false ? false : item?.alive === true ? true : null,
+    status: String(item?.status || (item?.alive === false ? 'dead' : 'stored')),
+    death_provenance: item?.death_provenance || null, stow_provenance: item?.provenance || null,
+  }));
+}
+
+export function buildStowedContentsTruthLine(character) {
+  const contents = buildStowedContentsTruth(character);
+  if (!contents.length) return 'AUTHORITATIVE STOWED CONTENTS: no itemized contents are recorded.';
+  return `AUTHORITATIVE STOWED CONTENTS: ${contents.map((item) => `${item.container}: ${item.quantity} ${item.name} [${item.alive === false ? 'DEAD CORPSE; cannot be a living prisoner' : item.status}]`).join('; ')}. Narration about containers must match this itemized state exactly and must never infer that a corpse is alive.`;
+}
 
 // Applied ONLY when the authoritative skill check FAILED: narration must show the
 // failure consequence, never a completed task.
