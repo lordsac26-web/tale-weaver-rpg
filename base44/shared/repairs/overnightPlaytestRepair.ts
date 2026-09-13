@@ -1,0 +1,44 @@
+export const OVERNIGHT_REPAIR_VERSION='overnight-playtest-repair-v1.0.0';
+export const PROTECTED_SESSION_ID='6a6825edd695bd65a4322256';
+export const REQUESTED_CHARACTER_ALIAS='1b2fdb54ba784ef2e1c5538e';
+export const PIVOT_REQUEST_ID='story-choice:6a6825edd695bd65a4322256:bcf66b55-c4d1-4fda-a812-b7de962e0a2a';
+export const PLACEMENT_REQUEST_ID='story-choice:6a6825edd695bd65a4322256:ba00cb10-dcee-4e71-8bf1-0c8e9e8df736';
+const RECEIPTS='__item_transfer_receipts'; const REPAIRS='__overnight_repair_receipts';
+const normalize=(value)=>String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+export const hashValue=async(value)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value))))).map(byte=>byte.toString(16).padStart(2,'0')).join('');
+const exactName=(item,name)=>normalize(item?.name||item)===normalize(name);
+const elapsedAfter=(condition,session)=>{const applied=Date.parse(condition?.applied_at||'');if(!Number.isFinite(applied))return 0;return(session?.world_state?.__rest_receipts||[]).filter(r=>Date.parse(r?.completed_at||'')>applied).reduce((sum,r)=>sum+(Number(r?.response?.clock?.elapsed_hours)||Number(r?.response?.clock?.elapsedHours)||0),0);};
+const laterLongstriderReceipts=(condition,session)=>{const applied=Date.parse(condition?.applied_at||'');return(session?.world_state?.__spell_action_receipts||[]).filter(r=>normalize(r?.spell_name)==='longstrider'&&Date.parse(r?.at||r?.created_at||'')>applied);};
+export async function buildOvernightRepairPlan(character,session){
+ const abort=[];const latest=(session?.story_log||[]).at(-1);const placement=(session?.story_log||[]).filter(e=>e?.request_id===PLACEMENT_REQUEST_ID);
+ const longstriders=(character?.conditions||[]).filter(c=>exactName(c,'Longstrider'));const corpses=(character?.stowed_items||[]).filter(i=>exactName(i,"Inquisitor Leader's Corpse"));
+ const ledger=(character?.stowed_items||[]).filter(i=>exactName(i,"Weaver's Ledger"));const staff=(character?.stowed_items||[]).filter(i=>exactName(i,'Unidentified Staff'));
+ if(session?.id!==PROTECTED_SESSION_ID)abort.push('protected_session_mismatch');if(session?.character_id!==character?.id)abort.push('character_session_linkage_mismatch');
+ if(latest?.request_id!==PIVOT_REQUEST_ID)abort.push('narrative_pivot_changed');if(placement.length!==1||!/tomb|inter/i.test(`${placement[0]?.player_choice||''} ${placement[0]?.text||''}`))abort.push('placement_receipt_missing');
+ if(longstriders.length!==1)abort.push('longstrider_cardinality_mismatch');else if(elapsedAfter(longstriders[0],session)<1)abort.push('no_authoritative_elapsed_game_evidence');else if(laterLongstriderReceipts(longstriders[0],session).length)abort.push('later_longstrider_recast_exists');
+ if(corpses.length!==1)abort.push('corpse_cardinality_mismatch');if(ledger.length!==1)abort.push('ledger_invariant_failed');if(staff.length!==1||staff[0].is_identified!==false)abort.push('staff_invariant_failed');
+ if((session?.world_state?.world_items||[]).some(i=>exactName(i,"Inquisitor Leader's Corpse")))abort.push('corpse_already_in_world');
+ const conditions=(character?.conditions||[]).filter(c=>!exactName(c,'Longstrider'));const stowed=(character?.stowed_items||[]).filter(i=>!exactName(i,"Inquisitor Leader's Corpse"));
+ const corpse=corpses[0];const moved=corpse?{...corpse,quantity:1,container:'Warded Druidic Tomb',world_status:'placed',location:'Circle of the Reeds',transfer_provenance:{...(corpse.transfer_provenance||{}),source:'stowed_items',destination:'Warded Druidic Tomb',request_id:PLACEMENT_REQUEST_ID}}:null;
+ const worldItems=moved?[...(session?.world_state?.world_items||[]),moved]:(session?.world_state?.world_items||[]);
+ const proposal={character_id:character?.id,session_id:session?.id,character_fields:['conditions','stowed_items'],session_fields:['world_state'],remove_longstrider:true,transfer:{item_name:corpse?.name||null,source:'stowed_items',destination:'Warded Druidic Tomb',request_id:PLACEMENT_REQUEST_ID},pivot_request_id:PIVOT_REQUEST_ID};
+ return{safe:abort.length===0,abort,proposal,proposal_hash:await hashValue(proposal),expected:{character_updated_date:character?.updated_date,session_updated_date:session?.updated_date,conditions_hash:await hashValue(character?.conditions||[]),stowed_hash:await hashValue(character?.stowed_items||[]),world_state_hash:await hashValue(session?.world_state||[])},updates:{conditions,stowed_items:stowed,world_items:worldItems,moved}};
+}
+export async function executeOvernightRepair({base44,payload={}}){
+ const db=base44.asServiceRole;const session=await db.entities.GameSession.get(PROTECTED_SESSION_ID).catch(()=>null);if(!session)return{status:404,body:{error:'Protected session not found.',writes:0}};
+ const character=await db.entities.Character.get(session.character_id).catch(()=>null);if(!character)return{status:404,body:{error:'Session-linked character not found.',writes:0}};
+ const plan=await buildOvernightRepairPlan(character,session);const mode=payload.mode||'dry_run';
+ if(mode==='dry_run')return{status:200,body:{version:OVERNIGHT_REPAIR_VERSION,mode,writes:0,requested_character_alias:REQUESTED_CHARACTER_ALIAS,resolved_character_id:character.id,...plan,updates:undefined}};
+ if(mode!=='commit')return{status:400,body:{error:'mode must be dry_run or commit',writes:0}};
+ if(!plan.safe)return{status:409,body:{error:'Repair invariants failed.',writes:0,...plan,updates:undefined}};
+ if(payload.proposal_hash!==plan.proposal_hash||payload.character_updated_date!==character.updated_date||payload.session_updated_date!==session.updated_date)return{status:409,body:{error:'State changed after dry run; run dry_run again.',writes:0}};
+ const at=new Date().toISOString();const before={conditions:character.conditions||[],stowed_items:character.stowed_items||[],world_state:session.world_state||{}};
+ const transferReceipt={request_id:PLACEMENT_REQUEST_ID,version:OVERNIGHT_REPAIR_VERSION,item_name:plan.updates.moved.name,quantity:1,source:'stowed_items',destination:'Warded Druidic Tomb',death_state_retained:plan.updates.moved.alive===false,provenance_retained:true,at};
+ const repairReceipt={version:OVERNIGHT_REPAIR_VERSION,proposal_hash:plan.proposal_hash,pivot_request_id:PIVOT_REQUEST_ID,placement_request_id:PLACEMENT_REQUEST_ID,changed_fields:plan.proposal.character_fields.concat('world_state'),at};
+ const worldState={...(session.world_state||{}),world_items:plan.updates.world_items,[RECEIPTS]:[...((session.world_state||{})[RECEIPTS]||[]).filter(r=>r?.request_id!==PLACEMENT_REQUEST_ID),transferReceipt],[REPAIRS]:[...((session.world_state||{})[REPAIRS]||[]),repairReceipt]};
+ await db.entities.Character.update(character.id,{conditions:plan.updates.conditions,stowed_items:plan.updates.stowed_items});
+ try{await db.entities.GameSession.update(session.id,{world_state:worldState});}catch(error){await db.entities.Character.update(character.id,{conditions:before.conditions,stowed_items:before.stowed_items});return{status:500,body:{error:`Session commit failed; character changes compensated: ${error.message}`,compensated:true,writes:0}};}
+ const [afterCharacter,afterSession]=await Promise.all([db.entities.Character.get(character.id),db.entities.GameSession.get(session.id)]);const latest=(afterSession.story_log||[]).at(-1);
+ const post={longstrider_absent:!(afterCharacter.conditions||[]).some(c=>exactName(c,'Longstrider')),corpse_absent_from_bag:!(afterCharacter.stowed_items||[]).some(i=>exactName(i,"Inquisitor Leader's Corpse")),corpse_in_tomb:(afterSession.world_state?.world_items||[]).filter(i=>exactName(i,"Inquisitor Leader's Corpse")&&/tomb/i.test(i.container)).length===1,ledger_unchanged:await hashValue((afterCharacter.stowed_items||[]).filter(i=>exactName(i,"Weaver's Ledger")))===await hashValue((before.stowed_items||[]).filter(i=>exactName(i,"Weaver's Ledger"))),staff_unchanged:await hashValue((afterCharacter.stowed_items||[]).filter(i=>exactName(i,'Unidentified Staff')))===await hashValue((before.stowed_items||[]).filter(i=>exactName(i,'Unidentified Staff'))),pivot_unchanged:latest?.request_id===PIVOT_REQUEST_ID,death_state_retained:plan.updates.moved.alive===false};
+ return{status:Object.values(post).every(Boolean)?200:500,body:{version:OVERNIGHT_REPAIR_VERSION,mode,writes:2,proposal_hash:plan.proposal_hash,requested_character_alias:REQUESTED_CHARACTER_ALIAS,resolved_character_id:character.id,receipt:repairReceipt,postconditions:post,before_hash:await hashValue(before),after_hash:await hashValue({conditions:afterCharacter.conditions,stowed_items:afterCharacter.stowed_items,world_state:afterSession.world_state})}};
+}
