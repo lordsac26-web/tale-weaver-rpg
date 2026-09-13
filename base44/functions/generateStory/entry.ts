@@ -126,6 +126,9 @@ Deno.serve(async (req) => {
       if (stowOutcome.body?.handled) {
         if (stowOutcome.status >= 400) return Response.json(stowOutcome.body, { status: stowOutcome.status });
         authoritativeStow = stowOutcome.body;
+        if (stowOutcome.body?.clarification_required) return Response.json({ narrative: stowOutcome.body.message, choices: [], stow_transaction: stowOutcome.body, clarification_required: true, preserve_scene: true, writes: 0, generate_story_version: GENERATE_STORY_VERSION }, { status: 200 });
+        if (stowOutcome.body?.reason === 'failed_check') return Response.json({ error: 'The container placement did not succeed.', stow_transaction: stowOutcome.body, preserve_scene: true, writes: 0 }, { status: 409 });
+        if (stowOutcome.body?.success) character = await base44.asServiceRole.entities.Character.get(character.id);
       }
     }
     let authoritativeTransfer = null;
@@ -453,6 +456,15 @@ Write a gripping 1-2 paragraph combat narrative.`;
     });
     let result = await generateNarrative(prompt);
     console.info('Story model candidate', JSON.stringify({ generate_story_version:GENERATE_STORY_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, request_id:storyRequestId, candidate:result }));
+    if (action === 'choice' && storyRequestId && !authoritativeStow?.success) {
+      const narratedStow = await executeStowAction({ base44, user, payload: { session_id, character_id: character.id, action_text: result?.narrative, request_id: storyRequestId, check: authoritativeChoiceContext?.check } });
+      if (narratedStow.status >= 400) return Response.json(narratedStow.body, { status: narratedStow.status });
+      if (narratedStow.body?.handled && !narratedStow.body?.success) return Response.json({ error: narratedStow.body?.reason || 'Narrated container placement lacks one authoritative source.', stow_transaction: narratedStow.body, preserve_scene: true, writes: 0 }, { status: 409 });
+      if (narratedStow.body?.success) {
+        authoritativeStow = narratedStow.body;
+        character = await base44.asServiceRole.entities.Character.get(character.id);
+      }
+    }
     const postRestNoMagic = Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested && !isPwt((character.conditions || []).find(isPwt)) && !isPwt(session.world_state?.active_concentration);
     if (postRestNoMagic && result?.narrative) result = { ...result, narrative: repairPostRestNarration(result.narrative).text };
     const contradictions = completedCombat ? findDeadCombatantContradictions(result?.narrative, completedCombat) : [];

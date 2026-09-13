@@ -1,6 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { classifyStowIntent, executeStowAction } from '../../shared/story/stowIntent.ts';
 import { parseThrownWeaponIntent } from '../../shared/story/thrownWeaponAction.ts';
+import { answerAskDMQuestion } from '../../shared/askDMContext.ts';
+import { buildStowedContentsTruth } from '../../shared/story/narrationTruth.ts';
 import { hashValue, readProtectedDndState } from '../../shared/tests/liveProtection.ts';
 
 export default async function testStowIntentRoutingRegression(req) {
@@ -51,6 +53,31 @@ export default async function testStowIntentRoutingRegression(req) {
 
       const orphan = await executeStowAction({ base44, ownerId: user.id, payload: { session_id: 'ffffffffffffffffffffffff', character_id: character.id, action_text: 'toss the torch into my bag of holding', request_id: 'stow-fixture-orphan' } });
       record('invalid linkage rejects without writes', orphan.status === 403 && orphan.body?.writes === 0);
+
+      const ledger = { name: "Weaver's Ledger", quantity: 1, category: 'Book', container: 'Bag of Holding', provenance: { source: 'fixture' } };
+      const staff = { name: 'Unidentified Staff', quantity: 1, category: 'Staff', container: 'Bag of Holding', is_identified: false, provenance: { source: 'fixture' } };
+      await base44.entities.Character.update(character.id, { stowed_items: [ledger, staff] });
+      const combat = await base44.entities.CombatLog.create({ session_id: session.id, character_id: character.id, result: 'victory', is_active: false, encounter_date: new Date().toISOString(), combatants: [{ id: 'enemy_fixture_overseer', name: 'Ritual Overseer', type: 'enemy', hp_current: 0, hp_max: 20, is_conscious: false }] });
+      fixtures.push(['CombatLog', combat.id]);
+      const corpseRequest = `${tag}:corpse-stow`;
+      await base44.entities.GameSession.update(session.id, { story_log: [{ request_id: corpseRequest, player_choice: 'place the body in my bag of holding', text: 'You force the remains into the Bag of Holding.' }], world_state: { last_completed_combat: { combat_id: combat.id, result: 'victory', defeated_enemies: [{ entity_id: 'enemy_fixture_overseer', name: 'Ritual Overseer', type: 'enemy', hp: 0, status: 'dead', can_act: false }] } } });
+      const corpseBefore = await base44.asServiceRole.entities.Character.get(character.id);
+      const corpseFirst = await executeStowAction({ base44, ownerId: user.id, payload: { session_id: session.id, character_id: character.id, action_text: 'place the body in my bag of holding', request_id: corpseRequest, check: { success: true } } });
+      const corpseReplay = await executeStowAction({ base44, ownerId: user.id, payload: { session_id: session.id, character_id: character.id, action_text: 'place the body in my bag of holding', request_id: corpseRequest, check: { success: true } } });
+      const corpseAfter = await base44.asServiceRole.entities.Character.get(character.id);
+      const corpses = (corpseAfter.stowed_items || []).filter((item) => item.death_provenance?.combat_id === combat.id);
+      record('defeated creature body routes through the canonical stow transaction', corpseFirst.body?.writes === 1 && corpseFirst.body?.stow?.source === 'completed_combat');
+      record('corpse appears exactly once with death and stow provenance', corpses.length === 1 && corpses[0].alive === false && corpses[0].death_provenance?.combatant_id === 'enemy_fixture_overseer' && corpses[0].provenance?.story_request_id === corpseRequest);
+      record('corpse stow replay writes nothing extra', corpseReplay.body?.already_processed === true && corpseReplay.body?.writes === 0 && (corpseAfter.stowed_items || []).length === 3);
+      record('ledger and staff identities survive corpse stow unchanged', JSON.stringify((corpseAfter.stowed_items || []).slice(0, 2)) === JSON.stringify([ledger, staff]));
+      const failedBefore = await hashValue([corpseAfter.stowed_items, corpseAfter.long_rest_abilities]);
+      const failed = await executeStowAction({ base44, ownerId: user.id, payload: { session_id: session.id, character_id: character.id, action_text: 'place the body in my bag of holding', request_id: `${tag}:failed-corpse`, check: { success: false } } });
+      const failedCharacter = await base44.asServiceRole.entities.Character.get(character.id);
+      record('failed corpse grab performs no writes', failed.body?.reason === 'failed_check' && failed.body?.writes === 0 && failedBefore === await hashValue([failedCharacter.stowed_items, failedCharacter.long_rest_abilities]));
+      const truth = buildStowedContentsTruth(corpseAfter);
+      const answer = answerAskDMQuestion('What is inside my Bag of Holding?', { stowed_contents: truth, player_state: {} });
+      record('Ask DM bag truth includes the dead corpse', answer.answer.includes("Ritual Overseer's Corpse") && answer.answer.includes('(dead corpse)'));
+      record('bag pane data contract exposes exactly all three stowed items', truth.length === 3 && truth.some((item) => item.name === "Ritual Overseer's Corpse" && item.alive === false));
     } finally {
       for (const [entity, id] of fixtures.reverse()) { try { await base44.asServiceRole.entities[entity].delete(id); } catch {} }
     }
@@ -58,7 +85,7 @@ export default async function testStowIntentRoutingRegression(req) {
     record('cleanup complete and protected live IDs unchanged', protectedBefore === protectedAfter);
     const passed = results.filter((item) => item.pass).length;
     const allPass = passed === results.length;
-    return Response.json({ function_version: 'test-stow-intent-routing-v1.0.0', passed, failed: results.length - passed, total: results.length, all_pass: allPass, results }, { status: allPass ? 200 : 500 });
+    return Response.json({ function_version: 'test-stow-intent-routing-v1.1.0', passed, failed: results.length - passed, total: results.length, all_pass: allPass, results }, { status: allPass ? 200 : 500 });
   } catch (error) {
     return Response.json({ error: error.message || 'Stow intent routing regression failed' }, { status: 500 });
   }

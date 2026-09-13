@@ -1,4 +1,4 @@
-export const STOW_INTENT_VERSION = 'stow-intent-v1.0.0';
+export const STOW_INTENT_VERSION = 'stow-intent-v1.1.0';
 export const STOW_RECEIPTS_KEY = '__stow_receipts';
 
 const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -51,22 +51,51 @@ export function resolveStowTarget(character, itemPhrase) {
   return { kind: 'unresolved', candidates: [] };
 }
 
-const stableIdentity = (item) => String(item?.equipment_id || item?.item_id || '').trim() || `name:${normalize(item?.name)}`;
+const stableIdentity = (item) => String(item?.equipment_id || item?.item_id || '').trim() || (item?.death_provenance?.combat_id && item?.death_provenance?.combatant_id ? `corpse:${item.death_provenance.combat_id}:${item.death_provenance.combatant_id}` : `name:${normalize(item?.name)}`);
+const corpseWordsOnly = (value) => normalize(value).split(' ').filter((word) => !['the','a','an','body','corpse','remains','dead','fallen','defeated','overseer'].includes(word));
+const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+
+export async function resolveCompletedCombatCorpse({ base44, session, character, itemPhrase, requestId }) {
+  if (!/\b(?:body|corpse|remains|dead|fallen|defeated)\b/i.test(String(itemPhrase || ''))) return { kind: 'unresolved', candidates: [] };
+  const completed = session?.world_state?.last_completed_combat;
+  const combatId = String(completed?.combat_id || '');
+  if (!combatId) return { kind: 'unresolved', candidates: [] };
+  const combat = await base44.asServiceRole.entities.CombatLog.get(combatId).catch(() => null);
+  if (!combat || combat.session_id !== session.id || combat.character_id !== character.id || combat.result !== 'victory' || combat.is_active !== false) return { kind: 'unresolved', candidates: [] };
+  const defeated = (completed?.defeated_enemies || completed?.combatants || []).filter((entry) => entry?.type === 'enemy' && Number(entry?.hp) === 0 && entry?.status === 'dead' && entry?.can_act === false);
+  const phraseTokens = corpseWordsOnly(itemPhrase);
+  const matches = defeated.filter((entry) => {
+    const nameTokens = corpseWordsOnly(entry?.name);
+    return !phraseTokens.length || nameTokens.some((word) => phraseTokens.includes(word));
+  });
+  if (matches.length !== 1) return { kind: matches.length ? 'ambiguous' : 'unresolved', candidates: matches.map((entry) => `${entry.name}'s Corpse`) };
+  const dead = matches[0];
+  const combatant = (combat.combatants || []).find((entry) => (entry?.id || entry?.entity_id) === dead.entity_id);
+  if (!combatant || Number(combatant.hp_current) !== 0 || combatant.is_conscious !== false) return { kind: 'unresolved', candidates: [] };
+  const existing = (character.stowed_items || []).find((item) => item?.death_provenance?.combat_id === combatId && item?.death_provenance?.combatant_id === dead.entity_id);
+  if (existing) return { kind: 'already_stowed', item: existing };
+  const storyIndex = (session.story_log || []).findIndex((entry) => entry?.request_id === requestId);
+  const at = new Date().toISOString();
+  return { kind: 'unique', source: 'completed_combat', item: {
+    name: `${dead.name}'s Corpse`, quantity: 1, category: 'Corpse', description: `The remains of ${dead.name}, defeated in the completed encounter.`,
+    alive: false, status: 'dead', is_identified: true,
+    death_provenance: { combat_id: combatId, combatant_id: dead.entity_id, enemy_name: dead.name, hp: 0, status: 'dead', died_at: combat.encounter_date || null },
+    provenance: { source: 'story_log_stow', story_index: storyIndex >= 0 ? storyIndex : (session.story_log || []).length, story_request_id: requestId, acquired_at: at, combat_id: combatId, combatant_id: dead.entity_id },
+  }, combat };
+}
 
 /**
- * Authoritative stow: move a carried item into a container sub-inventory
+ * Authoritative stow: move a carried item or an established defeated creature
+ * into a container sub-inventory.
  * (character.stowed_items). Idempotent per request token; ambiguous or
  * unresolvable item phrases request in-narration clarification instead of
  * hard-erroring after a passed check.
  */
 export async function executeStowAction({ base44, ownerId = null, payload }) {
   const parsed = classifyStowIntent(payload?.action_text);
-  if (!parsed) return { status: 200, body: { handled: false } };
+  if (!parsed) return { status: 200, body: { handled: false, writes: 0 } };
   const token = String(payload?.request_id || '').slice(0, 120);
   if (!token) return { status: 400, body: { handled: true, error: 'request_id is required.', writes: 0 } };
-  // SDK get() THROWS on a missing record instead of returning null, so an invalid
-  // linkage must be normalized here — otherwise callers 500 instead of failing
-  // closed with the 403 linkage rejection below.
   const [session, character] = await Promise.all([
     base44.asServiceRole.entities.GameSession.get(payload.session_id).catch(() => null),
     base44.asServiceRole.entities.Character.get(payload.character_id).catch(() => null),
@@ -76,35 +105,36 @@ export async function executeStowAction({ base44, ownerId = null, payload }) {
   const receipts = Array.isArray(abilities[STOW_RECEIPTS_KEY]) ? abilities[STOW_RECEIPTS_KEY] : [];
   const prior = receipts.find((receipt) => receipt?.token === token);
   if (prior) return { status: 200, body: { handled: true, success: true, already_processed: true, stow: prior, receipt: prior, stowed_items: character.stowed_items || [], inventory: character.inventory || [], writes: 0 } };
+  if (payload?.check?.success === false) return { status: 200, body: { handled: true, success: false, reason: 'failed_check', writes: 0 } };
 
-  const resolution = resolveStowTarget(character, parsed.item_phrase);
-  if (resolution.kind !== 'unique') {
-    return { status: 200, body: { handled: true, success: false, clarification_required: true, item_phrase: parsed.item_phrase, container: parsed.container, candidates: resolution.candidates, message: `Which item do you want to stow? The phrase "${parsed.item_phrase}" does not resolve to a single item you are carrying.`, writes: 0 } };
-  }
+  let resolution = resolveStowTarget(character, parsed.item_phrase);
+  if (resolution.kind === 'unresolved') resolution = await resolveCompletedCombatCorpse({ base44, session, character, itemPhrase: parsed.item_phrase, requestId: token });
+  if (resolution.kind === 'already_stowed') return { status: 200, body: { handled: true, success: true, already_processed: true, stow: { token, item_id: stableIdentity(resolution.item), item_name: resolution.item.name, quantity: 1, container: resolution.item.container, source: 'completed_combat', stow_intent_version: STOW_INTENT_VERSION }, receipt: null, stowed_items: character.stowed_items || [], inventory: character.inventory || [], writes: 0 } };
+  if (resolution.kind !== 'unique') return { status: 200, body: { handled: true, success: false, clarification_required: true, item_phrase: parsed.item_phrase, container: parsed.container, candidates: resolution.candidates, message: `Which established item or defeated creature do you want to stow? The phrase "${parsed.item_phrase}" does not resolve to one source.`, writes: 0 } };
+
+  const [latestSession, latestCharacter] = await Promise.all([
+    base44.asServiceRole.entities.GameSession.get(session.id),
+    base44.asServiceRole.entities.Character.get(character.id),
+  ]);
+  if (latestSession.updated_date !== session.updated_date || latestCharacter.updated_date !== character.updated_date) return { status: 409, body: { handled: true, error: 'State changed before stow; refresh and retry.', concurrency_conflict: true, writes: 0 } };
+
   const selected = resolution.item;
+  const source = resolution.source || 'inventory';
   const quantity = Number(selected.quantity) || 1;
-  const stowQuantity = parsed.whole_stack ? quantity : 1;
-  const remaining = quantity - stowQuantity;
+  const stowQuantity = source === 'completed_combat' ? 1 : parsed.whole_stack ? quantity : 1;
+  const remaining = source === 'completed_combat' ? 0 : quantity - stowQuantity;
   const inventory = Array.isArray(character.inventory) ? [...character.inventory] : [];
-  if (remaining <= 0) inventory.splice(resolution.index, 1);
-  else inventory[resolution.index] = { ...selected, quantity: remaining };
-
+  if (source === 'inventory') {
+    if (remaining <= 0) inventory.splice(resolution.index, 1);
+    else inventory[resolution.index] = { ...selected, quantity: remaining };
+  }
   const at = new Date().toISOString();
-  const receipt = {
-    token, item_id: stableIdentity(selected), item_name: selected.name, quantity: stowQuantity,
-    container: parsed.container, quantity_before: quantity, quantity_after: remaining, at,
-    stow_intent_version: STOW_INTENT_VERSION,
-  };
+  const receipt = { token, item_id: stableIdentity(selected), item_name: selected.name, quantity: stowQuantity, container: parsed.container, source, quantity_before: quantity, quantity_after: remaining, at, state_hash_before: await hash({ inventory: character.inventory || [], stowed_items: character.stowed_items || [] }), stow_intent_version: STOW_INTENT_VERSION };
   const stowed = Array.isArray(character.stowed_items) ? [...character.stowed_items] : [];
-  const existingSlot = stowed.find((entry) => entry?.name === selected.name && entry?.container === parsed.container);
+  const existingSlot = source === 'inventory' ? stowed.find((entry) => entry?.name === selected.name && entry?.container === parsed.container) : null;
   if (existingSlot) existingSlot.quantity = (Number(existingSlot.quantity) || 0) + stowQuantity;
-  else stowed.push({
-    name: selected.name, quantity: stowQuantity, category: selected.category || 'Item',
-    description: selected.description || '', container: parsed.container,
-    is_identified: selected.is_identified !== false,
-    stowed_at: at, stow_request_id: token,
-    provenance: { source: 'player_action', story_request_id: token, acquired_at: at },
-  });
+  else stowed.push({ ...selected, quantity: stowQuantity, container: parsed.container, stowed_at: at, stow_request_id: token, provenance: { ...(selected.provenance || {}), source: selected.provenance?.source || 'player_action', story_request_id: token, acquired_at: selected.provenance?.acquired_at || at } });
+  receipt.state_hash_after = await hash({ inventory, stowed_items: stowed });
   abilities[STOW_RECEIPTS_KEY] = [...receipts.slice(-47), receipt];
   await base44.asServiceRole.entities.Character.update(character.id, { inventory, stowed_items: stowed, long_rest_abilities: abilities });
   return { status: 200, body: { handled: true, success: true, already_processed: false, stow: receipt, receipt, stowed_items: stowed, inventory, writes: 1 } };

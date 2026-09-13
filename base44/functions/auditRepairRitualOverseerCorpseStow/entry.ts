@@ -1,0 +1,3 @@
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+import { executeRitualOverseerStowRepair } from '../../shared/repairs/ritualOverseerCorpseStow.ts';
+export default async function(req){try{const base44=createClientFromRequest(req);const user=await base44.auth.me();if(!user||user.role!=='admin')return Response.json({error:'Admin access required'},{status:403});const payload=await req.json().catch(()=>({mode:'dry_run'}));const result=await executeRitualOverseerStowRepair({base44,payload});return Response.json(result.body,{status:result.status});}catch(error){return Response.json({error:error.message||'Ritual Overseer corpse stow repair failed',writes:0},{status:500});}}
