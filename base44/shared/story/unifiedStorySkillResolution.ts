@@ -49,19 +49,21 @@ export async function resolveUnifiedStorySkillCheck({ db, user, payload }) {
     if (String(prior.skill) !== String(payload.skill) || Number(prior.dc) !== Number(payload.dc)) return { status: 409, body: { error: 'Idempotent skill-check request conflicts with its stored resolution', writes: 0 } };
     return { status: 200, body: { ...resolutionFromReceipt(prior, true), writes: 0, already_processed: true } };
   }
-  const preview = resolveStorySkillCheck({ character, session, skill: payload.skill, dc: payload.dc, requestId });
+  const context = String(payload.context || payload.action_text || '');
+  const preview = resolveStorySkillCheck({ character, session, skill: payload.skill, dc: payload.dc, requestId, context });
   if (!preview.ok) return { status: 409, body: { error: preview.error, breakdown: preview.breakdown, writes: 0 } };
   if (payload.prepare_only === true) return { status: 200, body: { ...preview, writes: 0, prepared: true } };
 
-  const hasAdvantage = payload.advantage === true && payload.disadvantage !== true;
-  const hasDisadvantage = payload.disadvantage === true && payload.advantage !== true;
+  const classAdvantages = preview.breakdown?.class_choice_advantage_sources || [];
+  const hasAdvantage = (payload.advantage === true || classAdvantages.length > 0) && payload.disadvantage !== true;
+  const hasDisadvantage = payload.disadvantage === true && !(payload.advantage === true || classAdvantages.length > 0);
   const serverRolls = payload.raw_d20 == null ? Array.from({ length: hasAdvantage || hasDisadvantage ? 2 : 1 }, () => {
     const first = rollD20();
     return payload.lucky_reroll === true && first === 1 ? rollD20() : first;
   }) : null;
   const raw = payload.raw_d20 == null ? (hasAdvantage ? Math.max(...serverRolls) : hasDisadvantage ? Math.min(...serverRolls) : serverRolls[0]) : Number(payload.raw_d20);
   const allRolls = Array.isArray(payload.all_rolls) && payload.all_rolls.length ? payload.all_rolls : (serverRolls || [raw]);
-  const resolved = resolveStorySkillCheck({ character, session, skill: payload.skill, dc: payload.dc, requestId, raw, allRolls, advantageSources: payload.advantage_sources || [] });
+  const resolved = resolveStorySkillCheck({ character, session, skill: payload.skill, dc: payload.dc, requestId, raw, allRolls, context, advantageSources: [...(payload.advantage_sources || []), ...classAdvantages] });
   if (!resolved.ok) return { status: 409, body: { error: resolved.error, breakdown: resolved.breakdown, writes: 0 } };
   const receipt = canonicalReceipt({ ...resolved.receipt, had_advantage: hasAdvantage, had_disadvantage: hasDisadvantage, roll_origin: payload.raw_d20 == null ? 'server' : 'reused' });
   const immutable = resolutionFromReceipt(receipt);

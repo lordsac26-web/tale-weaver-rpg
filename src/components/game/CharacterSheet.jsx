@@ -13,6 +13,7 @@ import SubclassSection from './SubclassSection';
 import RuneKnightPanel from './RuneKnightPanel';
 import AlignmentRadar from './AlignmentRadar';
 import XPBar from './XPBar';
+import ClassChoiceReview from './ClassChoiceReview';
 import {
   characterHasSpellcasting,
   getClassFeatureSections,
@@ -155,7 +156,7 @@ export default function CharacterSheet({ character: initialCharacter, onClose, o
           <AnimatePresence mode="wait">
             <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
               {tab === 'stats' && <StatsTab character={character} profBonus={profBonus} />}
-              {tab === 'skills' && <SkillsTab character={character} profBonus={profBonus} onUpdate={handleUpdateCharacter} />}
+              {tab === 'skills' && <SkillsTab character={character} profBonus={profBonus} />}
               {tab === 'combat' && <CombatTab character={character} profBonus={profBonus} isCaster={isCaster} onUpdate={handleUpdateCharacter} />}
               {tab === 'inventory' && <InventoryTab character={character} onUpdate={handleUpdateCharacter} onIdentify={null} sessionId={sessionId} />}
               {tab === 'spells' && <SpellbookTab character={character} onUpdateCharacter={handleUpdateCharacter} onCastSpell={onCastSpell} />}
@@ -254,19 +255,10 @@ function StatsTab({ character, profBonus }) {
 }
  
 // ─── Skills Tab ────────────────────────────────────────────────────────────────
-function SkillsTab({ character, profBonus, onUpdate }) {
-  const handleToggle = (skill, newLevel) => {
-    const updated = { ...(character.skills || {}) };
-    if (newLevel === null) {
-      delete updated[skill];
-    } else {
-      updated[skill] = newLevel;
-    }
-    onUpdate({ skills: updated });
-  };
-
+function SkillsTab({ character, profBonus }) {
   return (
     <div>
+      <p className="mb-3 rounded-lg border border-amber-900/40 bg-amber-950/20 p-2 text-sm text-amber-100/70">Skill training is read-only here. Confirm eligible class skills and Expertise in the Features tab.</p>
       {/* Legend */}
       <div className="flex items-center gap-4 px-3 pb-2 mb-1" style={{ borderBottom: '1px solid rgba(180,140,90,0.1)' }}>
         <span className="text-xs" style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>Click dot to toggle:</span>
@@ -291,7 +283,8 @@ function SkillsTab({ character, profBonus, onUpdate }) {
             stat={stat}
             character={character}
             profBonus={profBonus}
-            onToggle={handleToggle}
+            onToggle={undefined}
+            readonly
           />
         ))}
       </div>
@@ -539,6 +532,7 @@ function FeaturesTab({ character, onUpdate }) {
 
   return (
     <div className="space-y-4">
+      <ClassChoiceReview character={character} onUpdate={onUpdate} />
       {/* Racial Abilities */}
       {racialAbilities.length > 0 && (
         <Section title={`${character.race} Racial Abilities`} icon="🧬">

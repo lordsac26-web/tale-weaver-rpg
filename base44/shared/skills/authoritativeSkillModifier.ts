@@ -1,4 +1,5 @@
 import { isPassWithoutTraceIdentity, preferStructuredCondition } from '../spells/conditionIdentity.js';
+import { classChoiceSkillEffects, classLevels } from '../classChoiceReview.ts';
 
 const SKILL_ABILITIES = {
   Acrobatics: 'dexterity', 'Animal Handling': 'wisdom', Arcana: 'intelligence', Athletics: 'strength',
@@ -18,7 +19,7 @@ const gameClockExpired = (effect, session) => {
   return Number.isFinite(gameNow) && Number.isFinite(applied) && Number.isFinite(expires) && gameNow >= applied && gameNow >= expires;
 };
 
-export function resolveAuthoritativeSkillModifier({ character, session, skill: requestedSkill }) {
+export function resolveAuthoritativeSkillModifier({ character, session, skill: requestedSkill, context = '' }) {
   const skill = canonicalSkill(requestedSkill);
   if (!character || !skill) return { ok: false, error: 'Character and canonical skill are required', skill, total: 0, components: [] };
   if (session && session.character_id !== character.id) return { ok: false, error: 'Session and character linkage is invalid', skill, total: 0, components: [] };
@@ -26,10 +27,15 @@ export function resolveAuthoritativeSkillModifier({ character, session, skill: r
   const abilityBonus = statModifier(character[ability]);
   const proficiencyBonus = Number(character.proficiency_bonus) || 2;
   const training = character.skills?.[skill];
-  const proficiency = training === 'expert' ? proficiencyBonus * 2 : (training === 'proficient' || training === true) ? proficiencyBonus : 0;
+  const rogueLevels = Number(classLevels(character).Rogue || 0);
+  const confirmedExpertise = Array.isArray(character.class_choices?.expertise) && character.class_choices.expertise.includes(skill) && character.class_choices?.__review_confirmed?.expertise === true;
+  const expertiseActive = training === 'expert' && (rogueLevels === 0 || confirmedExpertise);
+  const choiceEffects = classChoiceSkillEffects(character, skill, context);
+  const terrainDouble = choiceEffects.proficiency_multiplier === 2 && ['proficient','expert',true].includes(training);
+  const proficiency = expertiseActive || terrainDouble ? proficiencyBonus * 2 : (training === 'proficient' || training === 'expert' || training === true) ? proficiencyBonus : 0;
   const components = [
     { type: 'ability', source: ability, value: abilityBonus },
-    { type: 'proficiency', source: training === 'expert' ? `${skill} expertise` : `${skill} proficiency`, value: proficiency },
+    { type: 'proficiency', source: expertiseActive ? `${skill} expertise` : terrainDouble ? `Natural Explorer: ${character.class_choices.favored_terrain}` : `${skill} proficiency`, value: proficiency },
   ];
   const baseSkill = abilityBonus + proficiency;
   const matchingModifiers = (character.active_modifiers || []).filter((modifier) => modifier?.effect === 'skill_bonus' && canonicalSkill(modifier.skill) === skill);
@@ -46,7 +52,7 @@ export function resolveAuthoritativeSkillModifier({ character, session, skill: r
   for (const modifier of otherBonuses) components.push({ type: 'effect', source: modifier.source || modifier.name || 'Skill bonus', value: Number(modifier.bonus) || 0, id: modifier.id || null });
   if (pwtLinkActive) components.push({ type: 'effect', source: 'Pass without Trace', value: 10, id: pwtModifiers[0].id, concentration: true });
   const effectBonus = components.filter((component) => component.type === 'effect').reduce((sum, component) => sum + component.value, 0);
-  return { ok: true, skill, ability, ability_bonus: abilityBonus, proficiency, base_skill: baseSkill, effect_bonus: effectBonus, bonus: effectBonus, total: baseSkill + effectBonus, components, pwt_active: pwtLinkActive, concentration_linked: pwtLinkActive };
+  return { ok: true, skill, ability, ability_bonus: abilityBonus, proficiency, base_skill: baseSkill, effect_bonus: effectBonus, bonus: effectBonus, total: baseSkill + effectBonus, components, pwt_active: pwtLinkActive, concentration_linked: pwtLinkActive, class_choice_advantage_sources: choiceEffects.advantage_sources };
 }
 
 export function buildSkillCheckReceipt({ requestId, raw, allRolls = [], dc, success, breakdown, advantageSources = [], at = new Date().toISOString() }) {

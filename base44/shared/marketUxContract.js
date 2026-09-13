@@ -1,11 +1,8 @@
-export const MARKET_UX_BUNDLE_VERSION = 'market-ux-v1.1.0';
+import { formatCoinFields } from './currencyFormat.js';
+export const MARKET_UX_BUNDLE_VERSION = 'market-ux-v1.2.0';
 
 export function formatCharacterFunds(character = {}) {
-  const parts = [];
-  if (Number(character.gold) > 0) parts.push(`${Number(character.gold)} gp`);
-  if (Number(character.silver) > 0) parts.push(`${Number(character.silver)} sp`);
-  if (Number(character.copper) > 0) parts.push(`${Number(character.copper)} cp`);
-  return parts.length ? parts.join(' · ') : '0 gp';
+  return formatCoinFields(character);
 }
 
 export function mergeCatalogPages(pages = [], eligibleCount = 0) {

@@ -30,8 +30,9 @@ function getProfLabel(level) {
 export default function SkillProficiencyRow({ skill, stat, character, profBonus, onToggle, readonly = false }) {
   const statMod = calcStatMod(character[stat] || 10);
   const profLevel = character.skills?.[skill];
-  const isExpert = profLevel === 'expert';
-  const isProficient = isExpert || profLevel === 'proficient' || profLevel === true;
+  const rogueLevels = (character.class === 'Rogue' ? 1 : 0) + (character.multiclass || []).filter(entry => entry?.class === 'Rogue').reduce((sum, entry) => sum + Number(entry.levels || 0), 0);
+  const isExpert = profLevel === 'expert' && (rogueLevels === 0 || (character.class_choices?.__review_confirmed?.expertise === true && (character.class_choices?.expertise || []).includes(skill)));
+  const isProficient = profLevel === 'expert' || profLevel === 'proficient' || profLevel === true;
   const bonus = isExpert ? profBonus * 2 : isProficient ? profBonus : 0;
   const total = statMod + bonus;
 

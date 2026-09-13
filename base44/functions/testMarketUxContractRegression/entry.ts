@@ -4,6 +4,7 @@ import { executeVendorTrade } from '../../shared/vendorTradeCore.ts';
 import { quotedVendorCatalog } from '../../shared/vendorCatalog.ts';
 import { resolveVendorHaggle, VENDOR_HAGGLE_VERSION } from '../../shared/vendorHaggle.ts';
 import { buildSellQuotesRequest, formatCharacterFunds, marketCategories, mergeCatalogPages, MARKET_UX_BUNDLE_VERSION } from '../../shared/marketUxContract.js';
+import { formatCopperAmount, formatPackQuote, formatQuoteAmount } from '../../shared/currencyFormat.js';
 import { handleVendorTradeRequest, VENDOR_TRADE_REQUEST_VERSION } from '../../shared/vendorTradeRequest.ts';
 
 const PROTECTED = { Character: ['6a6825cd07a490fa70a46852'], GameSession: ['6a6825edd695bd65a4322256'], CombatLog: ['6a767f23ec36fe219063ae49', '6a77463582a26b50018110ea'] };
@@ -41,6 +42,8 @@ export default async function(req) {
     fixtures.push(['Vendor', vendor.id]);
     const catalog = Array.from({ length: 65 }, (_, index) => ({ name: index === 64 ? 'Rope of the Last Shelf' : `Catalog ${String(index).padStart(2, '0')}`, category: index % 3 ? 'Weapon' : 'Tool', rarity: index % 2 ? 'common' : 'uncommon', base_price: index === 64 ? '3 gp' : '1 gp', stock: 5, vendor_types: ['blacksmith'] }));
 
+    record('fund display normalizes exact oversized denominations', formatCharacterFunds({ silver: 7865 }) === '786 gp · 5 sp' && formatCharacterFunds({ copper: 1403 }) === '14 gp · 3 cp');
+    record('card totals and pack labels conserve canonical copper', formatQuoteAmount(37, 7) === '2 gp · 5 sp · 9 cp' && formatPackQuote(100, { name: 'Arrows (20)' }) === '1 gp per pack (20 each)' && formatCopperAmount(300) === '3 gp');
     const sellQuote = quoteItem({ vendor, item: character.inventory[0], direction: 'sell_to_vendor' });
     record('authoritative sell quote displays half value and never flat five gold', sellQuote.unit_copper === 100 && sellQuote.unit_display === '1 gp' && sellQuote.unit_display !== '5 gp');
     const inventoryQuotes = quoteInventoryForVendor(vendor, character.inventory);

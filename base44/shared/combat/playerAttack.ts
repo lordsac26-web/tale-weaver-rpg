@@ -15,6 +15,7 @@ import { rollWeaponBaseDamage } from './weaponDamage.ts';
 import { appendRecoverableItem, buildRecoverableItem } from '../story/recoveryTransaction.ts';
 import { resolveExplicitThrownWeapon } from '../story/projectileLifecycle.ts';
 import { resolveSneakAttack } from './sneakAttack.ts';
+import { isConfirmedChoice } from '../classChoiceReview.ts';
 
 export async function handlePlayerAttack(ctx) {
   const { base44, session_id, combat_id, character_id, payload, request_id, roll_d20 = rollD20 } = ctx;
@@ -26,9 +27,8 @@ export async function handlePlayerAttack(ctx) {
   // fragile and caused false 403s for the legitimate owner.)
   const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
-  const featureNames = (character.features || []).map(f => String(f).toLowerCase());
-  const hasHordeBreaker = featureNames.some(f => f.includes('horde breaker'));
-  const hasColossusSlayer = featureNames.some(f => f.includes('colossus slayer'));
+  const hasHordeBreaker = isConfirmedChoice(character, 'hunters_prey', 'horde_breaker');
+  const hasColossusSlayer = isConfirmedChoice(character, 'hunters_prey', 'colossus_slayer');
   const isHordeBreakerAttack = modifiers.horde_breaker === true;
 
   const combatants = [...combatLog.combatants];
@@ -569,7 +569,7 @@ export async function handlePlayerAttack(ctx) {
     }
 
     // Apply Fighting Style bonuses
-    const fightingStyle = character.fighting_style?.toLowerCase();
+    const fightingStyle = isConfirmedChoice(character, 'fighting_style') ? character.fighting_style?.toLowerCase() : '';
     if (fightingStyle === 'archery' && isRanged) attackMod += 2;
     // Dueling: +2 damage when wielding a single one-handed weapon and no other weapon in offhand
     // Shield occupies 'offhand' slot (not 'shield'), so check both keys

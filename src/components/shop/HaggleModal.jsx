@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Coins } from 'lucide-react';
 import { HAGGLE_FLAVOR } from './vendorData';
 import VendorDialogue from './VendorDialogue';
+import { formatGoldAmount } from '@/lib/currencyFormat';
 
 function rollD20() { return Math.floor(Math.random() * 20) + 1; }
 
@@ -92,7 +93,7 @@ export default function HaggleModal({ item, vendor, character, onAccept, onClose
             <div className="font-fantasy text-sm font-semibold" style={{ color: '#e8d5b7' }}>{item.name}</div>
             <div className="flex items-center gap-1 mt-1">
               <Coins className="w-3 h-3" style={{ color: '#f0c040' }} />
-              <span className="font-fantasy text-sm" style={{ color: '#f0c040' }}>{item.base_price}gp listed</span>
+              <span className="font-fantasy text-sm" style={{ color: '#f0c040' }}>{formatGoldAmount(item.base_price)} listed</span>
             </div>
           </div>
 
@@ -148,10 +149,10 @@ export default function HaggleModal({ item, vendor, character, onAccept, onClose
                 <span style={{ color: 'rgba(180,140,90,0.5)', fontFamily: 'EB Garamond, serif' }}>Final price:</span>
                 <div className="flex items-center gap-1">
                   {finalPrice < item.base_price && (
-                    <span className="line-through text-xs" style={{ color: 'rgba(180,60,60,0.5)' }}>{item.base_price}gp</span>
+                    <span className="line-through text-xs" style={{ color: 'rgba(180,60,60,0.5)' }}>{formatGoldAmount(item.base_price)}</span>
                   )}
                   <span className="font-fantasy font-bold" style={{ color: finalPrice === 0 ? '#86efac' : finalPrice < item.base_price ? '#86efac' : finalPrice > item.base_price ? '#fca5a5' : '#f0c040' }}>
-                    {finalPrice === 0 ? 'FREE' : `${finalPrice}gp`}
+                    {finalPrice === 0 ? 'FREE' : formatGoldAmount(finalPrice)}
                   </span>
                 </div>
               </div>

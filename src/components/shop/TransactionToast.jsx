@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins } from 'lucide-react';
+import { formatCopperAmount, formatGoldAmount } from '@/lib/currencyFormat';
 
 export default function TransactionToast({ transaction, onDone }) {
   if (!transaction) return null;
@@ -45,10 +46,10 @@ export default function TransactionToast({ transaction, onDone }) {
             <div className="flex items-center gap-1.5 text-xs">
               <Coins className="w-3 h-3" style={{ color: transaction.type === 'buy' ? '#fca5a5' : '#86efac' }} />
               <span style={{ color: transaction.type === 'buy' ? '#fca5a5' : '#86efac' }}>
-                {transaction.type === 'buy' ? '-' : '+'}{transaction.amount}gp
+                {transaction.type === 'buy' ? '-' : '+'}{transaction.amount_copper != null ? formatCopperAmount(transaction.amount_copper) : formatGoldAmount(transaction.amount)}
               </span>
               <span style={{ color: 'rgba(180,140,90,0.4)', fontFamily: 'EB Garamond, serif' }}>
-                · Balance: {transaction.newBalance}gp
+                · Balance: {transaction.new_balance_copper != null ? formatCopperAmount(transaction.new_balance_copper) : formatGoldAmount(transaction.newBalance)}
               </span>
             </div>
           </div>

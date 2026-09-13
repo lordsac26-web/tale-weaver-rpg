@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Coins, TrendingDown } from 'lucide-react';
 import { formatInventoryItemName } from '@/lib/ammunition';
+import { formatGoldAmount } from '@/lib/currencyFormat';
 
 const RARITY_COLORS = {
   common: '#e8d5b7',
@@ -69,7 +70,7 @@ export default function SellItemModal({ item, onConfirm, onClose }) {
             <div>
               <h3 className="font-fantasy font-bold" style={{ color }}>{formatInventoryItemName(item)}</h3>
               <p className="text-xs" style={{ color: 'rgba(201,169,110,0.5)' }}>
-                Worth {unitValue} gp · sells for {unitSell} gp each
+                Worth {formatGoldAmount(unitValue)} · sells for {formatGoldAmount(unitSell)} each
               </p>
             </div>
           </div>
@@ -89,7 +90,7 @@ export default function SellItemModal({ item, onConfirm, onClose }) {
             style={{ background: 'rgba(40,30,8,0.5)', border: '1px solid rgba(240,192,64,0.25)' }}>
             <span className="font-fantasy text-sm" style={{ color: 'rgba(201,169,110,0.7)' }}>You receive</span>
             <span className="font-fantasy font-bold text-xl flex items-center gap-1.5" style={{ color: '#f0c040' }}>
-              <Coins className="w-5 h-5" /> {totalGold} gp
+              <Coins className="w-5 h-5" /> {formatGoldAmount(totalGold)}
             </span>
           </div>
 
@@ -101,7 +102,7 @@ export default function SellItemModal({ item, onConfirm, onClose }) {
             </button>
             <button onClick={() => onConfirm(item, qty, totalGold)} disabled={maxQty === 0}
               className="flex-1 py-3 rounded-xl font-fantasy font-bold text-sm btn-fantasy flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
-              <Coins className="w-4 h-4" /> Sell for {totalGold} gp
+              <Coins className="w-4 h-4" /> Sell for {formatGoldAmount(totalGold)}
             </button>
           </div>
         </div>

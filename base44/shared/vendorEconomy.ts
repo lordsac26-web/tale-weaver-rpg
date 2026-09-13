@@ -1,3 +1,4 @@
+import { formatCopperAmount } from './currencyFormat.js';
 const COPPER = { cp: 1, sp: 10, ep: 50, gp: 100, pp: 1000 };
 export const VENDOR_ECONOMY_VERSION = 'vendor-economy-v1.1.0';
 
@@ -47,11 +48,8 @@ export function canonicalValueCopper(item) {
 }
 
 export function formatCopper(copper) {
-  const value = Number(copper);
-  if (!Number.isInteger(value) || value < 0) return 'price_unavailable';
-  if (value % 100 === 0) return `${value / 100} gp`;
-  if (value % 10 === 0) return `${value / 10} sp`;
-  return `${value} cp`;
+  const display = formatCopperAmount(Number(copper));
+  return display === 'price unavailable' ? 'price_unavailable' : display;
 }
 
 export function quoteItem({ vendor, item, direction }) {

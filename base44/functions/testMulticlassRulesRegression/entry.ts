@@ -30,10 +30,10 @@ export default async function(req) {
     results.push({ name:'expertise doubles proficiency to plus six at PB three', pass:expertise.skills.Stealth==='expert'&&3*2===6 });
     results.push({ name:'non-caster level leaves Ranger 5 slots at four and two', pass:[4,2].join(',')==='4,2' });
     results.push({ name:'character level six proficiency is plus three', pass:proficiencyForLevel(6)===3 });
-    const plan=buildMulticlassClassUpdates(fixture,'Rogue',['Stealth','Sleight of Hand']);
+    const plan=buildMulticlassClassUpdates(fixture,'Rogue');
     await base44.asServiceRole.entities.Character.update(fixture.id,plan.updates);
     const applied=await base44.asServiceRole.entities.Character.get(fixture.id);
-    results.push({name:'disposable Ranger 5 to Rogue 1 application persists exact grants',pass:plan.ok&&applied.level===6&&applied.multiclass?.[0]?.class==='Rogue'&&!applied.multiclass?.[0]?.subclass&&applied.features?.includes('Sneak Attack (1d6)')&&applied.features?.includes("Thieves' Cant")&&applied.skills?.Stealth==='expert'&&applied.skills?.['Sleight of Hand']==='expert'});
+    results.push({name:'disposable Ranger 5 to Rogue 1 application grants fixed features but leaves choices pending',pass:plan.ok&&applied.level===6&&applied.multiclass?.[0]?.class==='Rogue'&&!applied.multiclass?.[0]?.subclass&&applied.features?.includes('Sneak Attack (1d6)')&&applied.features?.includes("Thieves' Cant")&&applied.skills?.Stealth==='proficient'&&applied.class_choices?.expertise==null});
     await base44.asServiceRole.entities.Character.delete(fixture.id);
     const fixtureAbsent=(await base44.asServiceRole.entities.Character.filter({id:fixture.id},'-created_date',1)).length===0;
     results.push({name:'disposable multiclass fixture cleanup verified',pass:fixtureAbsent});

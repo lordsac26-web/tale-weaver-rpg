@@ -5,7 +5,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { base44 } from '@/api/base44Client';
 import { CLASSES } from './gameData';
 import MulticlassClassPreview from './MulticlassClassPreview';
-import MulticlassExpertiseEditor from './MulticlassExpertiseEditor';
 
 export default function MulticlassManager({ character, onAuthoritativeUpdate }) {
   const [adding,setAdding]=useState(false); const [newClass,setNewClass]=useState('');
@@ -25,7 +24,7 @@ export default function MulticlassManager({ character, onAuthoritativeUpdate }) 
   },[character.id,newClass]);
 
   const addClass=async()=>{setSaving(true);setError('');try{
-    const response=await base44.functions.invoke('applyMulticlassLevel',{action:'apply_class',character_id:character.id,class_name:newClass,expertise_choices:newClass==='Rogue'?expertise:[]});
+    const response=await base44.functions.invoke('applyMulticlassLevel',{action:'apply_class',character_id:character.id,class_name:newClass});
     onAuthoritativeUpdate?.(response.data.character); setAdding(false); setNewClass(''); setExpertise([]);
   }catch(err){setError(err?.response?.data?.error||err.message);}finally{setSaving(false);}};
   const saveExpertise=async(choices,previous)=>{setSaving(true);setError('');try{
@@ -37,12 +36,11 @@ export default function MulticlassManager({ character, onAuthoritativeUpdate }) 
     <div className="flex items-center justify-between"><h3 className="font-fantasy text-lg" style={{color:'var(--brass-gold)'}}>Multiclassing</h3><span className="text-xs text-amber-100/60">Total Level: {character.level}</span></div>
     <ClassSummary label="Primary" className={character.class} levels={primaryLevels}/>
     {multiclass.map((entry,index)=><ClassSummary key={`${entry.class}-${index}`} label="Multiclass" className={entry.class} levels={entry.levels} subclass={entry.subclass}/>)}
-    {multiclass.some(entry=>entry.class==='Rogue'&&Number(entry.levels)>=1)&&<MulticlassExpertiseEditor character={character} onSave={saveExpertise} saving={saving}/>}
     {adding?<div className="space-y-3">
       <Select value={newClass} onValueChange={value=>{setNewClass(value);setExpertise([]);setError('');}}><SelectTrigger className="select-fantasy"><SelectValue placeholder="Choose class..."/></SelectTrigger><SelectContent>{Object.keys(CLASSES).filter(name=>name!==character.class&&!multiclass.some(entry=>entry.class===name)).map(name=><SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent></Select>
       <MulticlassClassPreview className={newClass} validation={validation}/>
-      {newClass==='Rogue'&&<ExpertiseChoices skills={proficient} value={expertise} onChange={setExpertise}/>} {error&&<p className="text-xs text-red-300">{error}</p>}
-      <div className="flex gap-2"><Button onClick={addClass} disabled={saving||!validation?.ok||(newClass==='Rogue'&&(expertise.length!==2||expertise[0]===expertise[1]))} className="btn-fantasy flex-1">{saving?'Applying…':'Apply Class'}</Button><Button onClick={()=>{setAdding(false);setNewClass('');setError('');}} className="btn-fantasy flex-1">Cancel</Button></div>
+      {newClass==='Rogue'&&<p className="text-xs text-amber-100/70">Rogue class skill and Expertise remain pending until you explicitly confirm them in Class Choice Review.</p>} {error&&<p className="text-xs text-red-300">{error}</p>}
+      <div className="flex gap-2"><Button onClick={addClass} disabled={saving||!validation?.ok} className="btn-fantasy flex-1">{saving?'Applying…':'Apply Class'}</Button><Button onClick={()=>{setAdding(false);setNewClass('');setError('');}} className="btn-fantasy flex-1">Cancel</Button></div>
     </div>:<button onClick={()=>setAdding(true)} className="w-full py-2 rounded-lg border border-dashed text-sm font-fantasy text-amber-200/70"><Plus className="w-4 h-4 inline mr-1"/>Add Multiclass</button>}
     <div className="flex items-start gap-2 p-3 rounded-lg bg-purple-950/20 border border-purple-800/30"><Info className="w-4 h-4 text-purple-300 flex-shrink-0"/><p className="text-xs text-purple-200/70">Prerequisites and subclass levels are checked before any class is applied.</p></div>
   </div>;

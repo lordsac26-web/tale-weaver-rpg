@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
-import { applyRogueExpertise, buildMulticlassClassUpdates, MULTICLASS_RULES_VERSION, SUBCLASS_LEVEL, validateMulticlassApplication } from '../../shared/multiclassRules.ts';
+import { buildMulticlassClassUpdates, MULTICLASS_RULES_VERSION, SUBCLASS_LEVEL, validateMulticlassApplication } from '../../shared/multiclassRules.ts';
 
 export default async function(req) {
   try {
@@ -18,13 +18,7 @@ export default async function(req) {
       return Response.json({ ...validation, class_name: className, subclass_level: SUBCLASS_LEVEL[className], rules_version: MULTICLASS_RULES_VERSION });
     }
 
-    if (action === 'set_expertise') {
-      if (!(character.multiclass || []).some(entry => entry?.class === 'Rogue' && Number(entry.levels || 0) >= 1) && character.class !== 'Rogue') return Response.json({ error: 'Rogue Expertise requires Rogue level 1.' }, { status: 400 });
-      const expertise = applyRogueExpertise(character.skills || {}, payload.expertise_choices, payload.previous_choices || []);
-      if (!expertise.ok) return Response.json({ error: expertise.reason }, { status: 400 });
-      await base44.asServiceRole.entities.Character.update(character.id, { skills: expertise.skills });
-      return Response.json({ success: true, skills: expertise.skills, expertise_choices: expertise.choices, rules_version: MULTICLASS_RULES_VERSION });
-    }
+    if (action === 'set_expertise') return Response.json({ error: 'Use Class Choice Review to explicitly confirm Rogue Expertise.' }, { status: 400 });
 
     if (action !== 'apply_class') return Response.json({ error: 'Unsupported action' }, { status: 400 });
     if (!className || className === character.class || (character.multiclass || []).some(entry => entry?.class === className)) return Response.json({ error: 'Choose a new class not already on this character.' }, { status: 400 });

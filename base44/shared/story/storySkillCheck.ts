@@ -2,8 +2,8 @@ import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '../sk
 
 const validD20 = (value) => Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 20;
 
-export function resolveStorySkillCheck({ character, session, skill, dc, requestId, raw = null, allRolls = [], advantageSources = [], at = null }) {
-  const breakdown = resolveAuthoritativeSkillModifier({ character, session, skill });
+export function resolveStorySkillCheck({ character, session, skill, dc, requestId, raw = null, allRolls = [], advantageSources = [], context = '', at = null }) {
+  const breakdown = resolveAuthoritativeSkillModifier({ character, session, skill, context });
   if (!breakdown.ok) return { ok: false, error: breakdown.error, breakdown };
   const checkDc = Number(dc);
   if (!Number.isFinite(checkDc) || checkDc < 1) return { ok: false, error: 'A valid skill-check DC is required', breakdown };

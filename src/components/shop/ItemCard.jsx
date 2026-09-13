@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, Coins, ShoppingCart } from 'lucide-react';
 import { RARITY_META, ITEM_CATEGORY_ICONS } from './vendorData';
 import { formatInventoryItemName } from '@/lib/ammunition';
+import { formatGoldAmount } from '@/lib/currencyFormat';
 
 export default function ItemCard({ item, vendorType, character, onBuy, mode = 'buy' }) {
   const [expanded, setExpanded] = useState(false);
@@ -76,7 +77,7 @@ export default function ItemCard({ item, vendorType, character, onBuy, mode = 'b
           <div className="text-right">
             <div className="flex items-center gap-1 justify-end">
               <Coins className="w-3 h-3" style={{ color: '#f0c040' }} />
-              <span className="font-fantasy font-bold text-sm" style={{ color: '#f0c040' }}>{item.base_price}gp</span>
+              <span className="font-fantasy font-bold text-sm" style={{ color: '#f0c040' }}>{formatGoldAmount(item.base_price)}</span>
             </div>
             {mode === 'buy' && (
               <button onClick={handleBuy} disabled={!canBuy}
