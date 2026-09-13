@@ -18,7 +18,7 @@ export async function executeLongRestCore({ db, ownerId, characterId, sessionId,
     const name = String(typeof condition === 'string' ? condition : condition?.name || '').toLowerCase();
     const duration = String(condition?.duration || '').toLowerCase();
     const expired = Number.isFinite(Date.parse(condition?.expires_at || '')) && Date.parse(condition.expires_at) <= restTime;
-    return !(expired || condition?.clears_on_long_rest || ['scene', 'combat', 'rest', 'short_rest', 'long_rest'].includes(duration) || name === 'pass without trace');
+    return !(expired || condition?.clears_on_long_rest || ['scene', 'combat', 'rest', 'short_rest', 'long_rest'].includes(duration) || name === 'pass without trace' || name === 'longstrider');
   });
   const activeModifiers = (character.active_modifiers || []).filter((modifier) => !modifier?.concentration && !(Number.isFinite(Date.parse(modifier?.expires_at || '')) && Date.parse(modifier.expires_at) <= restTime));
   const slotProgression=deriveCanonicalSpellSlots(character),preservedReceipts=Object.fromEntries(Object.entries(character.long_rest_abilities||{}).filter(([key])=>key.startsWith('__')));

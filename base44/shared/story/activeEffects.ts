@@ -1,6 +1,6 @@
 import { deriveCanonicalSpellSlots } from '../spells/slotProgression.ts';
 
-export const ACTIVE_EFFECTS_VERSION = 'active-effects-truth-v1.0.0';
+export const ACTIVE_EFFECTS_VERSION = 'active-effects-truth-v1.1.0';
 
 const PLACEHOLDERS = new Set(['', 'none', 'normal', 'no condition', 'no conditions', 'n/a', 'null', 'undefined']);
 const HINDRANCE_KEYS = new Set(['blinded','charmed','deafened','frightened','grappled','incapacitated','paralyzed','petrified','poisoned','prone','restrained','stunned','unconscious','silenced','silence','exhausted','exhaustion','cursed','wanted','hunted','wounded','bleeding']);
@@ -63,6 +63,30 @@ const remainingFromExpiry = (expiresAt, now) => {
   return `${hours} hour${hours === 1 ? '' : 's'} remaining`;
 };
 
+const gameElapsedHours = (session) => { const value = Number(session?.world_state?.elapsed_hours); return Number.isFinite(value) ? value : null; };
+const finiteHoursFor = (name, entry) => {
+  const match = String(entry?.duration || '').match(/(\d+(?:\.\d+)?)\s*(minute|hour)/i);
+  if (match) return Number(match[1]) * (match[2].toLowerCase() === 'hour' ? 1 : 1 / 60);
+  return normalizeKey(name) === 'longstrider' ? 1 : null;
+};
+const authoritativeElapsedAfter = (entry, session) => {
+  const applied = Date.parse(entry?.applied_at || '');
+  if (!Number.isFinite(applied)) return 0;
+  const rests = (session?.world_state?.__rest_receipts || []).filter((receipt) => Date.parse(receipt?.completed_at || '') > applied).reduce((sum, receipt) => sum + (Number(receipt?.response?.clock?.elapsed_hours) || Number(receipt?.response?.clock?.elapsedHours) || 0), 0);
+  const waits = (session?.world_state?.__time_advance_receipts || []).filter((receipt) => Date.parse(receipt?.at || '') > applied).reduce((sum, receipt) => sum + (Number(receipt?.clock?.elapsed_hours) || 0), 0);
+  return rests + waits;
+};
+const expiryFor = (name, entry, session, now) => {
+  const gameNow = gameElapsedHours(session);
+  const gameExpiry = Number(entry?.expires_game_elapsed_hours);
+  if (gameNow != null && Number.isFinite(gameExpiry)) return { expired: gameNow >= gameExpiry, remaining: Math.max(0, gameExpiry - gameNow), basis: 'game_time' };
+  const finiteHours = finiteHoursFor(name, entry);
+  if (gameNow != null && entry?.duration === 'persistent' && finiteHours != null && authoritativeElapsedAfter(entry, session) >= finiteHours) return { expired: true, remaining: 0, basis: 'legacy_game_time_evidence' };
+  const remaining = entry?.expires_at && gameNow == null ? remainingFromExpiry(entry.expires_at, now) : null;
+  return { expired: !!entry?.expires_at && gameNow == null && !remaining, remaining, basis: entry?.expires_at ? 'wall_time_without_game_clock' : null };
+};
+const remainingLabel = (expiry, entry) => expiry.basis === 'game_time' ? `${Math.max(1, Math.ceil(expiry.remaining * 60))} minute${Math.ceil(expiry.remaining * 60) === 1 ? '' : 's'} remaining` : expiry.remaining || entry?.duration || 'persistent';
+
 const effectFor = (name, entry) => {
   const key = normalizeKey(name);
   const fromEntry = typeof entry === 'object' && typeof entry.effect === 'string' ? entry.effect : null;
@@ -76,6 +100,12 @@ const kindFor = (name) => HINDRANCE_KEYS.has(normalizeKey(name)) ? 'hindrance' :
  * rest state). The ONLY source of mechanical bonuses for narration, Ask the DM
  * state queries, and the status panel.
  */
+export function effectiveMovementSpeed(character = {}, session = null) {
+  const truth = evaluateActiveEffects({ character, session });
+  const bonus = truth.active.filter((entry) => normalizeKey(entry.name) === 'longstrider').reduce((sum) => sum + 10, 0);
+  return Math.max(0, Number(character.speed) || 30) + bonus;
+}
+
 export function evaluateActiveEffects({ character = {}, session = null, now = Date.now() }) {
   const active = [];
   const expired = [];
@@ -89,31 +119,30 @@ export function evaluateActiveEffects({ character = {}, session = null, now = Da
 
   for (const condition of Array.isArray(character.conditions) ? character.conditions : []) {
     if (!isValidCondition(condition)) continue;
-    const expiresAt = typeof condition === 'object' ? condition.expires_at : null;
-    const remaining = expiresAt ? remainingFromExpiry(expiresAt, now) : null;
     const name = canonicalStoryConditionName(conditionName(condition));
+    const expiry = expiryFor(name, condition, session, now);
     const base = { name, source: (typeof condition === 'object' && condition.source) || 'story', kind: kindFor(name) };
-    if (expiresAt && !remaining) { expired.push({ ...base, expired_at: expiresAt }); continue; }
-    push({ ...base, mechanical_effect: effectFor(name, condition), remaining_duration: remaining || (typeof condition === 'object' && condition.duration) || 'persistent' });
+    if (expiry.expired) { expired.push({ ...base, expired_at: condition?.expires_at || null, expiration_basis: expiry.basis }); continue; }
+    push({ ...base, mechanical_effect: effectFor(name, condition), remaining_duration: remainingLabel(expiry, condition) });
   }
 
   const concentration = session?.world_state?.active_concentration || null;
   if (concentration && concentration.concentration !== false) {
     const name = conditionName(concentration.spell_name);
-    const remaining = concentration.expires_at ? remainingFromExpiry(concentration.expires_at, now) : null;
+    const expiry = expiryFor(name, concentration, session, now);
     const base = { name, source: name, kind: kindFor(name) };
-    if (concentration.expires_at && !remaining) expired.push({ ...base, expired_at: concentration.expires_at });
-    else push({ ...base, mechanical_effect: effectFor(name, concentration), remaining_duration: remaining || `${concentration.duration || 'concentration'} (until concentration ends)` });
+    if (expiry.expired) expired.push({ ...base, expired_at: concentration.expires_at || null, expiration_basis: expiry.basis });
+    else push({ ...base, mechanical_effect: effectFor(name, concentration), remaining_duration: expiry.basis === 'game_time' ? remainingLabel(expiry, concentration) : `${concentration.duration || 'concentration'} (until concentration ends)` });
   }
 
   for (const modifier of Array.isArray(character.active_modifiers) ? character.active_modifiers : []) {
-    const remaining = modifier?.expires_at ? remainingFromExpiry(modifier.expires_at, now) : null;
     const name = conditionName(modifier?.source || modifier?.effect || 'Active effect');
+    const expiry = expiryFor(name, modifier, session, now);
     const base = { name, source: name, kind: kindFor(modifier?.effect || name) };
-    if (modifier?.expires_at && !remaining) { expired.push({ ...base, expired_at: modifier.expires_at }); continue; }
+    if (expiry.expired) { expired.push({ ...base, expired_at: modifier?.expires_at || null, expiration_basis: expiry.basis }); continue; }
     if (modifier?.concentration && concentration && normalizeKey(concentration.spell_name) === normalizeKey(modifier.source)) continue;
     const effect = modifier?.effect === 'skill_bonus' ? `+${Number(modifier.bonus) || 0} ${modifier.skill || ''} checks`.trim() : effectFor(name, modifier);
-    push({ ...base, mechanical_effect: effect, remaining_duration: remaining || 'persistent' });
+    push({ ...base, mechanical_effect: effect, remaining_duration: remainingLabel(expiry, modifier) });
   }
 
   const slotProgression = deriveCanonicalSpellSlots(character);

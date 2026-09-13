@@ -23,6 +23,7 @@ import { executeAuthoritativeShortWait, SHORT_WAIT_VERSION } from '../../shared/
 import { inferUniqueScenePickup, UNIQUE_SCENE_PICKUP_VERSION } from '../../shared/story/uniqueScenePickup.ts';
 import { normalizeChoiceActionContract, CHOICE_ACTION_CONTRACT_VERSION } from '../../shared/story/choiceActionContract.js';
 import { executeStowAction } from '../../shared/story/stowIntent.ts';
+import { executeItemTransferAction, ITEM_TRANSFER_VERSION } from '../../shared/story/itemTransfer.ts';
 import { canonicalStoryConditionName, evaluateActiveEffects, normalizeStoryConditions } from '../../shared/story/activeEffects.ts';
 import { buildCorpseContractLine, buildStowedContentsTruthLine, FAILED_CHECK_CORRECTION_INSTRUCTION, failedCheckFallbackNarrative, findFailedCheckSuccessContradictions } from '../../shared/story/narrationTruth.ts';
 import { executeStoryWeaponAttack, STORY_WEAPON_ATTACK_VERSION } from '../../shared/story/storyWeaponAttack.ts';
@@ -125,6 +126,15 @@ Deno.serve(async (req) => {
       if (stowOutcome.body?.handled) {
         if (stowOutcome.status >= 400) return Response.json(stowOutcome.body, { status: stowOutcome.status });
         authoritativeStow = stowOutcome.body;
+      }
+    }
+    let authoritativeTransfer = null;
+    if (action === 'choice' && storyRequestId && !authoritativeStow?.success) {
+      const transferOutcome = await executeItemTransferAction({ base44, ownerId:user.id, payload:{ session_id, character_id:character.id, action_text:selectedChoice||custom_input, request_id:storyRequestId, check:authoritativeChoiceContext?.check } });
+      if(transferOutcome.body?.handled){
+        if(transferOutcome.status>=400)return Response.json(transferOutcome.body,{status:transferOutcome.status});
+        authoritativeTransfer=transferOutcome.body;
+        if(transferOutcome.body?.success){session=transferOutcome.body.session;character=transferOutcome.body.character;}
       }
     }
     let authoritativeWeaponAction = null;
@@ -307,6 +317,10 @@ ${ambushIntent ? `PENDING AMBUSH CONTRACT: This action resolves ONLY the Stealth
 ${narrativeRangedIntent ? `AUTHORITATIVE RANGED ATTACK CONTRACT: This is an attempted ranged weapon attack. Set combat_trigger true and provide complete living enemy stat blocks. Do not narrate a release, attack roll, hit, miss, damage, death, arrow count, or ammunition change; those resolve only through player_attack after combat starts.` : ''}
 ${Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested ? 'POST-REST FACT: the character is fully rested and alert. Do not describe fatigue, tiredness, weariness, raggedness, sleeplessness, or exhaustion unless a new structured mechanic explicitly causes it.' : ''}
 ${Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested ? 'POST-REST FACT: the character completed a successful rest and is not exhausted. Do not describe fatigue, tiredness, weariness, raggedness, sleeplessness, or impaired focus unless a new mechanical effect explicitly causes it.' : ''}
+${authoritativeTransfer ? (authoritativeTransfer.clarification_required
+  ? `ITEM TRANSFER CLARIFICATION REQUIRED: "${authoritativeTransfer.item_phrase}" does not resolve to exactly one authoritative item. Ask which item they mean; do not move or narrate a transfer.`
+  : authoritativeTransfer.success ? `AUTHORITATIVE ITEM TRANSFER: exactly ${authoritativeTransfer.receipt.quantity} ${authoritativeTransfer.receipt.item_name} moved from ${authoritativeTransfer.receipt.source} to ${authoritativeTransfer.receipt.destination}${authoritativeTransfer.already_processed?' (already processed; do not repeat the write)':''}. Preserve its provenance and death state exactly.`
+  : `ITEM TRANSFER NOT COMMITTED: ${authoritativeTransfer.reason||'the transfer did not succeed'}. Do not narrate the item as moved.`) : ''}
 ${authoritativeStow ? (authoritativeStow.clarification_required
   ? `STOW CLARIFICATION REQUIRED: the player tried to stow "${authoritativeStow.item_phrase}" into ${authoritativeStow.container}, but the item identity is ambiguous${authoritativeStow.candidates?.length ? ` (carried candidates: ${authoritativeStow.candidates.join(', ')})` : ''}. In the narration, ask which carried item they mean and offer clarifying choices. Do not invent an item, an acquisition, or a mechanical change.`
   : `AUTHORITATIVE STOW RESULT: exactly ${authoritativeStow.stow.quantity} ${authoritativeStow.stow.item_name} (${authoritativeStow.stow.item_id}) was moved into ${authoritativeStow.stow.container}${authoritativeStow.already_processed ? ' (this stow was already processed; do not repeat it)' : ''}. Narrate only this result; never claim another item was stowed.`) : ''}
@@ -546,6 +560,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
         ...(result.combat_handoff ? { combat_handoff: result.combat_handoff } : {}),
         ...(result.item_recovery ? { item_recovery: result.item_recovery } : {}),
         ...(authoritativeStow ? { stow_transaction: { receipt: authoritativeStow.receipt || authoritativeStow.stow || null, clarification_required: !!authoritativeStow.clarification_required, already_processed: !!authoritativeStow.already_processed } } : {}),
+        ...(authoritativeTransfer ? { transfer_transaction: { receipt:authoritativeTransfer.receipt||null, clarification_required:!!authoritativeTransfer.clarification_required, already_processed:!!authoritativeTransfer.already_processed, success:!!authoritativeTransfer.success, reason:authoritativeTransfer.reason||null } } : {}),
         ...(result.recovery_resolution ? { recovery_resolution: result.recovery_resolution } : {}),
         ...(result.recovery_transaction ? { recovery_transaction: result.recovery_transaction } : {}),
         ...(craftingTransaction ? { crafting_transaction: { receipt:craftingTransaction.receipt, already_processed:!!craftingTransaction.already_processed } } : {}),
@@ -714,7 +729,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });
+    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);

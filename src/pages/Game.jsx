@@ -576,7 +576,7 @@ export default function Game() {
     const data = result.data;
     if (!data?.success) throw new Error(data?.error || 'That spell could not be cast.');
     if (!data.spell_detected) return null;
-    setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, ...(typeof data.hp_current === 'number' ? { hp_current: data.hp_current } : {}), ...(data.inventory ? { inventory: data.inventory } : {}) } : prev);
+    setCharacter(prev => prev ? { ...prev, spell_slots: data.spell_slots, active_modifiers: data.active_modifiers, ...(data.conditions ? { conditions: data.conditions } : {}), ...(typeof data.hp_current === 'number' ? { hp_current: data.hp_current } : {}), ...(data.inventory ? { inventory: data.inventory } : {}) } : prev);
     const isPassWithoutTrace = String(data.spell_name || '').toLowerCase() === 'pass without trace';
     setNarrative(prev => [...prev, {
       type: 'roll_result',

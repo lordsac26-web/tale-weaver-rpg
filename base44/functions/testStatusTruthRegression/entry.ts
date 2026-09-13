@@ -18,7 +18,7 @@ export default async function testStatusTruthRegression(req) {
       const expiredAt = '2026-09-02T23:00:00.000Z';
       const conditions = [
         { name: 'Pass without Trace', source: 'Pass without Trace', duration: 'persistent', expires_at: expiredAt },
-        { name: 'Longstrider', source: 'story', duration: 'persistent' },
+        { name: 'Longstrider', source: 'story', duration: 'persistent', applied_at: '2026-09-01T10:00:00.000Z' },
         { name: 'Protected by the Circle', source: 'story', duration: 'persistent', applied_at: '2026-08-14T00:40:56.687Z' },
         { name: 'Protected by the Circle of the Reeds', source: 'story', duration: 'persistent', applied_at: '2026-08-14T00:34:17.063Z' },
         { name: 'Blessed by the Reeds', source: 'story', duration: 'persistent', applied_at: '2026-09-02T12:14:44.079Z' },
@@ -26,20 +26,25 @@ export default async function testStatusTruthRegression(req) {
         { name: 'Wanted', source: 'story', duration: 'persistent' },
       ];
       const character = { level: 6, class: 'Ranger', multiclass: [{ class: 'Rogue', subclass: '', levels: 1 }], spell_slots: {}, conditions, active_modifiers: [], attuned_items: [], exhaustion_level: 0 };
-      const session = { world_state: { active_concentration: { spell_name: 'Pass without Trace', concentration: true, expires_at: expiredAt } } };
+      const session = { world_state: { elapsed_hours: 10, active_concentration: { spell_name: 'Pass without Trace', concentration: true, expires_game_elapsed_hours: 2 }, __rest_receipts: [{ completed_at:'2026-09-02T10:00:00.000Z', response:{ clock:{ elapsed_hours:8 } } }] } };
+      conditions[0].expires_game_elapsed_hours=2;
       const truth = evaluateActiveEffects({ character, session, now });
       record('expired PWT condition and concentration are excluded from active effects', !truth.active.some((entry) => /pass without trace/i.test(entry.name)) && truth.expired.some((entry) => /pass without trace/i.test(entry.name)));
       record('near-duplicate persistent conditions normalize to stable canonical names', canonicalStoryConditionName('Protected by the Circle') === 'Protected by the Circle of the Reeds' && canonicalStoryConditionName('Blessed by the Reeds') === 'Blessed by the Circle of the Reeds' && normalizeStoryConditions(conditions).filter((entry) => /circle of the reeds/i.test(entry.name)).length === 2);
       const merged = normalizeStoryConditions(conditions).find((entry) => entry.name === 'Protected by the Circle of the Reeds');
       record('normalization keeps the earliest applied_at', merged?.applied_at === '2026-08-14T00:34:17.063Z');
-      record('active effects show source mechanical effect and duration', truth.active.some((entry) => entry.name === 'Longstrider' && entry.source === 'story' && String(entry.mechanical_effect).includes('+10') && entry.remaining_duration === 'persistent'));
+      record('legacy persistent Longstrider expires from later authoritative in-game rest evidence', !truth.active.some((entry) => entry.name === 'Longstrider') && truth.expired.some((entry) => entry.name === 'Longstrider' && entry.expiration_basis === 'legacy_game_time_evidence'));
+      const recastTruth=evaluateActiveEffects({character:{...character,conditions:[{name:'Longstrider',source:'Longstrider',duration:'1 Hour',duration_type:'game_elapsed',applied_game_elapsed_hours:10,expires_game_elapsed_hours:11}]},session:{world_state:{elapsed_hours:10.25}}});
+      record('new Longstrider recast remains active until one in-game hour elapses without concentration', recastTruth.active.some((entry)=>entry.name==='Longstrider'&&/45 minutes remaining/.test(entry.remaining_duration)));
+      const pausedTruth=evaluateActiveEffects({character:{...character,conditions:[{name:'Longstrider',source:'Longstrider',duration:'1 Hour',duration_type:'game_elapsed',applied_game_elapsed_hours:10,expires_game_elapsed_hours:11,expires_at:'2020-01-01T00:00:00.000Z'}]},session:{world_state:{elapsed_hours:10.25}}});
+      record('paused real-world time does not expire game-time Longstrider', pausedTruth.active.some((entry)=>entry.name==='Longstrider'));
       record('spell slots are explicit per level max and used', JSON.stringify(truth.spell_slots) === JSON.stringify([{ level: 1, max: 4, used: 0, remaining: 4 }, { level: 2, max: 2, used: 0, remaining: 2 }]));
       record('hindrances classify from authoritative state', truth.hindrances.some((entry) => entry.name === 'Wanted'));
 
       const tag = `StatusTruthQA_${Date.now()}`;
       const c = await base44.entities.Character.create({ name: tag, race: 'Human', class: 'Ranger', level: 6, multiclass: [{ class: 'Rogue', subclass: '', levels: 1 }], spell_slots: {}, conditions, active_modifiers: [], attuned_items: ['Ring of Protection'], stowed_items: [{ name: "Weaver's Ledger", quantity: 1, category: 'Book', container: 'Bag of Holding' }, { name: "Inquisitor Leader's Corpse", quantity: 1, category: 'Corpse', container: 'Bag of Holding', alive: false, status: 'dead' }], is_active: false });
       fixtures.push(['Character', c.id]);
-      const s = await base44.entities.GameSession.create({ character_id: c.id, title: tag, story_log: [{ request_id: `${tag}:seed`, text: 'The reeds whisper.', choices: [{ text: 'Watch' }] }], world_state: { active_concentration: { spell_name: 'Pass without Trace', concentration: true, expires_at: expiredAt } }, is_active: false });
+      const s = await base44.entities.GameSession.create({ character_id: c.id, title: tag, story_log: [{ request_id: `${tag}:seed`, text: 'The reeds whisper.', choices: [{ text: 'Watch' }] }], world_state: { elapsed_hours:10, active_concentration: { spell_name: 'Pass without Trace', concentration: true, expires_game_elapsed_hours:2 }, __rest_receipts:[{completed_at:'2026-09-02T10:00:00.000Z',response:{clock:{elapsed_hours:8}}}] }, is_active: false });
       fixtures.push(['GameSession', s.id]);
       const ask = (question, requestId) => executeAskDungeonMasterCore(base44, { session_id: s.id, character_id: c.id, question, request_id: `${tag}:${requestId}` });
       const stateBefore = await hashValue([await base44.asServiceRole.entities.Character.get(c.id), await base44.asServiceRole.entities.GameSession.get(s.id)]);
@@ -50,7 +55,7 @@ export default async function testStatusTruthRegression(req) {
       const attuned = await ask('What am I attuned to?', 'attuned');
       const bag = await ask('What is inside my bag of holding right now?', 'bag');
       const stateAfter = await hashValue([await base44.asServiceRole.entities.Character.get(c.id), await base44.asServiceRole.entities.GameSession.get(s.id)]);
-      record('buffs answer matches authoritative active effects exactly', buffs.body?.classification === 'established_fact' && /Longstrider/.test(buffs.body.answer) && /Protected by the Circle of the Reeds/.test(buffs.body.answer) && /Wanted/.test(buffs.body.answer) && !/Pass without Trace/i.test(buffs.body.answer));
+      record('buffs answer excludes expired Longstrider and matches authoritative effects', buffs.body?.classification === 'established_fact' && !/Longstrider/.test(buffs.body.answer) && /Protected by the Circle of the Reeds/.test(buffs.body.answer) && /Wanted/.test(buffs.body.answer) && !/Pass without Trace/i.test(buffs.body.answer));
       record('hindrance query answers from authoritative state', hindering.body?.classification === 'established_fact' && /Wanted/.test(hindering.body.answer) && !/Longstrider/.test(hindering.body.answer));
       record('spell slot query is explicit max and used per level', slots.body?.classification === 'established_fact' && /level 1: 4\/4 available \(0 used\)/i.test(slots.body.answer) && /level 2: 2\/2 available \(0 used\)/i.test(slots.body.answer));
       record('active spell query answers none without live concentration', /no active spell effects/i.test(spells.body.answer));

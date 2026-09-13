@@ -9,6 +9,7 @@ import { ConditionTooltip } from './GameTooltip';
 import XPBar from './XPBar';
 import { deriveConditionBadges } from '../../../base44/shared/spells/conditionIdentity';
 import { getPeriodForHour } from '../../../base44/shared/story/worldClock';
+import { evaluateActiveEffects } from '@/lib/activeEffects';
  
 export default function HUD({ character, session }) {
   const [openPanel, setOpenPanel] = useState(null);
@@ -30,9 +31,10 @@ export default function HUD({ character, session }) {
   const clockHour = Number.isInteger(Number(session?.world_state?.clock_hour)) ? Number(session.world_state.clock_hour) : null;
   const clockPeriod = clockHour == null ? session?.time_of_day : getPeriodForHour(clockHour);
   const clockLabel = clockHour == null ? `${session?.time_of_day || 'Unknown time'}` : `${clockHour % 12 || 12}:00 ${clockHour >= 12 ? 'PM' : 'AM'} — ${clockPeriod}`;
+  const activeEffectNames = new Set(evaluateActiveEffects({ character, session }).active.map((effect) => effect.name.toLowerCase()));
   const visibleConditions = deriveConditionBadges(character.conditions, character.active_modifiers).filter(cond => {
     const name = String(typeof cond === 'string' ? cond : cond?.display_name || cond?.name || cond?.source || '').trim().toLowerCase();
-    return !CONDITION_PLACEHOLDERS.has(name);
+    return !CONDITION_PLACEHOLDERS.has(name) && activeEffectNames.has(name);
   });
  
   return (

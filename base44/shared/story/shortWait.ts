@@ -25,12 +25,12 @@ export function planShortWait({intent,timeOfDay,worldState}){
   return {before_hour:beforeHour,elapsed_minutes:minutes,elapsed_hours:minutes/60,target_period:intent.target_period,after_period:getPeriodForHour((beforeHour+minutes/60)%24)};
 }
 export function expireEffectsForWait({character,session,elapsedMinutes}){
-  const expired=[];
-  const modifiers=(character.active_modifiers||[]).filter((effect)=>{const duration=effectMinutes(effect),remove=duration!=null&&elapsedMinutes>=duration;if(remove)expired.push({kind:'modifier',id:effect.id||null,name:effect.source||effect.effect});return !remove;});
+  const expired=[];const projectedGameHours=(Number(session?.world_state?.elapsed_hours)||0)+(Number(elapsedMinutes)||0)/60;
+  const modifiers=(character.active_modifiers||[]).filter((effect)=>{const duration=effectMinutes(effect),gameExpiry=Number(effect?.expires_game_elapsed_hours),remove=Number.isFinite(gameExpiry)?projectedGameHours>=gameExpiry:duration!=null&&elapsedMinutes>=duration;if(remove)expired.push({kind:'modifier',id:effect.id||null,name:effect.source||effect.effect});return !remove;});
   const active=session.world_state?.active_concentration,duration=effectMinutes(active),breakConcentration=!!active&&duration!=null&&elapsedMinutes>=duration;
   if(breakConcentration)expired.push({kind:'concentration',id:active.request_id||null,name:active.spell_name});
   const expiredNames=new Set(expired.map((x)=>String(x.name||'').toLowerCase()));
-  const conditions=(character.conditions||[]).filter((effect)=>{const name=String(effect?.source||effect?.name||effect||'').toLowerCase(),timed=effect?.duration_type==='timestamp'||effect?.concentration===true,d=effectMinutes(effect),remove=(timed&&d!=null&&elapsedMinutes>=d)||expiredNames.has(name);if(remove)expired.push({kind:'condition',id:effect?.id||null,name:effect?.display_name||effect?.name||String(effect)});return !remove;});
+  const conditions=(character.conditions||[]).filter((effect)=>{const name=String(effect?.source||effect?.name||effect||'').toLowerCase(),timed=['timestamp','game_elapsed'].includes(effect?.duration_type)||effect?.concentration===true,d=effectMinutes(effect),gameExpiry=Number(effect?.expires_game_elapsed_hours),remove=(Number.isFinite(gameExpiry)?projectedGameHours>=gameExpiry:(timed&&d!=null&&elapsedMinutes>=d))||expiredNames.has(name)||(name==='longstrider'&&d!=null&&elapsedMinutes>=d);if(remove)expired.push({kind:'condition',id:effect?.id||null,name:effect?.display_name||effect?.name||String(effect)});return !remove;});
   return {conditions,active_modifiers:modifiers,active_concentration:breakConcentration?null:active,expired_effects:expired};
 }
 export async function executeAuthoritativeShortWait({base44,ownerId,sessionId,characterId,requestId,actionText,receiptMetadata}){
