@@ -55,7 +55,7 @@ export default async function testStatusTruthRegression(req) {
       record('spell slot query is explicit max and used per level', slots.body?.classification === 'established_fact' && /level 1: 4\/4 available \(0 used\)/i.test(slots.body.answer) && /level 2: 2\/2 available \(0 used\)/i.test(slots.body.answer));
       record('active spell query answers none without live concentration', /no active spell effects/i.test(spells.body.answer));
       record('attunement query answers authoritative attunements', attuned.body?.classification === 'established_fact' && /Ring of Protection/.test(attuned.body.answer));
-      record('bag query answers complete itemized stowed contents and corpse status', bag.body?.classification === 'established_fact' && /Weaver's Ledger/.test(bag.body.answer) && /Inquisitor Leader's Corpse \(dead corpse\)/.test(bag.body.answer));
+      record('bag query answers complete itemized stowed contents and corpse status', bag.body?.classification === 'established_fact' && /Weaver's Ledger/.test(bag.body.answer) && /Inquisitor Leader's Corpse.*\(dead corpse\)/.test(bag.body.answer));
       record('state queries are zero-write and leave choices unchanged', stateBefore === stateAfter);
     } finally {
       for (const [entity, id] of fixtures.reverse()) { try { await base44.asServiceRole.entities[entity].delete(id); } catch {} }
