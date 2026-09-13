@@ -25,7 +25,7 @@ export default async function(req) {
     const replayRecords = await db.entities.NightlySweepResult.filter({ run_key: runKey }, '-created_date', 10);
     results.push({ name: 'same-day run-key replay is idempotent with no duplicate', pass: replay.already_processed === true && replayRecords.length === 1 && replayRecords[0].id === records[0].id });
     const missing = validateNightlySuiteManifest(MANDATORY_NIGHTLY_SUITES.slice(0, -1));
-    results.push({ name: 'missing mandatory suite fails closed', pass: !missing.valid && missing.missing.includes('testAskDMRegression') });
+    results.push({ name: 'missing mandatory suite fails closed', pass: !missing.valid && missing.missing.includes('testStatusTruthRegression') });
     const after = await hashValue(await protectedState(db));
     results.push({ name: 'protected live records remain unchanged', pass: before === after && first.protected_unchanged === true });
     results.push({ name: 'blocked invocation cannot report cleanup or all_pass', pass: first.cleanup_verified === true && Object.values(first.suite_details?.suites || {}).every((suite) => suite.invoked && suite.cleanup_verified) });
