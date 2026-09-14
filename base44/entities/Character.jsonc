@@ -323,6 +323,15 @@
     "portrait": {
       "type": "string"
     },
+    "roll_mode": {
+      "type": "string",
+      "enum": [
+        "ai",
+        "player"
+      ],
+      "default": "ai",
+      "description": "Persistent authoritative roll preference for story skills, story attacks, combat attacks, and death saves."
+    },
     "is_active": {
       "type": "boolean",
       "default": true
