@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Dices, Sparkles, UserRound, X } from 'lucide-react';
+import { Dices, X } from 'lucide-react';
 import { rollD20WithAdvantage, resolveCheckSuccess } from './equipmentAdvantage';
 import DiceSpillOverlay from './DiceSpillOverlay';
 
@@ -36,12 +36,10 @@ export default function SkillCheckRollModal({
   onCancel,
 }) {
   const [rolling, setRolling] = useState(false);
-  const [rollMode, setRollMode] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
   const doRoll = () => {
-    setRollMode('player');
     setRolling(true);
     setError('');
     setTimeout(async () => {
@@ -103,17 +101,8 @@ export default function SkillCheckRollModal({
 
           {error && <div className="text-center text-xs" style={{ color: '#fca5a5' }}>{error}</div>}
 
-          {/* Roll authority choice / roll result */}
-          {!rollMode && !result ? (
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={onCancel} className="rounded-xl border border-violet-400/40 bg-violet-950/60 p-4 text-violet-100">
-                <Sparkles className="mx-auto mb-2 h-5 w-5" /><span className="font-fantasy text-xs">AI Rolls</span>
-              </button>
-              <button onClick={() => setRollMode('player')} className="rounded-xl border border-amber-400/50 bg-amber-950/60 p-4 text-amber-100">
-                <UserRound className="mx-auto mb-2 h-5 w-5" /><span className="font-fantasy text-xs">I Roll</span>
-              </button>
-            </div>
-          ) : !result ? (
+          {/* Player mode opens directly to the configured roll action. */}
+          {!result ? (
             <button onClick={doRoll} disabled={rolling}
               className="w-full py-3 rounded-xl font-fantasy font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-60"
               style={{ background: 'linear-gradient(135deg, rgba(100,65,15,0.9), rgba(70,45,10,0.95))', border: '1px solid rgba(201,169,110,0.5)', color: '#f0c040' }}>

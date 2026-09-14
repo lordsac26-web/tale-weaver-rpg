@@ -42,6 +42,7 @@ import { acceptCompositePreflightResponse, buildCompositePreflightRequest, COMPO
 import { prepareStorySkillCheck, resolveStorySkillRoll } from '@/lib/storySkillCheck';
 import { acceptSequencedStoryPayload, hydrateLatestStoryEntry, STORY_TRANSITION_VERSION } from '../../base44/shared/story/storyTransition';
 import { beginCombatIntent, buildCombatRequestKey, COMBAT_FOLLOWUP_TRANSITION_VERSION, finishCombatIntent, oneEphemeralCombatError } from '../../base44/shared/combat/combatFollowupTransition';
+import { normalizeRollMode } from '@/lib/rollMode';
 
 const getFunctionErrorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.response?.data?.message ||
@@ -87,6 +88,7 @@ export default function Game() {
   const [showRestModal, setShowRestModal] = useState(false);
   const [restSubmitting, setRestSubmitting] = useState(false);
   const [showAskDM, setShowAskDM] = useState(false);
+  const [rollModeSaving, setRollModeSaving] = useState(false);
   const [mainViewTab, setMainViewTab] = useState('story');
   const [combatViewTab, setCombatViewTab] = useState('combat'); // 'story' | 'combat' | 'journal' — for mobile
   const [combatSyncError, setCombatSyncError] = useState(null);
@@ -262,6 +264,15 @@ export default function Game() {
     } finally {
       setStoryLoading(false);
     }
+  };
+
+  const rollMode = normalizeRollMode(character?.roll_mode);
+  const changeRollMode = async (nextMode) => {
+    if (!character?.id || nextMode === rollMode || rollModeSaving) return;
+    setRollModeSaving(true);
+    await base44.entities.Character.update(character.id, { roll_mode: nextMode });
+    setCharacter((current) => current ? { ...current, roll_mode: nextMode } : current);
+    setRollModeSaving(false);
   };
 
   const computeSkillBreakdown = (skillName, sourceCharacter = character) =>
@@ -446,7 +457,9 @@ export default function Game() {
         const stealthAdvantage = latestResolved?.skill_check?.success === true && String(latestResolved.skill_check.skill || '').toLowerCase() === 'stealth';
         const weapon = character?.equipped?.weapon || character?.equipped?.mainhand || {};
         const attackModifier = calcStatMod(character?.dexterity || 10) + Number(character?.proficiency_bonus || 2) + Number(weapon.attack_bonus || 0) + (String(character?.fighting_style || '').toLowerCase() === 'archery' ? 2 : 0);
-        setPendingRoll({ skill: `${weapon.name || 'Weapon'} Attack`, dc: null, modifier: attackModifier, advantage: stealthAdvantage, disadvantage: false, advantageSources: stealthAdvantage ? ['Latest successful Stealth setup'] : [], onResolve: (rollData) => { setPendingRoll(null); runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast, null, { origin: 'player', rolls: rollData.allRolls }); }, onCancel: () => { setPendingRoll(null); runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast); } });
+        if (rollMode === 'player') {
+          setPendingRoll({ skill: `${weapon.name || 'Weapon'} Attack`, dc: null, modifier: attackModifier, advantage: stealthAdvantage, disadvantage: false, advantageSources: stealthAdvantage ? ['Latest successful Stealth setup'] : [], onResolve: (rollData) => { setPendingRoll(null); runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast, null, { origin: 'player', rolls: rollData.allRolls }); }, onCancel: () => { setPendingRoll(null); setChoices(choices); } });
+        } else await runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast);
         return;
       }
       await runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast);
@@ -464,7 +477,7 @@ export default function Game() {
 
     // Manual mode: open the dice roller pre-configured for this check. The story
     // continues once the player rolls (onResolve). Cancel falls back to auto-roll.
-    if (true) {
+    if (rollMode === 'player') {
       setPendingRoll({
         skill: choice.skill_check, dc: choice.dc, modifier, breakdown,
         advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, advantageSources: resolvedAdvantageSources,
@@ -686,7 +699,7 @@ export default function Game() {
     const modifier = prepared.modifier;
 
     // Manual mode: prompt the player to roll the configured dice.
-    if (true) {
+    if (rollMode === 'player') {
       setPendingRoll({
         skill, dc, modifier, breakdown,
         advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, advantageSources: equipAdv.sources,
@@ -1574,6 +1587,9 @@ export default function Game() {
             setShowSceneVisualizer={setShowSceneVisualizer}
             setShowPortraitGen={setShowPortraitGen}
             setShowCharSheet={setShowCharSheet}
+            rollMode={rollMode}
+            onRollModeChange={changeRollMode}
+            rollModeSaving={rollModeSaving}
           />
         </div>
       </div>
@@ -1631,7 +1647,7 @@ export default function Game() {
                   setCustomInput={setCustomInput} onCustomSubmit={handleCustomInput} sessionId={sessionId} characterId={character?.id} combatId={validCombatId} />
               </div>
               <div className={`overflow-hidden ${combatViewTab !== 'combat' ? 'hidden lg:block' : ''}`}>
-                <CombatPanel combat={combat} character={character}
+                <CombatPanel combat={combat} character={character} rollMode={rollMode}
                   onPlayerAttack={handlePlayerAttack}
                   onOffhandAttack={handleOffhandAttack}
                   onNextTurn={handleNextTurn}
@@ -1868,6 +1884,7 @@ export default function Game() {
           <DeathSavesModal
             character={character}
             combat={combat}
+            rollMode={rollMode}
             onStabilize={async (roll) => {
               setShowDeathSaves(false);
               // Update local state immediately so HUD reflects the change without waiting for loadState

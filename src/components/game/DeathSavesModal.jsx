@@ -1,6 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Skull, Heart, Dices, AlertTriangle, Sparkles, UserRound } from 'lucide-react';
+import { Skull, Heart, Dices, AlertTriangle, UserRound } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import DiceSpillOverlay from './DiceSpillOverlay';
 
@@ -16,7 +16,7 @@ import DiceSpillOverlay from './DiceSpillOverlay';
  *   onDeath()         — called when 3 failures reached
  *   onClose()         — close the modal without acting
  */
-export default function DeathSavesModal({ character, combat, onStabilize, onDeath, onClose }) {
+export default function DeathSavesModal({ character, combat, rollMode = 'ai', onStabilize, onDeath, onClose }) {
   const [rolling, setRolling] = useState(false);
   const [lastRoll, setLastRoll] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -24,6 +24,7 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
   const [successes, setSuccesses] = useState(character.death_saves_success || 0);
   const [failures, setFailures] = useState(character.death_saves_failure || 0);
   const requestIdRef = useRef(null);
+  const autoRollStarted = useRef(false);
 
   const rollDeathSave = async (rollMode) => {
     setRolling(true);
@@ -105,6 +106,13 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
       onStabilize(roll);
     }
   };
+
+  useEffect(() => {
+    if (rollMode === 'ai' && !autoRollStarted.current) {
+      autoRollStarted.current = true;
+      rollDeathSave('ai');
+    }
+  }, [rollMode]);
 
   const isSuccess = lastRoll && lastRoll >= 10;
   const isCrit = lastRoll === 20;
@@ -203,15 +211,12 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
           </div>
         )}
 
-        {/* Roll authority choice */}
+        {/* Persistent roll mode: AI resolves immediately; player mode shows one roll action. */}
         {rolling ? (
           <div className="flex items-center justify-center gap-2 rounded-xl py-3 font-fantasy text-red-100"><Dices className="h-5 w-5 animate-spin" /> Rolling death save…</div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => rollDeathSave('ai')} disabled={successes >= 3 || failures >= 3} className="rounded-xl border border-violet-400/40 bg-violet-950/60 p-4 text-violet-100 disabled:opacity-50"><Sparkles className="mx-auto mb-2 h-5 w-5" /><span className="font-fantasy text-xs">AI Rolls</span></button>
-            <button onClick={() => rollDeathSave('player')} disabled={successes >= 3 || failures >= 3} className="rounded-xl border border-red-400/50 bg-red-950/60 p-4 text-red-100 disabled:opacity-50"><UserRound className="mx-auto mb-2 h-5 w-5" /><span className="font-fantasy text-xs">I Roll</span></button>
-          </div>
-        )}
+        ) : rollMode === 'player' ? (
+          <button onClick={() => rollDeathSave('player')} disabled={successes >= 3 || failures >= 3} className="w-full rounded-xl border border-red-400/50 bg-red-950/60 p-4 text-red-100 disabled:opacity-50"><UserRound className="mx-auto mb-2 h-5 w-5" /><span className="font-fantasy text-xs">Roll death save</span></button>
+        ) : null}
 
         {/* Rules Reminder */}
         <div className="mt-4 rounded-xl p-3" style={{ background: 'rgba(8,5,2,0.7)', border: '1px solid rgba(180,140,90,0.15)' }}>

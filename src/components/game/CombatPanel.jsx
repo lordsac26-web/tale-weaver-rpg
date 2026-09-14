@@ -26,7 +26,7 @@ import SkillCheckRollModal from './SkillCheckRollModal';
 import { ammoStatusForWeapon } from '@/lib/ammunition';
 import { buildCombatRequestKey } from '../../../base44/shared/combat/combatFollowupTransition';
 
-export default function CombatPanel({ combat, character, onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent, onCharacterUpdate, onCombatAct, actEvaluating }) {
+export default function CombatPanel({ combat, character, rollMode = 'ai', onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent, onCharacterUpdate, onCombatAct, actEvaluating }) {
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [action, setAction] = useState('attack');
   const [selectedSpell, setSelectedSpell] = useState(null);
@@ -167,6 +167,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
       ...(playerConditions.some((name) => ['poisoned', 'blinded', 'frightened'].includes(name)) ? ['Player condition'] : []),
       ...(combatModifiers.disadvantage ? ['Selected situational disadvantage'] : []),
     ];
+    if (rollMode !== 'player') { submitAction(); return; }
     setPendingAttackRoll({ target, advantage: advantageSources.length > 0, disadvantage: disadvantageSources.length > 0, advantageSources, disadvantageSources });
   };
 

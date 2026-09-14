@@ -1,0 +1,2 @@
+export const normalizeRollMode = (value) => value === 'player' ? 'player' : 'ai';
+export const shouldOpenPlayerRoll = ({ rollMode, surface }) => ['story_skill', 'story_attack', 'combat_attack', 'death_save'].includes(surface) && normalizeRollMode(rollMode) === 'player';
