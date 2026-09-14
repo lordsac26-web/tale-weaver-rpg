@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { handlePlayerAttack } from '../../shared/combat/playerAttack.ts';
 import { executePlayerAttackCore } from '../../shared/combat/playerAttackCore.ts';
 import { auditRepairMissedStealthedAttackCore } from '../../shared/repairs/missedStealthedAttack.ts';
+import { resolveAuthoritativeSkillModifier } from '../../shared/skills/authoritativeSkillModifier.ts';
 
 const LIVE = ['6a7a24fa5fc6300afbbe2507','6a6825cd07a490fa70a46852','6a6825edd695bd65a4322256'];
 const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -31,6 +32,7 @@ export default async function testLiveCombatStealthedAdvantageRegression(req) {
     const combatOnly=await make('combat_only',{combatConditions:[pwt,stealth]}); const hit=await invoke(combatOnly,'ui-hit',[0.1,0.8,0]); const hitBody=hit.value.body; const hitLog=await base44.asServiceRole.entities.CombatLog.get(combatOnly.l.id); const hitChar=await base44.asServiceRole.entities.Character.get(combatOnly.c.id);
     results.push({name:'actual UI player_attack payload reads CombatLog-only Stealthed and rolls exactly two d20s',pass:hitBody.all_rolls?.length===2&&hitBody.log_entry?.advantage===true&&hitBody.log_entry?.request_id==='ui-hit'});
     results.push({name:'higher advantage d20 is selected and attribution is persisted and displayed',pass:hitBody.raw_d20===17&&hitBody.log_entry?.selected_d20===17&&hitBody.log_entry?.advantage_sources?.length===1&&/Advantage \[3, 17\].*Attacking from Stealthed\/concealed/.test(hitBody.log_entry?.text||'')});
+    results.push({name:'attack receipt publishes structured dice ability proficiency and fighting-style breakdown',pass:hitBody.log_entry?.roll_breakdown?.dice?.mode==='advantage'&&hitBody.log_entry?.roll_breakdown?.modifiers?.some(x=>x.type==='ability')&&hitBody.log_entry?.roll_breakdown?.modifiers?.some(x=>x.type==='proficiency')&&hitBody.log_entry?.roll_breakdown?.modifiers?.some(x=>x.type==='fighting_style')});
     results.push({name:'hit consumes one action and Stealthed once while preserving PWT',pass:hitBody.hit&&hitLog.world_state.actions_used_this_turn===1&&!hitLog.combatants[0].conditions.some(x=>x.name==='Stealthed')&&!hitChar.conditions.some(x=>x.name==='Stealthed')&&hitLog.combatants[0].conditions.some(x=>x.name==='pass without trace')&&hitChar.active_modifiers.some(x=>x.source==='Pass without Trace')});
 
     const charOnly=await make('char_only',{charConditions:[pwt,stealth],ac:30}); const miss=await invoke(charOnly,'ui-miss',[0,0.1]); const missLog=await base44.asServiceRole.entities.CombatLog.get(charOnly.l.id); const missChar=await base44.asServiceRole.entities.Character.get(charOnly.c.id);
@@ -63,6 +65,8 @@ export default async function testLiveCombatStealthedAdvantageRegression(req) {
     results.push({name:'correction hash mismatch rejects with zero writes and no RNG',pass:rejected.status===409&&rejected.body.writes===0&&mismatchCalls===0});
     results.push({name:'service-role-created CombatLog resolves through shared production core',pass:hit.value.status===200&&hitLog.id===combatOnly.l.id});
 
+    const expiredPwtBreakdown=resolveAuthoritativeSkillModifier({character:{...plain.c,active_modifiers:[{id:'expired',source:'Pass without Trace',effect:'skill_bonus',skill:'Stealth',bonus:10,concentration:true,applied_at:'2026-01-01T00:00:00.000Z',expires_at:'2026-01-01T01:00:00.000Z'}],conditions:[{id:'expired_condition',name:'pass without trace',target_id:plain.c.id,caster_id:plain.c.id,concentration:true,applied_at:'2026-01-01T00:00:00.000Z',expires_at:'2026-01-01T01:00:00.000Z'}]},session:{...plain.s,world_state:{active_concentration:{spell_name:'Pass without Trace',concentration:true,character_id:plain.c.id,target_id:plain.c.id,caster_id:plain.c.id,applied_at:'2026-01-01T00:00:00.000Z',expires_at:'2026-01-01T01:00:00.000Z'}}},skill:'Stealth'});
+    results.push({name:'expired Pass without Trace contributes zero to later Stealth checks',pass:expiredPwtBreakdown.ok&&expiredPwtBreakdown.pwt_active===false&&expiredPwtBreakdown.effect_bonus===0});
     const after=await hash(await Promise.all([base44.asServiceRole.entities.CombatLog.get(LIVE[0]),base44.asServiceRole.entities.Character.get(LIVE[1]),base44.asServiceRole.entities.GameSession.get(LIVE[2])]));
     results.push({name:'protected live IDs remain unchanged',pass:before===after});
   } catch(error){results.push({name:'test execution',pass:false,detail:error.message});}

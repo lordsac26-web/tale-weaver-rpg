@@ -483,7 +483,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
       const attackOutcome=await executeStoryWeaponAttack({base44,user,sessionId:session_id,requestId:storyRequestId,contract:selectedChoiceContract,enemies});
       if(attackOutcome.status>=400)return Response.json({...attackOutcome.body,action_type:'weapon_attack',contract_version:CHOICE_ACTION_CONTRACT_VERSION},{status:attackOutcome.status});
       const attack=attackOutcome.body;
-      result={...result,narrative:attack.narrative,key_event:'',hp_change:0,xp_earned:0,loot:[],combat_trigger:attack.combat_active,enemies:attack.combat_active?enemies:[],authoritative_weapon_attack:attack,pending_ambush_attack:null};
+      if(attack.clarification_required)return Response.json({...attack,action_type:'weapon_attack',contract_version:CHOICE_ACTION_CONTRACT_VERSION,choices:latestChoices,generate_story_version:GENERATE_STORY_VERSION},{status:200});
+      result={...result,narrative:attack.narrative,key_event:'',hp_change:0,xp_earned:0,loot:[],combat_trigger:attack.combat_active,enemies:attack.combat_active?(attack.enemies||[]):[],authoritative_weapon_attack:attack,pending_ambush_attack:null};
     }
 
     let craftingTransaction = null;

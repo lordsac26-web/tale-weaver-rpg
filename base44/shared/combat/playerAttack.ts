@@ -64,6 +64,7 @@ export async function handlePlayerAttack(ctx) {
   let useLuckyPoint = false; // Lucky feat: reroll the d20 after the centralized roll
 
   let attackMod = 0;
+  let attackModifierComponents = [];
   let damageDice = '1d6';
   let damageBonus = 0;
   let attackType = 'melee';
@@ -103,6 +104,10 @@ export async function handlePlayerAttack(ctx) {
     const spellAttackBonus = spellStatMod + profBonus;
 
     attackMod = spellAttackBonus;
+    attackModifierComponents = [
+      { type: 'ability', source: spellAbility, value: spellStatMod },
+      { type: 'proficiency', source: 'proficiency bonus', value: profBonus },
+    ];
     // Scale cantrip damage by character level (PHB cantrip scaling rules)
     const isCantrip = (spell.base_level === 0 || spell.slot_level === 0);
     damageDice = isCantrip
@@ -550,6 +555,11 @@ export async function handlePlayerAttack(ctx) {
     }
     const profBonus = character.proficiency_bonus || 2;
     attackMod = abilityMod + profBonus + (weapon.attack_bonus || 0);
+    attackModifierComponents = [
+      { type: 'ability', source: isRanged ? 'dexterity' : isFinesse && dexMod >= strMod ? 'dexterity (finesse)' : 'strength', value: abilityMod },
+      { type: 'proficiency', source: 'proficiency bonus', value: profBonus },
+      ...(Number(weapon.attack_bonus || 0) !== 0 ? [{ type: 'equipment', source: `${weapon.name || 'weapon'} attack bonus`, value: Number(weapon.attack_bonus) }] : []),
+    ];
     damageBonus = abilityMod + (weapon.damage_bonus || 0);
     damageDice = weapon.damage_dice || '1d8';
     attackType = isRanged ? 'ranged' : 'melee';
@@ -570,7 +580,10 @@ export async function handlePlayerAttack(ctx) {
 
     // Apply Fighting Style bonuses
     const fightingStyle = isConfirmedChoice(character, 'fighting_style') ? character.fighting_style?.toLowerCase() : '';
-    if (fightingStyle === 'archery' && isRanged) attackMod += 2;
+    if (fightingStyle === 'archery' && isRanged) {
+      attackMod += 2;
+      attackModifierComponents.push({ type: 'fighting_style', source: 'Fighting Style: Archery', value: 2 });
+    }
     // Dueling: +2 damage when wielding a single one-handed weapon and no other weapon in offhand
     // Shield occupies 'offhand' slot (not 'shield'), so check both keys
     const hasOffhandItem = !!(character.equipped?.offhand || character.equipped?.shield);
@@ -609,6 +622,7 @@ export async function handlePlayerAttack(ctx) {
     // Sharpshooter: -5/+10 on ranged proficient attacks (PHB p.170)
     if (modifiers.sharpshooter && hasFeat('Sharpshooter') && isRanged) {
       attackMod -= 5;
+      attackModifierComponents.push({ type: 'feat', source: 'Sharpshooter', value: -5 });
       damageBonus += 10;
     }
 
@@ -667,7 +681,9 @@ export async function handlePlayerAttack(ctx) {
   const huntersMark = findHuntersMark(activeMods, character_id, target_id);
   for (const mod of activeMods) {
     if (mod.applies_to === 'attack' || mod.applies_to === 'all') {
-      attackMod += mod.value;
+      const value = Number(mod.value) || 0;
+      attackMod += value;
+      attackModifierComponents.push({ type: 'effect', source: mod.source || mod.name || 'Active effect', value });
     }
     if (mod.applies_to === 'damage') {
       damageBonus += mod.value;
@@ -685,11 +701,14 @@ export async function handlePlayerAttack(ctx) {
     // Storm Rune: +1d6 guidance on the attack roll while invoked.
     stormRuneBonus = rollDice(6);
     attackMod += stormRuneBonus;
+    attackModifierComponents.push({ type: 'effect', source: 'Storm Rune', value: stormRuneBonus });
   }
 
   // Channel Divinity: Guided Strike (Cleric, PHB p.59) — +10 to next attack roll (consumed)
   if (combatLog.world_state?.guided_strike_bonus) {
-    attackMod += combatLog.world_state.guided_strike_bonus;
+    const guidedStrike = Number(combatLog.world_state.guided_strike_bonus) || 0;
+    attackMod += guidedStrike;
+    attackModifierComponents.push({ type: 'feature', source: 'Guided Strike', value: guidedStrike });
   }
   // Paladin Aura of Hate (Oathbreaker L7, DMG p.97): +1d6 necrotic on melee weapon attacks
   if (!spell && (character.class || '') === 'Paladin' && (character.subclass || '').toLowerCase().includes('oathbreaker') && (character.level || 1) >= 7) {
@@ -817,8 +836,25 @@ export async function handlePlayerAttack(ctx) {
   let baseDamage = 0;
   let concentrationBrokenSelf = null; // set if this attack broke the player's own concentration
   const isSpellAttack = !!spell;
-  const advantageSources = concealmentAttributions(attackConcealment);
-  const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : projectileCommit ? 'player_attack' : 'attack', attack_mode: projectileCommit ? 'thrown' : attackType, target: target.name, target_id, spell_name: spell?.name || null, weapon: spell ? null : { name: weapon?.name || 'Weapon', canonical_item_id: projectileCommit?.item_id || weapon?.canonical_item_id || null, equipment_id: weapon?.equipment_id || null, item_id: weapon?.item_id || null, damage_dice: damageDice, damage_type: weapon?.damage_type || null, damage_bonus: weapon?.damage_bonus || 0, attack_bonus: weapon?.attack_bonus || 0, type: weapon?.type || attackType, attack_mode: projectileCommit ? 'thrown' : attackType, recoverable: !!projectileCommit, properties: weapon?.properties || [] }, request_id: request_id || null, raw_d20: attackResult.roll, selected_d20: attackResult.roll, all_rolls: attackResult.rolls, attack_bonus: attackMod, target_ac: target.ac + targetACBonus, advantage: attackResult.advantage, disadvantage: attackResult.disadvantage, advantage_sources: advantageSources };
+  const advantageSources = [
+    ...concealmentAttributions(attackConcealment),
+    ...(modifiers.advantage ? [modifiers.advantage_reason || 'Situational advantage'] : []),
+    ...(targetConditions.includes('stunned') ? ['Target is stunned'] : []),
+    ...(targetConditions.includes('restrained') ? ['Target is restrained'] : []),
+    ...(targetConditions.includes('blinded') ? ['Target is blinded'] : []),
+  ];
+  const disadvantageSources = [
+    ...(modifiers.disadvantage ? [modifiers.disadvantage_reason || 'Situational disadvantage'] : []),
+    ...((character.exhaustion_level || 0) >= 3 ? ['Exhaustion'] : []),
+    ...(conditions.includes('poisoned') ? ['Poisoned'] : []),
+    ...(conditions.includes('blinded') ? ['Blinded'] : []),
+    ...(conditions.includes('frightened') ? ['Frightened'] : []),
+    ...(targetConditions.includes('invisible') ? ['Target is invisible'] : []),
+  ];
+  const accountedAttackModifier = attackModifierComponents.reduce((sum, component) => sum + Number(component.value || 0), 0);
+  if (accountedAttackModifier !== attackMod) attackModifierComponents.push({ type: 'situational', source: 'Other authoritative modifiers', value: attackMod - accountedAttackModifier });
+  const rollBreakdown = { roll_type: 'attack', dice: { mode: attackResult.advantage ? 'advantage' : attackResult.disadvantage ? 'disadvantage' : 'normal', rolls: attackResult.rolls, selected: attackResult.roll, advantage_sources: advantageSources, disadvantage_sources: disadvantageSources }, modifiers: attackModifierComponents, modifier_total: attackMod, final_total: totalAttack, target_ac: target.ac + targetACBonus };
+  const logEntry = { round: combatLog.round, actor: character.name, action: isSpellAttack ? 'spell' : projectileCommit ? 'player_attack' : 'attack', attack_mode: projectileCommit ? 'thrown' : attackType, target: target.name, target_id, spell_name: spell?.name || null, weapon: spell ? null : { name: weapon?.name || 'Weapon', canonical_item_id: projectileCommit?.item_id || weapon?.canonical_item_id || null, equipment_id: weapon?.equipment_id || null, item_id: weapon?.item_id || null, damage_dice: damageDice, damage_type: weapon?.damage_type || null, damage_bonus: weapon?.damage_bonus || 0, attack_bonus: weapon?.attack_bonus || 0, type: weapon?.type || attackType, attack_mode: projectileCommit ? 'thrown' : attackType, recoverable: !!projectileCommit, properties: weapon?.properties || [] }, request_id: request_id || null, raw_d20: attackResult.roll, selected_d20: attackResult.roll, all_rolls: attackResult.rolls, attack_bonus: attackMod, target_ac: target.ac + targetACBonus, advantage: attackResult.advantage, disadvantage: attackResult.disadvantage, advantage_sources: advantageSources, disadvantage_sources: disadvantageSources, roll_breakdown: rollBreakdown };
 
   if (hit) {
     const parsedBase = damageDice.match(/(\d+)d(\d+)/);
@@ -1027,13 +1063,13 @@ export async function handlePlayerAttack(ctx) {
     if (sneakAttackApplied) logEntry.sneak_attack = { dice: sneakAttack.dice, attribution: sneakAttack.attribution };
     const actionLabel = spell ? `casts ${spell.name} at` : (isCritical ? 'CRITICALLY strikes' : 'hits');
     const attackDisplay = attackResult.advantage ? `Advantage [${attackResult.rolls.join(', ')}] → ${attackRoll}; ${attackRoll}+${attackMod}=${totalAttack}` : attackResult.disadvantage ? `Disadvantage [${attackResult.rolls.join(', ')}] → ${attackRoll}; ${attackRoll}+${attackMod}=${totalAttack}` : `${attackRoll}+${attackMod}=${totalAttack}`;
-    logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage!${huntersMark ? ` Base ${baseDamage} + Hunter's Mark ${huntersMarkDamage} (${huntersMarkRolls.join('+') || 0}) = ${damage}.` : ''}${sneakAttackApplied ? ` ${sneakAttack.attribution}; +${sneakAttack.dice}.` : ''} (Roll: ${attackDisplay} vs AC ${target.ac})${advantageSources.length ? ` Advantage source: ${advantageSources.join('; ')}.` : ''}${stormRuneBonus ? ` ⛈️ Storm Rune guided the strike (+${stormRuneBonus} to hit).` : ''}${fireRuneText}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
+    logEntry.text = `${character.name} ${actionLabel} ${target.name} for ${damage} ${spell?.damage_type || ''} damage!${huntersMark ? ` Base ${baseDamage} + Hunter's Mark ${huntersMarkDamage} (${huntersMarkRolls.join('+') || 0}) = ${damage}.` : ''}${sneakAttackApplied ? ` ${sneakAttack.attribution}; +${sneakAttack.dice}.` : ''} (Roll: ${attackDisplay} vs AC ${target.ac}) Modifiers: ${attackModifierComponents.map((component) => `${component.source} ${component.value >= 0 ? '+' : ''}${component.value}`).join('; ')}.${advantageSources.length ? ` Advantage source: ${advantageSources.join('; ')}.` : ''}${disadvantageSources.length ? ` Disadvantage source: ${disadvantageSources.join('; ')}.` : ''}${stormRuneBonus ? ` ⛈️ Storm Rune guided the strike (+${stormRuneBonus} to hit).` : ''}${fireRuneText}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`;
   } else {
     logEntry.hit = false;
     logEntry.attack_roll = totalAttack;
     const missLabel = spell ? `${spell.name} misses` : 'misses';
     const attackDisplay = attackResult.advantage ? `Advantage [${attackResult.rolls.join(', ')}] → ${attackRoll}; ${attackRoll}+${attackMod}=${totalAttack}` : attackResult.disadvantage ? `Disadvantage [${attackResult.rolls.join(', ')}] → ${attackRoll}; ${attackRoll}+${attackMod}=${totalAttack}` : `${attackRoll}+${attackMod}=${totalAttack}`;
-    logEntry.text = `${character.name} ${missLabel} ${target.name}! (Roll: ${attackDisplay} vs AC ${target.ac})${advantageSources.length ? ` Advantage source: ${advantageSources.join('; ')}.` : ''}`;
+    logEntry.text = `${character.name} ${missLabel} ${target.name}! (Roll: ${attackDisplay} vs AC ${target.ac}) Modifiers: ${attackModifierComponents.map((component) => `${component.source} ${component.value >= 0 ? '+' : ''}${component.value}`).join('; ')}.${advantageSources.length ? ` Advantage source: ${advantageSources.join('; ')}.` : ''}${disadvantageSources.length ? ` Disadvantage source: ${disadvantageSources.join('; ')}.` : ''}`;
   }
 
   // Consume only structured concealment states whose canonical rule explicitly

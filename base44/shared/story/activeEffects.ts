@@ -77,6 +77,8 @@ const authoritativeElapsedAfter = (entry, session) => {
   return rests + waits;
 };
 const expiryFor = (name, entry, session, now) => {
+  const wallExpiry = Date.parse(entry?.expires_at || '');
+  if (Number.isFinite(wallExpiry) && now >= wallExpiry) return { expired: true, remaining: 0, basis: 'timestamp' };
   const gameNow = gameElapsedHours(session);
   const gameExpiry = Number(entry?.expires_game_elapsed_hours);
   if (gameNow != null && Number.isFinite(gameExpiry)) return { expired: gameNow >= gameExpiry, remaining: Math.max(0, gameExpiry - gameNow), basis: 'game_time' };

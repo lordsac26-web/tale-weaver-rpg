@@ -28,6 +28,7 @@ export async function buildAskDMContext(base44, input) {
     if (!combat || combat.session_id !== session.id || (combat.character_id ? combat.character_id !== character.id : !playerLinksCharacter)) return rejected('combat_mismatch');
   }
   const visibleCombatants = (combat?.combatants || []).filter((entry) => entry?.type === 'player' || entry?.is_conscious !== false).map((entry) => ({ name: text(entry?.name, 100) || 'Unknown combatant', status: entry?.is_conscious === false ? 'defeated' : 'active' })).filter((entry) => entry.name);
+  const lastRoll = [...(combat?.log_entries || [])].reverse().find((entry) => entry?.roll_breakdown) || null;
   const playerVisibleContext = {
     character_name: text(character.name, 100),
     location: text(session.current_location || session.location, 180),
@@ -36,6 +37,7 @@ export async function buildAskDMContext(base44, input) {
     known_npc_names: Object.keys(session.npc_relations || {}).map((name) => text(name, 100)).filter(Boolean),
     public_quests: (session.active_quests || []).map((quest) => ({ title: text(quest?.title || quest?.name, 160), status: text(quest?.status, 80) })).filter((quest) => quest.title),
     combat: combat ? { round: Number.isFinite(Number(combat.round)) ? Number(combat.round) : null, visible_combatants: visibleCombatants } : null,
+    last_roll: lastRoll ? { actor: text(lastRoll.actor, 100), target: text(lastRoll.target, 100), action: text(lastRoll.action, 60), breakdown: lastRoll.roll_breakdown } : null,
     recent_transaction: buildRecentTransactionContext(character, session),
     stowed_contents: buildStowedContentsTruth(character),
     player_state: evaluateActiveEffects({ character, session }),
@@ -80,6 +82,14 @@ export function answerAskDMQuestion(question, playerVisibleContext) {
   if (refused) return { classification: 'refused', supporting_fact_keys: [], answer: 'I can only clarify player-visible facts already established in this session.' };
   const stateAnswer = answerPlayerStateQuestion(normalized, playerVisibleContext.player_state);
   if (stateAnswer) return stateAnswer;
+  if (/last (?:attack )?roll|what (?:buffs?|debuffs?|modifiers?|bonuses?|penalties)|why (?:did i|was).{0,30}(?:advantage|disadvantage)/i.test(normalized) && playerVisibleContext.last_roll?.breakdown) {
+    const roll = playerVisibleContext.last_roll;
+    const breakdown = roll.breakdown;
+    const modifiers = (breakdown.modifiers || []).map((component) => `${component.source} ${Number(component.value) >= 0 ? '+' : ''}${component.value}`).join(', ') || 'none';
+    const advantages = breakdown.dice?.advantage_sources?.join(', ') || 'none';
+    const disadvantages = breakdown.dice?.disadvantage_sources?.join(', ') || 'none';
+    return { classification: 'established_fact', supporting_fact_keys: ['last_roll.breakdown'], answer: `Last ${roll.action || 'attack'} roll against ${roll.target || 'the target'}: ${breakdown.dice?.mode || 'normal'} d20 [${(breakdown.dice?.rolls || []).join(', ')}], selected ${breakdown.dice?.selected}; modifiers ${modifiers}; total modifier ${breakdown.modifier_total >= 0 ? '+' : ''}${breakdown.modifier_total}; advantage sources: ${advantages}; disadvantage sources: ${disadvantages}.` };
+  }
   if (/\b(?:what(?:'s| is)?|which items? are)\b.{0,50}\b(?:inside|in|contents? of)\b.{0,30}\b(?:bag|container)|\b(?:bag of holding|stowed contents?)\b/i.test(normalized)) {
     const contents = playerVisibleContext.stowed_contents || [];
     return { classification: 'established_fact', supporting_fact_keys: ['stowed_contents'], answer: contents.length ? `Your stowed contents are: ${contents.map((item) => `${item.quantity} ${item.name} in ${item.container}${item.alive === false ? ' (dead corpse)' : ''}`).join('; ')}.` : 'Your itemized stowed contents are empty.' };
