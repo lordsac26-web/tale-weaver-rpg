@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import ViewportPortal from '@/components/ui/ViewportPortal';
 import { CLASSES, RACES, CONDITIONS, SKILL_STAT_MAP, BACKGROUNDS } from './gameData';
 import { SPELL_DETAILS, SCHOOL_COLORS, DAMAGE_TYPE_COLORS } from './spellData';
 import { resolveDescription } from './descriptionResolver';
@@ -19,13 +20,14 @@ import { resolveDescription } from './descriptionResolver';
  */
 export default function GameTooltip({ content, title, subtitle, icon, position = 'top', maxWidth = 280, children, disabled }) {
   const [visible, setVisible] = useState(false);
-  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [coords, setCoords] = useState({ top: 8, left: 8 });
   const triggerRef = useRef(null);
   const tooltipRef = useRef(null);
   const timeoutRef = useRef(null);
   const isDisabled = disabled || (!content && !title);
 
   const show = () => {
+    clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => setVisible(true), 300);
   };
 
@@ -34,37 +36,53 @@ export default function GameTooltip({ content, title, subtitle, icon, position =
     setVisible(false);
   };
 
-  useEffect(() => {
-    if (isDisabled || !visible || !triggerRef.current || !tooltipRef.current) return;
-    const triggerRect = triggerRef.current.getBoundingClientRect();
-    const tooltipRect = tooltipRef.current.getBoundingClientRect();
-    const gap = 8;
-    let top, left;
+  useLayoutEffect(() => {
+    if (isDisabled || !visible) return;
 
-    switch (position) {
-      case 'bottom':
+    const placeTooltip = () => {
+      if (!triggerRef.current || !tooltipRef.current) return;
+      const triggerRect = triggerRef.current.getBoundingClientRect();
+      const tooltipRect = tooltipRef.current.getBoundingClientRect();
+      const gap = 8;
+      const margin = 8;
+      let resolvedPosition = position;
+
+      if (position === 'right' && triggerRect.right + gap + tooltipRect.width > window.innerWidth - margin) resolvedPosition = 'left';
+      if (position === 'left' && triggerRect.left - gap - tooltipRect.width < margin) resolvedPosition = 'right';
+      if (position === 'top' && triggerRect.top - gap - tooltipRect.height < margin) resolvedPosition = 'bottom';
+      if (position === 'bottom' && triggerRect.bottom + gap + tooltipRect.height > window.innerHeight - margin) resolvedPosition = 'top';
+
+      let top;
+      let left;
+      if (resolvedPosition === 'bottom') {
         top = triggerRect.bottom + gap;
         left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
-        break;
-      case 'left':
+      } else if (resolvedPosition === 'left') {
         top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2;
         left = triggerRect.left - tooltipRect.width - gap;
-        break;
-      case 'right':
+      } else if (resolvedPosition === 'right') {
         top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2;
         left = triggerRect.right + gap;
-        break;
-      default: // top
+      } else {
         top = triggerRect.top - tooltipRect.height - gap;
         left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
-    }
+      }
 
-    // Clamp to viewport
-    left = Math.max(8, Math.min(left, window.innerWidth - tooltipRect.width - 8));
-    top = Math.max(8, Math.min(top, window.innerHeight - tooltipRect.height - 8));
+      left = Math.max(margin, Math.min(left, window.innerWidth - tooltipRect.width - margin));
+      top = Math.max(margin, Math.min(top, window.innerHeight - tooltipRect.height - margin));
+      setCoords({ top, left });
+    };
 
-    setCoords({ top, left });
-  }, [visible, position, isDisabled]);
+    placeTooltip();
+    window.addEventListener('resize', placeTooltip);
+    window.addEventListener('scroll', placeTooltip, true);
+    return () => {
+      window.removeEventListener('resize', placeTooltip);
+      window.removeEventListener('scroll', placeTooltip, true);
+    };
+  }, [visible, position, isDisabled, content, title, maxWidth]);
+
+  useEffect(() => () => clearTimeout(timeoutRef.current), []);
 
   if (isDisabled) return children;
 
@@ -76,49 +94,55 @@ export default function GameTooltip({ content, title, subtitle, icon, position =
         onMouseLeave={hide}
         onFocus={show}
         onBlur={hide}
+        onClick={() => {
+          clearTimeout(timeoutRef.current);
+          setVisible(current => !current);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setVisible(false);
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setVisible(current => !current);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-expanded={visible}
         className="inline-flex"
         style={{ cursor: 'help' }}>
         {children}
       </span>
       {visible && (
-        <div
-          ref={tooltipRef}
-          className="fixed z-[9999] pointer-events-none animate-fade-up"
-          style={{
-            top: coords.top,
-            left: coords.left,
-            maxWidth,
-            background: 'linear-gradient(160deg, rgba(32,18,6,0.98), rgba(18,9,3,0.99))',
-            border: '1px solid rgba(184,115,51,0.45)',
-            borderRadius: '10px',
-            padding: '10px 14px',
-            boxShadow: '0 0 24px rgba(0,0,0,0.8), 0 0 8px rgba(184,115,51,0.15)',
-            color: '#e8d5b7',
-            fontFamily: 'EB Garamond, serif',
-          }}>
-          {(title || icon) && (
-            <div className="flex items-center gap-2 mb-1.5">
-              {icon && <span className="text-base flex-shrink-0">{icon}</span>}
-              <div>
-                {title && (
-                  <div className="font-fantasy font-bold text-xs leading-tight" style={{ color: '#f0c040' }}>
-                    {title}
-                  </div>
-                )}
-                {subtitle && (
-                  <div className="text-xs leading-tight" style={{ color: 'rgba(212,149,90,0.7)', fontSize: '0.65rem' }}>
-                    {subtitle}
-                  </div>
-                )}
+        <ViewportPortal>
+          <div
+            ref={tooltipRef}
+            role="tooltip"
+            className="fixed z-[9999] pointer-events-none animate-fade-up overflow-y-auto"
+            style={{
+              top: coords.top,
+              left: coords.left,
+              width: `min(${maxWidth}px, calc(100vw - 16px))`,
+              maxHeight: 'calc(100dvh - 16px)',
+              background: 'linear-gradient(160deg, rgba(32,18,6,0.98), rgba(18,9,3,0.99))',
+              border: '1px solid rgba(184,115,51,0.45)',
+              borderRadius: '10px',
+              padding: '10px 14px',
+              boxShadow: '0 0 24px rgba(0,0,0,0.8), 0 0 8px rgba(184,115,51,0.15)',
+              color: '#e8d5b7',
+              fontFamily: 'EB Garamond, serif',
+            }}>
+            {(title || icon) && (
+              <div className="flex items-center gap-2 mb-1.5">
+                {icon && <span className="text-base flex-shrink-0">{icon}</span>}
+                <div>
+                  {title && <div className="font-fantasy font-bold text-xs leading-tight" style={{ color: '#f0c040' }}>{title}</div>}
+                  {subtitle && <div className="text-xs leading-tight" style={{ color: 'rgba(212,149,90,0.7)', fontSize: '0.65rem' }}>{subtitle}</div>}
+                </div>
               </div>
-            </div>
-          )}
-          {content && (
-            <div className="text-xs leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.85)' }}>
-              {content}
-            </div>
-          )}
-        </div>
+            )}
+            {content && <div className="text-xs leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'rgba(232,213,183,0.85)' }}>{content}</div>}
+          </div>
+        </ViewportPortal>
       )}
     </>
   );

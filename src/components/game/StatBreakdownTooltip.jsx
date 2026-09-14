@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
+import GameTooltip from './GameTooltip';
 import { RACES } from './gameData';
 import { FEATS } from './featData';
 import { resolveItemBonuses } from './itemBonuses';
@@ -128,83 +129,26 @@ export function getStatBreakdown(character, stat) {
 }
 
 /**
- * Tooltip component that shows stat breakdown on hover.
+ * Tooltip component that shows stat breakdown through the shared viewport-safe surface.
  */
 export default function StatBreakdownTooltip({ character, stat, children }) {
-  const [show, setShow] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-  const triggerRef = useRef(null);
-  const tooltipRef = useRef(null);
-
-  useEffect(() => {
-    if (show && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      const tooltipW = 220;
-      const tooltipH = 200;
-
-      let left = rect.left + rect.width / 2 - tooltipW / 2;
-      let top = rect.bottom + 8;
-
-      // Clamp to viewport
-      if (left < 8) left = 8;
-      if (left + tooltipW > window.innerWidth - 8) left = window.innerWidth - tooltipW - 8;
-      if (top + tooltipH > window.innerHeight - 8) {
-        top = rect.top - tooltipH - 8;
-      }
-
-      setPos({ top, left });
-    }
-  }, [show]);
-
   const { lines, total } = getStatBreakdown(character, stat);
-
-  return (
-    <>
-      <div
-        ref={triggerRef}
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-        className="cursor-help"
-      >
-        {children}
-      </div>
-
-      {show && (
-        <div
-          ref={tooltipRef}
-          className="fixed z-[100] rounded-xl p-3 shadow-2xl pointer-events-none"
-          style={{
-            top: pos.top,
-            left: pos.left,
-            width: 220,
-            background: 'rgba(12,8,3,0.97)',
-            border: '1px solid rgba(201,169,110,0.4)',
-            boxShadow: '0 0 30px rgba(0,0,0,0.8), 0 0 10px rgba(201,169,110,0.1)',
-          }}
-        >
-          <div className="font-fantasy text-xs tracking-widest mb-2" style={{ color: 'rgba(201,169,110,0.6)', fontSize: '0.6rem' }}>
-            SCORE BREAKDOWN
-          </div>
-          <div className="space-y-1">
-            {lines.map((line, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <span className="text-xs truncate pr-2" style={{ color: 'rgba(232,213,183,0.7)', fontFamily: 'EB Garamond, serif' }}>
-                  {line.label}
-                </span>
-                <span className="text-xs font-fantasy font-bold flex-shrink-0" style={{
-                  color: line.isSet ? '#93c5fd' : line.value > 0 ? '#86efac' : line.value < 0 ? '#fca5a5' : 'rgba(232,213,183,0.7)',
-                }}>
-                  {line.isSet ? `→ ${line.value}` : (line.value > 0 && i > 0 ? `+${line.value}` : line.value)}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2 pt-1.5 flex items-center justify-between" style={{ borderTop: '1px solid rgba(201,169,110,0.2)' }}>
-            <span className="text-xs font-fantasy" style={{ color: '#f0c040' }}>Total</span>
-            <span className="text-sm font-fantasy font-bold" style={{ color: '#f0c040' }}>{total}</span>
-          </div>
+  const content = (
+    <div className="space-y-1">
+      {lines.map((line, index) => (
+        <div key={`${line.label}-${index}`} className="flex items-center justify-between gap-3">
+          <span className="text-xs truncate">{line.label}</span>
+          <span className="text-xs font-fantasy font-bold flex-shrink-0" style={{ color: line.isSet ? '#93c5fd' : line.value > 0 ? '#86efac' : line.value < 0 ? '#fca5a5' : 'rgba(232,213,183,0.7)' }}>
+            {line.isSet ? `→ ${line.value}` : (line.value > 0 && index > 0 ? `+${line.value}` : line.value)}
+          </span>
         </div>
-      )}
-    </>
+      ))}
+      <div className="mt-2 pt-1.5 flex items-center justify-between border-t border-amber-200/20">
+        <span className="text-xs font-fantasy text-amber-300">Total</span>
+        <span className="text-sm font-fantasy font-bold text-amber-300">{total}</span>
+      </div>
+    </div>
   );
+
+  return <GameTooltip title="Score Breakdown" content={content} position="bottom" maxWidth={220}>{children}</GameTooltip>;
 }

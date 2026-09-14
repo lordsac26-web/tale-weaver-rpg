@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ViewportPortal from '@/components/ui/ViewportPortal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Heart } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -130,6 +131,7 @@ export default function ConsumableUseModal({ item, character, sessionId, onUse, 
   };
 
   return (
+    <ViewportPortal>
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
       onClick={onClose}>
@@ -137,7 +139,7 @@ export default function ConsumableUseModal({ item, character, sessionId, onUse, 
         initial={{ opacity: 0, scale: 0.9, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-sm rounded-2xl overflow-hidden"
+        className="w-full max-w-sm max-h-[calc(100dvh-2rem)] rounded-2xl overflow-y-auto"
         style={{ background: 'rgba(12,8,4,0.97)', border: `1px solid ${rarity.border}`, boxShadow: `0 0 40px ${rarity.glow}` }}
         onClick={e => e.stopPropagation()}>
 
@@ -226,5 +228,6 @@ export default function ConsumableUseModal({ item, character, sessionId, onUse, 
         </div>
       </motion.div>
     </div>
+    </ViewportPortal>
   );
 }
