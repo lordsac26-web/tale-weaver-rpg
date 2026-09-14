@@ -3,6 +3,7 @@
 // passed explicitly instead of captured from the request closure.
 import { completeCombatSession } from './sessionCombatState.ts';
 import { persistCompletedCombatContext } from '../story/completedCombatContext.ts';
+import { advanceWorldClockBySeconds } from '../story/worldClock.ts';
 
 export const awardVictoryXP = async (base44, cid, combatantsArr, cid_char) => {
   const freshLog = await base44.asServiceRole.entities.CombatLog.get(cid);
@@ -18,6 +19,12 @@ export const finalizeAndPersistCombat = async (base44, character_id, cid, sid, u
   const allDead = updatedCombatants.filter(c => c.type === 'enemy').every(c => !c.is_conscious);
   const playerDead = updatedCombatants.find(c => c.type === 'player')?.is_conscious === false;
   const result = allDead ? 'victory' : playerDead ? 'defeat' : 'ongoing';
+  const currentCombat = await base44.asServiceRole.entities.CombatLog.get(cid);
+  const completedRounds = Math.max(0, Number(nextRound || 0) - Number(currentCombat?.round || 0));
+  if (completedRounds > 0) {
+    const session = await base44.asServiceRole.entities.GameSession.get(sid);
+    await base44.asServiceRole.entities.GameSession.update(sid, { world_state: advanceWorldClockBySeconds({ worldState: session.world_state, elapsedSeconds: completedRounds * 6, source: 'combat_round' }) });
+  }
   await base44.asServiceRole.entities.CombatLog.update(cid, {
     combatants: updatedCombatants, log_entries: updatedLog,
     current_turn_index: nextIndex, round: nextRound,

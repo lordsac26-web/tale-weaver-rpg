@@ -1,4 +1,5 @@
 import { deriveCanonicalSpellSlots } from '../spells/slotProgression.ts';
+import { evaluateEffectDuration } from '../effectDuration.ts';
 
 export const ACTIVE_EFFECTS_VERSION = 'active-effects-truth-v1.1.0';
 
@@ -54,40 +55,13 @@ export function normalizeStoryConditions(conditions = []) {
   return result;
 }
 
-const remainingFromExpiry = (expiresAt, now) => {
-  const ms = Date.parse(expiresAt || '') - now;
-  if (!Number.isFinite(ms) || ms <= 0) return null;
-  const minutes = Math.round(ms / 60000);
-  if (minutes < 60) return `${Math.max(1, minutes)} minute${minutes === 1 ? '' : 's'} remaining`;
-  const hours = Math.round(minutes / 60);
-  return `${hours} hour${hours === 1 ? '' : 's'} remaining`;
+const expiryFor = (name, entry, session) => {
+  const result = evaluateEffectDuration({ entry, session, name });
+  return { expired: result.expired, remaining: result.remaining_seconds, basis: result.basis, migration_provenance: result.migration_provenance };
 };
-
-const gameElapsedHours = (session) => { const value = Number(session?.world_state?.elapsed_hours); return Number.isFinite(value) ? value : null; };
-const finiteHoursFor = (name, entry) => {
-  const match = String(entry?.duration || '').match(/(\d+(?:\.\d+)?)\s*(minute|hour)/i);
-  if (match) return Number(match[1]) * (match[2].toLowerCase() === 'hour' ? 1 : 1 / 60);
-  return normalizeKey(name) === 'longstrider' ? 1 : null;
-};
-const authoritativeElapsedAfter = (entry, session) => {
-  const applied = Date.parse(entry?.applied_at || '');
-  if (!Number.isFinite(applied)) return 0;
-  const rests = (session?.world_state?.__rest_receipts || []).filter((receipt) => Date.parse(receipt?.completed_at || '') > applied).reduce((sum, receipt) => sum + (Number(receipt?.response?.clock?.elapsed_hours) || Number(receipt?.response?.clock?.elapsedHours) || 0), 0);
-  const waits = (session?.world_state?.__time_advance_receipts || []).filter((receipt) => Date.parse(receipt?.at || '') > applied).reduce((sum, receipt) => sum + (Number(receipt?.clock?.elapsed_hours) || 0), 0);
-  return rests + waits;
-};
-const expiryFor = (name, entry, session, now) => {
-  const wallExpiry = Date.parse(entry?.expires_at || '');
-  if (entry?.expiration_rule === 'timestamp' && Number.isFinite(wallExpiry) && now >= wallExpiry) return { expired: true, remaining: 0, basis: 'timestamp' };
-  const gameNow = gameElapsedHours(session);
-  const gameExpiry = Number(entry?.expires_game_elapsed_hours);
-  if (gameNow != null && Number.isFinite(gameExpiry)) return { expired: gameNow >= gameExpiry, remaining: Math.max(0, gameExpiry - gameNow), basis: 'game_time' };
-  const finiteHours = finiteHoursFor(name, entry);
-  if (gameNow != null && entry?.duration === 'persistent' && finiteHours != null && authoritativeElapsedAfter(entry, session) >= finiteHours) return { expired: true, remaining: 0, basis: 'legacy_game_time_evidence' };
-  const remaining = entry?.expires_at && gameNow == null ? remainingFromExpiry(entry.expires_at, now) : null;
-  return { expired: !!entry?.expires_at && gameNow == null && !remaining, remaining, basis: entry?.expires_at ? 'wall_time_without_game_clock' : null };
-};
-const remainingLabel = (expiry, entry) => expiry.basis === 'game_time' ? `${Math.max(1, Math.ceil(expiry.remaining * 60))} minute${Math.ceil(expiry.remaining * 60) === 1 ? '' : 's'} remaining` : expiry.remaining || entry?.duration || 'persistent';
+const remainingLabel = (expiry, entry) => Number.isFinite(expiry.remaining)
+  ? `${Math.max(1, Math.ceil(expiry.remaining / 60))} minute${Math.ceil(expiry.remaining / 60) === 1 ? '' : 's'} remaining`
+  : entry?.duration || 'persistent';
 
 const effectFor = (name, entry) => {
   const key = normalizeKey(name);
@@ -128,7 +102,7 @@ export function evaluateActiveEffects({ character = {}, session = null, now = Da
     const expiry = linkedExpiry?.expired ? linkedExpiry : ownExpiry;
     const base = { name, source: (typeof condition === 'object' && condition.source) || 'story', kind: kindFor(name) };
     if (expiry.expired) { expired.push({ ...base, expired_at: condition?.expires_at || null, expiration_basis: expiry.basis }); continue; }
-    push({ ...base, mechanical_effect: effectFor(name, condition), remaining_duration: remainingLabel(expiry, condition) });
+    push({ ...base, mechanical_effect: effectFor(name, condition), remaining_duration: remainingLabel(expiry, condition), expiration_basis: expiry.basis, migration_provenance: expiry.migration_provenance || null });
   }
 
   if (concentration && concentration.concentration !== false) {
@@ -136,7 +110,7 @@ export function evaluateActiveEffects({ character = {}, session = null, now = Da
     const expiry = expiryFor(name, concentration, session, now);
     const base = { name, source: name, kind: kindFor(name) };
     if (expiry.expired) expired.push({ ...base, expired_at: concentration.expires_at || null, expiration_basis: expiry.basis });
-    else push({ ...base, mechanical_effect: effectFor(name, concentration), remaining_duration: expiry.basis === 'game_time' ? remainingLabel(expiry, concentration) : `${concentration.duration || 'concentration'} (until concentration ends)` });
+    else push({ ...base, mechanical_effect: effectFor(name, concentration), remaining_duration: remainingLabel(expiry, concentration), expiration_basis: expiry.basis, migration_provenance: expiry.migration_provenance || null });
   }
 
   for (const modifier of Array.isArray(character.active_modifiers) ? character.active_modifiers : []) {
@@ -148,7 +122,7 @@ export function evaluateActiveEffects({ character = {}, session = null, now = Da
     if (expiry.expired) { expired.push({ ...base, expired_at: modifier?.expires_at || null, expiration_basis: expiry.basis }); continue; }
     if (modifier?.concentration && concentration && normalizeKey(concentration.spell_name) === normalizeKey(modifier.source)) continue;
     const effect = modifier?.effect === 'skill_bonus' ? `+${Number(modifier.bonus) || 0} ${modifier.skill || ''} checks`.trim() : effectFor(name, modifier);
-    push({ ...base, mechanical_effect: effect, remaining_duration: remainingLabel(expiry, modifier) });
+    push({ ...base, mechanical_effect: effect, remaining_duration: remainingLabel(expiry, modifier), expiration_basis: expiry.basis, migration_provenance: expiry.migration_provenance || null });
   }
 
   const slotProgression = deriveCanonicalSpellSlots(character);

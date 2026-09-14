@@ -5,6 +5,7 @@ import {
   advanceTurn, resolveActionAndAdvance, resetTurnWorldState, SAVEABLE_CONDITIONS,
 } from './helpers.ts';
 import { finalizeAndPersistCombat } from './persistence.ts';
+import { advanceWorldClockBySeconds } from '../story/worldClock.ts';
 
 // ─── ACTION SURGE (Fighter, PHB p.72) ───────────────────────────────────────
 // Grants one extra action this turn. Once per short rest (twice at L17+).
@@ -229,7 +230,7 @@ export async function handleFlurryOfBlows(ctx) {
 // player ends their turn early or to step a non-acting combatant).
 // ═══════════════════════════════════════════════════════════════════════════
 export async function handleNextTurn(ctx) {
-  const { base44, combat_id } = ctx;
+  const { base44, session_id, combat_id } = ctx;
   const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
   const combatants = [...combatLog.combatants];
   const { nextIndex, nextRound } = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
@@ -276,6 +277,10 @@ export async function handleNextTurn(ctx) {
     current_turn_index: nextIndex, round: nextRound, world_state: nextWS,
     ...(condLog ? { log_entries: [...(combatLog.log_entries || []), condLog], combatants } : {}),
   });
+  if (session_id && nextRound > Number(combatLog.round || 0)) {
+    const session = await base44.asServiceRole.entities.GameSession.get(session_id);
+    await base44.asServiceRole.entities.GameSession.update(session_id, { world_state: advanceWorldClockBySeconds({ worldState: session.world_state, elapsedSeconds: 6, source: 'combat_round' }) });
+  }
   return Response.json({ next_turn_index: nextIndex, round: nextRound, current_combatant: combatants[nextIndex], condition_cleared: condLog?.text || null });
 }
 
@@ -383,6 +388,10 @@ export async function handleDeathSave(ctx) {
     world_state: resetTurnWorldState(combatLog),
     ...(terminalDefeat ? { is_active: false, result: 'defeat' } : {}),
   });
+  if (session_id && nextRound > Number(combatLog.round || 0)) {
+    const session = await base44.asServiceRole.entities.GameSession.get(session_id);
+    await base44.asServiceRole.entities.GameSession.update(session_id, { world_state: advanceWorldClockBySeconds({ worldState: session.world_state, elapsedSeconds: 6, source: 'combat_round' }) });
+  }
   if (terminalDefeat && session_id) {
     await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: false, combat_state: {} });
   }

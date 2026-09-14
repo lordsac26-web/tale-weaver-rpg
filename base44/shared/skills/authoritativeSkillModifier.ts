@@ -1,5 +1,6 @@
 import { isPassWithoutTraceIdentity, preferStructuredCondition } from '../spells/conditionIdentity.js';
 import { classChoiceSkillEffects, classLevels } from '../classChoiceReview.ts';
+import { evaluateEffectDuration } from '../effectDuration.ts';
 
 const SKILL_ABILITIES = {
   Acrobatics: 'dexterity', 'Animal Handling': 'wisdom', Arcana: 'intelligence', Athletics: 'strength',
@@ -11,15 +12,7 @@ const SKILL_ABILITIES = {
 const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 export const canonicalSkill = (value) => Object.keys(SKILL_ABILITIES).find((skill) => normalize(value).includes(normalize(skill))) || null;
 const statModifier = (score) => Math.floor(((Number(score) || 10) - 10) / 2);
-const gameClockExpired = (effect, session, now = Date.now()) => {
-  if (effect?.game_time_expired === true || Number(effect?.remaining_duration_minutes) === 0) return true;
-  const expires = Date.parse(effect?.expires_at || '');
-  if (effect?.expiration_rule === 'timestamp' && Number.isFinite(expires) && now >= expires) return true;
-  const gameNow = Date.parse(session?.world_state?.world_clock_timestamp || '');
-  const applied = Date.parse(effect?.applied_at || '');
-  if (Number.isFinite(gameNow) && Number.isFinite(applied) && Number.isFinite(expires)) return gameNow >= applied && gameNow >= expires;
-  return Number.isFinite(expires) && now >= expires;
-};
+const gameClockExpired = (effect, session) => evaluateEffectDuration({ entry: effect, session, name: effect?.source || effect?.name || effect?.spell_name }).expired;
 
 export function resolveAuthoritativeSkillModifier({ character, session, skill: requestedSkill, context = '' }) {
   const skill = canonicalSkill(requestedSkill);
@@ -54,7 +47,8 @@ export function resolveAuthoritativeSkillModifier({ character, session, skill: r
   for (const modifier of otherBonuses) components.push({ type: 'effect', source: modifier.source || modifier.name || 'Skill bonus', value: Number(modifier.bonus) || 0, id: modifier.id || null });
   if (pwtLinkActive) components.push({ type: 'effect', source: 'Pass without Trace', value: 10, id: pwtModifiers[0].id, concentration: true });
   const effectBonus = components.filter((component) => component.type === 'effect').reduce((sum, component) => sum + component.value, 0);
-  return { ok: true, skill, ability, ability_bonus: abilityBonus, proficiency, base_skill: baseSkill, effect_bonus: effectBonus, bonus: effectBonus, total: baseSkill + effectBonus, components, pwt_active: pwtLinkActive, concentration_linked: pwtLinkActive, class_choice_advantage_sources: choiceEffects.advantage_sources };
+  const pwtDuration = structuredPwt ? evaluateEffectDuration({ entry: structuredPwt, session, name: 'Pass without Trace' }) : null;
+  return { ok: true, skill, ability, ability_bonus: abilityBonus, proficiency, base_skill: baseSkill, effect_bonus: effectBonus, bonus: effectBonus, total: baseSkill + effectBonus, components, pwt_active: pwtLinkActive, concentration_linked: pwtLinkActive, pwt_expiration_basis: pwtDuration?.basis || null, pwt_migration_provenance: pwtDuration?.migration_provenance || null, class_choice_advantage_sources: choiceEffects.advantage_sources };
 }
 
 export function buildSkillCheckReceipt({ requestId, raw, allRolls = [], dc, success, breakdown, advantageSources = [], at = new Date().toISOString() }) {

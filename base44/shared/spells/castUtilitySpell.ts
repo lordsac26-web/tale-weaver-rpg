@@ -4,6 +4,7 @@ import { normalizeSpellText, resolveKnownTypedSpell } from './typedSpellParser.t
 import { canonicalSpellTargetProfile, resolveCanonicalSpellTarget, SPELL_TARGETING_VERSION } from './spellTargeting.ts';
 import { conditionIdentityKey, isPassWithoutTraceIdentity, preferStructuredCondition } from './conditionIdentity.js';
 import { getMaxSlotsForLevel } from './slotProgression.ts';
+import { durationSecondsFor, evaluateEffectDuration, getGameElapsedSeconds, withGameTimeDuration } from '../effectDuration.ts';
 
 const normalize = normalizeSpellText;
 const respond = (status, body) => ({ status, body });
@@ -22,9 +23,9 @@ const durationGameHours = (spell) => { const match=String(spell?.duration||'').m
 function findKnownSpell(character, actionText, requestedName) {
   return resolveKnownTypedSpell(character, actionText, requestedName);
 }
-function concentrationModifier(spell, now, characterId, spellTarget, expiresAt = null) {
+function concentrationModifier(spell, now, characterId, spellTarget, session, expiresAt = null) {
   const targetId = spellTarget?.kind === 'point_area' ? `scene_point:${normalize(spellTarget.anchor).replace(/ /g, '_')}` : spellTarget?.id || characterId;
-  const base = { id: `typed_spell_${normalize(spell.name).replace(/ /g, '_')}_${now}`, source: spell.name, effect: 'spell_concentration', concentration: true, caster_id: characterId, character_id: characterId, target_id: targetId, scope: spellTarget?.kind === 'point_area' ? 'area' : 'self', spell_target: spellTarget || null, applied_at: new Date(now).toISOString(), duration: spell.duration || 'Concentration', expiration_rule: expiresAt ? 'timestamp' : 'concentration', ...(expiresAt ? { expires_at: expiresAt } : {}) };
+  const base = withGameTimeDuration({ id: `typed_spell_${normalize(spell.name).replace(/ /g, '_')}_${now}`, source: spell.name, effect: 'spell_concentration', concentration: true, caster_id: characterId, character_id: characterId, target_id: targetId, scope: spellTarget?.kind === 'point_area' ? 'area' : 'self', spell_target: spellTarget || null, applied_at: new Date(now).toISOString(), duration: spell.duration || 'Concentration', ...(expiresAt ? { expires_at: expiresAt } : {}) }, session, spell.name);
   if (normalize(spell.name) === 'pass without trace') return { ...base, effect: 'skill_bonus', skill: 'Stealth', bonus: 10 };
   if (normalize(spell.name) === 'hunters mark') return { ...base, effect: 'hunters_mark', damage_bonus_dice: '1d6' };
   if (normalize(spell.name) === 'ensnaring strike') return { ...base, effect: 'ensnaring_strike_pending' };
@@ -82,12 +83,9 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   const now = Date.now();
   const concentration = session?.world_state?.active_concentration;
   const sessionKeepsConcentration = spell.concentration && normalize(concentration?.spell_name) === normalizedName && concentration?.concentration === true && concentration?.target_id === character_id;
-  const currentGameHours=Number(session?.world_state?.elapsed_hours)||0;
-  const active = (character.active_modifiers || []).filter((modifier) => {
-    const gameExpiry=Number(modifier?.expires_game_elapsed_hours);
-    if(Number.isFinite(gameExpiry))return currentGameHours<gameExpiry;
-    return !modifier.expires_at || new Date(modifier.expires_at).getTime() > now || (sessionKeepsConcentration && normalize(modifier.source) === normalizedName && modifier.concentration === true);
-  });
+  const currentGameSeconds = getGameElapsedSeconds(session);
+  const currentGameHours = currentGameSeconds / 3600;
+  const active = (character.active_modifiers || []).filter((modifier) => !evaluateEffectDuration({ entry: modifier, session, name: modifier?.source }).expired);
   const existing = spell.concentration ? (character.active_modifiers || []).find((modifier) => normalize(modifier.source) === normalizedName && modifier.concentration) : null;
   const structured = preferStructuredCondition(character.conditions, canonicalName);
   const coherentExisting = existing && structured && concentration
@@ -110,8 +108,9 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   const isPassWithoutTrace = normalizedName === 'pass without trace';
   const isSilence = normalizedName === 'silence';
   const isLongstrider = normalizedName === 'longstrider';
-  const finiteGameHours=durationGameHours(spell);
-  const expiresGameElapsedHours=finiteGameHours==null?null:currentGameHours+finiteGameHours;
+  const finiteDurationSeconds = durationSecondsFor(spell, canonicalName);
+  const finiteGameHours = finiteDurationSeconds == null ? null : finiteDurationSeconds / 3600;
+  const expiresGameElapsedHours = finiteGameHours == null ? null : currentGameHours + finiteGameHours;
   const expiresAt = spell.concentration ? durationExpiry(spell, now) : null;
   const previousConcentration = session?.world_state?.active_concentration || null;
   const previousSource = normalize(previousConcentration?.spell_name || '');
@@ -119,11 +118,11 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   const isReplacedModifier = (modifier) => replacesConcentration && modifier?.concentration === true && (normalize(modifier.source) === previousSource || modifier.id === previousConcentration?.modifier_id);
   const isReplacedCondition = (condition) => replacesConcentration && typeof condition === 'object' && condition?.concentration === true && (normalize(condition.source || condition.name) === previousSource || condition.id === previousConcentration?.condition_id);
   let activeModifiers = active;
-  if (spell.concentration) activeModifiers = [...active.filter((modifier) => !isReplacedModifier(modifier) && !(normalize(modifier.source) === normalizedName && modifier.concentration)), concentrationModifier(spell, now, character_id, targetResolution.target, expiresAt)];
+  if (spell.concentration) activeModifiers = [...active.filter((modifier) => !isReplacedModifier(modifier) && !(normalize(modifier.source) === normalizedName && modifier.concentration)), concentrationModifier(spell, now, character_id, targetResolution.target, session, expiresAt)];
   if(isLongstrider)activeModifiers=[...active.filter((modifier)=>normalize(modifier?.source)!==normalizedName),{id:`typed_spell_longstrider_${now}`,source:canonicalName,effect:'movement_bonus',bonus:10,unit:'feet',target_id:character_id,caster_id:character_id,applied_at:new Date(now).toISOString(),duration:spell.duration||'1 Hour',duration_type:'game_elapsed',applied_game_elapsed_hours:currentGameHours,expires_game_elapsed_hours:expiresGameElapsedHours,concentration:false}];
   let structuredConditions = (character.conditions || []).filter((condition) => !isReplacedCondition(condition) && !(isPassWithoutTraceIdentity(condition) && (isPassWithoutTrace || replacesConcentration)) && !(isLongstrider&&normalize(condition?.name||condition)===normalizedName));
-  if (isPassWithoutTrace) structuredConditions = addStructuredCondition(structuredConditions, buildStructuredCondition({ name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id, duration_type: 'timestamp', expires_at: expiresAt, concentration: true }));
-  if (isSilence) structuredConditions = addStructuredCondition(structuredConditions, buildStructuredCondition({ name:'silence', source:canonicalName, target_id:`scene_point:${targetResolution.target.anchor}`, caster_id:character_id, duration_type:'timestamp', expires_at:expiresAt, concentration:true, metadata:{target:targetResolution.target, radius_feet:targetResolution.target.radius_feet, range_feet:targetResolution.target.range_feet, stationary:true} }));
+  if (isPassWithoutTrace) structuredConditions = addStructuredCondition(structuredConditions, withGameTimeDuration(buildStructuredCondition({ name: 'pass without trace', source: canonicalName, target_id: character_id, caster_id: character_id, duration_type: 'game_elapsed', expires_at: expiresAt, concentration: true }), session, canonicalName));
+  if (isSilence) structuredConditions = addStructuredCondition(structuredConditions, withGameTimeDuration(buildStructuredCondition({ name:'silence', source:canonicalName, target_id:`scene_point:${targetResolution.target.anchor}`, caster_id:character_id, duration_type:'game_elapsed', expires_at:expiresAt, concentration:true, metadata:{target:targetResolution.target, radius_feet:targetResolution.target.radius_feet, range_feet:targetResolution.target.range_feet, stationary:true} }), session, canonicalName));
   if(isLongstrider)structuredConditions.push({id:`typed_condition_longstrider_${now}`,name:'Longstrider',source:canonicalName,target_id:character_id,caster_id:character_id,applied_at:new Date(now).toISOString(),duration:spell.duration||'1 Hour',duration_type:'game_elapsed',applied_game_elapsed_hours:currentGameHours,expires_game_elapsed_hours:expiresGameElapsedHours,concentration:false});
   let healAmount = 0;
   const hpBefore = Number(character.hp_current) || 0;
@@ -155,7 +154,7 @@ export async function executeUtilitySpellCast({ base44, user, payload }) {
   const at=new Date(now).toISOString();
   const concentrationTargetId=targetResolution.target?.kind==='point_area'?`scene_point:${targetResolution.target.anchor}`:targetResolution.target?.id||character_id;
   const sessionWorldState=session?{...(session.world_state||{}),last_spell_cast:{spell_name:canonicalName,canonical_spell_id:spell.id,character_id,slot_level:selectedLevel,used_before:usedBefore,used_after:usedAfter,heal_amount:healAmount,request_id:token,at}}:null;
-  if(sessionWorldState&&spell.concentration)sessionWorldState.active_concentration={spell_name:canonicalName,canonical_spell_id:spell.id,character_id,caster_id:character_id,target_id:concentrationTargetId,target:targetResolution.target,scope:targetResolution.target?.kind==='point_area'?'area':'self',duration:spell.duration||'Concentration',applied_at:at,expires_at:expiresAt,expiration_rule:expiresAt?'timestamp':'concentration',concentration:true,request_id:token};
+  if(sessionWorldState&&spell.concentration)sessionWorldState.active_concentration=withGameTimeDuration({spell_name:canonicalName,canonical_spell_id:spell.id,character_id,caster_id:character_id,target_id:concentrationTargetId,target:targetResolution.target,scope:targetResolution.target?.kind==='point_area'?'area':'self',duration:spell.duration||'Concentration',applied_at:at,expires_at:expiresAt,concentration:true,request_id:token},session,canonicalName);
   const stateHashBefore=await hashMechanicalState(stateProjection(character,session));
   const projectedCharacter={...character,spell_slots:spellSlots,active_modifiers:activeModifiers,conditions:(isPassWithoutTrace||isSilence||isLongstrider)?structuredConditions:character.conditions,long_rest_abilities:undefined,hp_current:healAmount>0?hpCurrent:character.hp_current,inventory:grantedInventory||character.inventory};
   const projectedSession=session?{...session,world_state:sessionWorldState}:null;

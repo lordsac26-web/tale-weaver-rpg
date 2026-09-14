@@ -45,7 +45,14 @@ export const advanceWorldClockForWait = ({ timeOfDay, worldState, elapsedHours =
   const baseTimestamp = Date.parse(worldState?.world_clock_timestamp || completedAt);
   const timestamp = new Date((Number.isFinite(baseTimestamp) ? baseTimestamp : Date.now()) + hours * 60 * 60 * 1000).toISOString();
   const period = getPeriodForHour(afterHour);
-  return { time_of_day:period, clock:{before_hour:beforeHour,after_hour:afterHour,elapsed_hours:hours,before_day:priorDay,after_day:priorDay+dayRollover,day_rollover:dayRollover,before_period:getPeriodForHour(beforeHour),after_period:period,period,before_label:`${formatWorldTime(beforeHour)} — ${getPeriodForHour(beforeHour)}`,after_label:`${formatWorldTime(afterHour)} — ${period}`,world_clock_timestamp:timestamp}, world_state:{...(worldState||{}),clock_hour:afterHour,day:priorDay+dayRollover,elapsed_hours:(Number(worldState?.elapsed_hours)||0)+hours,world_clock_timestamp:timestamp,last_time_advance_completed_at:completedAt,last_time_advance_duration_hours:hours,last_time_advance_before_hour:beforeHour,last_time_advance_after_hour:afterHour,last_time_advance_day_rollover:dayRollover,last_time_advance_period:period} };
+  return { time_of_day:period, clock:{before_hour:beforeHour,after_hour:afterHour,elapsed_hours:hours,before_day:priorDay,after_day:priorDay+dayRollover,day_rollover:dayRollover,before_period:getPeriodForHour(beforeHour),after_period:period,period,before_label:`${formatWorldTime(beforeHour)} — ${getPeriodForHour(beforeHour)}`,after_label:`${formatWorldTime(afterHour)} — ${period}`,world_clock_timestamp:timestamp}, world_state:{...(worldState||{}),clock_hour:afterHour,day:priorDay+dayRollover,elapsed_hours:(Number(worldState?.elapsed_hours)||0)+hours,elapsed_game_seconds:(Number(worldState?.elapsed_game_seconds)||Number(worldState?.elapsed_hours||0)*3600)+hours*3600,world_clock_timestamp:timestamp,last_time_advance_completed_at:completedAt,last_time_advance_duration_hours:hours,last_time_advance_before_hour:beforeHour,last_time_advance_after_hour:afterHour,last_time_advance_day_rollover:dayRollover,last_time_advance_period:period} };
+};
+
+export const advanceWorldClockBySeconds = ({ worldState, elapsedSeconds = 0, completedAt = new Date().toISOString(), source = 'explicit' }) => {
+  const seconds = Math.max(0, Number(elapsedSeconds) || 0);
+  const before = Number(worldState?.elapsed_game_seconds) || Number(worldState?.elapsed_hours || 0) * 3600;
+  const receipt = { source, at: completedAt, elapsed_seconds: seconds, before_game_seconds: before, after_game_seconds: before + seconds };
+  return { ...(worldState || {}), elapsed_game_seconds: before + seconds, elapsed_hours: (before + seconds) / 3600, __combat_time_receipts: source === 'combat_round' ? [...(worldState?.__combat_time_receipts || []).slice(-99), receipt] : (worldState?.__combat_time_receipts || []) };
 };
 
 export const advanceWorldClock = ({ timeOfDay, worldState, elapsedHours = 8, completedAt = new Date().toISOString() }) => {
@@ -61,6 +68,6 @@ export const advanceWorldClock = ({ timeOfDay, worldState, elapsedHours = 8, com
   return {
     time_of_day: period,
     clock: { before_hour: beforeHour, after_hour: afterHour, elapsed_hours: hours, before_day: priorDay, after_day: afterDay, day_rollover: dayRollover, before_period: getPeriodForHour(beforeHour), after_period: period, period, before_label: `${formatWorldTime(beforeHour)} — ${getPeriodForHour(beforeHour)}`, after_label: `${formatWorldTime(afterHour)} — ${period}`, world_clock_timestamp: timestamp },
-    world_state: { ...(worldState || {}), clock_hour: afterHour, day: priorDay + dayRollover, elapsed_hours: (Number(worldState?.elapsed_hours) || 0) + hours, world_clock_timestamp: timestamp, last_rest_completed_at: completedAt, last_rest_duration_hours: hours, last_rest_before_hour: beforeHour, last_rest_after_hour: afterHour, last_rest_day_rollover: dayRollover, last_rest_period: period },
+    world_state: { ...(worldState || {}), clock_hour: afterHour, day: priorDay + dayRollover, elapsed_hours: (Number(worldState?.elapsed_hours) || 0) + hours, elapsed_game_seconds: (Number(worldState?.elapsed_game_seconds) || Number(worldState?.elapsed_hours || 0) * 3600) + hours * 3600, world_clock_timestamp: timestamp, last_rest_completed_at: completedAt, last_rest_duration_hours: hours, last_rest_before_hour: beforeHour, last_rest_after_hour: afterHour, last_rest_day_rollover: dayRollover, last_rest_period: period },
   };
 };
