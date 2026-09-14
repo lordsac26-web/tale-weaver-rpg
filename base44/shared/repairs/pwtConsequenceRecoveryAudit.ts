@@ -33,6 +33,7 @@ export async function auditPwtConsequenceRecoveryOptions(db) {
     ammunition_chain: ammoReceipt?.quantity_before === 14 && ammoReceipt?.quantity_after === 13 && arrows?.item?.quantity === 13,
   };
   const currentHashes = { character: await hash(character), session: await hash(session), combat: await hash(combat), check_receipt: await hash(receipt), later_attack: await hash(laterAttack) };
+  const safeToPrepareMinimal = Object.entries(guards).filter(([name]) => !['later_consequences_exist', 'accepted_crit', 'ammunition_chain'].includes(name)).every(([, pass]) => pass);
   return {
     version: PWT_CONSEQUENCE_AUDIT_VERSION,
     read_only: true,
@@ -43,7 +44,7 @@ export async function auditPwtConsequenceRecoveryOptions(db) {
     current_hashes: currentHashes,
     corrected_check: { raw_d20: receipt?.raw_d20, base_modifier: corrected.base_skill, pwt_bonus: corrected.effect_bonus, modifier_total: corrected.total, dc: receipt?.dc, corrected_total: receipt ? receipt.raw_d20 + corrected.total : null, corrected_outcome: receipt ? receipt.raw_d20 + corrected.total >= receipt.dc : null, migration_provenance: duration.migration_provenance, expiration_basis: duration.basis },
     option_1: {
-      name: 'minimal_non_destructive', safe_to_prepare: true, applied: false,
+      name: 'minimal_non_destructive', safe_to_prepare: safeToPrepareMinimal, applied: false,
       exact_future_impact: { Character: [], GameSession: ['world_state.__pwt_recovery_corrections append one immutable receipt referencing the original check and corrected total 19'], CombatLog: [], story_log: [], inventory: [], narration: [] },
       preserved: ['current story entries', 'active combat', 'natural-20 attack', '15 damage', 'Vanguard 26→11 HP', 'arrow 14→13', 'all original receipts'],
       note: 'The unified evaluator already treats the legacy PWT as active for future checks; a later owner-approved apply would add provenance only, not rewrite history.'

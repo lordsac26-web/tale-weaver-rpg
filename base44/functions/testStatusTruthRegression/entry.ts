@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { canonicalStoryConditionName, evaluateActiveEffects, normalizeStoryConditions } from '../../shared/story/activeEffects.ts';
 import { executeAskDungeonMasterCore } from '../../shared/askDungeonMasterCore.ts';
 import { hashValue, readProtectedDndState } from '../../shared/tests/liveProtection.ts';

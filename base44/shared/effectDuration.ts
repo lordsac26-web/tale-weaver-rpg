@@ -1,6 +1,6 @@
 export const EFFECT_DURATION_VERSION = 'monotonic-game-time-v1.0.0';
 
-const numberOrNull = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+const numberOrNull = (value) => value === null || value === undefined || value === '' || typeof value === 'boolean' ? null : Number.isFinite(Number(value)) ? Number(value) : null;
 const normalize = (value) => String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
 export function getGameElapsedSeconds(session = null) {
@@ -22,7 +22,8 @@ export function durationSecondsFor(entry = {}, name = '') {
   const applied = Date.parse(entry?.applied_at || '');
   const expires = Date.parse(entry?.expires_at || '');
   if (Number.isFinite(applied) && Number.isFinite(expires) && expires >= applied) return (expires - applied) / 1000;
-  if (normalize(name || entry?.spell_name || entry?.source || entry?.name) === 'pass without trace') return 3600;
+  const identity = normalize(name || entry?.spell_name || entry?.source || entry?.name);
+  if (identity === 'pass without trace' || identity === 'longstrider') return 3600;
   return null;
 }
 
@@ -57,7 +58,7 @@ export function evaluateEffectDuration({ entry = {}, session = null, name = '' }
   if (duration != null) {
     const elapsed = explicitElapsedAfter(entry, session);
     const remaining = Math.max(0, duration - elapsed);
-    return { active: remaining > 0, expired: remaining <= 0, remaining_seconds: remaining, basis: 'legacy_explicit_game_time_evidence', migration_provenance: 'legacy_timestamp_conservatively_evaluated', duration_seconds: duration, explicit_elapsed_seconds: elapsed };
+    return { active: remaining > 0, expired: remaining <= 0, remaining_seconds: remaining, basis: 'legacy_game_time_evidence', migration_provenance: 'legacy_timestamp_conservatively_evaluated', duration_seconds: duration, explicit_elapsed_seconds: elapsed };
   }
   return { active: true, expired: false, remaining_seconds: null, basis: 'concentration_or_persistent', migration_provenance: entry?.expires_at ? 'legacy_timestamp_without_game_time_kept_active' : null };
 }
