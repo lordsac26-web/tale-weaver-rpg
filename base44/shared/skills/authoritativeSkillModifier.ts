@@ -14,7 +14,7 @@ const statModifier = (score) => Math.floor(((Number(score) || 10) - 10) / 2);
 const gameClockExpired = (effect, session, now = Date.now()) => {
   if (effect?.game_time_expired === true || Number(effect?.remaining_duration_minutes) === 0) return true;
   const expires = Date.parse(effect?.expires_at || '');
-  if (Number.isFinite(expires) && now >= expires) return true;
+  if (effect?.expiration_rule === 'timestamp' && Number.isFinite(expires) && now >= expires) return true;
   const gameNow = Date.parse(session?.world_state?.world_clock_timestamp || '');
   const applied = Date.parse(effect?.applied_at || '');
   return Number.isFinite(gameNow) && Number.isFinite(applied) && Number.isFinite(expires) && gameNow >= applied && gameNow >= expires;

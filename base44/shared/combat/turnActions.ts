@@ -286,7 +286,7 @@ export async function handleNextTurn(ctx) {
 // Nat 20 = regain 1 HP and stand up immediately.
 // Nat 1  = counts as 2 failures.
 export async function handleDeathSave(ctx) {
-  const { base44, session_id, combat_id, character_id } = ctx;
+  const { base44, session_id, combat_id, character_id, payload = {} } = ctx;
   const character = await base44.asServiceRole.entities.Character.get(character_id);
   if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
   const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
@@ -298,7 +298,9 @@ export async function handleDeathSave(ctx) {
     return Response.json({ error: 'Character is not at 0 HP — no death save needed.', invalid: true }, { status: 400 });
   }
 
-  let roll = rollD20();
+  const playerRoll = payload?.roll_submission?.origin === 'player' ? Number(payload.roll_submission.rolls?.[0]) : null;
+  if (playerRoll != null && (!Number.isInteger(playerRoll) || playerRoll < 1 || playerRoll > 20)) return Response.json({ error: 'Player-submitted death save must be a d20 value from 1 to 20.', invalid: true, writes: 0 }, { status: 400 });
+  let roll = playerRoll ?? rollD20();
   // Halfling Lucky (PHB p.28): death saves are saving throws — reroll natural 1s
   if ((character.race || '') === 'Halfling' && roll === 1) roll = rollD20();
   let successDelta = 0;
@@ -363,7 +365,9 @@ export async function handleDeathSave(ctx) {
     actor: character.name,
     action: 'death_save',
     roll,
-    text: logText + ` (${newSuccesses}/3 successes, ${newFailures}/3 failures)`,
+    roll_origin: playerRoll == null ? 'ai' : 'player',
+    roll_breakdown: { roll_type: 'death_save', roll_origin: playerRoll == null ? 'ai' : 'player', dice: { mode: 'normal', rolls: [roll], selected: roll, advantage_sources: [], disadvantage_sources: [] }, modifiers: [], modifier_total: 0, final_total: roll, dc: 10 },
+    text: logText + ` (${newSuccesses}/3 successes, ${newFailures}/3 failures)`, 
   };
 
   // Advance turn after death save (it consumes the player's turn)

@@ -32,7 +32,6 @@ import LevelUpModal from '@/components/game/LevelUpModal';
 import { canLevelUp } from '@/components/game/levelUpUtils';
 import SkillCheckRollModal from '@/components/game/SkillCheckRollModal';
 import AskDMDialog from '@/components/game/AskDMDialog';
-import { getManualRollEnabled } from '@/components/game/rollPreferences';
 import { canonicalSkillName } from '@/components/game/skillCheckResolver';
 import { buildThrownWeaponContext } from '@/lib/thrownWeaponIntent';
 import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '../../base44/shared/skills/authoritativeSkillModifier';

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Skull, Heart, Dices, AlertTriangle } from 'lucide-react';
+import { Skull, Heart, Dices, AlertTriangle, Sparkles, UserRound } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import DiceSpillOverlay from './DiceSpillOverlay';
 
 /**
  * DeathSavesModal — PHB p.197
@@ -22,23 +23,27 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
   // Use local state so UI updates immediately after each roll (not stale prop)
   const [successes, setSuccesses] = useState(character.death_saves_success || 0);
   const [failures, setFailures] = useState(character.death_saves_failure || 0);
+  const requestIdRef = useRef(null);
 
-  const rollDeathSave = async () => {
+  const rollDeathSave = async (rollMode) => {
     setRolling(true);
     setLastRoll(null);
     setErrorMsg(null);
     await new Promise(resolve => setTimeout(resolve, 600));
 
+    const submittedRoll = rollMode === 'player' ? Math.floor(Math.random() * 20) + 1 : null;
     // ── IN-COMBAT: route through combat engine only if the combat is still ACTIVE.
     // After defeat we set combat inactive, so an inactive log must use the client path. ──
     if (combat?.id && combat?.is_active) {
       try {
+        requestIdRef.current ||= `death-save:${combat.id}:${character.id}:${successes}:${failures}`;
         const res = await base44.functions.invoke('combatEngine', {
           action: 'death_save',
           session_id: combat.session_id,
           combat_id: combat.id,
           character_id: character.id,
-          payload: {},
+          request_id: requestIdRef.current,
+          payload: submittedRoll == null ? {} : { roll_submission: { origin: 'player', rolls: [submittedRoll] } },
         });
         const d = res.data;
         if (d?.error) { setErrorMsg(d.error); setRolling(false); return; }
@@ -46,6 +51,7 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
         setLastRoll(roll);
         setSuccesses(d.death_saves_success);
         setFailures(d.death_saves_failure);
+        requestIdRef.current = null;
         setRolling(false);
         // Reload combat so turn tracker advances
         window.dispatchEvent(new CustomEvent('reload-combat'));
@@ -59,7 +65,7 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
     }
 
     // ── OUT-OF-COMBAT FALLBACK: client-side roll (e.g., GM-controlled scenario) ──
-    const roll = Math.floor(Math.random() * 20) + 1;
+    const roll = submittedRoll ?? Math.floor(Math.random() * 20) + 1;
     setLastRoll(roll);
     setRolling(false);
 
@@ -107,6 +113,7 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(8px)' }}>
+      <DiceSpillOverlay active={rolling} />
       <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 30 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -196,25 +203,15 @@ export default function DeathSavesModal({ character, combat, onStabilize, onDeat
           </div>
         )}
 
-        {/* Roll Button */}
-        <button
-          onClick={rollDeathSave}
-          disabled={rolling || successes >= 3 || failures >= 3}
-          className="w-full py-3 rounded-xl btn-combat font-fantasy font-bold text-base flex items-center justify-center gap-2 disabled:opacity-50">
-          {rolling ? (
-            <>
-              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.6, ease: 'linear' }}>
-                <Dices className="w-5 h-5" />
-              </motion.div>
-              Rolling...
-            </>
-          ) : (
-            <>
-              <Dices className="w-5 h-5" />
-              Roll Death Save
-            </>
-          )}
-        </button>
+        {/* Roll authority choice */}
+        {rolling ? (
+          <div className="flex items-center justify-center gap-2 rounded-xl py-3 font-fantasy text-red-100"><Dices className="h-5 w-5 animate-spin" /> Rolling death save…</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => rollDeathSave('ai')} disabled={successes >= 3 || failures >= 3} className="rounded-xl border border-violet-400/40 bg-violet-950/60 p-4 text-violet-100 disabled:opacity-50"><Sparkles className="mx-auto mb-2 h-5 w-5" /><span className="font-fantasy text-xs">AI Rolls</span></button>
+            <button onClick={() => rollDeathSave('player')} disabled={successes >= 3 || failures >= 3} className="rounded-xl border border-red-400/50 bg-red-950/60 p-4 text-red-100 disabled:opacity-50"><UserRound className="mx-auto mb-2 h-5 w-5" /><span className="font-fantasy text-xs">I Roll</span></button>
+          </div>
+        )}
 
         {/* Rules Reminder */}
         <div className="mt-4 rounded-xl p-3" style={{ background: 'rgba(8,5,2,0.7)', border: '1px solid rgba(180,140,90,0.15)' }}>

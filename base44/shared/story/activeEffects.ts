@@ -78,7 +78,7 @@ const authoritativeElapsedAfter = (entry, session) => {
 };
 const expiryFor = (name, entry, session, now) => {
   const wallExpiry = Date.parse(entry?.expires_at || '');
-  if (Number.isFinite(wallExpiry) && now >= wallExpiry) return { expired: true, remaining: 0, basis: 'timestamp' };
+  if (entry?.expiration_rule === 'timestamp' && Number.isFinite(wallExpiry) && now >= wallExpiry) return { expired: true, remaining: 0, basis: 'timestamp' };
   const gameNow = gameElapsedHours(session);
   const gameExpiry = Number(entry?.expires_game_elapsed_hours);
   if (gameNow != null && Number.isFinite(gameExpiry)) return { expired: gameNow >= gameExpiry, remaining: Math.max(0, gameExpiry - gameNow), basis: 'game_time' };
@@ -119,16 +119,18 @@ export function evaluateActiveEffects({ character = {}, session = null, now = Da
     active.push(entry);
   };
 
+  const concentration = session?.world_state?.active_concentration || null;
   for (const condition of Array.isArray(character.conditions) ? character.conditions : []) {
     if (!isValidCondition(condition)) continue;
     const name = canonicalStoryConditionName(conditionName(condition));
-    const expiry = expiryFor(name, condition, session, now);
+    const ownExpiry = expiryFor(name, condition, session, now);
+    const linkedExpiry = normalizeKey(name) === 'pass without trace' && concentration ? expiryFor(name, concentration, session, now) : null;
+    const expiry = linkedExpiry?.expired ? linkedExpiry : ownExpiry;
     const base = { name, source: (typeof condition === 'object' && condition.source) || 'story', kind: kindFor(name) };
     if (expiry.expired) { expired.push({ ...base, expired_at: condition?.expires_at || null, expiration_basis: expiry.basis }); continue; }
     push({ ...base, mechanical_effect: effectFor(name, condition), remaining_duration: remainingLabel(expiry, condition) });
   }
 
-  const concentration = session?.world_state?.active_concentration || null;
   if (concentration && concentration.concentration !== false) {
     const name = conditionName(concentration.spell_name);
     const expiry = expiryFor(name, concentration, session, now);
@@ -139,7 +141,9 @@ export function evaluateActiveEffects({ character = {}, session = null, now = Da
 
   for (const modifier of Array.isArray(character.active_modifiers) ? character.active_modifiers : []) {
     const name = conditionName(modifier?.source || modifier?.effect || 'Active effect');
-    const expiry = expiryFor(name, modifier, session, now);
+    const ownExpiry = expiryFor(name, modifier, session, now);
+    const linkedExpiry = normalizeKey(name) === 'pass without trace' && concentration ? expiryFor(name, concentration, session, now) : null;
+    const expiry = linkedExpiry?.expired ? linkedExpiry : ownExpiry;
     const base = { name, source: name, kind: kindFor(modifier?.effect || name) };
     if (expiry.expired) { expired.push({ ...base, expired_at: modifier?.expires_at || null, expiration_basis: expiry.basis }); continue; }
     if (modifier?.concentration && concentration && normalizeKey(concentration.spell_name) === normalizeKey(modifier.source)) continue;
