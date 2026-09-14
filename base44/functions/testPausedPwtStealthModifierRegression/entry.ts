@@ -21,7 +21,7 @@ export default async function testPausedPwtStealthModifierRegression(req) {
       const conditions = options.conditions || [pwtCondition(character.id), ...(options.stealthed ? [{ name: 'Stealthed', source: 'story', duration: 'scene', applied_at: '2026-08-10T18:49:58.866Z' }] : [])];
       const modifiers = options.modifiers || [pwtModifier(character.id)];
       await base44.asServiceRole.entities.Character.update(character.id, { conditions, active_modifiers: modifiers });
-      const session = await base44.asServiceRole.entities.GameSession.create({ character_id: character.id, title: label, story_log: [], world_state: { world_clock_timestamp: options.gameClock || '2026-08-08T20:51:07.745Z', active_concentration: concentration(character.id, options.concentration || {}) }, is_active: false });
+      const session = await base44.asServiceRole.entities.GameSession.create({ character_id: character.id, title: label, story_log: [], world_state: { world_clock_timestamp: options.gameClock || '2026-08-08T20:51:07.745Z', elapsed_game_seconds: Number(options.elapsedGameSeconds) || 0, active_concentration: concentration(character.id, options.concentration || {}) }, is_active: false });
       const current = await base44.asServiceRole.entities.Character.get(character.id);
       const breakdown = resolveAuthoritativeSkillModifier({ character: current, session, skill: 'Stealth' });
       const receipt = options.raw == null ? null : buildSkillCheckReceipt({ requestId: 'fixture-story-action', raw: options.raw, allRolls: [options.raw], dc: 16, success: options.recordedSuccess ?? false, breakdown: { ...breakdown, total: 7, effect_bonus: 0, pwt_active: false }, advantageSources: [] });
@@ -35,7 +35,7 @@ export default async function testPausedPwtStealthModifierRegression(req) {
     results.push({ name: 'base plus7 and PWT plus10 resolve total plus17', pass: paused.breakdown.base_skill === 7 && paused.breakdown.total === 17 && paused.breakdown.components.some((component) => component.source === 'Pass without Trace' && component.value === 10) });
     results.push({ name: 'canonical condition modifier and session concentration link exactly', pass: paused.breakdown.concentration_linked === true });
     results.push({ name: 'PWT bonus appears exactly once', pass: paused.breakdown.components.filter((component) => component.source === 'Pass without Trace').length === 1 });
-    const expired = await make('game-expired', { gameClock: '2026-08-10T03:10:46.874Z' });
+    const expired = await make('game-expired', { gameClock: '2026-08-10T03:10:46.874Z', elapsedGameSeconds: 3600 });
     results.push({ name: 'game-time expired effect is excluded', pass: expired.breakdown.ok && !expired.breakdown.pwt_active && expired.breakdown.total === 7 });
     const broken = await make('concentration-broken', { concentration: { broken: true } });
     results.push({ name: 'broken concentration excludes PWT', pass: broken.breakdown.ok && !broken.breakdown.pwt_active && broken.breakdown.total === 7 });
