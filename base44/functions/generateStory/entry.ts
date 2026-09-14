@@ -480,7 +480,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...result, narrative: pendingAmbushNarrative(ambushIntent.target_hint, setupSucceeded), key_event: '', combat_trigger: setupSucceeded && result.combat_trigger && roster.ok, enemies: roster.ok ? roster.enemies : [], pending_ambush_attack: setupSucceeded && roster.ok ? { request_id: storyRequestId, target_name: roster.target.name, setup_receipt_id: authoritativeChoiceContext.check.id || authoritativeChoiceContext.check.request_id, setup_success: true } : null };
     } else if(narrativeRangedIntent){
       const enemies=Array.isArray(result.enemies)?result.enemies.filter((enemy)=>Number(enemy?.hp)>0&&Number(enemy?.ac)>0):[];
-      const attackOutcome=await executeStoryWeaponAttack({base44,user,sessionId:session_id,requestId:storyRequestId,contract:selectedChoiceContract,enemies});
+      const attackOutcome=await executeStoryWeaponAttack({base44,user,sessionId:session_id,requestId:storyRequestId,contract:selectedChoiceContract,enemies,rollSubmission:authoritativeChoiceContext?.roll_submission||null});
       if(attackOutcome.status>=400)return Response.json({...attackOutcome.body,action_type:'weapon_attack',contract_version:CHOICE_ACTION_CONTRACT_VERSION},{status:attackOutcome.status});
       const attack=attackOutcome.body;
       if(attack.clarification_required)return Response.json({...attack,action_type:'weapon_attack',contract_version:CHOICE_ACTION_CONTRACT_VERSION,choices:latestChoices,generate_story_version:GENERATE_STORY_VERSION},{status:200});

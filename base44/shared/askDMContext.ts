@@ -88,7 +88,7 @@ export function answerAskDMQuestion(question, playerVisibleContext) {
     const modifiers = (breakdown.modifiers || []).map((component) => `${component.source} ${Number(component.value) >= 0 ? '+' : ''}${component.value}`).join(', ') || 'none';
     const advantages = breakdown.dice?.advantage_sources?.join(', ') || 'none';
     const disadvantages = breakdown.dice?.disadvantage_sources?.join(', ') || 'none';
-    return { classification: 'established_fact', supporting_fact_keys: ['last_roll.breakdown'], answer: `Last ${roll.action || 'attack'} roll against ${roll.target || 'the target'}: ${breakdown.dice?.mode || 'normal'} d20 [${(breakdown.dice?.rolls || []).join(', ')}], selected ${breakdown.dice?.selected}; modifiers ${modifiers}; total modifier ${breakdown.modifier_total >= 0 ? '+' : ''}${breakdown.modifier_total}; advantage sources: ${advantages}; disadvantage sources: ${disadvantages}.` };
+    return { classification: 'established_fact', supporting_fact_keys: ['last_roll.breakdown'], answer: `Last ${roll.action || 'attack'} roll against ${roll.target || 'the target'} (${breakdown.roll_origin || 'ai'} rolled): ${breakdown.dice?.mode || 'normal'} d20 [${(breakdown.dice?.rolls || []).join(', ')}], selected ${breakdown.dice?.selected}; modifiers ${modifiers}; total modifier ${breakdown.modifier_total >= 0 ? '+' : ''}${breakdown.modifier_total}; advantage sources: ${advantages}; disadvantage sources: ${disadvantages}.` };
   }
   if (/\b(?:what(?:'s| is)?|which items? are)\b.{0,50}\b(?:inside|in|contents? of)\b.{0,30}\b(?:bag|container)|\b(?:bag of holding|stowed contents?)\b/i.test(normalized)) {
     const contents = playerVisibleContext.stowed_contents || [];

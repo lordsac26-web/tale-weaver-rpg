@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Dices, X } from 'lucide-react';
+import { Dices, Sparkles, UserRound, X } from 'lucide-react';
 import { rollD20WithAdvantage, resolveCheckSuccess } from './equipmentAdvantage';
+import DiceSpillOverlay from './DiceSpillOverlay';
 
 /**
  * SkillCheckRollModal — manual dice-roll prompt for a skill check.
@@ -35,10 +36,12 @@ export default function SkillCheckRollModal({
   onCancel,
 }) {
   const [rolling, setRolling] = useState(false);
+  const [rollMode, setRollMode] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
   const doRoll = () => {
+    setRollMode('player');
     setRolling(true);
     setError('');
     setTimeout(async () => {
@@ -60,6 +63,7 @@ export default function SkillCheckRollModal({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)' }}>
+      <DiceSpillOverlay active={rolling} />
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -71,10 +75,10 @@ export default function SkillCheckRollModal({
           style={{ background: 'linear-gradient(90deg, rgba(60,40,8,0.5), rgba(20,13,4,0.4))', borderBottom: '1px solid rgba(180,140,90,0.15)' }}>
           <div className="flex items-center gap-2">
             <Dices className="w-4 h-4" style={{ color: '#f0c040' }} />
-            <span className="font-fantasy font-bold text-sm" style={{ color: '#f0c040' }}>{skill} Check</span>
+            <span className="font-fantasy font-bold text-sm" style={{ color: '#f0c040' }}>{skill}{String(skill).toLowerCase().includes('attack') ? '' : ' Check'}</span>
           </div>
           {!result && (
-            <button onClick={onCancel} className="p-1 rounded-lg" style={{ color: 'rgba(201,169,110,0.5)' }}>
+            <button onClick={onCancel} aria-label="Let AI roll and close this choice" className="p-1 rounded-lg" style={{ color: 'rgba(201,169,110,0.5)' }}>
               <X className="w-4 h-4" />
             </button>
           )}
@@ -83,7 +87,7 @@ export default function SkillCheckRollModal({
         <div className="p-5 space-y-4">
           {/* Check summary */}
           <div className="text-center text-sm font-fantasy" style={{ color: 'rgba(232,213,183,0.85)' }}>
-            <div>d20 {modLabel} <span style={{ color: 'rgba(201,169,110,0.4)' }}>vs</span> <span style={{ color: '#fca5a5' }}>DC {dc}</span></div>
+            <div>d20 {modLabel} {Number.isFinite(Number(dc)) && <><span style={{ color: 'rgba(201,169,110,0.4)' }}>vs</span> <span style={{ color: '#fca5a5' }}>DC {dc}</span></>}</div>
             {breakdown && <div className="text-xs mt-1" style={{ color: 'rgba(201,169,110,0.65)' }}>Base {breakdown.base_skill >= 0 ? '+' : ''}{breakdown.base_skill} · Pass without Trace {breakdown.pwt_active ? '+10' : '+0'} · Total {breakdown.total >= 0 ? '+' : ''}{breakdown.total}</div>}
           </div>
 
@@ -99,8 +103,17 @@ export default function SkillCheckRollModal({
 
           {error && <div className="text-center text-xs" style={{ color: '#fca5a5' }}>{error}</div>}
 
-          {/* Roll button / result */}
-          {!result ? (
+          {/* Roll authority choice / roll result */}
+          {!rollMode && !result ? (
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={onCancel} className="rounded-xl border border-violet-400/40 bg-violet-950/60 p-4 text-violet-100">
+                <Sparkles className="mx-auto mb-2 h-5 w-5" /><span className="font-fantasy text-xs">AI Rolls</span>
+              </button>
+              <button onClick={() => setRollMode('player')} className="rounded-xl border border-amber-400/50 bg-amber-950/60 p-4 text-amber-100">
+                <UserRound className="mx-auto mb-2 h-5 w-5" /><span className="font-fantasy text-xs">I Roll</span>
+              </button>
+            </div>
+          ) : !result ? (
             <button onClick={doRoll} disabled={rolling}
               className="w-full py-3 rounded-xl font-fantasy font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-60"
               style={{ background: 'linear-gradient(135deg, rgba(100,65,15,0.9), rgba(70,45,10,0.95))', border: '1px solid rgba(201,169,110,0.5)', color: '#f0c040' }}>
@@ -127,7 +140,7 @@ export default function SkillCheckRollModal({
                 </div>
                 <div className="font-fantasy font-bold text-sm mt-2 tracking-widest uppercase"
                   style={{ color: result.success ? '#86efac' : '#fca5a5' }}>
-                  {result.raw === 20 ? '✦ Natural 20!' : result.raw === 1 ? '✦ Natural 1!' : result.success ? 'Success' : 'Failure'} vs DC {dc}
+                  {result.raw === 20 ? '✦ Natural 20!' : result.raw === 1 ? '✦ Natural 1!' : Number.isFinite(Number(dc)) ? (result.success ? 'Success' : 'Failure') : 'Roll Ready'}{Number.isFinite(Number(dc)) ? ` vs DC ${dc}` : ''}
                 </div>
               </div>
               <button onClick={() => onResolve(result)}

@@ -28,14 +28,13 @@ export default async function(req) {
     const ambiguous = resolveStoryAttackTarget({ targetRef: 'the target', enemies: [{ name: 'Rune Carver', hp: 10, ac: 12 }, { name: 'Cultist Guard', hp: 10, ac: 12 }], sceneText: 'Two enemies stand together.', characterLevel: 6 });
     test('genuinely ambiguous narrative target requests clarification without materialization', !ambiguous.ok && ambiguous.clarification_required === true);
 
-    const rolls = [4, 16];
     const contract = { text: 'Assassinate the lead rune carver with a precise arrow.', action_type: 'weapon_attack', weapon_attack: { target_ref: 'Lead Rune Carver', attack_mode: 'Stealth Attack', declared_attack_count: 1, intent: 'assassinate' } };
-    const first = await executeStoryWeaponAttack({ base44, user, sessionId: session.id, requestId: `${token}:attack`, contract, enemies: [], rollD20Fn: () => rolls.shift() || 10 });
+    const first = await executeStoryWeaponAttack({ base44, user, sessionId: session.id, requestId: `${token}:attack`, contract, enemies: [], rollSubmission: { origin: 'player', rolls: [4, 16] } });
     const combat = first.body?.combat_id ? await base44.asServiceRole.entities.CombatLog.get(first.body.combat_id) : null;
     if (combat) fixtures.push(['CombatLog', combat.id]);
     test('story attack initializes combat with only the materialized target', first.status === 200 && combat && combat.combatants.filter((entry) => entry.type === 'enemy').length === 1 && combat.combatants.some((entry) => entry.type === 'enemy' && entry.name === 'Lead Rune Carver'));
     test('latest successful Stealth receipt is revalidated without expired PWT and grants attributed advantage', first.body?.advantage === true && first.body?.roll_breakdown?.dice?.mode === 'advantage' && first.body?.advantage_sources?.includes('Attacking from Stealthed/concealed'));
-    test('story ambush rolls two d20s and selects the higher result', first.body?.roll_breakdown?.dice?.rolls?.length === 2 && first.body?.roll_breakdown?.dice?.selected === 16);
+    test('player-controlled story ambush uses two submitted d20s and selects the higher result', first.body?.roll_breakdown?.roll_origin === 'player' && first.body?.roll_breakdown?.dice?.rolls?.length === 2 && first.body?.roll_breakdown?.dice?.selected === 16);
     test('Rogue multiclass Sneak Attack is attributed on an advantaged hit', first.body?.hit === true && first.body?.sneak_attack?.dice === '1d6' && /Sneak Attack/.test(first.body?.sneak_attack?.attribution || ''));
     test('attack modifier breakdown exposes ability proficiency and fighting style', ['ability', 'proficiency', 'fighting_style'].every((type) => first.body?.roll_breakdown?.modifiers?.some((component) => component.type === type)));
     const beforeReplay = combat ? await hashValue(await base44.asServiceRole.entities.CombatLog.get(combat.id)) : null;

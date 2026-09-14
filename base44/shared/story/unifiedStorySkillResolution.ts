@@ -65,7 +65,7 @@ export async function resolveUnifiedStorySkillCheck({ db, user, payload }) {
   const allRolls = Array.isArray(payload.all_rolls) && payload.all_rolls.length ? payload.all_rolls : (serverRolls || [raw]);
   const resolved = resolveStorySkillCheck({ character, session, skill: payload.skill, dc: payload.dc, requestId, raw, allRolls, context, advantageSources: [...(payload.advantage_sources || []), ...classAdvantages] });
   if (!resolved.ok) return { status: 409, body: { error: resolved.error, breakdown: resolved.breakdown, writes: 0 } };
-  const receipt = canonicalReceipt({ ...resolved.receipt, had_advantage: hasAdvantage, had_disadvantage: hasDisadvantage, roll_origin: payload.raw_d20 == null ? 'server' : 'reused' });
+  const receipt = canonicalReceipt({ ...resolved.receipt, had_advantage: hasAdvantage, had_disadvantage: hasDisadvantage, roll_origin: payload.raw_d20 == null ? 'ai' : payload.roll_origin === 'player' ? 'player' : 'reused' });
   const immutable = resolutionFromReceipt(receipt);
   const nextReceipts = [...receipts.filter((entry) => entry?.request_id !== requestId).slice(-49), receipt];
   await db.entities.GameSession.update(sessionId, { world_state: { ...(session.world_state || {}), __skill_check_receipts: nextReceipts } });

@@ -22,6 +22,7 @@ import CombatPlayerStatus from './CombatPlayerStatus';
 import CombatStatusDashboard from './CombatStatusDashboard';
 import SmiteSlotPicker from './SmiteSlotPicker';
 import CombatActWindow from './CombatActWindow';
+import SkillCheckRollModal from './SkillCheckRollModal';
 import { ammoStatusForWeapon } from '@/lib/ammunition';
 import { buildCombatRequestKey } from '../../../base44/shared/combat/combatFollowupTransition';
 
@@ -43,6 +44,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   // Paladin Divine Smite: chosen spell slot level for the next weapon attack (null = no smite)
   const [smiteSlotLevel, setSmiteSlotLevel] = useState(null);
   const [hordeBreakerTarget, setHordeBreakerTarget] = useState('');
+  const [pendingAttackRoll, setPendingAttackRoll] = useState(null);
 
   // Keep the selection authoritative after every combat reload. If the selected
   // enemy was just defeated, move to the next conscious enemy so an Extra Attack
@@ -100,7 +102,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
   const isRangedMod    = activeWeaponForMod?.type === 'ranged';
   const isFinesseMod   = (activeWeaponForMod?.properties || []).includes('finesse') || ['rapier','shortsword','dagger','hand crossbow','whip','scimitar'].includes((activeWeaponForMod?.name || '').toLowerCase());
   const statMod     = isRangedMod ? dexMod : isFinesseMod ? Math.max(strMod, dexMod) : strMod;
-  const attackMod   = statMod + profBonus + (activeWeaponForMod?.attack_bonus || 0);
+  const attackMod   = statMod + profBonus + (activeWeaponForMod?.attack_bonus || 0) + (String(character?.fighting_style || '').toLowerCase() === 'archery' && isRangedMod ? 2 : 0);
 
   const handleSelectSpell = (spellName, baseLevel) => {
     setSelectedSpell(spellName);
@@ -110,7 +112,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
 
   const concentrationSpell = world_state?.concentration_spell;
 
-  const handleAction = () => {
+  const submitAction = (rollSubmission = null) => {
     const details = action === 'spell' && selectedSpell ? (SPELL_DETAILS[selectedSpell] || {}) : {};
     const effectiveTarget = details.is_utility ? (player?.id || selectedTarget) : selectedTarget;
     const request_id = buildCombatRequestKey({ combat, sessionId:combat?.session_id, characterId:character?.id, targetId:effectiveTarget, actionType:action });
@@ -132,7 +134,7 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         special_effects: details.special_effects || [],
         slot_level: selectedSpellLevel || selectedSpellBaseLevel || 1,
         base_level: selectedSpellBaseLevel || 1,
-      }, { ...combatModifiers, request_id, metamagic, twin_target_id: metamagic.twinned ? twinTargetId : null });
+      }, { ...combatModifiers, request_id, metamagic, twin_target_id: metamagic.twinned ? twinTargetId : null, ...(rollSubmission ? { roll_submission: rollSubmission } : {}) });
     } else if (action === 'attack') {
       const weapon = getActiveWeapon() || { 
         name: 'Unarmed Strike',
@@ -142,10 +144,30 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
         type: 'melee',
         properties: []
       };
-      onPlayerAttack(selectedTarget, 'attack', weapon, { ...combatModifiers, request_id, smite_slot_level: smiteSlotLevel || undefined });
+      onPlayerAttack(selectedTarget, 'attack', weapon, { ...combatModifiers, request_id, smite_slot_level: smiteSlotLevel || undefined, ...(rollSubmission ? { roll_submission: rollSubmission } : {}) });
     } else {
       onPlayerAttack(selectedTarget, action, null, { ...combatModifiers, request_id });
     }
+  };
+
+  const handleAction = () => {
+    const details = action === 'spell' && selectedSpell ? (SPELL_DETAILS[selectedSpell] || {}) : {};
+    const usesAttackRoll = action === 'attack' || (action === 'spell' && !details.is_utility && details.attack_type !== 'saving_throw' && details.attack_type !== 'auto_hit');
+    if (!usesAttackRoll) { submitAction(); return; }
+    const target = (combatants || []).find((entry) => entry.id === selectedTarget);
+    const playerConditions = [...(player?.conditions || []), ...(character?.conditions || [])].map((condition) => String(condition?.name || condition || '').toLowerCase());
+    const targetConditions = (target?.conditions || []).map((condition) => String(condition?.name || condition || '').toLowerCase());
+    const advantageSources = [
+      ...(playerConditions.some((name) => ['stealthed', 'hidden', 'concealed', 'invisible'].includes(name)) ? ['Attacking from Stealthed/concealed'] : []),
+      ...(targetConditions.some((name) => ['stunned', 'restrained', 'blinded'].includes(name)) ? ['Target condition'] : []),
+      ...(combatModifiers.advantage ? ['Selected situational advantage'] : []),
+    ];
+    const disadvantageSources = [
+      ...(targetConditions.includes('invisible') ? ['Target is invisible'] : []),
+      ...(playerConditions.some((name) => ['poisoned', 'blinded', 'frightened'].includes(name)) ? ['Player condition'] : []),
+      ...(combatModifiers.disadvantage ? ['Selected situational disadvantage'] : []),
+    ];
+    setPendingAttackRoll({ target, advantage: advantageSources.length > 0, disadvantage: disadvantageSources.length > 0, advantageSources, disadvantageSources });
   };
 
   // Dodge action (PHB p.192): ends the turn; enemy attacks get disadvantage until next turn.
@@ -656,6 +678,19 @@ export default function CombatPanel({ combat, character, onPlayerAttack, onNextT
           <CombatLog logEntries={log_entries || []} player={player} />
         </div>
       </div>
+      {pendingAttackRoll && (
+        <SkillCheckRollModal
+          skill={`${action === 'spell' ? selectedSpell : activeWeaponForMod?.name || 'Weapon'} Attack`}
+          modifier={attackMod}
+          dc={pendingAttackRoll.target?.ac}
+          advantage={pendingAttackRoll.advantage}
+          disadvantage={pendingAttackRoll.disadvantage}
+          advantageSources={[...pendingAttackRoll.advantageSources, ...pendingAttackRoll.disadvantageSources]}
+          luckyReroll={character?.race === 'Halfling'}
+          onCancel={() => { setPendingAttackRoll(null); submitAction(); }}
+          onResolve={(rollData) => { setPendingAttackRoll(null); submitAction({ origin: 'player', rolls: rollData.allRolls }); }}
+        />
+      )}
     </div>
   );
 }

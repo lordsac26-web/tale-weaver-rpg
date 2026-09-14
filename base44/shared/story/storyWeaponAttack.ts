@@ -10,7 +10,7 @@ export const STORY_WEAPON_ATTACK_VERSION = 'story-weapon-attack-v1.0.0';
 const RECEIPTS = '__story_weapon_attack_receipts';
 const responseBody = async (response) => ({ status: response.status, body: await response.json() });
 
-export async function executeStoryWeaponAttack({ base44, user, sessionId, requestId, contract, enemies, rollD20Fn = null }) {
+export async function executeStoryWeaponAttack({ base44, user, sessionId, requestId, contract, enemies, rollSubmission = null, rollD20Fn = null }) {
   const session = await base44.asServiceRole.entities.GameSession.get(sessionId).catch(() => null);
   const character = session?.character_id ? await base44.asServiceRole.entities.Character.get(session.character_id).catch(() => null) : null;
   if (!session || !character || character.created_by_id !== user.id || session.character_id !== character.id) return { status: 403, body: { error: 'Story attack ownership chain is invalid.', writes: 0 } };
@@ -41,7 +41,7 @@ export async function executeStoryWeaponAttack({ base44, user, sessionId, reques
   const target = (started.body.combatants || []).find((entry) => entry.type === 'enemy' && entry.name === targetSpec.name) || (started.body.combatants || []).find((entry) => entry.type === 'enemy');
   if (!target) return { status: 409, body: { error: 'The authoritative combat target could not be bound.', writes: 0 } };
   const attackRequestId = `${requestId}:weapon:0`;
-  const attack = await executePlayerAttackCore({ base44, sessionId, combatId: started.body.combat_id, characterId: character.id, requestId: attackRequestId, ownerId: user.id, handler: handlePlayerAttack, rollD20Fn, payload: { target_id: target.id, weapon, modifiers: { action_text: contract.text, nonlethal_intent: contract.weapon_attack?.intent === 'incapacitate_requested' } } });
+  const attack = await executePlayerAttackCore({ base44, sessionId, combatId: started.body.combat_id, characterId: character.id, requestId: attackRequestId, ownerId: user.id, handler: handlePlayerAttack, rollD20Fn, payload: { target_id: target.id, weapon, modifiers: { action_text: contract.text, nonlethal_intent: contract.weapon_attack?.intent === 'incapacitate_requested' }, ...(rollSubmission ? { roll_submission: rollSubmission } : {}) } });
   if (attack.status >= 400) return attack;
   const freshSession = await base44.asServiceRole.entities.GameSession.get(sessionId);
   const activeCombat = !!(freshSession?.in_combat && freshSession?.combat_state?.combat_id);

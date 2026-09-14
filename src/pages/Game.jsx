@@ -342,7 +342,7 @@ export default function Game() {
   };
 
   // Sends the chosen action (and any resolved skill check) to the story engine.
-  const runChoiceStory = async (choice, choiceIndex, skillSuccess, tacticalSources, requestId, preCast = null, skillReceipt = null) => {
+  const runChoiceStory = async (choice, choiceIndex, skillSuccess, tacticalSources, requestId, preCast = null, skillReceipt = null, rollSubmission = null) => {
     const storySequence = ++storyRequestSequenceRef.current;
     setStoryActionLabel(choice.action_type === 'weapon_attack' ? 'Resolving the authoritative weapon attack…' : 'Resolving the chosen action…');
     setStoryLoading(true);
@@ -363,7 +363,7 @@ export default function Game() {
         choice_text: choice.text,
         request_id: requestId,
         story_sequence: Date.now() * 1000 + storySequence,
-        choice_context: { action_type: choice.action_type, check: skillReceipt || { success: skillSuccess === true }, recovery: choice.recovery || null, weapon_attack: choice.action_type === 'weapon_attack' ? choice.weapon_attack : buildThrownWeaponContext(choice.text, character, skillSuccess !== false), ambush_intent: classifyPrecisionAmbushIntent(choice.text) },
+        choice_context: { action_type: choice.action_type, check: skillReceipt || { success: skillSuccess === true }, recovery: choice.recovery || null, weapon_attack: choice.action_type === 'weapon_attack' ? choice.weapon_attack : buildThrownWeaponContext(choice.text, character, skillSuccess !== false), ambush_intent: classifyPrecisionAmbushIntent(choice.text), ...(rollSubmission ? { roll_submission: rollSubmission } : {}) },
         custom_input: (choice.skill_check
           ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}${skillReceipt ? ` (d20 ${skillReceipt.raw_d20} + base ${skillReceipt.modifier_breakdown.base_skill} + effects ${skillReceipt.modifier_breakdown.effect_bonus} = ${skillReceipt.final_total})` : ''}]`
           : choice.text) + mechanicsContext + tacticalContext,
@@ -442,6 +442,14 @@ export default function Game() {
       return;
     }
     if (choiceRoute !== 'resolve_story_skill_check') {
+      if (choice.action_type === 'weapon_attack') {
+        const latestResolved = [...(session?.story_log || [])].reverse().find((entry) => entry?.skill_check || entry?.authoritative_weapon_attack);
+        const stealthAdvantage = latestResolved?.skill_check?.success === true && String(latestResolved.skill_check.skill || '').toLowerCase() === 'stealth';
+        const weapon = character?.equipped?.weapon || character?.equipped?.mainhand || {};
+        const attackModifier = calcStatMod(character?.dexterity || 10) + Number(character?.proficiency_bonus || 2) + Number(weapon.attack_bonus || 0) + (String(character?.fighting_style || '').toLowerCase() === 'archery' ? 2 : 0);
+        setPendingRoll({ skill: `${weapon.name || 'Weapon'} Attack`, dc: null, modifier: attackModifier, advantage: stealthAdvantage, disadvantage: false, advantageSources: stealthAdvantage ? ['Latest successful Stealth setup'] : [], onResolve: (rollData) => { setPendingRoll(null); runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast, null, { origin: 'player', rolls: rollData.allRolls }); }, onCancel: () => { setPendingRoll(null); runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast); } });
+        return;
+      }
       await runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast);
       return;
     }
@@ -457,11 +465,11 @@ export default function Game() {
 
     // Manual mode: open the dice roller pre-configured for this check. The story
     // continues once the player rolls (onResolve). Cancel falls back to auto-roll.
-    if (getManualRollEnabled()) {
+    if (true) {
       setPendingRoll({
         skill: choice.skill_check, dc: choice.dc, modifier, breakdown,
         advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, advantageSources: resolvedAdvantageSources,
-        resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: resolvedAdvantageSources }),
+        resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: resolvedAdvantageSources, rollOrigin: 'player' }),
         onResolve: (rollData) => { setPendingRoll(null); continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { ...rollData, advantageSources: resolvedAdvantageSources }); },
         onCancel: async () => {
           setPendingRoll(null);
@@ -679,11 +687,11 @@ export default function Game() {
     const modifier = prepared.modifier;
 
     // Manual mode: prompt the player to roll the configured dice.
-    if (getManualRollEnabled()) {
+    if (true) {
       setPendingRoll({
         skill, dc, modifier, breakdown,
         advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, advantageSources: equipAdv.sources,
-        resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: equipAdv.sources }),
+        resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: equipAdv.sources, rollOrigin: 'player' }),
         onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, actionType || 'skill_check', skill, dc, recovery, requestId, preCast, { ...rollData, advantageSources: equipAdv.sources }); },
         onCancel: async () => {
           setPendingRoll(null);
@@ -959,7 +967,7 @@ export default function Game() {
     try {
       result = await base44.functions.invoke('combatEngine', {
         action: 'player_attack', session_id: sessionId, combat_id: combatId,
-        character_id: character?.id, request_id: attackRequestId, payload: { target_id: targetId, weapon, spell, modifiers, twin_target_id: twinTargetId }
+        character_id: character?.id, request_id: attackRequestId, payload: { target_id: targetId, weapon, spell, modifiers, twin_target_id: twinTargetId, ...(modifiers?.roll_submission ? { roll_submission: modifiers.roll_submission } : {}) }
       });
     } catch (err) {
       setCombatActionError(current => oneEphemeralCombatError(current, getFunctionErrorMessage(err, 'That action could not be resolved.')));
