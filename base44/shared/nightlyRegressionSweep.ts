@@ -22,15 +22,18 @@ export const MANDATORY_NIGHTLY_SUITES = [
   'testItemTransferRegression',
   'testOvernightPlaytestRepairRegression',
   'testClassChoiceReviewRegression',
+  'testMonotonicEffectDurationRegression',
+  'testPersistentRollModeRegression',
+  'testAskDMRecentRollRegression',
 ];
 
 export const PROTECTED_NIGHTLY_IDS = {
   Character: ['6a6825cd07a490fa70a46852'],
   GameSession: ['6a6825edd695bd65a4322256'],
-  CombatLog: ['6a767f23ec36fe219063ae49', '6a77463582a26b50018110ea'],
+  CombatLog: ['6aa746e6987af77e96be7413', '6aa7d6840d6ccc68948480df'],
 };
 
-const THRESHOLDS = { testLongRestRegression: 26, testTypedUtilitySpellRegression: 19, testAskDMRegression: 9, testStowIntentRoutingRegression: 13, testStatusTruthRegression: 13, testItemTransferRegression: 9, testOvernightPlaytestRepairRegression: 8, testClassChoiceReviewRegression: 14 };
+const THRESHOLDS = { testLongRestRegression: 26, testTypedUtilitySpellRegression: 19, testAskDMRegression: 9, testStowIntentRoutingRegression: 13, testStatusTruthRegression: 16, testItemTransferRegression: 9, testOvernightPlaytestRepairRegression: 8, testClassChoiceReviewRegression: 14, testMonotonicEffectDurationRegression: 12, testPersistentRollModeRegression: 11, testAskDMRecentRollRegression: 7 };
 const QA_MARKER = /(?:LongRestQA|NarrativeContinuityQA|VictoryHandoffQA|P1QA_|SkeletonQA_|HuntersMarkQA_|ArrowRecoveryQA|StorySyncQA|ItemRecoveryQA|ItemTransferQA_|TypedUtilityQA|VendorQA_|AskDMQA_|StowQA_|StatusTruthQA_|ClassChoiceQA_)/;
 
 const hashValue = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');

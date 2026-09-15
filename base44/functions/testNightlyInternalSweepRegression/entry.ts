@@ -3,7 +3,7 @@ import { MANDATORY_NIGHTLY_SUITES, validateNightlySuiteManifest } from '../../sh
 import { writeNightlySweepAggregate } from '../../shared/nightlySweepWriter.ts';
 
 const hashValue = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))).map((byte) => byte.toString(16).padStart(2, '0')).join('');
-const protectedState = (db) => Promise.all([db.entities.Character.get('6a6825cd07a490fa70a46852'), db.entities.GameSession.get('6a6825edd695bd65a4322256'), db.entities.CombatLog.get('6a767f23ec36fe219063ae49'), db.entities.CombatLog.get('6a77463582a26b50018110ea')]);
+const protectedState = (db) => Promise.all([db.entities.Character.get('6a6825cd07a490fa70a46852'), db.entities.GameSession.get('6a6825edd695bd65a4322256'), db.entities.CombatLog.get('6aa746e6987af77e96be7413'), db.entities.CombatLog.get('6aa7d6840d6ccc68948480df')]);
 
 export default async function(req) {
   const results = [];

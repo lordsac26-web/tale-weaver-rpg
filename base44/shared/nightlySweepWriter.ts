@@ -1,6 +1,6 @@
 import { MANDATORY_NIGHTLY_SUITES, NIGHTLY_SWEEP_VERSION, validateNightlySuiteManifest } from './nightlyRegressionSweep.ts';
 
-const THRESHOLDS = { testLongRestRegression: 26, testTypedUtilitySpellRegression: 19, testAskDMRegression: 9, testItemTransferRegression: 9, testOvernightPlaytestRepairRegression: 8, testClassChoiceReviewRegression: 14 };
+const THRESHOLDS = { testLongRestRegression: 26, testTypedUtilitySpellRegression: 19, testAskDMRegression: 9, testItemTransferRegression: 9, testStatusTruthRegression: 16, testOvernightPlaytestRepairRegression: 8, testClassChoiceReviewRegression: 14, testMonotonicEffectDurationRegression: 12, testPersistentRollModeRegression: 11, testAskDMRecentRollRegression: 7 };
 
 const dateKey = () => `nightly-sweep-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}`;
 const cleanupOk = (data) => {

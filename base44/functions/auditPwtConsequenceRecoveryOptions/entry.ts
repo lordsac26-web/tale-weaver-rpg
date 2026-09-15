@@ -6,7 +6,7 @@ export default async function auditPwtConsequenceRecoveryOptionsEndpoint(req) {
   const user = await base44.auth.me();
   if (!user || user.role !== 'admin') return Response.json({ error: 'Admin access required', writes: 0 }, { status: 403 });
   const body = await req.json().catch(() => ({}));
-  if (body?.mode && body.mode !== 'diagnose') return Response.json({ error: 'This endpoint is read-only and supports diagnose mode only.', writes: 0 }, { status: 400 });
-  const result = await auditPwtConsequenceRecoveryOptions(base44.asServiceRole);
-  return Response.json(result);
+  if (body?.mode && !['diagnose', 'apply_option_1'].includes(body.mode)) return Response.json({ error: 'Unsupported recovery mode.', writes: 0 }, { status: 400 });
+  const result = await auditPwtConsequenceRecoveryOptions(base44.asServiceRole, body);
+  return Response.json(result, { status: result.status || 200 });
 }
