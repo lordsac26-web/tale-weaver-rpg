@@ -22,7 +22,7 @@
     "document": {
       "dsl": "1.0.0",
       "name": "nightly_p0_p1_internal_sweep",
-      "version": "1.4",
+      "version": "1.5",
       "namespace": "base44"
     },
     "do": [
@@ -345,9 +345,64 @@
               "nightly_internal": true
             }
           },
-          "then": "write_result",
+          "then": "new_suite_cooldown",
           "x-base44": {
             "title": "Test class choices"
+          }
+        }
+      },
+      {
+        "new_suite_cooldown": {
+          "wait": "PT1M",
+          "then": "monotonic_effect_duration",
+          "x-base44": {
+            "title": "Cool down test traffic",
+            "description": "Avoid fixture rate limits before new suites"
+          }
+        }
+      },
+      {
+        "monotonic_effect_duration": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testMonotonicEffectDurationRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "persistent_roll_mode",
+          "x-base44": {
+            "title": "Test game-time effects"
+          }
+        }
+      },
+      {
+        "persistent_roll_mode": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testPersistentRollModeRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "ask_dm_recent_roll",
+          "x-base44": {
+            "title": "Test persistent roll mode"
+          }
+        }
+      },
+      {
+        "ask_dm_recent_roll": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "testAskDMRecentRollRegression",
+            "args": {
+              "nightly_internal": true
+            }
+          },
+          "then": "write_result",
+          "x-base44": {
+            "title": "Test recent roll answers"
           }
         }
       },
@@ -379,7 +434,10 @@
                 "testStatusTruthRegression": "${ .status_truth }",
                 "testItemTransferRegression": "${ .item_transfer }",
                 "testOvernightPlaytestRepairRegression": "${ .overnight_repair_guard }",
-                "testClassChoiceReviewRegression": "${ .class_choice_review }"
+                "testClassChoiceReviewRegression": "${ .class_choice_review }",
+                "testMonotonicEffectDurationRegression": "${ .monotonic_effect_duration }",
+                "testPersistentRollModeRegression": "${ .persistent_roll_mode }",
+                "testAskDMRecentRollRegression": "${ .ask_dm_recent_roll }"
               }
             }
           },
