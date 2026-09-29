@@ -646,7 +646,6 @@ export default function Game() {
     } catch (err) {
       console.error('Failed to execute action:', err);
       await loadState().catch(() => null);
-      setChoices([]);
       setNarrative(prev => [...prev, { type: 'narration', text: `${getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry.')} The latest authoritative scene was restored; retry your last action.` }]);
     } finally {
       setStoryLoading(false);

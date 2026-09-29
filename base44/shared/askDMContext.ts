@@ -88,6 +88,7 @@ export function answerAskDMQuestion(question, playerVisibleContext) {
   if (refused) return { classification: 'refused', supporting_fact_keys: [], answer: 'I can only clarify player-visible facts already established in this session.' };
   const stateAnswer = answerPlayerStateQuestion(normalized, playerVisibleContext.player_state);
   if (stateAnswer) return stateAnswer;
+  if (/^(?:roll|cast|attack|rest|heal|advance|process|take|spend)\b/i.test(normalized)) return { classification: 'clarification_only', supporting_fact_keys: [], answer: 'This is an out-of-character clarification only. Use the normal action controls to roll, act, cast, rest, or advance the story.' };
   if (/\b(?:last|latest|most recent)\b.{0,40}\b(?:roll|check|attack|save)\b|\b(?:dice|modifiers?|bonuses?|penalties|advantage|disadvantage)\b.{0,40}\b(?:last|latest|recent|roll|check|attack|save)\b/i.test(normalized)) {
     const requestedKind = /\bstealth\b/i.test(normalized) ? 'stealth' : /\battack\b/i.test(normalized) ? 'attack' : /\bsave\b/i.test(normalized) ? 'save' : null;
     const rolls = playerVisibleContext.recent_rolls || [];
