@@ -31,7 +31,7 @@ export const resolutionFromReceipt = (receipt, replayed = false) => {
   });
 };
 
-export async function resolveUnifiedStorySkillCheck({ db, user, payload }) {
+export async function resolveUnifiedStorySkillCheck({ db, user, payload, rollD20Fn = rollD20 }) {
   const sessionId = payload?.session_id;
   const characterId = payload?.character_id;
   const requestId = String(payload?.request_id || '').trim().slice(0, 120);
@@ -58,14 +58,14 @@ export async function resolveUnifiedStorySkillCheck({ db, user, payload }) {
   const hasAdvantage = (payload.advantage === true || classAdvantages.length > 0) && payload.disadvantage !== true;
   const hasDisadvantage = payload.disadvantage === true && !(payload.advantage === true || classAdvantages.length > 0);
   const serverRolls = payload.raw_d20 == null ? Array.from({ length: hasAdvantage || hasDisadvantage ? 2 : 1 }, () => {
-    const first = rollD20();
-    return payload.lucky_reroll === true && first === 1 ? rollD20() : first;
+    const first = rollD20Fn();
+    return payload.lucky_reroll === true && first === 1 ? rollD20Fn() : first;
   }) : null;
   const raw = payload.raw_d20 == null ? (hasAdvantage ? Math.max(...serverRolls) : hasDisadvantage ? Math.min(...serverRolls) : serverRolls[0]) : Number(payload.raw_d20);
   const allRolls = Array.isArray(payload.all_rolls) && payload.all_rolls.length ? payload.all_rolls : (serverRolls || [raw]);
   const resolved = resolveStorySkillCheck({ character, session, skill: payload.skill, dc: payload.dc, requestId, raw, allRolls, context, advantageSources: [...(payload.advantage_sources || []), ...classAdvantages] });
   if (!resolved.ok) return { status: 409, body: { error: resolved.error, breakdown: resolved.breakdown, writes: 0 } };
-  const receipt = canonicalReceipt({ ...resolved.receipt, had_advantage: hasAdvantage, had_disadvantage: hasDisadvantage, roll_origin: payload.raw_d20 == null ? 'ai' : payload.roll_origin === 'player' ? 'player' : 'reused' });
+  const receipt = canonicalReceipt({ ...resolved.receipt, had_advantage: hasAdvantage, had_disadvantage: hasDisadvantage, roll_origin: payload.raw_d20 == null ? 'ai' : payload.roll_origin === 'player' ? 'player' : 'reused', ...(payload.action_text ? { action_text: String(payload.action_text).slice(0, 600), source_story_request_id: (session.story_log || []).at(-1)?.request_id || null } : {}) });
   const immutable = resolutionFromReceipt(receipt);
   const nextReceipts = [...receipts.filter((entry) => entry?.request_id !== requestId).slice(-49), receipt];
   await db.entities.GameSession.update(sessionId, { world_state: { ...(session.world_state || {}), __skill_check_receipts: nextReceipts } });

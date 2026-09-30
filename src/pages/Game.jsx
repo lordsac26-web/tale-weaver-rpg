@@ -43,6 +43,7 @@ import { prepareStorySkillCheck, resolveStorySkillRoll } from '@/lib/storySkillC
 import { acceptSequencedStoryPayload, hydrateLatestStoryEntry, STORY_TRANSITION_VERSION } from '../../base44/shared/story/storyTransition';
 import { beginCombatIntent, buildCombatRequestKey, COMBAT_FOLLOWUP_TRANSITION_VERSION, finishCombatIntent, oneEphemeralCombatError } from '../../base44/shared/combat/combatFollowupTransition';
 import { normalizeRollMode } from '@/lib/rollMode';
+import createStoryContinuation from '@/lib/storyContinuation';
 
 const getFunctionErrorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.response?.data?.message ||
@@ -80,6 +81,8 @@ export default function Game() {
   const victoryResumeInFlight = useRef(false);
   const storyRequestSequenceRef = useRef(0);
   const choiceDispatchInFlightRef = useRef(false);
+  const storyContinuationRef = useRef(null);
+  if (!storyContinuationRef.current) storyContinuationRef.current = createStoryContinuation(payload => base44.functions.invoke('generateStory', payload));
   const [storyActionLabel, setStoryActionLabel] = useState(null);
   const [companions, setCompanions] = useState([]);
   const [showCompanions, setShowCompanions] = useState(false);
@@ -341,8 +344,9 @@ export default function Game() {
     const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources } = rollData;
     const resolved = rollData.receipt || rollData.modifier_breakdown
       ? rollData
-      : await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, requestId, raw, allRolls, advantageSources });
+      : await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, actionText: choice.text, requestId, raw, allRolls, advantageSources });
     const { modifier, breakdown, final, success, receipt } = resolved;
+    storyContinuationRef.current.remember(requestId, resolved);
     const feedback = getSkillFeedback(choice.skill_check, success, final, choice.dc, raw);
     setNarrative(prev => [...prev, {
       type: 'skill_check', skill: choice.skill_check, dc: choice.dc, raw, allRolls, hadAdvantage, hadDisadvantage,
@@ -357,6 +361,7 @@ export default function Game() {
     setStoryActionLabel(choice.action_type === 'weapon_attack' ? 'Resolving the authoritative weapon attack…' : 'Resolving the chosen action…');
     setStoryLoading(true);
     try {
+      const result = await storyContinuationRef.current.send(requestId, async () => {
       const mechanicalCast = preCast || await maybeCastStorySpell(choice.text, requestId);
       const mechanicalItem = await maybeUseStoryConsumable(choice.text);
       const mechanicsContext = [
@@ -366,7 +371,7 @@ export default function Game() {
       const tacticalContext = (tacticalSources && tacticalSources.length > 0)
         ? ` [TACTICAL: Attack has advantage (${tacticalSources.join('; ')}). Apply advantage to the attack roll.]`
         : '';
-      const result = await base44.functions.invoke('generateStory', {
+      return {
         session_id: sessionId,
         action: 'choice',
         choice_index: choiceIndex,
@@ -377,6 +382,7 @@ export default function Game() {
         custom_input: (choice.skill_check
           ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}${skillReceipt ? ` (d20 ${skillReceipt.raw_d20} + base ${skillReceipt.modifier_breakdown.base_skill} + effects ${skillReceipt.modifier_breakdown.effect_bonus} = ${skillReceipt.final_total})` : ''}]`
           : choice.text) + mechanicsContext + tacticalContext,
+      };
       });
       const data = result.data;
       if(data.time_advance?.clock&&data.session)setSession(data.session);
@@ -400,6 +406,7 @@ export default function Game() {
       }
 
       await loadState({ storySequence, expectedRequestId: requestId });
+      storyContinuationRef.current.accepted(requestId);
     } catch (err) {
       console.error('Failed to process choice:', err);
       await loadState().catch(() => null);
@@ -433,7 +440,11 @@ export default function Game() {
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
     setChoices([]);
 
-    const requestId = `story-choice:${sessionId}:${crypto.randomUUID()}`;
+    let requestId;
+    try { requestId = storyContinuationRef.current.begin(`choice:${session?.story_log?.at(-1)?.request_id}:${choice.text}`, () => `story-choice:${sessionId}:${crypto.randomUUID()}`); }
+    catch (err) { choiceDispatchInFlightRef.current = false; setChoices(choices); setNarrative(prev => [...prev, { type: 'action_error', text: err.message }]); return; }
+    const retryReceipt = storyContinuationRef.current.receipt(requestId);
+    if (retryReceipt) { await continueChoiceWithRoll(choice, choiceIndex, requestId, null, retryReceipt); return; }
     let preCast = null;
     try { preCast = await maybeCastStorySpell(choice.text, requestId); }
     catch (err) {
@@ -458,7 +469,7 @@ export default function Game() {
         const weapon = character?.equipped?.weapon || character?.equipped?.mainhand || {};
         const attackModifier = calcStatMod(character?.dexterity || 10) + Number(character?.proficiency_bonus || 2) + Number(weapon.attack_bonus || 0) + (String(character?.fighting_style || '').toLowerCase() === 'archery' ? 2 : 0);
         if (rollMode === 'player') {
-          setPendingRoll({ skill: `${weapon.name || 'Weapon'} Attack`, dc: null, modifier: attackModifier, advantage: stealthAdvantage, disadvantage: false, advantageSources: stealthAdvantage ? ['Latest successful Stealth setup'] : [], onResolve: (rollData) => { setPendingRoll(null); runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast, null, { origin: 'player', rolls: rollData.allRolls }); }, onCancel: () => { setPendingRoll(null); setChoices(choices); } });
+          setPendingRoll({ skill: `${weapon.name || 'Weapon'} Attack`, dc: null, modifier: attackModifier, advantage: stealthAdvantage, disadvantage: false, advantageSources: stealthAdvantage ? ['Latest successful Stealth setup'] : [], onResolve: (rollData) => { setPendingRoll(null); runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast, null, { origin: 'player', rolls: rollData.allRolls }); }, onCancel: () => { storyContinuationRef.current.cancelled(requestId); choiceDispatchInFlightRef.current = false; setPendingRoll(null); setChoices(choices); } });
         } else await runChoiceStory(choice, choiceIndex, undefined, [], requestId, preCast);
         return;
       }
@@ -470,7 +481,7 @@ export default function Game() {
     const resolvedAdvantage = equipAdv.advantage;
     const resolvedAdvantageSources = [...(equipAdv.sources || [])];
     let prepared;
-    try { prepared = await prepareStorySkillCheck({ sessionId, characterId: checkCharacter?.id, skill: choice.skill_check, dc: choice.dc, requestId }); }
+    try { prepared = await prepareStorySkillCheck({ sessionId, characterId: checkCharacter?.id, skill: choice.skill_check, dc: choice.dc, actionText: choice.text, requestId }); }
     catch (err) { choiceDispatchInFlightRef.current = false; setNarrative(prev => [...prev, { type: 'action_error', text: getFunctionErrorMessage(err, 'The skill check could not be prepared.') }]); return; }
     const breakdown = prepared.breakdown;
     const modifier = prepared.modifier;
@@ -481,11 +492,11 @@ export default function Game() {
       setPendingRoll({
         skill: choice.skill_check, dc: choice.dc, modifier, breakdown,
         advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, advantageSources: resolvedAdvantageSources,
-        resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: resolvedAdvantageSources, rollOrigin: 'player' }),
+        resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, actionText: choice.text, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: resolvedAdvantageSources, rollOrigin: 'player' }),
         onResolve: (rollData) => { setPendingRoll(null); continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { ...rollData, advantageSources: resolvedAdvantageSources }); },
         onCancel: async () => {
           setPendingRoll(null);
-          const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, requestId, advantageSources: resolvedAdvantageSources, advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
+          const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, actionText: choice.text, requestId, advantageSources: resolvedAdvantageSources, advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
           continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { ...resolved, advantageSources: resolvedAdvantageSources });
         },
       });
@@ -493,7 +504,7 @@ export default function Game() {
     }
 
     // Auto mode: the authoritative server rolls once, persists once, and returns the immutable result.
-    const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, requestId, advantageSources: resolvedAdvantageSources, advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
+    const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill: choice.skill_check, dc: choice.dc, actionText: choice.text, requestId, advantageSources: resolvedAdvantageSources, advantage: resolvedAdvantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
     await continueChoiceWithRoll(choice, choiceIndex, requestId, preCast, { ...resolved, advantageSources: resolvedAdvantageSources });
   };
 
@@ -617,13 +628,15 @@ export default function Game() {
     const storySequence = ++storyRequestSequenceRef.current;
     setStoryLoading(true);
     try {
+      const result = await storyContinuationRef.current.send(requestId, async () => {
       const mechanicalCast = preCast || await maybeCastStorySpell(action, requestId);
       const mechanicalItem = await maybeUseStoryConsumable(action);
       const mechanicsContext = [
         mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
         mechanicalItem ? ` [MECHANICS: ${mechanicalItem.quantity} ${mechanicalItem.item_name} were authoritatively consumed and restored ${mechanicalItem.heal_amount} HP. Do not narrate a different quantity or apply another mechanical heal.]` : '',
       ].join('');
-      const result = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'choice', request_id: requestId, story_sequence: Date.now() * 1000 + storySequence, choice_context: { ...outcome, weapon_attack: buildThrownWeaponContext(action, character, outcome?.check?.success !== false) }, custom_input: action + checkResult + mechanicsContext });
+      return { session_id: sessionId, action: 'choice', request_id: requestId, story_sequence: Date.now() * 1000 + storySequence, choice_context: { ...outcome, weapon_attack: buildThrownWeaponContext(action, character, outcome?.check?.success !== false) }, custom_input: action + checkResult + mechanicsContext };
+      });
       const data = result.data;
       if(data.time_advance?.clock&&data.session)setSession(data.session);
       if(data.time_advance?.clock&&data.character)setCharacter(data.character);
@@ -643,6 +656,7 @@ export default function Game() {
         setChoices(acceptedStory.hydration.choices);
       }
       await loadState({ storySequence, expectedRequestId: requestId });
+      storyContinuationRef.current.accepted(requestId);
     } catch (err) {
       console.error('Failed to execute action:', err);
       await loadState().catch(() => null);
@@ -657,8 +671,9 @@ export default function Game() {
     const { raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources } = rollData;
     const resolved = rollData.receipt || rollData.modifier_breakdown
       ? rollData
-      : await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, raw, allRolls, advantageSources });
+      : await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, actionText: action, requestId, raw, allRolls, advantageSources });
     const { modifier, breakdown, final, success, receipt } = resolved;
+    storyContinuationRef.current.remember(requestId, resolved);
     const feedback = getSkillFeedback(skill, success, final, dc, raw);
     setNarrative(prev => [...prev, { type: 'skill_check', skill, dc, raw, allRolls, hadAdvantage, hadDisadvantage, advantageSources, modifier, breakdown, final, success, feedback, character_name: character?.name }]);
     const checkResult = ` [Skill Check: ${skill} DC${dc} — ${success ? 'SUCCESS' : 'FAILURE'} (d20 ${raw} + base ${breakdown.base_skill} + effects ${breakdown.effect_bonus} = ${final}${hadAdvantage ? ', with advantage' : ''}${hadDisadvantage ? ', with disadvantage' : ''}${advantageSources?.length ? `; source: ${advantageSources.join(', ')}` : ''})]`;
@@ -672,7 +687,11 @@ export default function Game() {
       setNarrative(prev => [...prev, { type: 'action_error', text: proposal.valid ? 'The composite plan is validated but must be resolved through its ordered authoritative children.' : `${proposal.reasoning} Choose one of the legal alternatives shown; the scene and choices remain unchanged.` }]);
       return;
     }
-    const requestId = `story-action:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    let requestId;
+    try { requestId = storyContinuationRef.current.begin(`proposal:${session?.story_log?.at(-1)?.request_id}:${action}`, () => `story-action:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`); }
+    catch (err) { setNarrative(prev => [...prev, { type: 'action_error', text: err.message }]); return; }
+    const retryReceipt = storyContinuationRef.current.receipt(requestId);
+    if (retryReceipt) { await continueProposalWithRoll(action, actionType || 'skill_check', skill, dc, recovery, requestId, null, retryReceipt); return; }
 
     setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
     setChoices([]);
@@ -692,7 +711,7 @@ export default function Game() {
 
     const equipAdv = getEquipmentAdvantage(checkCharacter?.equipped, canonicalSkillName(skill));
     let prepared;
-    try { prepared = await prepareStorySkillCheck({ sessionId, characterId: checkCharacter?.id, skill, dc, requestId }); }
+    try { prepared = await prepareStorySkillCheck({ sessionId, characterId: checkCharacter?.id, skill, dc, actionText: action, requestId }); }
     catch (err) { setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'The skill check could not be prepared.'), success: false }]); return; }
     const breakdown = prepared.breakdown;
     const modifier = prepared.modifier;
@@ -702,11 +721,11 @@ export default function Game() {
       setPendingRoll({
         skill, dc, modifier, breakdown,
         advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, advantageSources: equipAdv.sources,
-        resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: equipAdv.sources, rollOrigin: 'player' }),
+        resolveRoll: (rollData) => resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, actionText: action, requestId, raw: rollData.raw, allRolls: rollData.allRolls, advantageSources: equipAdv.sources, rollOrigin: 'player' }),
         onResolve: (rollData) => { setPendingRoll(null); continueProposalWithRoll(action, actionType || 'skill_check', skill, dc, recovery, requestId, preCast, { ...rollData, advantageSources: equipAdv.sources }); },
         onCancel: async () => {
           setPendingRoll(null);
-          const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, advantageSources: equipAdv.sources, advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
+          const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, actionText: action, requestId, advantageSources: equipAdv.sources, advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
           continueProposalWithRoll(action, actionType || 'skill_check', skill, dc, recovery, requestId, preCast, { ...resolved, advantageSources: equipAdv.sources });
         },
       });
@@ -714,7 +733,7 @@ export default function Game() {
     }
 
     // Auto mode: resolve and persist through the same authoritative server transaction.
-    const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, requestId, advantageSources: equipAdv.sources, advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
+    const resolved = await resolveStorySkillRoll({ sessionId, characterId: character?.id, skill, dc, actionText: action, requestId, advantageSources: equipAdv.sources, advantage: equipAdv.advantage, disadvantage: equipAdv.disadvantage, luckyReroll: character?.race === 'Halfling' });
     await continueProposalWithRoll(action, actionType || 'skill_check', skill, dc, recovery, requestId, preCast, { ...resolved, advantageSources: equipAdv.sources });
   };
 

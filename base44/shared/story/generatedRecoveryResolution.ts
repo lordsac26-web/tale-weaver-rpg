@@ -23,7 +23,12 @@ const groundedFallback = ({ action, location, check }) => ({
 });
 
 export async function resolveGeneratedRecoveryCandidate({ candidate, regenerate, action, location, check }) {
-  const inspect = (value) => validateNarratedRecovery({ narrative: value?.narrative, recovery: value?.current_recovery, loot: value?.loot });
+  const inspect = (value) => {
+    const validation = validateNarratedRecovery({ narrative: value?.narrative, recovery: value?.current_recovery, loot: value?.loot });
+    // Structurally matched loot is still forbidden when the actual check failed.
+    if (check?.success === false && validation.claim?.claimed) return { ...validation, ok: false, status: 'failed_check_acquisition' };
+    return validation;
+  };
   const initial = inspect(candidate);
   if (initial.ok) return { result: candidate, parser_version: NARRATED_RECOVERY_PARSER_VERSION, classification: initial.status, attempts: 0, initial_validation: initial };
 

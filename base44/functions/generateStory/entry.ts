@@ -32,6 +32,8 @@ import { COMPOSITE_ACTION_CONTRACT_VERSION } from '../../shared/story/compositeA
 import { craftingNarrationNeedsReceipt, CRAFTING_TRANSACTION_VERSION, executeCraftingTransaction } from '../../shared/craftingTransaction.ts';
 import { buildInfiltrationSessionUpdate, guardInfiltrationBeat, INFILTRATION_ADVANCEMENT_VERSION, planInfiltrationAdvancement } from '../../shared/story/infiltrationSuccessAdvancement.ts';
 import { normalizeDeclaredRecovery, routeChoiceAward, CHOICE_AWARD_ROUTING_VERSION } from '../../shared/story/choiceAwardRouting.js';
+import { resolveFailedCheckCandidate, resolveNarratedStowCandidate, FAILED_CHECK_CONTINUATION_VERSION } from '../../shared/story/failedCheckContinuation.ts';
+import { selectStoryChoice } from '../../shared/story/selectedStoryChoice.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -48,7 +50,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.12.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.13.0';
 
 Deno.serve(async (req) => {
   try {
@@ -70,6 +72,12 @@ Deno.serve(async (req) => {
     }
     if (action === 'hydrate') return Response.json(buildGameHydration(session, character));
     const storyRequestId = String(request_id || '').slice(0, 120);
+    // Replay an accepted pair before any cast, stow, transfer, or award dispatch.
+    const replayIndex = action === 'choice' && storyRequestId ? (session.story_log || []).findIndex((entry) => entry?.request_id === storyRequestId && entry?.text) : -1;
+    if (replayIndex >= 0) {
+      const entry = session.story_log[replayIndex];
+      return Response.json({ narrative: entry.text, choices: entry.choices || [], ...storyPayloadFromCommit({ entry, index: replayIndex, persistence_confirmed: true }), persistence_confirmed: true, already_processed: true, writes: 0, generate_story_version: GENERATE_STORY_VERSION });
+    }
     if (action === 'start') {
       const existingOpening = hydrateLatestStoryEntry(session);
       if (existingOpening.text && existingOpening.choices.length >= 4) return Response.json({ narrative: existingOpening.text, choices: existingOpening.choices, ...storyPayloadFromCommit({ entry: existingOpening.entry, index: existingOpening.index, persistence_confirmed: true }), persistence_confirmed: true, already_processed: true });
@@ -85,8 +93,9 @@ Deno.serve(async (req) => {
     const completedCombat = await readCompletedCombatContext(base44, session) || (authoritativeChoiceContext?.completed_combat && typeof authoritativeChoiceContext.completed_combat === 'object'
       ? authoritativeChoiceContext.completed_combat : null);
     const latestChoices = hydrateLatestStoryEntry(session).choices;
-    const persistedChoice = action === 'choice' && Number.isInteger(Number(choice_index)) ? latestChoices[Number(choice_index)] : null;
-    const selectedChoiceContract = normalizeChoiceActionContract(persistedChoice || { text: choice_text || custom_input || `Selected choice ${Number(choice_index || 0) + 1}`, ...authoritativeChoiceContext });
+    const selection = selectStoryChoice({ latestChoices, choiceIndex: action === 'choice' ? choice_index : undefined, choiceText: choice_text, customInput: custom_input, context: authoritativeChoiceContext });
+    if (!selection.ok) return Response.json({ ...selection, invalid: true, preserve_scene: true, writes: 0 }, { status: 409 });
+    const selectedChoiceContract = selection.contract;
     authoritativeChoiceContext = { ...authoritativeChoiceContext, recovery: normalizeDeclaredRecovery(authoritativeChoiceContext.recovery ?? selectedChoiceContract.recovery) };
     const selectedChoice = action === 'choice' ? stripGeneratedChoiceAnnotations(selectedChoiceContract.text) : '';
     if (action === 'choice' && selectedChoiceContract.action_type === 'composite_action') {
@@ -122,12 +131,12 @@ Deno.serve(async (req) => {
     let authoritativeStow = null;
     let recoveryAttention = null;
     if (action === 'choice') {
-      const stowOutcome = await executeStowAction({ base44, user, payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId } });
+      const stowOutcome = await executeStowAction({ base44, ownerId: user.id, payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId, check: authoritativeChoiceContext?.check } });
       if (stowOutcome.body?.handled) {
         if (stowOutcome.status >= 400) return Response.json(stowOutcome.body, { status: stowOutcome.status });
         authoritativeStow = stowOutcome.body;
         if (stowOutcome.body?.clarification_required) return Response.json({ narrative: stowOutcome.body.message, choices: [], stow_transaction: stowOutcome.body, clarification_required: true, preserve_scene: true, writes: 0, generate_story_version: GENERATE_STORY_VERSION }, { status: 200 });
-        if (stowOutcome.body?.reason === 'failed_check') return Response.json({ error: 'The container placement did not succeed.', stow_transaction: stowOutcome.body, preserve_scene: true, writes: 0 }, { status: 409 });
+        // failed_check is an expected zero-write outcome; continue its failure branch.
         if (stowOutcome.body?.success) character = await base44.asServiceRole.entities.Character.get(character.id);
       }
     }
@@ -326,7 +335,8 @@ ${authoritativeTransfer ? (authoritativeTransfer.clarification_required
   : `ITEM TRANSFER NOT COMMITTED: ${authoritativeTransfer.reason||'the transfer did not succeed'}. Do not narrate the item as moved.`) : ''}
 ${authoritativeStow ? (authoritativeStow.clarification_required
   ? `STOW CLARIFICATION REQUIRED: the player tried to stow "${authoritativeStow.item_phrase}" into ${authoritativeStow.container}, but the item identity is ambiguous${authoritativeStow.candidates?.length ? ` (carried candidates: ${authoritativeStow.candidates.join(', ')})` : ''}. In the narration, ask which carried item they mean and offer clarifying choices. Do not invent an item, an acquisition, or a mechanical change.`
-  : `AUTHORITATIVE STOW RESULT: exactly ${authoritativeStow.stow.quantity} ${authoritativeStow.stow.item_name} (${authoritativeStow.stow.item_id}) was moved into ${authoritativeStow.stow.container}${authoritativeStow.already_processed ? ' (this stow was already processed; do not repeat it)' : ''}. Narrate only this result; never claim another item was stowed.`) : ''}
+  : authoritativeStow.success ? `AUTHORITATIVE STOW RESULT: exactly ${authoritativeStow.stow.quantity} ${authoritativeStow.stow.item_name} (${authoritativeStow.stow.item_id}) was moved into ${authoritativeStow.stow.container}${authoritativeStow.already_processed ? ' (this stow was already processed; do not repeat it)' : ''}. Narrate only this result; never claim another item was stowed.`
+  : 'STOW NOT COMMITTED: the authoritative check failed. No item moved; narrate the failed attempt and alternatives.') : ''}
 ${activeEffectsLine}
 ${stowedContentsLine}
 ${corpseContractLine}
@@ -456,15 +466,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
     });
     let result = await generateNarrative(prompt);
     console.info('Story model candidate', JSON.stringify({ generate_story_version:GENERATE_STORY_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, request_id:storyRequestId, candidate:result }));
-    if (action === 'choice' && storyRequestId && !authoritativeStow?.success) {
-      const narratedStow = await executeStowAction({ base44, user, payload: { session_id, character_id: character.id, action_text: result?.narrative, request_id: storyRequestId, check: authoritativeChoiceContext?.check } });
-      if (narratedStow.status >= 400) return Response.json(narratedStow.body, { status: narratedStow.status });
-      if (narratedStow.body?.handled && !narratedStow.body?.success) return Response.json({ error: narratedStow.body?.reason || 'Narrated container placement lacks one authoritative source.', stow_transaction: narratedStow.body, preserve_scene: true, writes: 0 }, { status: 409 });
-      if (narratedStow.body?.success) {
-        authoritativeStow = narratedStow.body;
-        character = await base44.asServiceRole.entities.Character.get(character.id);
-      }
-    }
+    result = await resolveFailedCheckCandidate({ candidate: result, check: authoritativeChoiceContext?.check, regenerate: (instruction) => generateNarrative(`${prompt}\n\n${instruction}`) });
     const postRestNoMagic = Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested && !isPwt((character.conditions || []).find(isPwt)) && !isPwt(session.world_state?.active_concentration);
     if (postRestNoMagic && result?.narrative) result = { ...result, narrative: repairPostRestNarration(result.narrative).text };
     const contradictions = completedCombat ? findDeadCombatantContradictions(result?.narrative, completedCombat) : [];
@@ -490,14 +492,14 @@ Write a gripping 1-2 paragraph combat narrative.`;
     let craftingTransaction = null;
     const awardRoute = routeChoiceAward({ actionType:selectedChoiceContract.action_type, actionText:selectedChoice||custom_input, recovery:result?.current_recovery, craftingOutcome:result?.crafting_outcome, narrative:result?.narrative });
     console.info('Story award route', JSON.stringify({ request_id:storyRequestId, action_type:selectedChoiceContract.action_type, route:awardRoute.route, routing_version:CHOICE_AWARD_ROUTING_VERSION }));
-    if (action === 'choice' && awardRoute.route === 'crafting') {
+    if (action === 'choice' && authoritativeChoiceContext?.check?.success !== false && awardRoute.route === 'crafting') {
       const crafted = await executeCraftingTransaction({ base44, ownerId:user.id, characterId:character.id, sessionId:session_id, requestId:storyRequestId, recipe:result?.crafting_outcome || {}, check:authoritativeChoiceContext.check });
       if (crafted.status >= 400 || !crafted.body?.applied) return Response.json({ error:crafted.body?.reason || 'Crafting did not establish a complete transaction.', invalid:true, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, writes:0 },{status:crafted.status||409});
       craftingTransaction=crafted.body;
       const receipt=crafted.body.receipt;
       result={...result,narrative:`${result.narrative}\n\nCrafting confirmed: you received exactly ${receipt.yield_quantity} ${receipt.canonical_item}. The inventory transaction is complete.`,current_recovery:null};
     }
-    if (action === 'choice' && awardRoute.route === 'crafting' && craftingNarrationNeedsReceipt(selectedChoice||custom_input,result?.narrative) && !craftingTransaction?.applied) return Response.json({error:'The exact crafting yield was not established; no ammunition was added.',invalid:true,crafting_transaction_version:CRAFTING_TRANSACTION_VERSION,writes:0},{status:409});
+    if (action === 'choice' && authoritativeChoiceContext?.check?.success !== false && awardRoute.route === 'crafting' && craftingNarrationNeedsReceipt(selectedChoice||custom_input,result?.narrative) && !craftingTransaction?.applied) return Response.json({error:'The exact crafting yield was not established; no ammunition was added.',invalid:true,crafting_transaction_version:CRAFTING_TRANSACTION_VERSION,writes:0},{status:409});
     let recoveryResolution = null;
     if (!authoritativeRecovery && !craftingTransaction && action === 'choice') {
       recoveryResolution = await resolveGeneratedRecoveryCandidate({
@@ -514,18 +516,21 @@ Write a gripping 1-2 paragraph combat narrative.`;
     const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
     if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0, parser_version:NARRATED_RECOVERY_PARSER_VERSION, recovery_diagnostics:result.recovery_diagnostics }, { status: 409 });
     result = skillInvariant.result;
-    if (authoritativeChoiceContext?.check?.success === false && result.narrative) {
-      const failedCheckContradictions = findFailedCheckSuccessContradictions(result.narrative);
-      if (failedCheckContradictions.length) {
-        result = await generateNarrative(`${prompt}\n\nFAILED-CHECK CORRECTION: The authoritative check FAILED, but the prior candidate narrated the task as completed (${failedCheckContradictions.join(', ')}). ${FAILED_CHECK_CORRECTION_INSTRUCTION}`);
-        if (findFailedCheckSuccessContradictions(result?.narrative || '').length) {
-          result = { ...result, narrative: failedCheckFallbackNarrative(selectedChoice || custom_input) };
-        }
-      }
-    }
     const infiltrationBeat=await guardInfiltrationBeat({candidate:result,previousEntry:(session.story_log||[]).at(-1),plan:infiltrationPlan,regenerate:({metrics,plan})=>generateNarrative(`${prompt}\n\nDUPLICATE-BEAT CORRECTION: The prior candidate was static or too similar (narration ${metrics.narrative_similarity.toFixed(3)}, choices ${metrics.choice_similarity.toFixed(3)}). Rewrite once so the ${plan.success?'successful':'failed'} infiltration action creates a distinct consequence, advances to the contracted structured state when successful, and offers four materially different choices. Never reuse the prior beat or say no further action is taken.`)});
     result={...infiltrationBeat.result,infiltration_guard:infiltrationBeat.guard};
     if (stealthSetupIntent?.establishes_concealment) result = { ...result, combat_trigger:false, enemies:[], condition_update:{target:'player',add:'Stealthed',remove:[],duration:'persistent'}, stealth_handoff:{version:STEALTH_SETUP_HANDOFF_VERSION,request_id:storyRequestId,classification_evidence:stealthSetupIntent,attack_resolved:false,advantage_attribution:'Attacking from Stealthed/concealed'} };
+    // All model rewrites have finished. Recheck the failed branch before any
+    // narration-derived inventory dispatch; this never changes its receipt.
+    result = await resolveFailedCheckCandidate({ candidate: result, check: authoritativeChoiceContext?.check });
+    const finalInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
+    if (!finalInvariant.ok) return Response.json({ error: finalInvariant.error, invalid: true, writes: 0 }, { status: 409 });
+    result = finalInvariant.result;
+    if (action === 'choice' && storyRequestId && !authoritativeStow?.success) {
+      const narratedStow = await resolveNarratedStowCandidate({ base44, ownerId: user.id, sessionId: session_id, characterId: character.id, requestId: storyRequestId, candidate: result, check: authoritativeChoiceContext?.check });
+      if (narratedStow.status >= 400) return Response.json(narratedStow.body, { status: narratedStow.status });
+      if (narratedStow.body?.handled && !narratedStow.body?.success) return Response.json({ error: narratedStow.body?.reason || 'Narrated container placement lacks one authoritative source.', stow_transaction: narratedStow.body, preserve_scene: true, writes: 0 }, { status: 409 });
+      if (narratedStow.body?.success) { authoritativeStow = narratedStow.body; character = await base44.asServiceRole.entities.Character.get(character.id); }
+    }
     if (!authoritativeRecovery && !craftingTransaction && action === 'choice') {
       const committed = await guardAndCommitNarratedRecovery({ base44, sessionId:session_id, characterId:character.id, requestId:storyRequestId, check:authoritativeChoiceContext.check, narrative:result.narrative, recovery:result.current_recovery, loot:result.loot });
       result = { ...result, recovery_transaction: committed.body?.recovery_transaction || { status: committed.body?.reason || 'unknown', ...generatedRecoveryDiagnostics(result) } };
@@ -742,7 +747,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // TODO: Add your full loot + alignment code here if needed
     }
 
-    return Response.json({ ...result, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });
+    return Response.json({ ...result, failed_check_continuation_version:FAILED_CHECK_CONTINUATION_VERSION, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);
