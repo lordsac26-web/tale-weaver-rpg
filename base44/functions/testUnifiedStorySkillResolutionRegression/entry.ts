@@ -16,7 +16,7 @@ export default async function testUnifiedStorySkillResolutionRegression(req) {
       const character=await base44.entities.Character.create({name:`${token}_${label}`,race:'Human',class:'Ranger',level:5,strength:14,dexterity:19,proficiency_bonus:3,skills:{Stealth:'proficient',Athletics:'proficient'},hp_max:44,hp_current:27,xp:0,inventory:[],conditions:[],active_modifiers:[],is_active:false});
       const modifiers=[pwtModifier(character.id),...(duplicate?[pwtModifier(character.id,{id:`duplicate_${character.id}`})]:[])];
       await db.entities.Character.update(character.id,{conditions:[pwtCondition(character.id)],active_modifiers:modifiers});
-      const session=await db.entities.GameSession.create({character_id:character.id,title:label,story_log:[],world_state:{world_clock_timestamp:expired?'2026-08-10T03:00:00.000Z':'2026-08-08T20:51:07.745Z',active_concentration:concentration(character.id,broken?{broken:true}:{})},in_combat:false,combat_state:{},is_active:false});
+      const session=await db.entities.GameSession.create({character_id:character.id,title:label,story_log:[],world_state:{elapsed_game_seconds:expired?3600:0,world_clock_timestamp:expired?'2026-08-10T03:00:00.000Z':'2026-08-08T20:51:07.745Z',active_concentration:concentration(character.id,broken?{broken:true}:{})},in_combat:false,combat_state:{},is_active:false});
       fixtures.push({character:character.id,session:session.id}); return {character:await db.entities.Character.get(character.id),session};
     };
     const resolve=async(fixture,id,skill,dc,raw)=>resolveUnifiedStorySkillCheck({db,user,payload:{session_id:fixture.session.id,character_id:fixture.character.id,request_id:`${token}:${id}`,skill,dc,raw_d20:raw,all_rolls:[raw]}});

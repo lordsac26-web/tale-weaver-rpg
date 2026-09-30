@@ -39,7 +39,7 @@ import { classifyPrecisionAmbushIntent, stripGeneratedChoiceAnnotations } from '
 import { normalizeChoiceCheckDisplay } from '../../base44/shared/story/choiceCheckDisplay';
 import { normalizeChoiceActionContract, CHOICE_ACTION_FRONTEND_VERSION } from '../../base44/shared/story/choiceActionContract';
 import { acceptCompositePreflightResponse, buildCompositePreflightRequest, COMPOSITE_UI_TRANSITION_VERSION, routeStoryAction } from '../../base44/shared/story/compositeActionTransition';
-import { prepareStorySkillCheck, resolveStorySkillRoll } from '@/lib/storySkillCheck';
+import { prepareStorySkillCheck, resolveStorySkillRoll, resumeStorySkillResolution } from '@/lib/storySkillCheck';
 import { acceptSequencedStoryPayload, hydrateLatestStoryEntry, STORY_TRANSITION_VERSION } from '../../base44/shared/story/storyTransition';
 import { beginCombatIntent, buildCombatRequestKey, COMBAT_FOLLOWUP_TRANSITION_VERSION, finishCombatIntent, oneEphemeralCombatError } from '../../base44/shared/combat/combatFollowupTransition';
 import { normalizeRollMode } from '@/lib/rollMode';
@@ -389,6 +389,7 @@ export default function Game() {
       if(data.time_advance?.clock&&data.character)setCharacter(data.character);
       const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
       if (!acceptedStory.accepted) throw new Error(acceptedStory.reason === 'persistence_unconfirmed' ? 'The new story was not confirmed by the server.' : 'A newer story response superseded this one.');
+      storyContinuationRef.current.accepted(requestId);
 
       if (acceptedStory.hydration.text) setNarrative(prev => [...prev, { type: 'narration', text: acceptedStory.hydration.text }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP earned!` }]);
@@ -440,10 +441,11 @@ export default function Game() {
     setNarrative(prev => [...prev, { type: 'player_action', text: choice.text }]);
     setChoices([]);
 
+    const resumed = resumeStorySkillResolution(session, choice.text, choice.skill_check, choice.dc);
     let requestId;
-    try { requestId = storyContinuationRef.current.begin(`choice:${session?.story_log?.at(-1)?.request_id}:${choice.text}`, () => `story-choice:${sessionId}:${crypto.randomUUID()}`); }
+    try { requestId = storyContinuationRef.current.begin(`choice:${session?.story_log?.at(-1)?.request_id}:${choice.text}`, () => resumed?.receipt.request_id || `story-choice:${sessionId}:${crypto.randomUUID()}`); }
     catch (err) { choiceDispatchInFlightRef.current = false; setChoices(choices); setNarrative(prev => [...prev, { type: 'action_error', text: err.message }]); return; }
-    const retryReceipt = storyContinuationRef.current.receipt(requestId);
+    const retryReceipt = storyContinuationRef.current.receipt(requestId) || resumed;
     if (retryReceipt) { await continueChoiceWithRoll(choice, choiceIndex, requestId, null, retryReceipt); return; }
     let preCast = null;
     try { preCast = await maybeCastStorySpell(choice.text, requestId); }
@@ -642,6 +644,7 @@ export default function Game() {
       if(data.time_advance?.clock&&data.character)setCharacter(data.character);
       const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
       if (!acceptedStory.accepted) throw new Error(`Story recovery required: ${acceptedStory.reason}.`);
+      storyContinuationRef.current.accepted(requestId);
       if (acceptedStory.hydration.text) setNarrative(prev => [...prev, { type: 'narration', text: acceptedStory.hydration.text }]);
       if (data.xp_earned) setNarrative(prev => [...prev, { type: 'xp_gain', text: `+${data.xp_earned} XP!` }]);
       if (data.item_recovery && !data.item_recovery.already_processed) setNarrative(prev => [...prev, { type: 'xp_gain', text: data.item_recovery.inventory_result === 'already_owned' ? `📦 ${data.item_recovery.item_name} was already secured.` : `📦 Recovered ${data.item_recovery.quantity} ${data.item_recovery.item_name}${data.item_recovery.quantity === 1 ? '' : 's'}.` }]);
@@ -687,10 +690,11 @@ export default function Game() {
       setNarrative(prev => [...prev, { type: 'action_error', text: proposal.valid ? 'The composite plan is validated but must be resolved through its ordered authoritative children.' : `${proposal.reasoning} Choose one of the legal alternatives shown; the scene and choices remain unchanged.` }]);
       return;
     }
+    const resumed = resumeStorySkillResolution(session, action, skill, dc);
     let requestId;
-    try { requestId = storyContinuationRef.current.begin(`proposal:${session?.story_log?.at(-1)?.request_id}:${action}`, () => `story-action:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`); }
+    try { requestId = storyContinuationRef.current.begin(`proposal:${session?.story_log?.at(-1)?.request_id}:${action}`, () => resumed?.receipt.request_id || `story-action:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`); }
     catch (err) { setNarrative(prev => [...prev, { type: 'action_error', text: err.message }]); return; }
-    const retryReceipt = storyContinuationRef.current.receipt(requestId);
+    const retryReceipt = storyContinuationRef.current.receipt(requestId) || resumed;
     if (retryReceipt) { await continueProposalWithRoll(action, actionType || 'skill_check', skill, dc, recovery, requestId, null, retryReceipt); return; }
 
     setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
