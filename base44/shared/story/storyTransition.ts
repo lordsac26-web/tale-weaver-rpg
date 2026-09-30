@@ -7,10 +7,10 @@ export const canonicalStoryResponsePayload = ({ requestId, text, choices, skillC
 export function commitStoryTransition(storyLog, completedEntry, requestId, limit = 60) {
   const source = Array.isArray(storyLog) ? storyLog : [];
   const existingIndex = requestId ? source.findIndex((entry) => entry?.request_id === requestId) : -1;
-  const normalizedEntry = { ...completedEntry, choices: normalizeStoryChoices(completedEntry?.choices) };
-  const next = existingIndex >= 0
-    ? source.map((entry, index) => index === existingIndex ? normalizedEntry : entry)
-    : [...source, normalizedEntry];
+  // An accepted request is immutable. Explicit audit repairs have their own
+  // guarded write paths; a transport replay cannot replace narration or choices.
+  const normalizedEntry = existingIndex >= 0 ? source[existingIndex] : { ...completedEntry, choices: normalizeStoryChoices(completedEntry?.choices) };
+  const next = existingIndex >= 0 ? source : [...source, normalizedEntry];
   const story_log = next.slice(-limit);
   const index = story_log.findIndex((entry) => requestId && entry?.request_id === requestId);
   return { story_log, entry: normalizedEntry, index: index >= 0 ? index : story_log.length - 1, replayed: existingIndex >= 0 };

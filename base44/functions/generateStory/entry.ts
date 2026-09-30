@@ -21,11 +21,11 @@ import { buildGameHydration, finalizeGeneratedStoryResult } from '../../shared/s
 import { canonicalStoryStealthedCondition, classifyStealthSetupIntent, STEALTH_SETUP_HANDOFF_VERSION, withCanonicalStoryStealthed } from '../../shared/story/stealthSetupHandoff.ts';
 import { executeAuthoritativeShortWait, SHORT_WAIT_VERSION } from '../../shared/story/shortWait.ts';
 import { inferUniqueScenePickup, UNIQUE_SCENE_PICKUP_VERSION } from '../../shared/story/uniqueScenePickup.ts';
-import { normalizeChoiceActionContract, CHOICE_ACTION_CONTRACT_VERSION } from '../../shared/story/choiceActionContract.js';
+import { CHOICE_ACTION_CONTRACT_VERSION } from '../../shared/story/choiceActionContract.js';
 import { executeStowAction } from '../../shared/story/stowIntent.ts';
 import { executeItemTransferAction, ITEM_TRANSFER_VERSION } from '../../shared/story/itemTransfer.ts';
 import { canonicalStoryConditionName, evaluateActiveEffects, normalizeStoryConditions } from '../../shared/story/activeEffects.ts';
-import { buildCorpseContractLine, buildStowedContentsTruthLine, FAILED_CHECK_CORRECTION_INSTRUCTION, failedCheckFallbackNarrative, findFailedCheckSuccessContradictions } from '../../shared/story/narrationTruth.ts';
+import { buildCorpseContractLine, buildStowedContentsTruthLine } from '../../shared/story/narrationTruth.ts';
 import { executeStoryWeaponAttack, STORY_WEAPON_ATTACK_VERSION } from '../../shared/story/storyWeaponAttack.ts';
 import { preflightCompositeAction, COMPOSITE_ACTION_PREFLIGHT_VERSION } from '../../shared/story/compositeActionPreflight.ts';
 import { COMPOSITE_ACTION_CONTRACT_VERSION } from '../../shared/story/compositeActionContract.js';
@@ -52,7 +52,7 @@ const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
 const GENERATE_STORY_VERSION = 'generate-story-v2.13.0';
 
-Deno.serve(async (req) => {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -753,4 +753,4 @@ Write a gripping 1-2 paragraph combat narrative.`;
     console.error('Story generation error:', error);
     return Response.json({ error: error.message || 'Story generation failed' }, { status: 500 });
   }
-});
+}
