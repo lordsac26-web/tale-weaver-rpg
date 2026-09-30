@@ -12,7 +12,7 @@ export function parsePwtCompoundIntent(actionText) {
   return { steps: [{ type: 'cast', spell_name: 'Pass without Trace' }, { type: 'skill', skill: 'Stealth', action: 'Hide' }] };
 }
 
-export async function executePwtCompoundAction({ base44, user, payload }) {
+export async function executePwtCompoundAction({ base44, user, payload, rollD20Fn = rollD20 }) {
   const plan = parsePwtCompoundIntent(payload?.action_text);
   if (!plan) return { status: 200, body: { handled: false, plan: [] } };
   const parentId = String(payload?.request_id || '').slice(0, 100);
@@ -26,7 +26,7 @@ export async function executePwtCompoundAction({ base44, user, payload }) {
   const receipts = Array.isArray(session.world_state?.__compound_action_receipts) ? session.world_state.__compound_action_receipts : [];
   const prior = receipts.find((receipt) => receipt?.id === skillId);
   if (prior) return { status: 200, body: { handled: true, plan: plan.steps, child_ids: { cast: castId, skill: skillId }, cast: cast.body, skill: prior, already_processed: true, narration: prior.narration } };
-  const raw = rollD20();
+  const raw = rollD20Fn();
   const dc = Math.max(5, Number(payload?.skill_dc) || 15);
   const resolution = resolveStorySkillCheck({ character, session, skill: 'Stealth', dc, requestId: skillId, raw, allRolls: [raw] });
   if (!resolution.ok) return { status: 409, body: { error: resolution.error, handled: true, plan: plan.steps, child_ids: { cast: castId, skill: skillId }, invalid: true } };
