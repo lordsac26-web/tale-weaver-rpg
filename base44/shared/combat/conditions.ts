@@ -14,6 +14,8 @@
 //   concentration   — linked to a concentration slot; cleared on concentration break
 //   save_ends       — the affected creature re-saves each turn (save_ends + save metadata)
 
+import { evaluateEffectDuration } from '../effectDuration.ts';
+
 export const normalizeConditionName = (value) =>
   String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
@@ -129,12 +131,15 @@ export const removeConcentrationConditions = (arr) =>
 
 // Deterministic expiry pass for authoritative turn/rest transitions. Legacy
 // values remain readable and untouched because they have no lifecycle metadata.
-export const expireStructuredConditions = (arr, { phase, round = null, now = Date.now(), resting = false } = {}) =>
+export const expireStructuredConditions = (arr, { phase, round = null, now = Date.now(), resting = false, session = null } = {}) =>
   (arr || []).filter((condition) => {
     if (!condition || typeof condition === 'string') return true;
     if (resting && condition.duration_type === 'until_rest') return false;
-    if (condition.duration_type === 'timestamp' && condition.expires_at && new Date(condition.expires_at).getTime() <= now) return false;
-    if (condition.duration_type === 'rounds' && Number.isFinite(Number(condition.expires_round)) && Number(round) >= Number(condition.expires_round)) return false;
+    // Wall timestamps are legacy duration evidence, never an advancing game clock.
+    // Missing session evidence conservatively keeps timed effects active.
+    const timed = ['timestamp', 'game_elapsed'].includes(condition.duration_type) || condition.expiration_rule === 'game_time';
+    if ((timed || condition.broken === true || condition.game_time_expired === true) && evaluateEffectDuration({ entry: condition, session, name: condition.source || condition.name }).expired) return false;
+    if (condition.duration_type === 'rounds' && round != null && condition.expires_round != null && Number.isFinite(Number(condition.expires_round)) && Number(round) >= Number(condition.expires_round)) return false;
     if (condition.duration_type === 'until_turn_start' && phase === 'turn_start') return false;
     if (condition.duration_type === 'until_turn_end' && phase === 'turn_end') return false;
     return true;

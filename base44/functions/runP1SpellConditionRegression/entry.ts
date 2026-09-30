@@ -190,8 +190,12 @@ export default async function runP1SpellConditionRegression(req) {
       const combatant = (afterCombat.combatants || []).find((item) => item.id === state.character.id);
       const replay = await invoke('Pass without Trace structured concentration and replay', 'castUtilitySpell', payload);
       const afterReplay = await state.base44.asServiceRole.entities.Character.get(state.character.id);
-      const pass = passCast.status === 200 && replay.status === 200 && passCast.body?.success && condition?.target_id === state.character.id && condition?.source === 'Pass without Trace' && condition?.duration_type === 'timestamp' && !!condition?.expires_at && condition?.concentration === true && hasCondition(combatant?.conditions, 'pass without trace') && replay.body?.already_processed === true && afterReplay.spell_slots?.level_2 === 1 && receiptCount(afterReplay) === 2;
-      return { pass, actual_status: passCast.status !== 200 ? passCast.status : replay.status, detail: { cast: passCast.body, replay: replay.body, condition, slots: afterReplay.spell_slots, auth_context: passCast.ownership } };
+      const freshSession = await state.base44.asServiceRole.entities.GameSession.get(state.session.id);
+      const concentration = freshSession.world_state?.active_concentration;
+      const modifier = afterPass.active_modifiers?.find((item) => item.source === 'Pass without Trace');
+      const linkedDuration = [condition, modifier, concentration].every((item) => item?.target_id === state.character.id && item?.caster_id === state.character.id && item?.concentration === true && item?.duration_type === 'game_elapsed' && item?.expiration_rule === 'game_time' && item?.duration_seconds === 3600 && Number.isFinite(item?.start_game_time_seconds) && item?.expires_game_time_seconds === item?.start_game_time_seconds + 3600 && item?.expires_at === condition?.expires_at && Number.isFinite(Date.parse(item?.expires_at)));
+      const pass = passCast.status === 200 && replay.status === 200 && passCast.body?.success && condition?.source === 'Pass without Trace' && linkedDuration && hasCondition(combatant?.conditions, 'pass without trace') && sameJson(combatant?.conditions.find((item) => item.name === 'pass without trace'), condition) && replay.body?.already_processed === true && replay.body?.writes === 0 && afterReplay.spell_slots?.level_2 === 1 && receiptCount(afterReplay) === 2 && sameJson(afterReplay, afterPass);
+      return { pass, actual_status: passCast.status !== 200 ? passCast.status : replay.status, detail: { cast: passCast.body, replay: replay.body, condition, modifier, concentration, linked_duration_valid: linkedDuration, replay_state_unchanged: sameJson(afterReplay, afterPass), slots: afterReplay.spell_slots, auth_context: passCast.ownership } };
     });
 
     await runTest('Condition lifecycle, Character/CombatLog sync, and legacy readability', 200, async () => {
@@ -201,14 +205,34 @@ export default async function runP1SpellConditionRegression(req) {
       const condition = (character.conditions || []).find((item) => typeof item === 'object' && item.name === 'pass without trace');
       const combatant = (combat.combatants || []).find((item) => item.id === state.character.id);
       if (!condition || !combatant) return { pass: false, actual_status: 200, detail: { error: 'Pass without Trace condition was unavailable for lifecycle verification.' } };
-      const characterConditions = expireStructuredConditions(character.conditions, { phase: 'turn_end', now: new Date(condition.expires_at).getTime() + 1 });
-      const combatConditions = expireStructuredConditions(combatant.conditions, { phase: 'turn_end', now: new Date(condition.expires_at).getTime() + 1 });
+      const freshSession = await state.base44.asServiceRole.entities.GameSession.get(state.session.id);
+      const futureWallTime = Date.parse(condition.expires_at) + 86400000;
+      const atGameTime = (seconds) => ({ ...freshSession, world_state: { ...freshSession.world_state, elapsed_game_seconds: seconds } });
+      const remains = (entry, session) => hasCondition(expireStructuredConditions([entry], { phase: 'turn_end', now: futureWallTime, session }), 'pass without trace');
+      const legacy = { ...condition, duration_type: 'timestamp' };
+      for (const key of ['expiration_rule', 'start_game_time_seconds', 'duration_seconds', 'expires_game_time_seconds', 'applied_game_elapsed_hours', 'expires_game_elapsed_hours']) delete legacy[key];
+      const legacyExpiredSession = { ...freshSession, world_state: { __time_advance_receipts: [{ at: new Date(Date.parse(legacy.applied_at) + 1).toISOString(), elapsed_seconds: 3600 }] } };
+      const checks = {
+        paused_real_time_preserved: remains(condition, atGameTime(condition.start_game_time_seconds)),
+        before_game_expiry_preserved: remains(condition, atGameTime(condition.expires_game_time_seconds - 1)),
+        legacy_without_game_evidence_preserved: remains(legacy, atGameTime(999999)),
+        legacy_with_game_expiry_removed: !remains(legacy, legacyExpiredSession),
+        broken_concentration_removed: !remains({ ...condition, broken: true }, freshSession),
+      };
+      const expiredSession = atGameTime(condition.expires_game_time_seconds);
+      // Only the disposable session advances; prove expiry at the exact game boundary.
+      await state.base44.asServiceRole.entities.GameSession.update(state.session.id, { world_state: expiredSession.world_state });
+      const persistedSession = await state.base44.asServiceRole.entities.GameSession.get(state.session.id);
+      const characterConditions = expireStructuredConditions(character.conditions, { phase: 'turn_end', now: futureWallTime, session: persistedSession });
+      const combatConditions = expireStructuredConditions(combatant.conditions, { phase: 'turn_end', now: futureWallTime, session: persistedSession });
       await state.base44.asServiceRole.entities.Character.update(state.character.id, { conditions: characterConditions });
       await state.base44.asServiceRole.entities.CombatLog.update(state.combat.id, { combatants: combat.combatants.map((item) => item.id === state.character.id ? { ...item, conditions: combatConditions } : item) });
       const afterCharacter = await state.base44.asServiceRole.entities.Character.get(state.character.id);
       const afterCombat = await state.base44.asServiceRole.entities.CombatLog.get(state.combat.id);
       const afterCombatant = (afterCombat.combatants || []).find((item) => item.id === state.character.id);
-      return { pass: !hasCondition(afterCharacter.conditions, 'pass without trace') && !hasCondition(afterCombatant?.conditions, 'pass without trace') && hasCondition(afterCharacter.conditions, 'legacy-readable') && hasCondition(afterCombatant?.conditions, 'legacy-readable'), actual_status: 200, detail: { character_conditions: afterCharacter.conditions, combat_conditions: afterCombatant?.conditions || [] } };
+      checks.exact_game_expiry_removed_in_both_records = !hasCondition(afterCharacter.conditions, 'pass without trace') && !hasCondition(afterCombatant?.conditions, 'pass without trace');
+      checks.legacy_readability_preserved_in_both_records = hasCondition(afterCharacter.conditions, 'legacy-readable') && hasCondition(afterCombatant?.conditions, 'legacy-readable');
+      return { pass: Object.values(checks).every(Boolean), actual_status: 200, detail: { checks, game_seconds: persistedSession.world_state.elapsed_game_seconds, expiry_game_seconds: condition.expires_game_time_seconds, character_conditions: afterCharacter.conditions, combat_conditions: afterCombatant?.conditions || [] } };
     });
 
     await runTest('Ownership/session mismatch rejection', [400, 403], async () => {
