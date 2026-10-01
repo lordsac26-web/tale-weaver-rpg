@@ -1,4 +1,5 @@
 import { acceptSequencedStoryPayload } from '@/lib/storyTransition';
+import { validatePlayerText } from '@/lib/playerText';
 
 const fingerprint = r => JSON.stringify([r?.request_id, r?.source_story_request_id, r?.skill, r?.raw_d20, r?.all_rolls, r?.modifier_total, r?.final_total, r?.dc, r?.success, r?.roll_origin]);
 export async function verifyStowFollowup(data, original) {
@@ -52,6 +53,8 @@ export default function createStowFollowupState({ sessionId, invoke, storage, on
     },
     async submit(reply = state.reply) {
       if (state.busy || state.finished) return state;
+      const checkedReply = validatePlayerText(reply, state.ids.length > 0);
+      if (!checkedReply.ok) return update({ reply, error: checkedReply.error, busy: false });
       if (!state.original) return update({ error: 'No saved stow attempt is attached to this reply. Reload the saved scene before submitting another action.' });
       const expectedSequence = ++sequence;
       update({ reply, busy: true, error: '' });

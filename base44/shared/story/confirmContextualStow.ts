@@ -2,8 +2,11 @@ import { classifyStowIntent, executeStowAction } from './stowIntent.ts';
 import { buildStoryClarification } from './storyPersistence.ts';
 import { pendingCorpseReceipt, restoreCorpseStow } from './pendingCorpseStow.ts';
 import { confirmCorpseStowReceipt } from './confirmCorpseStowReceipt.ts';
+import { validatePlayerText } from './playerText.ts';
 
 export async function confirmContextualStow({ base44, ownerId, payload }) {
+  const checkedAnswer = validatePlayerText(payload.answer_text || '', true);
+  if (!checkedAnswer.ok) return { status: 400, body: checkedAnswer };
   const db = base44.asServiceRole;
   const [session, character] = await Promise.all([db.entities.GameSession.get(payload.session_id), db.entities.Character.get(payload.character_id)]);
   if (!ownerId || character.created_by_id !== ownerId || session.character_id !== character.id) return { status: 403, body: { error: 'This character and campaign do not belong to you.', writes: 0 } };
@@ -19,7 +22,7 @@ export async function confirmContextualStow({ base44, ownerId, payload }) {
   const preserved = await buildStoryClarification({ db, sessionId: session.id, characterId: character.id, requestId: id, sourceRequestId: receipt.source_story_request_id, stow: { message: 'Which bodies did you mean?' } });
   if (preserved.status !== 200) return preserved;
   const result = await executeStowAction({ base44, ownerId, payload: { session_id: session.id, character_id: character.id, request_id: id, action_text: receipt.action_text, check: receipt,
-    source_story_request_id: receipt.source_story_request_id, contextual_stow: true, selected_source_ids: payload.selected_source_ids, answer_text: String(payload.answer_text || '').slice(0, 160) } });
+    source_story_request_id: receipt.source_story_request_id, contextual_stow: true, selected_source_ids: payload.selected_source_ids, answer_text: checkedAnswer.text } });
   if (result.status >= 400) return result;
   if (result.body.clarification_required) return buildStoryClarification({ db, sessionId: session.id, characterId: character.id, requestId: id, sourceRequestId: receipt.source_story_request_id, stow: result.body });
   if (!result.body.success) return { status: 200, body: { ...preserved.body, response_kind: 'stow_confirmation', committed: false, message: 'The original check did not succeed. No bodies have been moved.', stow_transaction: result.body, writes: 0 } };

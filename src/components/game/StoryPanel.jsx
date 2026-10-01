@@ -8,6 +8,8 @@ import { stripEmbeddedChoices } from './stripEmbeddedChoices';
 import { normalizeChoiceCheckDisplay } from '../../../base44/shared/story/choiceCheckDisplay';
 import AskDMDialog from './AskDMDialog';
 import StowClarificationCard from '@/components/game/StowClarificationCard';
+import PlayerTextLimit from '@/components/game/PlayerTextLimit';
+import GroundedClarificationCard from '@/components/game/GroundedClarificationCard';
 import { base44 } from '@/api/base44Client';
  
 const RISK_STYLES = {
@@ -26,7 +28,7 @@ function truncateForNarration(text, maxChars = 800) {
   return lastPeriod > 100 ? slice.slice(0, lastPeriod + 1) : slice;
 }
  
-export default function StoryPanel({ narrative, choices, loading, loadingLabel, onChoice, customInput, setCustomInput, onCustomSubmit, sessionId, characterId, combatId, stowClarification }) {
+export default function StoryPanel({ narrative, choices, loading, loadingLabel, onChoice, customInput, setCustomInput, onCustomSubmit, sessionId, characterId, combatId, stowClarification, groundedClarification }) {
   const endRef = useRef(null);
   const [showAskDM, setShowAskDM] = useState(false);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
@@ -526,7 +528,8 @@ export default function StoryPanel({ narrative, choices, loading, loadingLabel, 
         {/* Decorative brass divider that visually seals off the narration above */}
         <div className="brass-rule absolute top-0 left-0 right-0" />
         <div className="max-w-4xl mx-auto w-full space-y-2.5">
-          {!loading && !stowClarification?.pending && choices.length > 0 && (
+          {groundedClarification?.pending && !stowClarification?.pending && <GroundedClarificationCard controller={groundedClarification} />}
+          {!loading && !stowClarification?.pending && !groundedClarification?.pending && choices.length > 0 && (
             <div className="rounded-xl p-2.5 space-y-1.5"
               style={{ background: 'rgba(14,9,3,0.6)', border: '1px solid rgba(180,140,90,0.14)' }}>
               <div className="flex items-center gap-2" style={{ color: 'rgba(225,190,140,0.9)' }}>
@@ -593,21 +596,22 @@ export default function StoryPanel({ narrative, choices, loading, loadingLabel, 
           <div className="flex flex-wrap sm:flex-nowrap gap-2 mt-3">
             <div className="flex-1 min-w-0 relative">
               <Feather className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'rgba(201,169,110,0.3)' }} />
-              <input
+              <textarea rows={2}
                 value={customInput}
                 onChange={e => setCustomInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && customInput.trim() && onCustomSubmit()}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && customInput.trim()) { e.preventDefault(); onCustomSubmit(); } }}
                 placeholder={stowClarification?.pending ? 'Reply to the saved stow clarification…' : choices.length > 0 ? 'Or write your own action...' : 'Describe your action...'}
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm input-fantasy"
+                className="max-h-32 w-full resize-y pl-9 pr-4 py-2.5 rounded-xl text-sm input-fantasy"
                 style={{ fontFamily: 'EB Garamond, serif', fontSize: '1rem' }}
               />
             </div>
+            <PlayerTextLimit value={customInput} />
             <MicButton value={customInput} onTranscript={setCustomInput} disabled={loading} />
             <button onClick={() => setShowAskDM(true)} className="px-3 py-2.5 rounded-xl text-xs flex-shrink-0" style={{ border: '1px solid rgba(110,150,220,0.35)', color: 'rgba(185,210,255,0.9)', background: 'rgba(20,35,65,0.5)' }}>Ask the DM</button>
             <button onClick={onCustomSubmit} disabled={!customInput.trim() || stowClarification?.state.busy}
               className="px-5 py-2.5 rounded-xl text-sm btn-fantasy disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
               style={{ fontSize: '0.85rem', letterSpacing: '0.05em', minHeight: '2.75rem' }}>
-              {stowClarification?.pending ? 'Reply' : 'Act'}
+              {stowClarification?.pending || groundedClarification?.pending ? 'Reply' : 'Act'}
             </button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { characterBelongsToUser } from '../combat/authGuard.ts';
 import { resolveStorySkillCheck } from './storySkillCheck.ts';
+import { validatePlayerText } from './playerText.ts';
 
 const rollD20 = () => {
   const bytes = new Uint32Array(1);
@@ -32,6 +33,8 @@ export const resolutionFromReceipt = (receipt, replayed = false) => {
 };
 
 export async function resolveUnifiedStorySkillCheck({ db, user, payload, rollD20Fn = rollD20 }) {
+  const checkedText = validatePlayerText(payload?.context || payload?.action_text || '', true);
+  if (!checkedText.ok) return { status: 400, body: checkedText };
   const sessionId = payload?.session_id;
   const characterId = payload?.character_id;
   const requestId = String(payload?.request_id || '').trim().slice(0, 120);

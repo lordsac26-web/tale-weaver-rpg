@@ -1,4 +1,5 @@
 import React from 'react';
+import PlayerTextLimit from '@/components/game/PlayerTextLimit';
 
 export default function StowReplyForm({ state, controller }) {
   const candidates = (state.data?.stow_transaction?.candidates || []).filter(x => x.id).slice(0, 24);
@@ -10,7 +11,8 @@ export default function StowReplyForm({ state, controller }) {
       </label>)}
     </div>
     <label className="block font-body text-sm">Clarification reply
-      <input value={state.reply} disabled={state.busy} maxLength={160} onChange={event => controller.setReply(event.target.value)} className="input-fantasy mt-1 min-h-11 w-full rounded-lg px-3 py-2 text-base sm:text-sm" />
+      <textarea value={state.reply} disabled={state.busy} rows={2} onChange={event => controller.setReply(event.target.value)} className="input-fantasy mt-1 min-h-11 max-h-32 w-full resize-y rounded-lg px-3 py-2 text-base sm:text-sm" />
+      <PlayerTextLimit value={state.reply} />
     </label>
     <button type="submit" disabled={state.busy || (!state.ids.length && !state.reply.trim())} className="btn-fantasy min-h-11 self-start rounded-lg px-3 py-2 text-sm disabled:opacity-50">{state.busy ? 'Checking saved attempt…' : 'Confirm Reply'}</button>
   </form>;

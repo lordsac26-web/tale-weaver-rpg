@@ -47,6 +47,7 @@ import { normalizeRollMode } from '@/lib/rollMode';
 import createStoryContinuation from '@/lib/storyContinuation';
 import useStoryStowClarification from '@/components/game/useStoryStowClarification';
 import useStoryCustomAction from '@/components/game/useStoryCustomAction';
+import useGroundedClarification from '@/components/game/useGroundedClarification';
 
 const getFunctionErrorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.response?.data?.message ||
@@ -521,7 +522,8 @@ export default function Game() {
   };
 
   // Intercept custom input — send to DM for adjudication first
-  const handleCustomInput = useStoryCustomAction({ customInput, setCustomInput, stow: stowClarification, sessionId, character, session, narrative, setEvaluatingAction, setPendingProposal, setNarrative, buildCompositePreflightRequest, acceptCompositePreflightResponse });
+  const groundedClarification = useGroundedClarification({ sessionId, characterId: character?.id, onResolved: data => setPendingProposal(data) });
+  const handleCustomInput = useStoryCustomAction({ customInput, setCustomInput, stow: stowClarification, grounded: groundedClarification, sessionId, character, session, narrative, setEvaluatingAction, setPendingProposal, setNarrative, buildCompositePreflightRequest, acceptCompositePreflightResponse });
 
   // Recognize only explicit casts of spells the character actually knows or has
   // prepared. Apostrophes and punctuation are ignored so "hunters mark" still
@@ -690,7 +692,7 @@ export default function Game() {
 
     // No check required — straight to the story.
     if (!requires_check || !skill || !dc) {
-      await runProposalStory(action, '', { action_type: actionType || 'utility', check: { success: true }, recovery: recovery || null }, requestId, preCast);
+      await runProposalStory(action, '', { action_type: actionType || 'utility', check: { success: true }, recovery: recovery || null, grounded_action: proposal.grounded_action || null, ground_answer_text: proposal.ground_answer_text || '' }, requestId, preCast);
       return;
     }
 
@@ -1726,7 +1728,7 @@ export default function Game() {
                       onChoice={character?.hp_current <= 0 ? () => {} : handleChoice} 
                       customInput={customInput}
                       setCustomInput={character?.hp_current <= 0 ? () => {} : setCustomInput} 
-                      onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} sessionId={sessionId} characterId={character?.id} stowClarification={stowClarification} />
+                      onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} sessionId={sessionId} characterId={character?.id} stowClarification={stowClarification} groundedClarification={groundedClarification} />
                   )}
                 </div>
               </div>
