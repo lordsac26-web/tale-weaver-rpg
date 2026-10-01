@@ -7,8 +7,8 @@ export default function useStoryCustomAction({ customInput, setCustomInput, stow
     const checkedText = validatePlayerText(customInput);
     if (!checkedText.ok) { setNarrative(prev => [...prev, { type: 'action_error', text: checkedText.error }]); return; }
     if (stow.pending) { const result = await stow.submit(customInput); if (result.finished) setCustomInput(''); return; }
-    if (grounded?.pending) { const result = await grounded.submit(customInput); if (result) setCustomInput(''); return; }
-    const text = checkedText.text; setCustomInput(''); setEvaluatingAction(true);
+    if (grounded?.pending) { await grounded.submit(customInput); return; }
+    const text = checkedText.text; setEvaluatingAction(true);
     try {
       const composite = buildCompositePreflightRequest({ text, sessionId, characterId: character?.id, source: 'free_text' });
       const result = await base44.functions.invoke(composite?.endpoint || 'evaluatePlayerAction', {

@@ -605,13 +605,13 @@ Write a gripping 1-2 paragraph combat narrative.`;
         ...(result.authoritative_weapon_attack ? { authoritative_weapon_attack: result.authoritative_weapon_attack, action_contract: selectedChoiceContract } : {})
       };
       result = { ...result, previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash };
+      const sceneCommit = await prepareGroundedStoryCommit({ session: commitSession, entry: completedEntry, candidates: result.scene_entities, existingPlan: groundedAction });
+      completedEntry.scene_entities = sceneCommit.entities;
+      completedEntry.scene_grounding = sceneCommit.diagnostics;
       const committedTransition = commitStoryTransition(commitSession.story_log || [], completedEntry, storyRequestId || null);
       const updatedLog = committedTransition.story_log;
       result = { ...result, choices: completedEntry.choices, story_sequence: incomingStorySequence || null, ...storyPayloadFromCommit(committedTransition) };
 
-      const sceneCommit = await prepareGroundedStoryCommit({ session: commitSession, entry: completedEntry, candidates: result.scene_entities, existingPlan: groundedAction });
-      completedEntry.scene_entities = sceneCommit.entities;
-      completedEntry.scene_grounding = sceneCommit.diagnostics;
       const updateData = { story_log: updatedLog };
       const infiltrationUpdate=buildInfiltrationSessionUpdate({session:commitSession,plan:infiltrationPlan});
       if(infiltrationUpdate){updateData.time_of_day=infiltrationUpdate.time_of_day;updateData.world_state=infiltrationUpdate.world_state;}

@@ -48,6 +48,7 @@ import createStoryContinuation from '@/lib/storyContinuation';
 import useStoryStowClarification from '@/components/game/useStoryStowClarification';
 import useStoryCustomAction from '@/components/game/useStoryCustomAction';
 import useGroundedClarification from '@/components/game/useGroundedClarification';
+import usePlayerDraft from '@/components/game/usePlayerDraft';
 
 const getFunctionErrorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.response?.data?.message ||
@@ -67,7 +68,7 @@ export default function Game() {
   const [storyLoading, setStoryLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [combatLoading, setCombatLoading] = useState(false);
-  const [customInput, setCustomInput] = useState('');
+  const [customInput, setCustomInput] = usePlayerDraft(sessionId);
   const [showCharSheet, setShowCharSheet] = useState(false);
   const [showDiceRoller, setShowDiceRoller] = useState(false);
 
