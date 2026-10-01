@@ -34,6 +34,7 @@ import { buildInfiltrationSessionUpdate, guardInfiltrationBeat, INFILTRATION_ADV
 import { normalizeDeclaredRecovery, routeChoiceAward, CHOICE_AWARD_ROUTING_VERSION } from '../../shared/story/choiceAwardRouting.js';
 import { resolveFailedCheckCandidate, resolveNarratedStowCandidate, FAILED_CHECK_CONTINUATION_VERSION } from '../../shared/story/failedCheckContinuation.ts';
 import { selectStoryChoice } from '../../shared/story/selectedStoryChoice.ts';
+import { buildStoryClarification, confirmPersistedStoryPair, finishStoryPersistence } from '../../shared/story/storyPersistence.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -75,8 +76,8 @@ export default async function(req) {
     // Replay an accepted pair before any cast, stow, transfer, or award dispatch.
     const replayIndex = action === 'choice' && storyRequestId ? (session.story_log || []).findIndex((entry) => entry?.request_id === storyRequestId && entry?.text) : -1;
     if (replayIndex >= 0) {
-      const entry = session.story_log[replayIndex];
-      return Response.json({ narrative: entry.text, choices: entry.choices || [], ...storyPayloadFromCommit({ entry, index: replayIndex, persistence_confirmed: true }), persistence_confirmed: true, already_processed: true, writes: 0, generate_story_version: GENERATE_STORY_VERSION });
+      const replay = await confirmPersistedStoryPair({ readSession: () => base44.asServiceRole.entities.GameSession.get(session_id), requestId: storyRequestId });
+      return Response.json({ ...replay.body, already_processed: replay.status === 200, generate_story_version: GENERATE_STORY_VERSION, ...(replay.status === 200 ? { writes: 0 } : {}) }, { status: replay.status });
     }
     if (action === 'start') {
       const existingOpening = hydrateLatestStoryEntry(session);
@@ -135,7 +136,10 @@ export default async function(req) {
       if (stowOutcome.body?.handled) {
         if (stowOutcome.status >= 400) return Response.json(stowOutcome.body, { status: stowOutcome.status });
         authoritativeStow = stowOutcome.body;
-        if (stowOutcome.body?.clarification_required) return Response.json({ narrative: stowOutcome.body.message, choices: [], stow_transaction: stowOutcome.body, clarification_required: true, preserve_scene: true, writes: 0, generate_story_version: GENERATE_STORY_VERSION }, { status: 200 });
+        if (stowOutcome.body?.clarification_required) {
+          const clarification = await buildStoryClarification({ db: base44.asServiceRole, sessionId: session_id, characterId: character.id, requestId: storyRequestId, sourceRequestId: hydrateLatestStoryEntry(session).request_id, stow: stowOutcome.body });
+          return Response.json({ ...clarification.body, generate_story_version: GENERATE_STORY_VERSION }, { status: clarification.status });
+        }
         // failed_check is an expected zero-write outcome; continue its failure branch.
         if (stowOutcome.body?.success) character = await base44.asServiceRole.entities.Character.get(character.id);
       }
@@ -572,7 +576,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
         timestamp: new Date().toISOString(), action,
         ...(storyRequestId ? { request_id: storyRequestId } : {}),
         player_choice: action === 'choice' ? selectedChoice : (custom_input ?? choice_index),
-        text: result.narrative, choices: result.choices,
+        text: result.narrative, choices: result.choices, mechanics_status: 'pending',
+        transition_outcome: { combat_trigger: !!result.combat_trigger, enemies: result.enemies || [], hp_change: result.hp_change || 0, xp_earned: result.xp_earned || 0, combat_handoff: result.combat_handoff || null, pending_ambush_attack: result.pending_ambush_attack || null },
         ...(skillCheck ? { skill_check: skillCheck, skill_display: result.skill_display } : {}),
         choice_evidence: { previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash, guard: result.choice_guard },
         ...(result.combat_handoff ? { combat_handoff: result.combat_handoff } : {}),
@@ -659,11 +664,8 @@ Write a gripping 1-2 paragraph combat narrative.`;
       }
 
       await base44.asServiceRole.entities.GameSession.update(session_id, updateData);
-      const persistedSession = await base44.asServiceRole.entities.GameSession.get(session_id);
-      const persistedTransition = hydrateLatestStoryEntry(persistedSession);
-      const persistedPayloadHash = await hashStoryValue(canonicalStoryResponsePayload({ requestId: persistedTransition.request_id, text: persistedTransition.text, choices: persistedTransition.choices, skillCheck: persistedTransition.entry?.skill_check || null }));
-      if (persistedTransition.request_id !== (storyRequestId || completedEntry.request_id || null) || persistedPayloadHash !== responsePayloadHash) return Response.json({ error: 'Story narration was generated but its authoritative narration and choices pair was not confirmed. Rehydrate and retry.', persistence_confirmed: false, writes: 0, transition_version: STORY_TRANSITION_VERSION }, { status: 409 });
-      result = { ...result, persistence_confirmed: true, ...storyPayloadFromCommit({ ...committedTransition, persistence_confirmed: true }) };
+      const staged = await confirmPersistedStoryPair({ readSession: () => base44.asServiceRole.entities.GameSession.get(session_id), requestId: storyRequestId || completedEntry.request_id || null, expectedHash: responsePayloadHash, allowPending: true, afterWrite: true });
+      if (staged.status !== 200) return Response.json(staged.body, { status: staged.status });
 
       // Target-aware character conditions. Enemy/NPC effects never belong on the
       // Character record, and placeholders such as "None" are always discarded.
@@ -744,7 +746,9 @@ Write a gripping 1-2 paragraph combat narrative.`;
         });
       }
 
-      // TODO: Add your full loot + alignment code here if needed
+      const finished = await finishStoryPersistence({ db: base44.asServiceRole, sessionId: session_id, requestId: storyRequestId || completedEntry.request_id || null, expectedHash: responsePayloadHash });
+      if (finished.status !== 200) return Response.json(finished.body, { status: finished.status });
+      result = { ...result, ...finished.body };
     }
 
     return Response.json({ ...result, failed_check_continuation_version:FAILED_CHECK_CONTINUATION_VERSION, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });

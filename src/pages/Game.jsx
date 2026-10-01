@@ -40,7 +40,8 @@ import { normalizeChoiceCheckDisplay } from '../../base44/shared/story/choiceChe
 import { normalizeChoiceActionContract, CHOICE_ACTION_FRONTEND_VERSION } from '../../base44/shared/story/choiceActionContract';
 import { acceptCompositePreflightResponse, buildCompositePreflightRequest, COMPOSITE_UI_TRANSITION_VERSION, routeStoryAction } from '../../base44/shared/story/compositeActionTransition';
 import { prepareStorySkillCheck, resolveStorySkillRoll, resumeStorySkillResolution } from '@/lib/storySkillCheck';
-import { acceptSequencedStoryPayload, hydrateLatestStoryEntry, STORY_TRANSITION_VERSION } from '../../base44/shared/story/storyTransition';
+import { acceptSequencedStoryPayload, hydrateLatestStoryEntry, STORY_TRANSITION_VERSION } from '@/lib/storyTransition';
+import applyStoryClarification from '@/lib/storyClarification';
 import { beginCombatIntent, buildCombatRequestKey, COMBAT_FOLLOWUP_TRANSITION_VERSION, finishCombatIntent, oneEphemeralCombatError } from '../../base44/shared/combat/combatFollowupTransition';
 import { normalizeRollMode } from '@/lib/rollMode';
 import createStoryContinuation from '@/lib/storyContinuation';
@@ -387,6 +388,7 @@ export default function Game() {
       const data = result.data;
       if(data.time_advance?.clock&&data.session)setSession(data.session);
       if(data.time_advance?.clock&&data.character)setCharacter(data.character);
+      if (await applyStoryClarification({ data, requestId, sourceId: session?.story_log?.at(-1)?.request_id, sequence: storySequence, latestSequence: storyRequestSequenceRef.current, continuation: storyContinuationRef.current, setNarrative, setChoices })) return;
       const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
       if (!acceptedStory.accepted) throw new Error(acceptedStory.reason === 'persistence_unconfirmed' ? 'The new story was not confirmed by the server.' : 'A newer story response superseded this one.');
       storyContinuationRef.current.accepted(requestId);
@@ -642,6 +644,7 @@ export default function Game() {
       const data = result.data;
       if(data.time_advance?.clock&&data.session)setSession(data.session);
       if(data.time_advance?.clock&&data.character)setCharacter(data.character);
+      if (await applyStoryClarification({ data, requestId, sourceId: session?.story_log?.at(-1)?.request_id, sequence: storySequence, latestSequence: storyRequestSequenceRef.current, continuation: storyContinuationRef.current, setNarrative, setChoices })) return;
       const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
       if (!acceptedStory.accepted) throw new Error(`Story recovery required: ${acceptedStory.reason}.`);
       storyContinuationRef.current.accepted(requestId);
@@ -663,7 +666,7 @@ export default function Game() {
     } catch (err) {
       console.error('Failed to execute action:', err);
       await loadState().catch(() => null);
-      setNarrative(prev => [...prev, { type: 'narration', text: `${getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry.')} The latest authoritative scene was restored; retry your last action.` }]);
+      setNarrative(prev => [...prev, { type: 'narration', text: `${getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry.')} The last saved scene is displayed; this does not prove the attempted action completed. Do not repeat it until its saved result is confirmed.` }]);
     } finally {
       setStoryLoading(false);
     }
