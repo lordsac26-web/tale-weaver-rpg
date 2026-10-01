@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Feather, Loader2, Sparkles } from 'lucide-react';
 import MicButton from './MicButton';
+import PlayerTextLimit from '@/components/game/PlayerTextLimit';
+import { validatePlayerText } from '@/lib/playerText';
 
 /**
  * CombatActWindow — a free-text "Act" input inside combat. The player describes
@@ -17,8 +19,8 @@ export default function CombatActWindow({ onSubmit, loading, disabled }) {
 
   const submit = () => {
     if (!text.trim() || loading || disabled) return;
+    if (!validatePlayerText(text).ok) return;
     onSubmit(text.trim());
-    setText('');
   };
 
   return (
@@ -56,6 +58,7 @@ export default function CombatActWindow({ onSubmit, loading, disabled }) {
           {loading ? 'DM…' : 'Act'}
         </button>
       </div>
+      <PlayerTextLimit value={text} />
     </div>
   );
 }

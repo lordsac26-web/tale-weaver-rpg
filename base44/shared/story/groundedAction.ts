@@ -2,7 +2,7 @@ import { buildGroundedContext } from './groundedSceneContext.ts';
 import { validatePlayerText } from './playerText.ts';
 const OPS = ['inspect','open','loot','take','drop','stow','remove'];
 const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-export const sceneInteractionIntent = text => /\b(?:inspect|examine|investigate|search|open|loot|take|pick up|drop|stow|put|place|remove|retrieve)\b/i.test(text || '');
+export const sceneInteractionIntent = text => !/\b(?:take down|attack|shoot|cast|invoke|rest|wait)\b/i.test(text || '') && /\b(?:inspect|examine|investigate|search|open|loot|take|pick up|drop|stow|put|place|remove|retrieve)\b/i.test(text || '');
 const infer = text => /\b(?:stow|put|place)\b/i.test(text) ? 'stow' : /\bopen\b/i.test(text) ? 'open' : /\bloot\b/i.test(text) ? 'loot' : /\b(?:take|pick up)\b/i.test(text) ? 'take' : /\bdrop\b/i.test(text) ? 'drop' : /\b(?:remove|retrieve)\b/i.test(text) ? 'remove' : 'inspect';
 const safeLabel = text => String(text || '').replace(/[\r\n]+/g, ' ').slice(0, 300);
 export async function resolveGroundedAction({ base44, session, character, actionText, answerText = '', expectedRevision, allowReconciliation = true }) {
@@ -32,6 +32,8 @@ export async function resolveGroundedAction({ base44, session, character, action
   let uncertainty = proposal.uncertainty;
   if (!valid || (wantedCount > 1 && matches.length !== wantedCount)) uncertainty = `Which ${wantedCount > 1 ? `${wantedCount} objects` : 'object'} do you mean${catalog.length ? `: ${catalog.slice(0, 8).map(x => x.name).join(', ')}` : '? I do not have a supported interactable identity here'}?`;
   if (deadRequired && matches.some(x => x.status !== 'dead')) uncertainty = 'I can connect the reference, but collapse or unconsciousness does not prove death. You can inspect the bodies; I will not mark them dead or move them as verified corpses.';
+  if (matches.some(x => !x.place && ['loot', 'take', 'drop', 'remove'].includes(intent))) uncertainty = 'I can identify the scene object, but this transfer still needs a validated item/contents transaction. You can inspect it now; I will not promise unsupported loot or move it into inventory.';
+  if (intent === 'stow' && matches.some(x => !x.place && x.status !== 'dead')) uncertainty = 'That is a world object, not a carried inventory item. Inspect it first; a validated pickup must establish ownership before it can be stowed.';
   const plan = { version: context.version, session_id: session.id, scene_id: context.scene_id, scene_revision: context.revision, intent, target_ids: matches.map(x => x.id), quantity: proposal.quantity, destination: safeLabel(proposal.destination),
     targets: matches, evidence: matches.map(x => x.evidence || { authority: 'owned_inventory', id: x.id, place: x.place }), mechanical_prerequisites: [], uncertainty: safeLabel(uncertainty), context_omitted_entries: context.omitted_entries };
   return { handled: true, status: 200, writes: 0, clarification_required: !!plan.uncertainty, reasoning: plan.uncertainty || `This refers to ${matches.map(x => x.name).join(' and ')} in the saved scene.`, grounded_action: plan, context };
