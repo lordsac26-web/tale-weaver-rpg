@@ -526,7 +526,7 @@ export default function StoryPanel({ narrative, choices, loading, loadingLabel, 
         {/* Decorative brass divider that visually seals off the narration above */}
         <div className="brass-rule absolute top-0 left-0 right-0" />
         <div className="max-w-4xl mx-auto w-full space-y-2.5">
-          {!loading && choices.length > 0 && (
+          {!loading && !stowClarification?.pending && choices.length > 0 && (
             <div className="rounded-xl p-2.5 space-y-1.5"
               style={{ background: 'rgba(14,9,3,0.6)', border: '1px solid rgba(180,140,90,0.14)' }}>
               <div className="flex items-center gap-2" style={{ color: 'rgba(225,190,140,0.9)' }}>

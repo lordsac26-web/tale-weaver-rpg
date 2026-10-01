@@ -1,6 +1,7 @@
 import { classifyStowIntent } from './stowIntent.ts';
 import { resolveContextualCorpseSet } from './contextualCorpseStow.ts';
 import { buildStoryClarification } from './storyPersistence.ts';
+import { confirmCorpseStowReceipt } from './confirmCorpseStowReceipt.ts';
 
 export function pendingCorpseReceipt(session, character, requestedId) {
   const source = session.story_log?.at(-1)?.request_id;
@@ -23,6 +24,8 @@ export async function restoreCorpseStow({ base44, session, character, receipt })
     candidates: resolution.candidates.map(x => ({ id: x.id, name: x.name, label: x.label })), already_stowed: resolution.already, writes: 0 };
   const frame = await buildStoryClarification({ db: base44.asServiceRole, sessionId: session.id, characterId: character.id, requestId: receipt.request_id, sourceRequestId: receipt.source_story_request_id, stow });
   if (frame.status !== 200 || !prior) return frame;
+  const bag = await confirmCorpseStowReceipt(base44.asServiceRole, character.id, receipt.request_id, parsed.container);
+  if (!bag.ok) return { status: 409, body: { error: 'This attempt has a receipt but its bag contents are not confirmed. Keep the original attempt paused.', writes: 0 } };
   return { status: 200, body: { ...frame.body, response_kind: 'stow_confirmation', committed: true, message: 'This saved attempt already secured these bodies; no body was moved again.',
-    stow_transaction: { handled: true, success: true, already_processed: true, receipt: prior, stow: prior, writes: 0 }, character_inventory: character.inventory, character_stowed_items: character.stowed_items, writes: 0 } };
+    stow_transaction: { handled: true, success: true, already_processed: true, receipt: prior, stow: prior, writes: 0 }, authoritative_bag_reread: true, character_inventory: bag.character.inventory, character_stowed_items: bag.character.stowed_items, writes: 0 } };
 }
