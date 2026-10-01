@@ -17,6 +17,7 @@ export async function verifyStowFollowup(data, original) {
 
 export default function createStowFollowupState({ sessionId, invoke, storage, onChange = () => {}, onConfirmed = () => {} }) {
   const key = `pending-story-stow:${sessionId}`;
+  let sequence = 0;
   let state = { data: null, original: null, reply: '', ids: [], busy: false, error: '', finished: false };
   try { const saved = JSON.parse(storage.getItem(key) || 'null'); if (saved?.original?.session_id === sessionId) state = { ...state, ...saved, busy: false }; } catch { state.error = 'The local saved reply could not be restored; the original roll can still be recovered from the campaign.'; }
   const update = patch => {
@@ -25,8 +26,9 @@ export default function createStowFollowupState({ sessionId, invoke, storage, on
     onChange(state); return state;
   };
   const install = data => update({ data, original: data, finished: false, error: '', ...(state.original?.requested_request_id === data.requested_request_id ? {} : { reply: '', ids: [] }) });
-  const consume = async (data, original = state.original) => {
+  const consume = async (data, original = state.original, expectedSequence = sequence) => {
     await verifyStowFollowup(data, original);
+    if (expectedSequence !== sequence) return state;
     const finished = data.response_kind === 'stow_confirmation' && data.committed === true;
     update({ data, finished, error: '' });
     if (finished) onConfirmed(data);
@@ -37,25 +39,28 @@ export default function createStowFollowupState({ sessionId, invoke, storage, on
     setReply: reply => update({ reply, ids: [] }), setIds: ids => update({ ids }),
     async restore(characterId) {
       if (state.busy) return state;
+      const expectedSequence = sequence;
       try {
         const result = await invoke({ session_id: sessionId, character_id: characterId, read_only: true, ...(state.original ? { original_request_id: state.original.requested_request_id } : {}) });
         const data = result.data;
+        if (expectedSequence !== sequence || state.busy) return state;
         if (data?.response_kind === 'no_pending_stow') return update({ data: null, original: null, finished: false });
         if (!state.original) install(data);
-        await consume(data);
-      } catch (err) { update({ error: err?.response?.data?.error || err.message, busy: false }); }
+        await consume(data, state.original, expectedSequence);
+      } catch (err) { if (expectedSequence === sequence) update({ error: err?.response?.data?.error || err.message, busy: false }); }
       return state;
     },
     async submit(reply = state.reply) {
       if (state.busy || state.finished) return state;
       if (!state.original) return update({ error: 'No saved stow attempt is attached to this reply. Reload the saved scene before submitting another action.' });
+      const expectedSequence = ++sequence;
       update({ reply, busy: true, error: '' });
       try {
         const result = await invoke({ session_id: sessionId, character_id: state.original.character_id, original_request_id: state.original.requested_request_id,
           ...(state.ids.length ? { selected_source_ids: state.ids } : { answer_text: reply }) });
-        await consume(result.data);
-      } catch (err) { update({ error: err?.response?.data?.error || err.message || 'Confirmation failed. Your reply and original attempt are retained.' }); }
-      finally { update({ busy: false }); }
+        await consume(result.data, state.original, expectedSequence);
+      } catch (err) { if (expectedSequence === sequence) update({ error: err?.response?.data?.error || err.message || 'Confirmation failed. Your reply and original attempt are retained.' }); }
+      finally { if (expectedSequence === sequence) update({ busy: false }); }
       return state;
     },
   };

@@ -1,7 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import createStowFollowupState from '@/lib/stowFollowupState';
-import useStoryCustomAction from '@/components/game/useStoryCustomAction';
+// This callback factory does not call React hooks; use a non-hook name in tests.
+import createStoryCustomAction from '@/components/game/useStoryCustomAction';
 import StowClarificationCard from '@/components/game/StowClarificationCard';
 import { createStowFollowupFixture, quotedStowReply } from '@/lib/tests/stowFollowupFixture';
 
@@ -22,7 +23,7 @@ export default async function runStowFollowupRegression(base44, modes = ['ai', '
       const reloaded = make(); await reloaded.restore(f.characterId);
       check(`${mode}/${variant}: reload restores original roll, source, and quoted reply`, reloaded.getState().reply === quotedStowReply && reloaded.getState().original.requested_request_id === f.requestId && reloaded.getState().original.check_receipt.final_total === 31);
       let proposalCalls = 0, mechanicsCalls = 0, input = quotedStowReply;
-      const submit = useStoryCustomAction({ customInput: input, setCustomInput: value => { input = value; }, stow: { pending: true, submit: reloaded.submit }, sessionId: f.sessionId, character: before[0], session: before[1], narrative: [],
+      const submit = createStoryCustomAction({ customInput: input, setCustomInput: value => { input = value; }, stow: { pending: true, submit: reloaded.submit }, sessionId: f.sessionId, character: before[0], session: before[1], narrative: [],
         setEvaluatingAction: () => { mechanicsCalls++; }, setPendingProposal: () => { proposalCalls++; }, setNarrative: () => {}, buildCompositePreflightRequest: () => { mechanicsCalls++; }, acceptCompositePreflightResponse: () => { mechanicsCalls++; } });
       await submit();
       const after = await read(f), state = reloaded.getState(), html = renderToStaticMarkup(React.createElement(StowClarificationCard, { state, controller: reloaded }));
@@ -36,6 +37,10 @@ export default async function runStowFollowupRegression(base44, modes = ['ai', '
         check(`${mode}: backend replay is confirmed, zero-write and byte-inert`, replay.data.committed && replay.data.writes === 0 && stateHash(after) === stateHash(afterReplay));
         const restoredResult = make(); await restoredResult.restore(f.characterId);
         check(`${mode}: reload after commit displays authoritative confirmed bag`, restoredResult.getState().finished && visibleBag.length === after[0].stowed_items.length);
+        let releaseRestore;
+        const racing = createStowFollowupState({ sessionId: f.sessionId, storage: { getItem: () => null, setItem: () => {} }, invoke: payload => payload.read_only ? new Promise(resolve => { releaseRestore = resolve; }) : Promise.resolve({ data: replay.data }) });
+        racing.install(original.data); const staleRestore = racing.restore(f.characterId); await racing.submit(quotedStowReply); releaseRestore({ data: original.data }); await staleRestore;
+        check(`${mode}: delayed hydration cannot reopen an already confirmed attempt`, racing.getState().finished && !racing.getState().busy && !racing.getState().error);
       } else {
         check(`${mode}/${variant}: incomplete evidence yields named visible explanation, not a silent no-op`, !state.finished && !state.error && state.data.stow_transaction.reason_code && (html.includes('No bod') || html.includes('no body')) && stateHash(before[0]) === stateHash(after[0]) && state.reply === quotedStowReply && input === quotedStowReply);
       }

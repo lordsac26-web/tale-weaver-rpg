@@ -7,7 +7,7 @@ export function pendingCorpseReceipt(session, character, requestedId) {
   const source = session.story_log?.at(-1)?.request_id;
   return [...(session.world_state?.__skill_check_receipts || [])].reverse().find(x => {
     const parsed = classifyStowIntent(x.action_text);
-    return x.unified_story_skill_resolution === true && x.source_story_request_id === source && parsed && /\b(?:corpses|bodies)\b/i.test(parsed.item_phrase)
+    return x.unified_story_skill_resolution === true && x.success === true && x.source_story_request_id === source && parsed && /\b(?:corpses|bodies)\b/i.test(parsed.item_phrase)
       && (requestedId ? x.request_id === requestedId : !character.long_rest_abilities?.__stow_receipts?.some(r => r.token === x.request_id))
       && !session.story_log.some(e => e.request_id === x.request_id);
   });
