@@ -115,7 +115,7 @@ export async function executeStowAction({ base44, ownerId = null, payload }) {
   if (resolution.kind === 'already_stowed') return { status: 200, body: { handled: true, success: true, already_processed: true, stow: { token, item_id: stableIdentity(resolution.item), item_name: resolution.item.name, quantity: 1, container: resolution.item.container, source: 'completed_combat', stow_intent_version: STOW_INTENT_VERSION }, receipt: null, stowed_items: character.stowed_items || [], inventory: character.inventory || [], writes: 0 } };
   if (!['unique', 'set'].includes(resolution.kind)) return { status: 200, body: { handled: true, success: false, clarification_required: true, item_phrase: parsed.item_phrase, container: parsed.container,
     candidates: contextual ? resolution.candidates.map(x => ({ id: x.id, name: x.name, label: x.label })) : resolution.candidates,
-    contextual_stow: contextual, already_stowed: resolution.already || [], message: resolution.message || `Which item would you like to put in ${parsed.container}${resolution.candidates?.length ? `: ${resolution.candidates.join(', ')}` : ''}? Nothing has been moved.`, writes: 0 } };
+    reason_code: resolution.reason_code || 'source_selection_required', contextual_stow: contextual, already_stowed: resolution.already || [], message: resolution.message || `Which item would you like to put in ${parsed.container}${resolution.candidates?.length ? `: ${resolution.candidates.join(', ')}` : ''}? Nothing has been moved.`, writes: 0 } };
 
   const [latestSession, latestCharacter] = await Promise.all([
     base44.asServiceRole.entities.GameSession.get(session.id),

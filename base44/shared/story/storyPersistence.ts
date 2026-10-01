@@ -30,7 +30,7 @@ export async function buildStoryClarification({ db, sessionId, characterId, requ
   if (confirmed.session.character_id !== characterId) return failure('character_session_mismatch');
   const receipts = (confirmed.session.world_state?.__skill_check_receipts || []).filter(x => x.request_id === requestId);
   if (receipts.length > 1 || (receipts[0] && receipts[0].source_story_request_id !== sourceRequestId)) return failure('ambiguous_clarification_receipt');
-  return { status: 200, body: { ...confirmed.body, response_kind: 'clarification', persistence_scope: 'existing_scene', requested_request_id: requestId, preserve_scene: true, clarification_required: true, clarification_message: stow.message, stow_transaction: stow, check_receipt: receipts[0] || null, writes: 0 } };
+  return { status: 200, body: { ...confirmed.body, response_kind: 'clarification', session_id: sessionId, character_id: characterId, persistence_scope: 'existing_scene', requested_request_id: requestId, preserve_scene: true, clarification_required: true, clarification_message: stow.message, stow_transaction: stow, check_receipt: receipts[0] || null, writes: 0 } };
 }
 
 // Stage before consequences, complete only afterwards. An interrupted consequence

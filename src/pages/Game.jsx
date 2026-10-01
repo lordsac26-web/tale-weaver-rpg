@@ -45,6 +45,8 @@ import applyStoryClarification from '@/lib/storyClarification';
 import { beginCombatIntent, buildCombatRequestKey, COMBAT_FOLLOWUP_TRANSITION_VERSION, finishCombatIntent, oneEphemeralCombatError } from '../../base44/shared/combat/combatFollowupTransition';
 import { normalizeRollMode } from '@/lib/rollMode';
 import createStoryContinuation from '@/lib/storyContinuation';
+import useStoryStowClarification from '@/components/game/useStoryStowClarification';
+import useStoryCustomAction from '@/components/game/useStoryCustomAction';
 
 const getFunctionErrorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.response?.data?.message ||
@@ -103,6 +105,11 @@ export default function Game() {
   // Manual dice-roll prompt: when set, a pre-configured roll modal is shown and
   // the staged callback runs once the player rolls (or skips on cancel = auto).
   const [pendingRoll, setPendingRoll] = useState(null);
+  const stowClarification = useStoryStowClarification({ sessionId, onConfirmed: data => {
+    setCharacter(prev => ({ ...prev, inventory: data.character_inventory, stowed_items: data.character_stowed_items }));
+    storyContinuationRef.current.accepted(data.requested_request_id);
+    setCustomInput('');
+  } });
 
   // CombatLogs are created by service-role backend functions and may not be
   // visible to browser-scoped entity reads under RLS. Always resume through the
@@ -155,6 +162,7 @@ export default function Game() {
     if (combatResolution.combat) setCombatViewTab('combat');
 
     setCharacter(loadedChar);
+    await stowClarification.restore(loadedChar.id);
 
     if (loadedChar) {
       const comps = await base44.entities.Companion.filter({ character_id: loadedChar.id });
@@ -388,7 +396,7 @@ export default function Game() {
       const data = result.data;
       if(data.time_advance?.clock&&data.session)setSession(data.session);
       if(data.time_advance?.clock&&data.character)setCharacter(data.character);
-      if (await applyStoryClarification({ data, requestId, sourceId: session?.story_log?.at(-1)?.request_id, sequence: storySequence, latestSequence: storyRequestSequenceRef.current, continuation: storyContinuationRef.current, setNarrative, setChoices })) return;
+      if (await applyStoryClarification({ data, requestId, sourceId: session?.story_log?.at(-1)?.request_id, sequence: storySequence, latestSequence: storyRequestSequenceRef.current, continuation: storyContinuationRef.current, setNarrative, setChoices, onStowClarification: stowClarification.install })) return;
       const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
       if (!acceptedStory.accepted) throw new Error(acceptedStory.reason === 'persistence_unconfirmed' ? 'The new story was not confirmed by the server.' : 'A newer story response superseded this one.');
       storyContinuationRef.current.accepted(requestId);
@@ -513,37 +521,7 @@ export default function Game() {
   };
 
   // Intercept custom input — send to DM for adjudication first
-  const handleCustomInput = async () => {
-    if (!customInput.trim()) return;
-    const text = customInput;
-    setCustomInput('');
-    setEvaluatingAction(true);
-
-    try {
-      const compositeTransition = buildCompositePreflightRequest({ text, sessionId, characterId:character?.id, source:'free_text' });
-      const endpoint = compositeTransition?.endpoint || 'evaluatePlayerAction';
-      const result = await base44.functions.invoke(endpoint, {
-        ...(compositeTransition?.payload || {}),
-        action: text,
-        request_id: compositeTransition?.request_id || `evaluate-action:${sessionId}:${crypto.randomUUID()}`,
-        session_id: sessionId,
-        character_id: character?.id,
-        character,
-        session_context: `${session?.current_location || ''} — ${narrative.filter(e => e.type === 'narration').slice(-1)[0]?.text?.slice(0, 200) || ''}`
-      });
-      if (result.data?.action_type === 'composite_action') {
-        const expectedKey = compositeTransition?.parent_key || result.data?.composite_plan?.plan?.parent_key;
-        const acceptance = acceptCompositePreflightResponse(result.data, expectedKey);
-        if (!acceptance.accepted) throw new Error(`Composite preflight response rejected: ${acceptance.reason}`);
-      }
-      setPendingProposal({ ...result.data, action: text, ...(compositeTransition ? {parent_key:compositeTransition.parent_key} : {}) });
-    } catch (err) {
-      console.error('Failed to evaluate action:', err);
-      setCustomInput(text); // restore the player's input so they don't lose it
-    } finally {
-      setEvaluatingAction(false);
-    }
-  };
+  const handleCustomInput = useStoryCustomAction({ customInput, setCustomInput, stow: stowClarification, sessionId, character, session, narrative, setEvaluatingAction, setPendingProposal, setNarrative, buildCompositePreflightRequest, acceptCompositePreflightResponse });
 
   // Recognize only explicit casts of spells the character actually knows or has
   // prepared. Apostrophes and punctuation are ignored so "hunters mark" still
@@ -644,7 +622,7 @@ export default function Game() {
       const data = result.data;
       if(data.time_advance?.clock&&data.session)setSession(data.session);
       if(data.time_advance?.clock&&data.character)setCharacter(data.character);
-      if (await applyStoryClarification({ data, requestId, sourceId: session?.story_log?.at(-1)?.request_id, sequence: storySequence, latestSequence: storyRequestSequenceRef.current, continuation: storyContinuationRef.current, setNarrative, setChoices })) return;
+      if (await applyStoryClarification({ data, requestId, sourceId: session?.story_log?.at(-1)?.request_id, sequence: storySequence, latestSequence: storyRequestSequenceRef.current, continuation: storyContinuationRef.current, setNarrative, setChoices, onStowClarification: stowClarification.install })) return;
       const acceptedStory = acceptSequencedStoryPayload(data, storySequence, storyRequestSequenceRef.current);
       if (!acceptedStory.accepted) throw new Error(`Story recovery required: ${acceptedStory.reason}.`);
       storyContinuationRef.current.accepted(requestId);
@@ -1748,7 +1726,7 @@ export default function Game() {
                       onChoice={character?.hp_current <= 0 ? () => {} : handleChoice} 
                       customInput={customInput}
                       setCustomInput={character?.hp_current <= 0 ? () => {} : setCustomInput} 
-                      onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} sessionId={sessionId} characterId={character?.id} onStowConfirmed={data => setCharacter(prev => ({ ...prev, inventory: data.character_inventory, stowed_items: data.character_stowed_items }))} />
+                      onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} sessionId={sessionId} characterId={character?.id} stowClarification={stowClarification} />
                   )}
                 </div>
               </div>

@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+.stow-clarification-panel {
+  max-height: min(28rem, 45vh);
+  max-height: min(28rem, 45dvh);
+}
+
+
 @layer base {
   :root {
     --background: 0 0% 100%;

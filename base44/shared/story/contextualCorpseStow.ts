@@ -1,4 +1,5 @@
-export const CONTEXTUAL_CORPSE_STOW_VERSION = 'contextual-corpse-stow-v1';
+import { investigatedCorpseLinks, matchSceneCorpseReply, requestedCorpseCount, unresolvedCorpseMessage } from './corpseSceneReply.ts';
+export const CONTEXTUAL_CORPSE_STOW_VERSION = 'contextual-corpse-stow-v2';
 const norm = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 export const corpseIdentity = item => `corpse:${item.death_provenance?.combat_id}:${item.death_provenance?.combatant_id}`;
 const dead = item => item?.death_provenance?.combat_id && item.death_provenance.combatant_id && item.death_provenance.status === 'dead' && Number(item.death_provenance.hp) === 0 && item.alive === false;
@@ -22,7 +23,7 @@ export async function readContextualCorpseSources({ base44, session, character }
   }
   const stowedIds = new Set((character.stowed_items || []).filter(dead).map(corpseIdentity));
   const scene = session.story_log?.at(-1);
-  const explicitLinks = new Set([scene?.combat_handoff?.combat_id, scene?.authoritative_weapon_attack?.combat_id, ...(scene?.defeat_combat_ids || [])].filter(Boolean));
+  const explicitLinks = new Set([scene?.combat_handoff?.combat_id, scene?.authoritative_weapon_attack?.combat_id, ...(scene?.defeat_combat_ids || []), ...investigatedCorpseLinks(session).combat_ids]);
   const candidates = new Map(), already = (character.stowed_items || []).filter(dead).map(x => ({ id: corpseIdentity(x), name: x.death_provenance.enemy_name || x.name, label: `${x.name} (already in ${x.container})` })), excluded = [];
   for (const combat of recent.slice(0, 9)) {
     if (combat.session_id !== session.id || combat.character_id !== character.id || combat.result !== 'victory' || combat.is_active !== false) continue;
@@ -72,7 +73,11 @@ export function validateCorpseContainer({ character, container, sources }) {
 export async function resolveContextualCorpseSet({ base44, session, character, itemPhrase, container, selectedIds, answerText }) {
   const context = await readContextualCorpseSources({ base44, session, character });
   let sources = context.candidates;
-  if (selectedIds !== undefined) {
+  const count = requestedCorpseCount(itemPhrase), replyMatch = matchSceneCorpseReply(context, session, answerText, count);
+  if (selectedIds === undefined && replyMatch) {
+    if (!replyMatch.ok) return { kind: 'clarification', ...context, reason_code: replyMatch.reason, message: unresolvedCorpseMessage(context, replyMatch.reason, replyMatch.sources) };
+    sources = replyMatch.sources;
+  } else if (selectedIds !== undefined) {
     const ids = Array.isArray(selectedIds) ? selectedIds : [];
     if (!ids.length || ids.length > 8 || new Set(ids).size !== ids.length || ids.some(id => !sources.some(x => x.id === id))) return { kind: 'clarification', ...context, message: 'That selection is no longer available in this scene. Which of the listed bodies did you mean? Nothing has been moved.' };
     sources = sources.filter(x => ids.includes(x.id));
@@ -84,12 +89,13 @@ export async function resolveContextualCorpseSet({ base44, session, character, i
       const message = supported.length ? `Which bodies do you mean: ${joins(supported)}? Nothing has been moved.`
         : context.already.length ? `Do you mean ${context.reference}, rather than the bodies already in your bag? I can't yet link those scene bodies to verified deaths. Nothing has been moved.`
         : `Do you mean ${context.reference}? I can't yet verify which defeated creatures those bodies belong to. Nothing has been moved.`;
-      return { kind: 'clarification', ...context, message };
+      return { kind: 'clarification', ...context, reason_code: sources.length ? 'ambiguous_sources' : 'scene_deaths_unverified', message: answerText ? unresolvedCorpseMessage(context, sources.length ? 'ambiguous_sources' : 'scene_deaths_unverified') : message };
     }
   }
+  if (count && sources.length !== count) return { kind: 'clarification', ...context, reason_code: 'partial_death_evidence', message: `You requested ${count} bodies, but only ${sources.length} verified, unstowed source is available: ${sources.map(x => x.name).join(', ')}. Already in your bag: ${context.already.map(x => x.name).join(', ') || 'none'}. I will not move a partial set. No bodies moved.` };
   if (sources.length > 8) return { kind: 'clarification', ...context, message: 'There are several bodies here. Which group of up to eight do you mean? Nothing has been moved.' };
   const fit = validateCorpseContainer({ character, container, sources });
-  if (!fit.ok) return { kind: 'clarification', ...context, message: fit.message };
+  if (!fit.ok) return { kind: 'clarification', ...context, reason_code: 'container_fit_unverified', message: fit.message };
   return { kind: 'set', ...context, sources };
 }
 

@@ -1,6 +1,6 @@
 import { acceptSequencedStoryPayload } from '@/lib/storyTransition';
 
-export default async function applyStoryClarification({ data, requestId, sourceId, sequence, latestSequence, continuation, setNarrative, setChoices }) {
+export default async function applyStoryClarification({ data, requestId, sourceId, sequence, latestSequence, continuation, setNarrative, setChoices, onStowClarification }) {
   if (data?.response_kind !== 'clarification') return false;
   const accepted = acceptSequencedStoryPayload(data, sequence, latestSequence);
   const receipt = data.check_receipt;
@@ -11,8 +11,13 @@ export default async function applyStoryClarification({ data, requestId, sourceI
   const canonical = { request_id: entry.request_id || null, text: String(entry.text || ''), choices: entry.choices || [], skill_check: entry.skill_check || null };
   const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(canonical))))).map(byte => byte.toString(16).padStart(2, '0')).join('');
   if (hash !== data.response_payload_hash) throw new Error('The preserved scene checksum could not be verified. Keep this action paused.');
-  continuation.accepted(requestId);
   setChoices(accepted.hydration.choices);
-  setNarrative(previous => [...previous, { type: data.stow_transaction?.contextual_stow ? 'stow_clarification' : 'action_error', text: data.clarification_message, clarification: data }]);
+  if (data.stow_transaction?.contextual_stow && onStowClarification) {
+    onStowClarification(data);
+    // The source scene is accepted, not the attempted stow. Keep its continuation.
+  } else {
+    continuation.accepted(requestId);
+    setNarrative(previous => [...previous, { type: 'action_error', text: data.clarification_message }]);
+  }
   return true;
 }

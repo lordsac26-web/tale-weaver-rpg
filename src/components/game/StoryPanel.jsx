@@ -26,7 +26,7 @@ function truncateForNarration(text, maxChars = 800) {
   return lastPeriod > 100 ? slice.slice(0, lastPeriod + 1) : slice;
 }
  
-export default function StoryPanel({ narrative, choices, loading, loadingLabel, onChoice, customInput, setCustomInput, onCustomSubmit, sessionId, characterId, combatId, onStowConfirmed }) {
+export default function StoryPanel({ narrative, choices, loading, loadingLabel, onChoice, customInput, setCustomInput, onCustomSubmit, sessionId, characterId, combatId, stowClarification }) {
   const endRef = useRef(null);
   const [showAskDM, setShowAskDM] = useState(false);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
@@ -437,7 +437,6 @@ export default function StoryPanel({ narrative, choices, loading, loadingLabel, 
                 <SkillCheckResult entry={entry} />
               )}
  
-              {entry.type === 'stow_clarification' && <StowClarificationCard clarification={entry.clarification} sessionId={sessionId} characterId={characterId} onConfirmed={onStowConfirmed} />}
               {entry.type === 'action_error' && (
                 <div className="flex justify-center">
                   <div className="flex max-w-xl items-start gap-2 rounded-xl border border-amber-500/50 bg-amber-950/70 px-4 py-3 text-sm text-amber-100" role="alert">
@@ -589,6 +588,7 @@ export default function StoryPanel({ narrative, choices, loading, loadingLabel, 
             </div>
           )}
  
+          {stowClarification && <StowClarificationCard state={stowClarification.state} controller={stowClarification.controller} />}
           {/* Custom input */}
           <div className="flex flex-wrap sm:flex-nowrap gap-2 mt-3">
             <div className="flex-1 min-w-0 relative">
@@ -597,17 +597,17 @@ export default function StoryPanel({ narrative, choices, loading, loadingLabel, 
                 value={customInput}
                 onChange={e => setCustomInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && customInput.trim() && onCustomSubmit()}
-                placeholder={choices.length > 0 ? 'Or write your own action...' : 'Describe your action...'}
+                placeholder={stowClarification?.pending ? 'Reply to the saved stow clarification…' : choices.length > 0 ? 'Or write your own action...' : 'Describe your action...'}
                 className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm input-fantasy"
                 style={{ fontFamily: 'EB Garamond, serif', fontSize: '1rem' }}
               />
             </div>
             <MicButton value={customInput} onTranscript={setCustomInput} disabled={loading} />
             <button onClick={() => setShowAskDM(true)} className="px-3 py-2.5 rounded-xl text-xs flex-shrink-0" style={{ border: '1px solid rgba(110,150,220,0.35)', color: 'rgba(185,210,255,0.9)', background: 'rgba(20,35,65,0.5)' }}>Ask the DM</button>
-            <button onClick={onCustomSubmit} disabled={!customInput.trim()}
+            <button onClick={onCustomSubmit} disabled={!customInput.trim() || stowClarification?.state.busy}
               className="px-5 py-2.5 rounded-xl text-sm btn-fantasy disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
               style={{ fontSize: '0.85rem', letterSpacing: '0.05em', minHeight: '2.75rem' }}>
-              Act
+              {stowClarification?.pending ? 'Reply' : 'Act'}
             </button>
           </div>
         </div>
