@@ -13,6 +13,6 @@ export default async function applyStoryClarification({ data, requestId, sourceI
   if (hash !== data.response_payload_hash) throw new Error('The preserved scene checksum could not be verified. Keep this action paused.');
   continuation.accepted(requestId);
   setChoices(accepted.hydration.choices);
-  setNarrative(previous => [...previous, { type: 'action_error', text: data.clarification_message }]);
+  setNarrative(previous => [...previous, { type: data.stow_transaction?.contextual_stow ? 'stow_clarification' : 'action_error', text: data.clarification_message, clarification: data }]);
   return true;
 }

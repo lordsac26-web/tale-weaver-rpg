@@ -1748,7 +1748,7 @@ export default function Game() {
                       onChoice={character?.hp_current <= 0 ? () => {} : handleChoice} 
                       customInput={customInput}
                       setCustomInput={character?.hp_current <= 0 ? () => {} : setCustomInput} 
-                      onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} sessionId={sessionId} characterId={character?.id} />
+                      onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} sessionId={sessionId} characterId={character?.id} onStowConfirmed={data => setCharacter(prev => ({ ...prev, inventory: data.character_inventory, stowed_items: data.character_stowed_items }))} />
                   )}
                 </div>
               </div>

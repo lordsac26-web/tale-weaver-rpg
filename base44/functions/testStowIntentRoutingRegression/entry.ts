@@ -13,6 +13,7 @@ export default async function testStowIntentRoutingRegression(req) {
     await req.json().catch(() => ({}));
     const protectedBefore = await hashValue(await readProtectedDndState(base44.asServiceRole));
     const fixtures = [];
+    const cleanup = [];
     const results = [];
     const record = (name, pass) => results.push({ name, pass: !!pass });
     try {
@@ -79,13 +80,16 @@ export default async function testStowIntentRoutingRegression(req) {
       record('Ask DM bag truth includes the dead corpse', answer.answer.includes("Ritual Overseer's Corpse") && answer.answer.includes('(dead corpse)'));
       record('bag pane data contract exposes exactly all three stowed items', truth.length === 3 && truth.some((item) => item.name === "Ritual Overseer's Corpse" && item.alive === false));
     } finally {
-      for (const [entity, id] of fixtures.reverse()) { try { await base44.asServiceRole.entities[entity].delete(id); } catch {} }
+      for (const [entity, id] of fixtures.reverse()) {
+        await base44.asServiceRole.entities[entity].delete(id);
+        cleanup.push({ entity, id, verified_absent: (await base44.asServiceRole.entities[entity].filter({ id })).length === 0 });
+      }
     }
     const protectedAfter = await hashValue(await readProtectedDndState(base44.asServiceRole));
-    record('cleanup complete and protected live IDs unchanged', protectedBefore === protectedAfter);
+    record('cleanup complete and protected live IDs unchanged', cleanup.length === fixtures.length && cleanup.every(x => x.verified_absent) && protectedBefore === protectedAfter);
     const passed = results.filter((item) => item.pass).length;
     const allPass = passed === results.length;
-    return Response.json({ function_version: 'test-stow-intent-routing-v1.1.0', passed, failed: results.length - passed, total: results.length, all_pass: allPass, results }, { status: allPass ? 200 : 500 });
+    return Response.json({ function_version: 'test-stow-intent-routing-v1.1.0', passed, failed: results.length - passed, total: results.length, all_pass: allPass, results, cleanup, protected_before: protectedBefore, protected_after: protectedAfter, protected_unchanged: protectedBefore === protectedAfter }, { status: allPass ? 200 : 500 });
   } catch (error) {
     return Response.json({ error: error.message || 'Stow intent routing regression failed' }, { status: 500 });
   }

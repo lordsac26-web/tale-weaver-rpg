@@ -1,4 +1,5 @@
-export const STOW_INTENT_VERSION = 'stow-intent-v1.1.0';
+import { resolveContextualCorpseSet, commitCorpseStowSet } from './contextualCorpseStow.ts';
+export const STOW_INTENT_VERSION = 'stow-intent-v1.2.0';
 export const STOW_RECEIPTS_KEY = '__stow_receipts';
 
 const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -107,10 +108,14 @@ export async function executeStowAction({ base44, ownerId = null, payload }) {
   if (prior) return { status: 200, body: { handled: true, success: true, already_processed: true, stow: prior, receipt: prior, stowed_items: character.stowed_items || [], inventory: character.inventory || [], writes: 0 } };
   if (payload?.check?.success === false) return { status: 200, body: { handled: true, success: false, reason: 'failed_check', writes: 0 } };
 
-  let resolution = resolveStowTarget(character, parsed.item_phrase);
-  if (resolution.kind === 'unresolved') resolution = await resolveCompletedCombatCorpse({ base44, session, character, itemPhrase: parsed.item_phrase, requestId: token });
+  const contextual = /\b(?:corpses|bodies)\b/i.test(parsed.item_phrase) || payload.contextual_stow === true;
+  if (contextual && payload.source_story_request_id && payload.source_story_request_id !== session.story_log?.at(-1)?.request_id) return { status: 409, body: { handled: true, error: 'The scene has changed since that attempt. Nothing has been moved.', writes: 0 } };
+  let resolution = contextual ? await resolveContextualCorpseSet({ base44, session, character, itemPhrase: parsed.item_phrase, container: parsed.container, selectedIds: payload.selected_source_ids, answerText: payload.answer_text }) : resolveStowTarget(character, parsed.item_phrase);
+  if (!contextual && resolution.kind === 'unresolved') resolution = await resolveCompletedCombatCorpse({ base44, session, character, itemPhrase: parsed.item_phrase, requestId: token });
   if (resolution.kind === 'already_stowed') return { status: 200, body: { handled: true, success: true, already_processed: true, stow: { token, item_id: stableIdentity(resolution.item), item_name: resolution.item.name, quantity: 1, container: resolution.item.container, source: 'completed_combat', stow_intent_version: STOW_INTENT_VERSION }, receipt: null, stowed_items: character.stowed_items || [], inventory: character.inventory || [], writes: 0 } };
-  if (resolution.kind !== 'unique') return { status: 200, body: { handled: true, success: false, clarification_required: true, item_phrase: parsed.item_phrase, container: parsed.container, candidates: resolution.candidates, message: `Which established item or defeated creature do you want to stow? The phrase "${parsed.item_phrase}" does not resolve to one source.`, writes: 0 } };
+  if (!['unique', 'set'].includes(resolution.kind)) return { status: 200, body: { handled: true, success: false, clarification_required: true, item_phrase: parsed.item_phrase, container: parsed.container,
+    candidates: contextual ? resolution.candidates.map(x => ({ id: x.id, name: x.name, label: x.label })) : resolution.candidates,
+    contextual_stow: contextual, already_stowed: resolution.already || [], message: resolution.message || `Which item would you like to put in ${parsed.container}${resolution.candidates?.length ? `: ${resolution.candidates.join(', ')}` : ''}? Nothing has been moved.`, writes: 0 } };
 
   const [latestSession, latestCharacter] = await Promise.all([
     base44.asServiceRole.entities.GameSession.get(session.id),
@@ -118,6 +123,7 @@ export async function executeStowAction({ base44, ownerId = null, payload }) {
   ]);
   if (latestSession.updated_date !== session.updated_date || latestCharacter.updated_date !== character.updated_date) return { status: 409, body: { handled: true, error: 'State changed before stow; refresh and retry.', concurrency_conflict: true, writes: 0 } };
 
+  if (resolution.kind === 'set') return commitCorpseStowSet({ base44, character: latestCharacter, session: latestSession, resolution, token, parsed: { ...parsed, original_action: payload.action_text }, abilities, receipts, version: STOW_INTENT_VERSION });
   const selected = resolution.item;
   const source = resolution.source || 'inventory';
   const quantity = Number(selected.quantity) || 1;

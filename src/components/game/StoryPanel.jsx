@@ -7,6 +7,7 @@ import { stopAllNarration } from './narrationControl';
 import { stripEmbeddedChoices } from './stripEmbeddedChoices';
 import { normalizeChoiceCheckDisplay } from '../../../base44/shared/story/choiceCheckDisplay';
 import AskDMDialog from './AskDMDialog';
+import StowClarificationCard from '@/components/game/StowClarificationCard';
 import { base44 } from '@/api/base44Client';
  
 const RISK_STYLES = {
@@ -25,7 +26,7 @@ function truncateForNarration(text, maxChars = 800) {
   return lastPeriod > 100 ? slice.slice(0, lastPeriod + 1) : slice;
 }
  
-export default function StoryPanel({ narrative, choices, loading, loadingLabel, onChoice, customInput, setCustomInput, onCustomSubmit, sessionId, characterId, combatId }) {
+export default function StoryPanel({ narrative, choices, loading, loadingLabel, onChoice, customInput, setCustomInput, onCustomSubmit, sessionId, characterId, combatId, onStowConfirmed }) {
   const endRef = useRef(null);
   const [showAskDM, setShowAskDM] = useState(false);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
@@ -436,6 +437,7 @@ export default function StoryPanel({ narrative, choices, loading, loadingLabel, 
                 <SkillCheckResult entry={entry} />
               )}
  
+              {entry.type === 'stow_clarification' && <StowClarificationCard clarification={entry.clarification} sessionId={sessionId} characterId={characterId} onConfirmed={onStowConfirmed} />}
               {entry.type === 'action_error' && (
                 <div className="flex justify-center">
                   <div className="flex max-w-xl items-start gap-2 rounded-xl border border-amber-500/50 bg-amber-950/70 px-4 py-3 text-sm text-amber-100" role="alert">
