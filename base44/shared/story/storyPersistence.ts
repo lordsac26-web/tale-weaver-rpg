@@ -1,4 +1,4 @@
-import { canonicalStoryResponsePayload, hashStoryValue, hydrateLatestStoryEntry, storyPayloadFromCommit } from './storyTransition.ts';
+import { canonicalStoryResponsePayload, hashStoryValue, storyPayloadFromCommit } from './storyTransition.ts';
 
 export const STORY_PERSISTENCE_VERSION = 'story-persistence-v1.0.0';
 const failure = (reason, afterWrite = false) => ({ status: 409, body: { error: `Story persistence requires reconciliation: ${reason}. No new action was replayed.`, error_code: reason, persistence_confirmed: false, preserve_scene: true, partial_write_possible: afterWrite, writes: afterWrite ? null : 0, story_persistence_version: STORY_PERSISTENCE_VERSION } });

@@ -34,7 +34,8 @@ import { buildInfiltrationSessionUpdate, guardInfiltrationBeat, INFILTRATION_ADV
 import { normalizeDeclaredRecovery, routeChoiceAward, CHOICE_AWARD_ROUTING_VERSION } from '../../shared/story/choiceAwardRouting.js';
 import { resolveFailedCheckCandidate, resolveNarratedStowCandidate, FAILED_CHECK_CONTINUATION_VERSION } from '../../shared/story/failedCheckContinuation.ts';
 import { selectStoryChoice } from '../../shared/story/selectedStoryChoice.ts';
-import { buildStoryClarification, confirmPersistedStoryPair, finishStoryPersistence } from '../../shared/story/storyPersistence.ts';
+import { confirmPersistedStoryPair, finishStoryPersistence } from '../../shared/story/storyPersistence.ts';
+import { resolveStoryStowTransition } from '../../shared/story/storyStowTransition.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -79,6 +80,7 @@ export default async function(req) {
       const replay = await confirmPersistedStoryPair({ readSession: () => base44.asServiceRole.entities.GameSession.get(session_id), requestId: storyRequestId });
       return Response.json({ ...replay.body, already_processed: replay.status === 200, generate_story_version: GENERATE_STORY_VERSION, ...(replay.status === 200 ? { writes: 0 } : {}) }, { status: replay.status });
     }
+    if (action !== 'hydrate' && session.story_log?.at(-1)?.mechanics_status === 'pending') return Response.json({ error: 'A prior story action has an incomplete mechanics commit. Keep gameplay paused for reconciliation.', error_code: 'partial_mechanics_commit', preserve_scene: true, partial_write_possible: true, writes: 0 }, { status: 409 });
     if (action === 'start') {
       const existingOpening = hydrateLatestStoryEntry(session);
       if (existingOpening.text && existingOpening.choices.length >= 4) return Response.json({ narrative: existingOpening.text, choices: existingOpening.choices, ...storyPayloadFromCommit({ entry: existingOpening.entry, index: existingOpening.index, persistence_confirmed: true }), persistence_confirmed: true, already_processed: true });
@@ -132,17 +134,11 @@ export default async function(req) {
     let authoritativeStow = null;
     let recoveryAttention = null;
     if (action === 'choice') {
-      const stowOutcome = await executeStowAction({ base44, ownerId: user.id, payload: { session_id, character_id: character.id, action_text: selectedChoice, request_id: storyRequestId, check: authoritativeChoiceContext?.check } });
-      if (stowOutcome.body?.handled) {
-        if (stowOutcome.status >= 400) return Response.json(stowOutcome.body, { status: stowOutcome.status });
-        authoritativeStow = stowOutcome.body;
-        if (stowOutcome.body?.clarification_required) {
-          const clarification = await buildStoryClarification({ db: base44.asServiceRole, sessionId: session_id, characterId: character.id, requestId: storyRequestId, sourceRequestId: hydrateLatestStoryEntry(session).request_id, stow: stowOutcome.body });
-          return Response.json({ ...clarification.body, generate_story_version: GENERATE_STORY_VERSION }, { status: clarification.status });
-        }
-        // failed_check is an expected zero-write outcome; continue its failure branch.
-        if (stowOutcome.body?.success) character = await base44.asServiceRole.entities.Character.get(character.id);
-      }
+      const stowOutcome = await resolveStoryStowTransition({ base44, ownerId: user.id, session, characterId: character.id, requestId: storyRequestId, actionText: selectedChoice, check: authoritativeChoiceContext?.check });
+      if (stowOutcome.response) return Response.json({ ...stowOutcome.response.body, generate_story_version: GENERATE_STORY_VERSION }, { status: stowOutcome.response.status });
+      authoritativeStow = stowOutcome.stow;
+      // A failed roll remains a zero-item-write narrative branch.
+      if (authoritativeStow?.success) character = await base44.asServiceRole.entities.Character.get(character.id);
     }
     let authoritativeTransfer = null;
     if (action === 'choice' && storyRequestId && !authoritativeStow?.success) {

@@ -2,7 +2,9 @@ export const STORY_TRANSITION_VERSION = 'story-transition-v2.5.0';
 export const normalizeStoryChoices = value => Array.isArray(value) ? value : [];
 export function hydrateLatestStoryEntry(session) {
   const storyLog = Array.isArray(session?.story_log) ? session.story_log : [];
-  const index = storyLog.length - 1, entry = storyLog[index] || null;
+  let index = storyLog.length - 1;
+  while (index >= 0 && storyLog[index]?.mechanics_status === 'pending') index--;
+  const entry = storyLog[index] || null;
   return { index, request_id: entry?.request_id || null, text: String(entry?.text || ''), choices: normalizeStoryChoices(entry?.choices), entry };
 }
 export function acceptSequencedStoryPayload(payload, sequence, latestSequence) {

@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
-import generateStory from '../generateStory/entry.ts';
+import { resolveStoryStowTransition } from '../../shared/story/storyStowTransition.ts';
 import { buildStoryClarification, confirmPersistedStoryPair, finishStoryPersistence } from '../../shared/story/storyPersistence.ts';
 import { canonicalStoryResponsePayload, hashStoryValue, commitStoryTransition, acceptSequencedStoryPayload } from '../../shared/story/storyTransition.ts';
 import { resolveUnifiedStorySkillCheck } from '../../shared/story/unifiedStorySkillResolution.ts';
@@ -53,9 +53,9 @@ export default async function(req) {
       if (success) {
         const old = { narrative: stow.body.message, choices: [], clarification_required: true, preserve_scene: true, writes: 0 };
         record(`${label}: reproduces exact pre-fix persistence_unconfirmed branch`, stow.body.clarification_required && acceptSequencedStoryPayload(old, 1, 1).reason === 'persistence_unconfirmed');
-        const response = await generateStory(new Request(req.url, { method: 'POST', headers: req.headers, body: JSON.stringify({ session_id: s.id, action: 'choice', request_id: id, choice_context: { check: receipt, action_type: 'skill_check' }, ...(selected ? { choice_index: 0, choice_text: incident.action_text } : { custom_input: incident.action_text }) }) }));
-        const clarified = { status: response.status, body: await response.json() };
-        record(`${label}: actual production handler returns verified clarification`, clarified.status === 200 && clarified.body.response_kind === 'clarification');
+        const production = await resolveStoryStowTransition({ base44, ownerId: user.id, session: await db.entities.GameSession.get(s.id), characterId: c.id, requestId: id, actionText: selection.contract.text, check: receipt });
+        const clarified = production.response;
+        record(`${label}: shared production stow branch returns verified clarification`, clarified?.status === 200 && clarified.body.response_kind === 'clarification');
         const afterClarification = await db.entities.GameSession.get(s.id);
         record(`${label}: fresh preserved pair is confirmed without fake narrative commit`, clarified.status === 200 && clarified.body.response_kind === 'clarification' && clarified.body.writes === 0 && acceptSequencedStoryPayload(clarified.body, 1, 1).accepted && afterClarification.story_log.length === 1 && clarified.body.check_receipt.request_id === id);
         const second = await buildStoryClarification({ db, sessionId: s.id, characterId: c.id, requestId: id, sourceRequestId: sourceEntry.request_id, stow: stow.body });

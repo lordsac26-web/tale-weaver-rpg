@@ -18,7 +18,8 @@ export function commitStoryTransition(storyLog, completedEntry, requestId, limit
 
 export function hydrateLatestStoryEntry(session) {
   const storyLog = Array.isArray(session?.story_log) ? session.story_log : [];
-  const index = storyLog.length - 1;
+  let index = storyLog.length - 1;
+  while (index >= 0 && storyLog[index]?.mechanics_status === 'pending') index--;
   const entry = index >= 0 ? storyLog[index] : null;
   return {
     index,
