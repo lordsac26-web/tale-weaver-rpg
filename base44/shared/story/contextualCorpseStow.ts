@@ -1,8 +1,9 @@
 import { investigatedCorpseLinks, matchSceneCorpseReply, requestedCorpseCount, unresolvedCorpseMessage } from './corpseSceneReply.ts';
-export const CONTEXTUAL_CORPSE_STOW_VERSION = 'contextual-corpse-stow-v2';
+import { corpseIdentity, verifiedDeadCorpse as dead } from './corpseIdentity.ts';
+import { readNarrativeCorpseEntities } from './narrativeCorpseSources.ts';
+export { corpseIdentity } from './corpseIdentity.ts';
+export const CONTEXTUAL_CORPSE_STOW_VERSION = 'contextual-corpse-stow-v2.1';
 const norm = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-export const corpseIdentity = item => `corpse:${item.death_provenance?.combat_id}:${item.death_provenance?.combatant_id}`;
-const dead = item => item?.death_provenance?.combat_id && item.death_provenance.combatant_id && item.death_provenance.status === 'dead' && Number(item.death_provenance.hp) === 0 && item.alive === false;
 const bodyTokens = phrase => norm(phrase).split(' ').filter(x => !['the','these','those','all','both','two','bodies','body','corpses','corpse','remains','dead','fallen','of'].includes(x));
 const joins = values => values.length < 2 ? values[0] || '' : `${values.slice(0, -1).join(', ')} and ${values.at(-1)}`;
 
@@ -41,6 +42,14 @@ export async function readContextualCorpseSources({ base44, session, character }
       if (!inScene) { excluded.push({ id: identity, name: enemy.name, reason: 'different_scene' }); continue; }
       candidates.set(identity, { id: identity, name: enemy.name, label, group: combat.id, item, source: 'completed_combat' });
     }
+  }
+  const structured = [...(session.combat_state?.combatants || []), ...recent.flatMap(c => (c.combatants || []).map(x => ({ ...x, combat_id: c.id })))];
+  const narrated = await readNarrativeCorpseEntities({ session, structured });
+  for (const entity of narrated) {
+    if (stowedIds.has(entity.id) || (character.inventory || []).some(x => corpseIdentity(x) === entity.id)) continue;
+    const item = { name: `${entity.name}'s Corpse`, scene_entity_id: entity.id, quantity: 1, category: 'Corpse', alive: false, status: 'dead', is_identified: true,
+      death_provenance: entity.death_provenance, evidence: entity.evidence };
+    candidates.set(entity.id, { id: entity.id, name: entity.name, label: `${entity.name} (${session.current_location}; narrated remains)`, group: entity.source_request_id, item, source: 'narrative_derived' });
   }
   // Carried bodies still require the same verified death identity. Never create a
   // second scene copy of a carried body, or validate a corpse merely by its name.
@@ -105,7 +114,7 @@ export async function commitCorpseStowSet({ base44, character, session, resoluti
   const at = new Date().toISOString(), ids = new Set(resolution.sources.map(x => x.id));
   const inventory = (character.inventory || []).filter((x, index) => !resolution.sources.some(s => s.source === 'inventory' && s.index === index));
   const stowed = [...(character.stowed_items || []), ...resolution.sources.map(({ item }) => ({ ...item, container: parsed.container, stowed_at: at, stow_request_id: token,
-    provenance: { ...(item.provenance || {}), source: item.provenance?.source || 'validated_completed_combat', story_request_id: token, source_story_request_id: session.story_log?.at(-1)?.request_id, combat_id: item.death_provenance.combat_id, combatant_id: item.death_provenance.combatant_id, acquired_at: item.provenance?.acquired_at || at } }))];
+    provenance: { ...(item.provenance || {}), source: item.provenance?.source || (item.death_provenance.source === 'narrative_derived' ? 'validated_narrative_death' : 'validated_completed_combat'), story_request_id: token, source_story_request_id: session.story_log?.at(-1)?.request_id, combat_id: item.death_provenance.combat_id, combatant_id: item.death_provenance.combatant_id, acquired_at: item.provenance?.acquired_at || at } }))];
   const receipt = { token, item_id: [...ids].sort().join('|'), item_name: joins(resolution.sources.map(x => x.item.name)), quantity: ids.size, container: parsed.container,
     source: 'contextual_corpse_set', items: resolution.sources.map(x => ({ item_id: x.id, item_name: x.item.name, quantity: 1, death_provenance: x.item.death_provenance })), original_action: parsed.original_action,
     source_story_request_id: session.story_log?.at(-1)?.request_id, at, stow_intent_version: version, contextual_version: CONTEXTUAL_CORPSE_STOW_VERSION };

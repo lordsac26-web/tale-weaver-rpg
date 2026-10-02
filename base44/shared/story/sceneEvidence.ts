@@ -1,5 +1,6 @@
 import { hashStoryValue } from './storyTransition.ts';
-export const SCENE_GROUNDING_VERSION = 'grounded-scene-v1';
+import { hasCommittedCultistDeathChain } from './narrativeDeathEvidence.ts';
+export const SCENE_GROUNDING_VERSION = 'grounded-scene-v1.1';
 export const SCENE_ENTITY_SCHEMA = { type: 'array', maxItems: 24, items: { type: 'object', properties: {
   name: { type: 'string' }, aliases: { type: 'array', items: { type: 'string' }, maxItems: 6 }, type: { type: 'string', enum: ['object', 'container', 'creature', 'corpse'] },
   quantity: { type: 'integer', minimum: 1, maximum: 8 }, status: { type: 'string', enum: ['alive', 'dead', 'unknown'] },
@@ -29,16 +30,17 @@ export function validateSceneCandidate({ session, entry, candidate, structured =
   if (candidate.quantity === 1 && /\b(?:two|three|four|five|six|seven|eight|several|many)\b/i.test(quote)) return reject('singular_identity_in_plural_span');
   const subsequent = (session.story_log || []).slice(Math.max(0, session.story_log?.indexOf(entry) + 1));
   const matchName = v => words.some(w => norm(v).includes(w));
-  const structuredMatches = structured.filter(x => matchName(x.name) || candidate.existing_id === x.id);
+  const structuredMatches = structured.filter(x => matchName(x.name) || (candidate.existing_id && candidate.existing_id === x.id));
   if (candidate.status === 'dead' || candidate.type === 'corpse') {
     const escapedNames = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
     const attributedDeath = new RegExp(`\\b(?:dead|lifeless|slain) (?:${escapedNames})\\b|\\b(?:${escapedNames}) (?:is|are|was|were|lies|lie) (?:dead|lifeless|slain)\\b|\\b(?:${escapedNames}) died\\b`, 'i').test(norm(quote));
-    if (!explicitDeath.test(quote) || !attributedDeath || hypothetic.test(quote) || life.test(quote)) return reject('death_not_explicit');
+    const committedDeathChain = !newlyGenerated && hasCommittedCultistDeathChain(session, entry, candidate);
+    if (!committedDeathChain && (!explicitDeath.test(quote) || !attributedDeath || hypothetic.test(quote) || life.test(quote))) return reject('death_not_explicit');
     if (structuredMatches.some(x => x.status === 'alive' || x.alive === true || Number(x.hp_current ?? x.hp) > 0 || x.is_stable === true)) return reject('structured_living_contradiction');
-    if (subsequent.some(e => matchName(e.text) && life.test(e.text))) return reject('subsequent_living_contradiction');
+    if (!committedDeathChain && subsequent.some(e => matchName(e.text) && life.test(e.text))) return reject('subsequent_living_contradiction');
     // Narration may establish discovered narrative-mode remains, but may not replace
     // attack/spell resolution, or turn a successful Stealth check into two kills.
-    if (session.in_combat || entry.combat_handoff || harmful.test(`${entry.player_choice || ''} ${quote}`) || (newlyGenerated && harmful.test(text))) return reject('mechanical_death_requires_receipt');
+    if (session.in_combat || entry.combat_handoff || (!committedDeathChain && harmful.test(`${entry.player_choice || ''} ${quote}`)) || (newlyGenerated && harmful.test(text))) return reject('mechanical_death_requires_receipt');
     if (structuredMatches.some(x => x.evidence?.narrative_derived !== true)) return reject('use_existing_mechanical_identity');
   }
   return { ok: true, start, end: start + quote.length };

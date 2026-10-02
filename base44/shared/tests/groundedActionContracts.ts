@@ -3,6 +3,7 @@ import { materializeSceneCandidates, sceneRevision } from '../story/sceneEvidenc
 import { prepareGroundedStoryCommit } from '../story/groundedStoryCommit.ts';
 import { resolveGroundedAction } from '../story/groundedAction.ts';
 import { hashStoryValue } from '../story/storyTransition.ts';
+import { readNarrativeCorpseEntities } from '../story/narrativeCorpseSources.ts';
 
 export async function runGroundedActionContracts() {
   const checks = [], check = (name, ok) => checks.push({ name, pass: !!ok });
@@ -59,7 +60,22 @@ export async function runGroundedActionContracts() {
   const unknown = await resolveGroundedAction({ base44: fake, session: scene, character, actionText: 'Inspect my invented legendary sword' });
   check('user_assertion_does_not_materialize_item', unknown.clarification_required && unknown.grounded_action.target_ids.length === 0);
   check('fixture_state_unchanged', before === await hashStoryValue(session));
+  const kill = { request_id: 'fixture-tunnel-kill', player_choice: 'attempt to take down both guards', text: 'The two remaining cultists pace the corridor. The twin arrows fly with lethal, silent precision, finding their marks before the guards even register your presence. The cultists collapse instantly, their unnatural connection to the Weaver severed as they crumple into the muck, leaving the tunnel silent once more.' };
+  const aftermath = { request_id: 'fixture-tunnel-search', player_choice: 'Scavenge the fallen guards for logistical intel.', text: 'You step over the bodies of the cultist vanguard, your boots sinking into the dark silt that now absorbs their pooling, cold blood. Your fingers search their leather armor. However, your search proves fruitless. Frustrated, you stand, the corpses contained within the bag reminding you of the older bodies.' };
+  const tunnel = { ...session, story_log: [kill, aftermath] }, tunnelBefore = await hashStoryValue(tunnel);
+  const bodies = await readNarrativeCorpseEntities({ session: tunnel });
+  check('committed_lethal_volley_and_searched_cold_blood_aftermath_proves_two_deaths', bodies.length === 2);
+  check('tunnel_bodies_distinct_named_narrative_identities', new Set(bodies.map(x => x.id)).size === 2 && bodies.every(x => /Tunnel Cultist Guard [12]/.test(x.name) && x.death_provenance.source === 'narrative_derived'));
+  check('tunnel_body_identity_stable_on_reload', JSON.stringify(bodies) === JSON.stringify(await readNarrativeCorpseEntities({ session: tunnel })));
+  check('old_vanguard_does_not_relabel_tunnel_pair', (await readNarrativeCorpseEntities({ session: tunnel, structured: [{ name: 'Obsidian Circle Vanguard', hp_current: 0 }] })).length === 2);
+  check('lethal_volley_without_searched_remains_insufficient', (await readNarrativeCorpseEntities({ session: { ...tunnel, story_log: [kill] } })).length === 0);
+  check('cold_blood_without_severed_connection_insufficient', (await readNarrativeCorpseEntities({ session: { ...tunnel, story_log: [{ ...kill, text: 'The two remaining cultists collapse instantly.' }, aftermath] } })).length === 0);
+  check('tunnel_living_contradiction_blocks_materialization', (await readNarrativeCorpseEntities({ session: tunnel, structured: [{ name: 'cultists', hp_current: 2, status: 'alive' }] })).length === 0);
+  check('tunnel_subsequent_guard_revival_blocks_materialization', (await readNarrativeCorpseEntities({ session: { ...tunnel, story_log: [kill, aftermath, { text: 'The cultists wake and speak.' }] } })).length === 0);
+  check('tunnel_pending_kill_cannot_materialize', (await readNarrativeCorpseEntities({ session: { ...tunnel, story_log: [{ ...kill, mechanics_status: 'pending' }, aftermath] } })).length === 0);
+  check('tunnel_projection_never_invents_weight_or_volume', bodies.every(x => x.weight === undefined && x.volume_cubic_ft === undefined));
+  check('tunnel_materialization_zero_state_mutation', tunnelBefore === await hashStoryValue(tunnel));
   const passed = checks.filter(x => x.pass).length;
-  return { suite_version: 'grounded-action-contracts-v1', coverage: 'in_memory_contracts_only_not_end_to_end', passed, failed: checks.length - passed, total: checks.length, all_pass: passed === checks.length, checks, writes: 0,
+  return { suite_version: 'grounded-action-contracts-v1.1', coverage: 'in_memory_contracts_only_not_end_to_end', passed, failed: checks.length - passed, total: checks.length, all_pass: passed === checks.length, checks, writes: 0,
     cleanup_verified: true, cleanup: [], fixtures_created: 0, protected_state: { read_or_mutated: false }, release_verified: false };
 }

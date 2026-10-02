@@ -16,10 +16,10 @@ export function unresolvedCorpseMessage(context, reason, sources = []) {
 export function matchSceneCorpseReply(context, session, answer, expectedCount) {
   if (!isSceneCorpseReply(answer)) return null;
   const link = investigatedCorpseLinks(session);
-  const linked = context.candidates.filter(x => link.combat_ids.includes(x.group));
+  const linked = context.candidates.filter(x => link.combat_ids.includes(x.group) || (x.source === 'narrative_derived' && x.group === link.source_story_request_id));
   const count = expectedCount || (/\b(?:two|both)\b/i.test(answer) ? 2 : null);
   if (link.combat_ids.length && !linked.length && context.already.filter(x => link.combat_ids.some(id => x.id.startsWith(`corpse:${id}:`))).length >= (count || 1)) return { ok: false, reason: 'already_stowed', sources: [] };
-  if (!link.combat_ids.length || !linked.length || (count && linked.length !== count)) return { ok: false, reason: 'scene_deaths_unverified', sources: linked };
+  if (!linked.length || (count && linked.length !== count)) return { ok: false, reason: 'scene_deaths_unverified', sources: linked };
   // Adjacency connects the Investigation to its authoritative prior defeat; words
   // like 'killed' never manufacture a creature id, death certificate, or capacity.
   return { ok: true, sources: linked, link };

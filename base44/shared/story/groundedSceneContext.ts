@@ -1,5 +1,6 @@
 import { SCENE_ENTITY_SCHEMA, evidenceEntries, materializeSceneCandidates, sceneRevision, SCENE_GROUNDING_VERSION } from './sceneEvidence.ts';
 import { evaluateActiveEffects } from './activeEffects.ts';
+import { readNarrativeCorpseEntities } from './narrativeCorpseSources.ts';
 
 // Context is a bounded projection. Source entries included in the model call are
 // complete, never a clipped prefix. Validation still sees ALL subsequent entries.
@@ -13,14 +14,14 @@ export async function buildGroundedContext({ base44, session, character, reconci
   const structured = [...(session.world_state?.scene_entities || []), ...(session.combat_state?.combatants || []), ...combats.flatMap(c => (c.combatants || []).map(x => ({ ...x, combat_id: c.id })))];
   const stored = [...(character.inventory || []), ...(character.stowed_items || [])];
   const transferredIds = new Set(stored.map(x => x.scene_entity_id || x.death_provenance?.scene_entity_id).filter(Boolean));
-  let entities = [];
+  let entities = (await readNarrativeCorpseEntities({ session, structured })).filter(x => !transferredIds.has(x.id));
   const diagnostics = [];
   for (const entity of (session.world_state?.scene_entities || []).slice(0, 64)) {
     if (entity.session_id !== session.id || entity.location !== (session.current_location || '') || transferredIds.has(entity.id)) continue;
     const source = evidenceEntries(session).find(e => e.request_id === entity.source_request_id);
     if (!source || source.text.slice(entity.evidence?.span_start, entity.evidence?.span_end) !== entity.evidence?.quote) continue;
     const projected = await materializeSceneCandidates({ session, entry: source, structured, candidates: [{ name: entity.source_name || entity.name, aliases: entity.aliases?.slice(1), type: entity.type, quantity: entity.source_quantity || 1, status: entity.status, source_request_id: source.request_id, quote: entity.evidence.quote }] });
-    if (projected.accepted.some(x => x.id === entity.id && x.evidence.source_hash === entity.evidence.source_hash)) entities.push(entity);
+    if (!entities.some(x => x.id === entity.id) && projected.accepted.some(x => x.id === entity.id && x.evidence.source_hash === entity.evidence.source_hash)) entities.push(entity);
   }
   if (reconcile && entries.length && base44.integrations?.Core?.InvokeLLM) {
     const extracted = await base44.integrations.Core.InvokeLLM({
