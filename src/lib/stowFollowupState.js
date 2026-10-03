@@ -27,6 +27,27 @@ export default function createStowFollowupState({ sessionId, invoke, storage, on
     onChange(state); return state;
   };
   const install = data => update({ data, original: data, finished: false, error: '', ...(state.original?.requested_request_id === data.requested_request_id ? {} : { reply: '', ids: [] }) });
+  // The server is authoritative for which saved roll is canonical. When it says
+  // the locally saved attempt was a superseded duplicate, adopt its attempt and
+  // keep the typed reply (selected bodies reset because the frame changed).
+  const rebind = data => update({ data, original: data, finished: false, error: '', ids: [] });
+  async function restore(characterId, { force = false } = {}) {
+    if (state.busy) return state;
+    const expectedSequence = sequence;
+    try {
+      const result = await invoke({ session_id: sessionId, character_id: characterId, read_only: true, ...(state.original ? { original_request_id: state.original.requested_request_id } : {}) });
+      const data = result.data;
+      if (expectedSequence !== sequence || state.busy) return state;
+      if (data?.response_kind === 'no_pending_stow') return update({ data: null, original: null, finished: false, dismissed: null });
+      // A closed card stays closed on reload; repeating the stow action reopens it.
+      if (!force && state.dismissed && data?.requested_request_id === state.dismissed) return update({ data: null, original: null, error: '' });
+      if (force && state.dismissed) update({ dismissed: null });
+      if (!state.original) install(data);
+      else if (data?.rebound_from && data.rebound_from === state.original.requested_request_id) rebind(data);
+      await consume(data, state.original, expectedSequence);
+    } catch (err) { if (expectedSequence === sequence) update({ error: err?.response?.data?.error || err.message, busy: false }); }
+    return state;
+  }
   const consume = async (data, original = state.original, expectedSequence = sequence) => {
     await verifyStowFollowup(data, original);
     if (expectedSequence !== sequence) return state;
@@ -36,20 +57,14 @@ export default function createStowFollowupState({ sessionId, invoke, storage, on
     return state;
   };
   return {
-    getState: () => state, install,
-    setReply: reply => update({ reply, ids: [] }), setIds: ids => update({ ids }),
-    async restore(characterId) {
+    getState: () => state, install, restore,
+    // Typing a reply never clears ticked bodies; a ticked selection is explicit.
+    setReply: reply => update({ reply }), setIds: ids => update({ ids }),
+    // Close the card without touching the campaign: nothing is written and the
+    // saved roll stays on the server.
+    dismiss() {
       if (state.busy) return state;
-      const expectedSequence = sequence;
-      try {
-        const result = await invoke({ session_id: sessionId, character_id: characterId, read_only: true, ...(state.original ? { original_request_id: state.original.requested_request_id } : {}) });
-        const data = result.data;
-        if (expectedSequence !== sequence || state.busy) return state;
-        if (data?.response_kind === 'no_pending_stow') return update({ data: null, original: null, finished: false });
-        if (!state.original) install(data);
-        await consume(data, state.original, expectedSequence);
-      } catch (err) { if (expectedSequence === sequence) update({ error: err?.response?.data?.error || err.message, busy: false }); }
-      return state;
+      return update({ data: null, original: null, reply: '', ids: [], error: '', finished: false, dismissed: state.original?.requested_request_id || state.data?.requested_request_id || null });
     },
     async submit(reply = state.reply) {
       if (state.busy || state.finished) return state;
@@ -62,7 +77,13 @@ export default function createStowFollowupState({ sessionId, invoke, storage, on
         const result = await invoke({ session_id: sessionId, character_id: state.original.character_id, original_request_id: state.original.requested_request_id,
           ...(state.ids.length ? { selected_source_ids: state.ids } : { answer_text: reply }) });
         await consume(result.data, state.original, expectedSequence);
-      } catch (err) { if (expectedSequence === sequence) update({ error: err?.response?.data?.error || err.message || 'Confirmation failed. Your reply and original attempt are retained.' }); }
+      } catch (err) {
+        if (expectedSequence === sequence && err?.response?.data?.error_code === 'stow_attempt_rebound') {
+          update({ busy: false });
+          await restore(state.original.character_id);
+          if (!state.error) update({ error: err.response.data.error });
+        } else if (expectedSequence === sequence) update({ error: err?.response?.data?.error || err.message || 'Confirmation failed. Your reply and original attempt are retained.' });
+      }
       finally { if (expectedSequence === sequence) update({ busy: false }); }
       return state;
     },

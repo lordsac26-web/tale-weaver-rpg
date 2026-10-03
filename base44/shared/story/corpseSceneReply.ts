@@ -25,3 +25,6 @@ export function matchSceneCorpseReply(context, session, answer, expectedCount) {
   return { ok: true, sources: linked, link };
 }
 export const requestedCorpseCount = phrase => /\b(?:two|both|2)\b/i.test(norm(phrase)) ? 2 : null;
+// A reply such as "stow just 1 body" states only a count, never an identity.
+export const replyCorpseCount = text => /\b(?:two|both|2)\b/i.test(norm(text)) ? 2 : /\b(?:one|1|single)\b/i.test(norm(text)) ? 1 : null;
+export const COUNT_ONLY_REPLY_WORDS = new Set(['stow','put','place','just','only','one','1','two','2','single','a','an','it','them','in','into','my','bag','holding','please','i','want','to','mean','that','this','of']);

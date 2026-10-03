@@ -9,5 +9,5 @@ export default function useStoryStowClarification({ sessionId, onConfirmed }) {
     invoke: payload => base44.functions.invoke('confirmStoryStowClarification', payload),
     onChange: () => render(x => x + 1), onConfirmed: data => callback.current?.(data) }), [sessionId]);
   const state = controller.getState();
-  return { controller, state, pending: !!state.data && !state.finished, install: controller.install, restore: controller.restore, submit: controller.submit };
+  return { controller, state, pending: !!state.data && !state.finished, install: controller.install, restore: controller.restore, submit: controller.submit, dismiss: controller.dismiss };
 }

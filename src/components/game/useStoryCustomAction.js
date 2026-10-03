@@ -21,7 +21,7 @@ export default function useStoryCustomAction({ customInput, setCustomInput, stow
         if (!accepted.accepted) throw new Error(`Composite preflight response rejected: ${accepted.reason}`);
       }
       if (result.data?.action_type === 'stow_resume' && stow) {
-        const restored = await stow.restore(character?.id);
+        const restored = await stow.restore(character?.id, { force: true });
         if (restored?.data || restored?.finished) setCustomInput('');
         return;
       }

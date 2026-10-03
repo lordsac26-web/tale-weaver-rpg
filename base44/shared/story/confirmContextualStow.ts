@@ -14,8 +14,13 @@ export async function confirmContextualStow({ base44, ownerId, payload }) {
   if (payload.read_only === true) {
     const pending = pendingCorpseReceipt(session, character, id || null);
     if (id && !pending) return { status: 409, body: { error: 'The saved stow intent no longer matches this scene. Your reply remains saved; keep the attempt paused.', writes: 0 } };
-    return restoreCorpseStow({ base44, session, character, receipt: pending });
+    const restored = await restoreCorpseStow({ base44, session, character, receipt: pending });
+    // Tell the client its saved reply pointed at a superseded duplicate roll so it
+    // can adopt the canonical attempt instead of failing the linkage check.
+    return id && pending && pending.request_id !== id && restored.status === 200 ? { ...restored, body: { ...restored.body, rebound_from: id } } : restored;
   }
+  const bound = pendingCorpseReceipt(session, character, id);
+  if (bound && bound.request_id !== id) return { status: 409, body: { error: 'That reply was attached to a later duplicate roll. It is being re-linked to your saved attempt — confirm again. Nothing has been moved.', error_code: 'stow_attempt_rebound', canonical_request_id: bound.request_id, writes: 0 } };
   const matches = (session.world_state?.__skill_check_receipts || []).filter(x => x.request_id === id && x.unified_story_skill_resolution === true);
   const receipt = matches[0], parsed = classifyStowIntent(receipt?.action_text);
   if (matches.length !== 1 || !parsed || !/\b(?:corpses|bodies)\b/i.test(parsed.item_phrase)) return { status: 409, body: { error: 'I cannot link that answer to a saved corpse-stow attempt. Nothing has been moved.', writes: 0 } };

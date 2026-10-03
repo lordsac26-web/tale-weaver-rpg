@@ -1,7 +1,7 @@
-import { investigatedCorpseLinks, matchSceneCorpseReply, requestedCorpseCount, unresolvedCorpseMessage } from './corpseSceneReply.ts';
+import { investigatedCorpseLinks, matchSceneCorpseReply, requestedCorpseCount, replyCorpseCount, COUNT_ONLY_REPLY_WORDS, unresolvedCorpseMessage } from './corpseSceneReply.ts';
 import { corpseIdentity, verifiedDeadCorpse as dead } from './corpseIdentity.ts';
 import { readNarrativeCorpseEntities } from './narrativeCorpseSources.ts';
-import { validateContainerFit } from './containerCapacity.ts';
+import { validateContainerFit, stowableMeasure } from './containerCapacity.ts';
 export { corpseIdentity } from './corpseIdentity.ts';
 export const CONTEXTUAL_CORPSE_STOW_VERSION = 'contextual-corpse-stow-v2.2';
 const norm = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -72,6 +72,19 @@ export function validateCorpseContainer({ character, container, sources }) {
   return fit.ok ? { ok: true, totals: fit.totals } : { ok: false, message: fit.message, totals: fit.totals };
 }
 
+// A count-only reply cannot pick an identity, but capacity does not depend on
+// which body: if even the lightest N overload the container, refuse with the
+// exact figures; otherwise ask the player to tick which N. Moves nothing.
+function countOnlyReply({ context, character, container, sources, replyCount }) {
+  const label = replyCount === 1 ? 'body' : `${replyCount} bodies`;
+  if (!sources.length || replyCount > sources.length) return { kind: 'clarification', ...context, reason_code: 'partial_death_evidence', message: `Only ${sources.length} verified, unstowed ${sources.length === 1 ? 'body is' : 'bodies are'} here${sources.length ? `: ${joins(sources.map(x => x.name))}` : ''}. Nothing has been moved.` };
+  const lightest = [...sources].sort((a, b) => stowableMeasure(a.item).weight - stowableMeasure(b.item).weight).slice(0, replyCount);
+  const fit = validateCorpseContainer({ character, container, sources: lightest });
+  if (!fit.ok) return { kind: 'clarification', ...context, reason_code: 'container_fit_unverified', message: fit.message, totals: fit.totals };
+  if (replyCount === sources.length) return { kind: 'set', ...context, sources, fit: fit.totals };
+  return { kind: 'clarification', ...context, reason_code: 'source_selection_required', message: `Which ${label} do you mean: ${joins(sources.map(x => x.label))}? Tick ${replyCount === 1 ? 'it' : 'them'} below. Nothing has been moved.` };
+}
+
 export async function resolveContextualCorpseSet({ base44, session, character, itemPhrase, container, selectedIds, answerText }) {
   const context = await readContextualCorpseSources({ base44, session, character });
   let sources = context.candidates;
@@ -85,6 +98,8 @@ export async function resolveContextualCorpseSet({ base44, session, character, i
     sources = sources.filter(x => ids.includes(x.id));
   } else {
     const tokens = bodyTokens(answerText || itemPhrase);
+    const replyCount = answerText ? replyCorpseCount(answerText) : null;
+    if (replyCount && tokens.every(t => COUNT_ONLY_REPLY_WORDS.has(t))) return countOnlyReply({ context, character, container, sources, replyCount });
     if (tokens.length) sources = sources.filter(x => tokens.every(t => norm(x.name).split(' ').includes(t)));
     if (!sources.length || new Set(sources.map(x => x.group)).size > 1 || (answerText && !tokens.length)) {
       const supported = context.candidates.map(x => x.label);
@@ -94,7 +109,9 @@ export async function resolveContextualCorpseSet({ base44, session, character, i
       return { kind: 'clarification', ...context, reason_code: sources.length ? 'ambiguous_sources' : 'scene_deaths_unverified', message: answerText ? unresolvedCorpseMessage(context, sources.length ? 'ambiguous_sources' : 'scene_deaths_unverified') : message };
     }
   }
-  if (count && sources.length !== count) return { kind: 'clarification', ...context, reason_code: 'partial_death_evidence', message: `You requested ${count} bodies, but only ${sources.length} verified, unstowed source is available: ${sources.map(x => x.name).join(', ')}. Already in your bag: ${context.already.map(x => x.name).join(', ') || 'none'}. I will not move a partial set. No bodies moved.` };
+  // An explicit selection is the player's deliberate narrowing of the set; the
+  // original wording's count only guards implicit resolution.
+  if (count && selectedIds === undefined && sources.length !== count) return { kind: 'clarification', ...context, reason_code: 'partial_death_evidence', message: `You requested ${count} bodies, but only ${sources.length} verified, unstowed source is available: ${sources.map(x => x.name).join(', ')}. Already in your bag: ${context.already.map(x => x.name).join(', ') || 'none'}. I will not move a partial set. No bodies moved.` };
   if (sources.length > 8) return { kind: 'clarification', ...context, message: 'There are several bodies here. Which group of up to eight do you mean? Nothing has been moved.' };
   const fit = validateCorpseContainer({ character, container, sources });
   if (!fit.ok) return { kind: 'clarification', ...context, reason_code: 'container_fit_unverified', message: fit.message };
