@@ -45,7 +45,7 @@ export default async function(req) {
       await db.entities.Character.update(c.id, { stowed_items: [], long_rest_abilities: {} });
       // Canonical capacity: missing measures take conservative defaults and never pause the set as unknowns.
       const defaulted = await call(`${request}:fit`);
-      record(`${mode}: missing measures take conservative defaults and commit atomically`, defaulted.body.writes === 1 && defaulted.body.receipt.quantity === 2 && defaulted.body.receipt.capacity?.total_weight_lb === 200 && defaulted.body.receipt.capacity?.total_volume_cubic_ft === 12 && (await db.entities.Character.get(c.id)).stowed_items.length === 2);
+      record(`${mode}: missing measures take conservative defaults and commit atomically`, defaulted.body.writes === 1 && defaulted.body.receipt.quantity === 2 && defaulted.body.receipt.capacity?.weight_lb === 200 && defaulted.body.receipt.capacity?.volume_cubic_ft === 12 && (await db.entities.Character.get(c.id)).stowed_items.length === 2);
       await db.entities.Character.update(c.id, { stowed_items: [], long_rest_abilities: {} });
       await db.entities.CombatLog.update(combat.id, { combatants: [guards[0], { ...guards[1], dimensions_ft: { width: 9, height: 9 } }] });
       const oversizedBefore = await hashValue(await db.entities.Character.get(c.id)), oversized = await call(`${request}:oversize`);
