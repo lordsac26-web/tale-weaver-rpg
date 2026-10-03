@@ -43,9 +43,16 @@ export default async function(req) {
       const onlyRemaining = await call(`${request}:remaining`);
       record(`${mode}: stows only the remaining corpse without a duplicate`, onlyRemaining.body.receipt.quantity === 1 && (await db.entities.Character.get(c.id)).stowed_items.length === 2);
       await db.entities.Character.update(c.id, { stowed_items: [], long_rest_abilities: {} });
-      await db.entities.CombatLog.update(combat.id, { combatants: [guards[0], { ...guards[1], dimensions_ft: null }] });
-      const invalidBefore = await hashValue(await db.entities.Character.get(c.id)), invalid = await call(`${request}:fit`);
-      record(`${mode}: missing fit evidence blocks entire multi-source set, no partial stow`, invalid.body.clarification_required && invalid.body.writes === 0 && invalidBefore === await hashValue(await db.entities.Character.get(c.id)) && /can't yet confirm/.test(invalid.body.message));
+      // Canonical capacity: missing measures take conservative defaults and never pause the set as unknowns.
+      const defaulted = await call(`${request}:fit`);
+      record(`${mode}: missing measures take conservative defaults and commit atomically`, defaulted.body.writes === 1 && defaulted.body.receipt.quantity === 2 && defaulted.body.receipt.capacity?.total_weight_lb === 200 && defaulted.body.receipt.capacity?.total_volume_cubic_ft === 12 && (await db.entities.Character.get(c.id)).stowed_items.length === 2);
+      await db.entities.Character.update(c.id, { stowed_items: [], long_rest_abilities: {} });
+      await db.entities.CombatLog.update(combat.id, { combatants: [guards[0], { ...guards[1], dimensions_ft: { width: 9, height: 9 } }] });
+      const oversizedBefore = await hashValue(await db.entities.Character.get(c.id)), oversized = await call(`${request}:oversize`);
+      record(`${mode}: oversized opening refusal is specific, named and zero-write`, oversized.body.clarification_required && oversized.body.writes === 0 && oversizedBefore === await hashValue(await db.entities.Character.get(c.id)) && /opening/.test(oversized.body.message) && oversized.body.message.includes('Cultist Guard 2'));
+      await db.entities.CombatLog.update(combat.id, { combatants: [guards[0], { ...guards[1], weight: 600 }] });
+      const overweight = await call(`${request}:overweight`);
+      record(`${mode}: overweight refusal reports the exact limit and figure`, overweight.body.clarification_required && overweight.body.writes === 0 && /against its 500 lb limit/.test(overweight.body.message) && overweight.body.message.includes('700 lb'));
       await db.entities.CombatLog.update(combat.id, { combatants: guards });
       const other = await base44.entities.CombatLog.create({ session_id: s.id, character_id: c.id, result: 'victory', is_active: false, location: s.current_location,
         combatants: [{ ...guards[0], id: `${mode}_other_guard`, name: 'Sanctum Guard' }] });

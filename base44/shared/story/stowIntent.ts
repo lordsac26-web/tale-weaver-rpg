@@ -1,4 +1,5 @@
 import { resolveContextualCorpseSet, commitCorpseStowSet } from './contextualCorpseStow.ts';
+import { validateContainerFit } from './containerCapacity.ts';
 export const STOW_INTENT_VERSION = 'stow-intent-v1.2.0';
 export const STOW_RECEIPTS_KEY = '__stow_receipts';
 
@@ -125,6 +126,10 @@ export async function executeStowAction({ base44, ownerId = null, payload }) {
 
   if (resolution.kind === 'set') return commitCorpseStowSet({ base44, character: latestCharacter, session: latestSession, resolution, token, parsed: { ...parsed, original_action: payload.action_text }, abilities, receipts, version: STOW_INTENT_VERSION });
   const selected = resolution.item;
+  // General fit validation applies to item stows too: recorded weight, or a
+  // conservative canonical default, against the container's real capacity.
+  const fit = validateContainerFit({ character, container: parsed.container, incoming: [selected] });
+  if (!fit.ok) return { status: 200, body: { handled: true, success: false, clarification_required: true, reason_code: 'container_fit_unverified', message: fit.message, totals: fit.totals, writes: 0 } };
   const source = resolution.source || 'inventory';
   const quantity = Number(selected.quantity) || 1;
   const stowQuantity = source === 'completed_combat' ? 1 : parsed.whole_stack ? quantity : 1;
@@ -140,6 +145,7 @@ export async function executeStowAction({ base44, ownerId = null, payload }) {
   const existingSlot = source === 'inventory' ? stowed.find((entry) => entry?.name === selected.name && entry?.container === parsed.container) : null;
   if (existingSlot) existingSlot.quantity = (Number(existingSlot.quantity) || 0) + stowQuantity;
   else stowed.push({ ...selected, quantity: stowQuantity, container: parsed.container, stowed_at: at, stow_request_id: token, provenance: { ...(selected.provenance || {}), source: selected.provenance?.source || 'player_action', story_request_id: token, acquired_at: selected.provenance?.acquired_at || at } });
+  receipt.capacity = fit.totals;
   receipt.state_hash_after = await hash({ inventory, stowed_items: stowed });
   abilities[STOW_RECEIPTS_KEY] = [...receipts.slice(-47), receipt];
   await base44.asServiceRole.entities.Character.update(character.id, { inventory, stowed_items: stowed, long_rest_abilities: abilities });

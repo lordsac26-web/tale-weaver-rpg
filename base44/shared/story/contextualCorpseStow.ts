@@ -1,8 +1,9 @@
 import { investigatedCorpseLinks, matchSceneCorpseReply, requestedCorpseCount, unresolvedCorpseMessage } from './corpseSceneReply.ts';
 import { corpseIdentity, verifiedDeadCorpse as dead } from './corpseIdentity.ts';
 import { readNarrativeCorpseEntities } from './narrativeCorpseSources.ts';
+import { validateContainerFit } from './containerCapacity.ts';
 export { corpseIdentity } from './corpseIdentity.ts';
-export const CONTEXTUAL_CORPSE_STOW_VERSION = 'contextual-corpse-stow-v2.1';
+export const CONTEXTUAL_CORPSE_STOW_VERSION = 'contextual-corpse-stow-v2.2';
 const norm = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const bodyTokens = phrase => norm(phrase).split(' ').filter(x => !['the','these','those','all','both','two','bodies','body','corpses','corpse','remains','dead','fallen','of'].includes(x));
 const joins = values => values.length < 2 ? values[0] || '' : `${values.slice(0, -1).join(', ')} and ${values.at(-1)}`;
@@ -62,21 +63,13 @@ export async function readContextualCorpseSources({ base44, session, character }
   return { candidates: [...candidates.values()], already, excluded, reference: corpseSceneReference(session) };
 }
 
+// Fit now resolves through the shared canonical capacity contract:
+// recorded weights are used, missing ones take conservative defaults,
+// and genuinely oversized or excess loads are refused with a specific
+// explanation instead of pausing the stow.
 export function validateCorpseContainer({ character, container, sources }) {
-  const bag = (character.inventory || []).find(x => norm(x.name) === norm(container) && Number(x.quantity ?? 1) > 0);
-  if (!bag) return { ok: false, message: `I can't confirm that you're carrying ${container}. Nothing has been moved.` };
-  const description = `${bag.description || ''} ${bag.effect || ''}`;
-  const maxWeight = bag.capacity_weight_lb ?? Number(description.match(/(?:up to |holds )?(\d+)\s*(?:lb|pounds)/i)?.[1]);
-  const maxVolume = bag.capacity_volume_cubic_ft ?? Number(description.match(/(\d+)\s*(?:cubic feet|cubic ft)/i)?.[1]);
-  const opening = bag.opening_width_ft ?? (norm(bag.name) === 'bag of holding' && maxWeight === 500 && maxVolume === 64 ? 2 : NaN);
-  const contents = (character.stowed_items || []).filter(x => norm(x.container) === norm(container));
-  const items = [...contents, ...sources.map(x => x.item)];
-  const finite = x => typeof x === 'number' && Number.isFinite(x) && x >= 0;
-  if (!finite(maxWeight) || !finite(maxVolume) || !finite(opening) || items.some(x => !finite(x.weight) || !finite(x.volume_cubic_ft))
-    || sources.some(x => !finite(x.item.dimensions_ft?.width) || !finite(x.item.dimensions_ft?.height))) return { ok: false, message: `I can identify ${joins(sources.map(x => x.name))}, but I can't yet confirm that the bodies fit within ${container}'s opening and remaining capacity. Nothing has been moved.` };
-  if (items.reduce((sum, x) => sum + x.weight * Number(x.quantity ?? 1), 0) > maxWeight || items.reduce((sum, x) => sum + x.volume_cubic_ft * Number(x.quantity ?? 1), 0) > maxVolume
-    || sources.some(x => x.item.dimensions_ft.width > opening || x.item.dimensions_ft.height > opening)) return { ok: false, message: `Those bodies won't fit within ${container}'s recorded limits. Nothing has been moved.` };
-  return { ok: true };
+  const fit = validateContainerFit({ character, container, incoming: sources.map(x => x.item) });
+  return fit.ok ? { ok: true, totals: fit.totals } : { ok: false, message: fit.message, totals: fit.totals };
 }
 
 export async function resolveContextualCorpseSet({ base44, session, character, itemPhrase, container, selectedIds, answerText }) {
@@ -105,7 +98,7 @@ export async function resolveContextualCorpseSet({ base44, session, character, i
   if (sources.length > 8) return { kind: 'clarification', ...context, message: 'There are several bodies here. Which group of up to eight do you mean? Nothing has been moved.' };
   const fit = validateCorpseContainer({ character, container, sources });
   if (!fit.ok) return { kind: 'clarification', ...context, reason_code: 'container_fit_unverified', message: fit.message };
-  return { kind: 'set', ...context, sources };
+  return { kind: 'set', ...context, sources, fit: fit.totals };
 }
 
 // One Character update holds all removals, additions, and the request receipt.
@@ -117,7 +110,7 @@ export async function commitCorpseStowSet({ base44, character, session, resoluti
     provenance: { ...(item.provenance || {}), source: item.provenance?.source || (item.death_provenance.source === 'narrative_derived' ? 'validated_narrative_death' : 'validated_completed_combat'), story_request_id: token, source_story_request_id: session.story_log?.at(-1)?.request_id, combat_id: item.death_provenance.combat_id, combatant_id: item.death_provenance.combatant_id, acquired_at: item.provenance?.acquired_at || at } }))];
   const receipt = { token, item_id: [...ids].sort().join('|'), item_name: joins(resolution.sources.map(x => x.item.name)), quantity: ids.size, container: parsed.container,
     source: 'contextual_corpse_set', items: resolution.sources.map(x => ({ item_id: x.id, item_name: x.item.name, quantity: 1, death_provenance: x.item.death_provenance })), original_action: parsed.original_action,
-    source_story_request_id: session.story_log?.at(-1)?.request_id, at, stow_intent_version: version, contextual_version: CONTEXTUAL_CORPSE_STOW_VERSION };
+    source_story_request_id: session.story_log?.at(-1)?.request_id, at, capacity: resolution.fit || null, stow_intent_version: version, contextual_version: CONTEXTUAL_CORPSE_STOW_VERSION };
   abilities.__stow_receipts = [...receipts.slice(-47), receipt];
   await base44.asServiceRole.entities.Character.update(character.id, { inventory, stowed_items: stowed, long_rest_abilities: abilities });
   return { status: 200, body: { handled: true, success: true, already_processed: false, stow: receipt, receipt, inventory, stowed_items: stowed, writes: 1 } };

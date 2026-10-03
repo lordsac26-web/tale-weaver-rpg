@@ -4,6 +4,7 @@ import { prepareGroundedStoryCommit } from '../story/groundedStoryCommit.ts';
 import { resolveGroundedAction } from '../story/groundedAction.ts';
 import { hashStoryValue } from '../story/storyTransition.ts';
 import { readNarrativeCorpseEntities } from '../story/narrativeCorpseSources.ts';
+import { validateContainerFit, defaultStowableMeasure } from '../story/containerCapacity.ts';
 
 export async function runGroundedActionContracts() {
   const checks = [], check = (name, ok) => checks.push({ name, pass: !!ok });
@@ -75,7 +76,23 @@ export async function runGroundedActionContracts() {
   check('tunnel_pending_kill_cannot_materialize', (await readNarrativeCorpseEntities({ session: { ...tunnel, story_log: [{ ...kill, mechanics_status: 'pending' }, aftermath] } })).length === 0);
   check('tunnel_projection_never_invents_weight_or_volume', bodies.every(x => x.weight === undefined && x.volume_cubic_ft === undefined));
   check('tunnel_materialization_zero_state_mutation', tunnelBefore === await hashStoryValue(tunnel));
+  const bagCharacter = { id: 'fixture-bag', inventory: [{ name: 'Bag of Holding', quantity: 1 }], stowed_items: [] };
+  const corpseItem = (name) => ({ name, quantity: 1, category: 'Corpse' });
+  const twoGuards = validateContainerFit({ character: bagCharacter, container: 'Bag of Holding', incoming: [corpseItem('Tunnel Cultist Guard 1'), corpseItem('Tunnel Cultist Guard 2')] });
+  check('capacity_two_medium_corpses_within_canonical_bag', twoGuards.ok === true && twoGuards.totals.weight_lb === 320 && twoGuards.totals.volume_cubic_ft === 16);
+  check('capacity_medium_humanoid_corpse_defaults', defaultStowableMeasure(corpseItem('Ritual Overseer')).weight === 160 && defaultStowableMeasure(corpseItem('Ritual Overseer')).volume === 8);
+  const liveShape = { id: 'fixture-live', inventory: [{ name: 'Bag of Holding', quantity: 1 }], stowed_items: [
+    { name: "Weaver's Ledger", category: 'Book', container: 'Bag of Holding' },
+    { name: 'Unidentified Staff', category: 'Staff', container: 'Bag of Holding' },
+    corpseItem('Ritual Overseer'), corpseItem('Rune-Caster'), corpseItem('Obsidian Circle Vanguard'),
+  ].map((x) => ({ ...x, container: 'Bag of Holding' })) };
+  const liveFit = validateContainerFit({ character: liveShape, container: 'Bag of Holding', incoming: [corpseItem('Tunnel Cultist Guard 1'), corpseItem('Tunnel Cultist Guard 2')] });
+  check('capacity_live_shape_refused_with_exact_overload_figure', liveFit.ok === false && liveFit.message.includes('806 lb') && liveFit.message.includes('500 lb limit') && Math.abs(liveFit.totals.volume_cubic_ft - 41.1) < 0.01);
+  const oreFit = validateContainerFit({ character: bagCharacter, container: 'Bag of Holding', incoming: [{ name: 'Ore Pile', weight: 600, quantity: 1 }] });
+  check('capacity_overweight_refusal_specific', oreFit.ok === false && oreFit.message.includes('600 lb') && oreFit.message.includes('500 lb limit'));
+  const dragonFit = validateContainerFit({ character: bagCharacter, container: 'Bag of Holding', incoming: [{ name: 'Ancient Drake Corpse', category: 'Corpse', weight: 4000, volume_cubic_ft: 200, dimensions_ft: { width: 15, height: 12 }, quantity: 1 }] });
+  check('capacity_dragon_corpse_refused_by_opening', dragonFit.ok === false && dragonFit.message.includes('opening') && dragonFit.message.includes('Ancient Drake Corpse'));
   const passed = checks.filter(x => x.pass).length;
-  return { suite_version: 'grounded-action-contracts-v1.1', coverage: 'in_memory_contracts_only_not_end_to_end', passed, failed: checks.length - passed, total: checks.length, all_pass: passed === checks.length, checks, writes: 0,
+  return { suite_version: 'grounded-action-contracts-v1.2', coverage: 'in_memory_contracts_only_not_end_to_end', passed, failed: checks.length - passed, total: checks.length, all_pass: passed === checks.length, checks, writes: 0,
     cleanup_verified: true, cleanup: [], fixtures_created: 0, protected_state: { read_or_mutated: false }, release_verified: false };
 }
