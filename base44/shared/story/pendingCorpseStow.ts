@@ -3,14 +3,29 @@ import { resolveContextualCorpseSet } from './contextualCorpseStow.ts';
 import { buildStoryClarification } from './storyPersistence.ts';
 import { confirmCorpseStowReceipt } from './confirmCorpseStowReceipt.ts';
 
+// Canonical pending binding: the EARLIEST successful corpse-stow check from
+// the current scene is authoritative; later duplicate rolls for the same
+// intent are superseded. Explicit request ids migrate onto the canonical
+// attempt while the group is unresolved, and once any attempt committed, an
+// explicit id returns that committed receipt (already-secured confirmation)
+// while the automatic binding reports nothing pending.
 export function pendingCorpseReceipt(session, character, requestedId) {
   const source = session.story_log?.at(-1)?.request_id;
-  return [...(session.world_state?.__skill_check_receipts || [])].reverse().find(x => {
+  const attempts = (session.world_state?.__skill_check_receipts || []).filter(x => {
     const parsed = classifyStowIntent(x.action_text);
     return x.unified_story_skill_resolution === true && x.success === true && x.source_story_request_id === source && parsed && /\b(?:corpses|bodies)\b/i.test(parsed.item_phrase)
-      && (requestedId ? x.request_id === requestedId : !character.long_rest_abilities?.__stow_receipts?.some(r => r.token === x.request_id))
       && !session.story_log.some(e => e.request_id === x.request_id);
   });
+  if (!attempts.length) return undefined;
+  const canonical = attempts[0];
+  const committed = new Set((character.long_rest_abilities?.__stow_receipts || []).filter(r => attempts.some(x => x.request_id === r.token)).map(r => r.token));
+  if (requestedId) {
+    const requested = attempts.find(x => x.request_id === requestedId);
+    if (!requested) return undefined;
+    if (committed.size) return committed.has(requested.request_id) ? requested : undefined;
+    return canonical;
+  }
+  return committed.size ? undefined : canonical;
 }
 
 // Reconstruct from the saved roll + source scene, not transient narrative cards.

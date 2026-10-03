@@ -1,8 +1,11 @@
 import { hashStoryValue } from './storyTransition.ts';
 import { hasCommittedCultistDeathChain } from './narrativeDeathEvidence.ts';
 export const SCENE_GROUNDING_VERSION = 'grounded-scene-v1.1';
-export const SCENE_ENTITY_SCHEMA = { type: 'array', maxItems: 24, items: { type: 'object', properties: {
-  name: { type: 'string' }, aliases: { type: 'array', items: { type: 'string' }, maxItems: 6 }, type: { type: 'string', enum: ['object', 'container', 'creature', 'corpse'] },
+// No maxItems anywhere in this schema: nested array bounds are rejected by
+// the LLM provider's automatic JSON-schema routing (HTTP 400). Server-side
+// validation still caps candidates (24), aliases (6), and quantity (1-8).
+export const SCENE_ENTITY_SCHEMA = { type: 'array', items: { type: 'object', properties: {
+  name: { type: 'string' }, aliases: { type: 'array', items: { type: 'string' } }, type: { type: 'string', enum: ['object', 'container', 'creature', 'corpse'] },
   quantity: { type: 'integer', minimum: 1, maximum: 8 }, status: { type: 'string', enum: ['alive', 'dead', 'unknown'] },
   source_request_id: { type: 'string' }, quote: { type: 'string' }, existing_id: { type: 'string' }
 }, required: ['name', 'type', 'quantity', 'status', 'source_request_id', 'quote'] } };

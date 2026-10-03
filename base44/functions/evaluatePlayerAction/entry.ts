@@ -5,6 +5,7 @@ import { preflightCompositeAction } from '../../shared/story/compositeActionPref
 import { isExplicitCraftingAction } from '../../shared/story/choiceAwardRouting.js';
 import { validatePlayerText } from '../../shared/story/playerText.ts';
 import { resolveGroundedAction } from '../../shared/story/groundedAction.ts';
+import { resolveStowResume } from '../../shared/story/stowResume.ts';
 
 export default async function(req) {
   try {
@@ -127,6 +128,13 @@ Return ONLY a JSON object:
       if (projectileRecovery.status >= 400) return Response.json({ error: projectileRecovery.error, writes: 0, combat_id: projectileRecovery.combat_id || null }, { status: projectileRecovery.status });
       return Response.json({ action, action_type: 'utility', request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.4.0', requires_check: projectileRecovery.requires_check, skill: projectileRecovery.skill, dc: projectileRecovery.dc, reasoning: projectileRecovery.reasoning, risk_level: projectileRecovery.risk_level, recovery: projectileRecovery.recovery, recovery_rule: projectileRecovery.recovery.rule, combat_id: projectileRecovery.combat_id });
     }
+    // A repeated corpse-stow request resumes the canonical saved attempt for
+    // this scene instead of rolling a fresh, superseding check.
+    const stowResume = resolveStowResume({ session, character, actionText: action });
+    if (stowResume) return Response.json({ action, action_type: 'stow_resume', requires_check: false, skill: null, dc: null, risk_level: 'low',
+      resume_request_id: stowResume.request_id, check_receipt: stowResume.resume, superseded_request_ids: stowResume.superseded_request_ids,
+      reasoning: `A saved ${stowResume.resume.skill} check (${stowResume.resume.final_total} vs DC ${stowResume.resume.dc}) already covers this exact stow attempt in this scene. Confirm it below — no new roll.`,
+      request_id: String(request_id || '').slice(0, 120), writes: 0, function_version: 'evaluate-player-action-v2.6-stow-resume' });
     const grounding = await resolveGroundedAction({ base44, session, character, actionText: action, answerText: checkedAnswer.text, expectedRevision: expected_scene_revision });
     if (grounding.status >= 400) return Response.json(grounding, { status: grounding.status });
     if (grounding.clarification_required) return Response.json({ ...grounding, context: undefined, action, requires_check: false, action_type: 'utility', request_id, risk_level: 'low' });

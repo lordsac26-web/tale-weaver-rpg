@@ -20,6 +20,11 @@ export default function useStoryCustomAction({ customInput, setCustomInput, stow
         const accepted = acceptCompositePreflightResponse(result.data, composite?.parent_key || result.data?.composite_plan?.plan?.parent_key);
         if (!accepted.accepted) throw new Error(`Composite preflight response rejected: ${accepted.reason}`);
       }
+      if (result.data?.action_type === 'stow_resume' && stow) {
+        const restored = await stow.restore(character?.id);
+        if (restored?.data || restored?.finished) setCustomInput('');
+        return;
+      }
       if (result.data?.clarification_required && grounded) { grounded.install(result.data); setCustomInput(text); return; }
       setPendingProposal({ ...result.data, action: text, ...(composite ? { parent_key: composite.parent_key } : {}) });
     } catch (err) {
