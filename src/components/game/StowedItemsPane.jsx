@@ -38,7 +38,7 @@ export default function StowedItemsPane({ character, onClose }) {
               {items.map((item, i) => (
                 <div key={`${item.name}-${i}`} className="text-xs leading-snug" style={{ fontFamily: 'EB Garamond, serif' }}>
                   <span className="font-semibold" style={{ color: 'var(--brass-gold)' }}>
-                    {item.name}{Number(item.quantity) > 1 ? ` ×${item.quantity}` : ''}
+                    {item.name}{Number(item.quantity) > 1 ? ` ×${item.quantity}` : Number(item.quantity) === 0 ? ' · used' : ''}
                   </span>
                   {item.description ? <span style={{ color: 'rgba(220,185,135,0.8)' }}> — {String(item.description).slice(0, 140)}</span> : null}
                   <span className="italic" style={{ color: 'rgba(184,155,110,0.55)' }}>

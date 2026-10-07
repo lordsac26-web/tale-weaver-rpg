@@ -9,7 +9,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { resolveItemBonuses } from './itemBonuses';
 import { useEquipmentDescription } from './contentDetails';
-import { addInventoryItemAtAcquisition, formatInventoryItemName, normalizeAmmoForDisplay } from '@/lib/ammunition';
+import { addInventoryItemAtAcquisition, formatInventoryItemName, normalizeAmmoForDisplay, isDepletedInventoryItem } from '@/lib/ammunition';
 
 const RARITIES = Object.keys(ITEM_RARITY);
 
@@ -155,9 +155,10 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
   const isEquipped = canEquip && Object.entries(equipped).some(([s, i]) => i && s !== 'weapon' && i.name === item.name);
   const isUnidentifiedMagic = item.is_magic && !item.is_identified;
   const isConsumable = isConsumableItem(item);
+  const isDepleted = isDepletedInventoryItem(item);
   const rowStyle = isEquipped
-    ? { background: 'rgba(10,35,12,0.6)', border: `1px solid ${rarity.border}` }
-    : { background: 'rgba(15,10,5,0.55)', border: '1px solid rgba(180,140,90,0.1)' };
+    ? { background: 'rgba(10,35,12,0.6)', border: `1px solid ${rarity.border}`, opacity: isDepleted ? 0.6 : 1 }
+    : { background: 'rgba(15,10,5,0.55)', border: '1px solid rgba(180,140,90,0.1)', opacity: isDepleted ? 0.6 : 1 };
 
   return (
     <div className="rounded-xl overflow-hidden transition-all" style={rowStyle}>
@@ -167,6 +168,7 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-medium" style={{ color: rarity.color, fontFamily: 'EB Garamond, serif' }}>{formatInventoryItemName(item)}</span>
             {!formatInventoryItemName(item).includes('remaining') && item.quantity > 1 && <span className="text-xs" style={{ color: 'rgba(180,140,90,0.5)' }}>×{item.quantity}</span>}
+            {isDepleted && <span className="text-[0.58rem] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(50,12,6,0.9)', border: '1px solid rgba(200,60,40,0.55)', color: '#ffb89a', fontFamily: 'Cinzel, serif', letterSpacing: '0.08em' }}>USED</span>}
             {!isUnidentifiedMagic && <RarityBadge rarity={item.rarity || 'common'} />}
             {item.requires_attunement && <span className="text-xs px-1 py-0.5 rounded" style={{ background: 'rgba(60,20,80,0.5)', border: '1px solid rgba(160,80,220,0.3)', color: '#c4b5fd', fontSize: '0.58rem' }}>Attune</span>}
             {isEquipped && <span className="text-xs px-1.5 py-0.5 rounded-full badge-green">Equipped</span>}
@@ -193,7 +195,7 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
              <Sparkles className="w-3.5 h-3.5" />
            </button>
           )}
-          {isConsumable && (
+          {isConsumable && !isDepleted && (
            <button onClick={() => onUseConsumable?.(item, origIndex)}
              className="p-1.5 rounded-lg text-xs border transition-all"
              style={{ background: 'rgba(10,40,15,0.5)', border: '1px solid rgba(40,160,80,0.3)', color: '#86efac' }}
@@ -201,7 +203,7 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
              <FlaskConical className="w-3.5 h-3.5" />
            </button>
           )}
-          {canEquip && (
+          {canEquip && (!isDepleted || isEquipped) && (
            <button onClick={() => onEquip(item, origIndex, slot)}
              className="p-1.5 rounded-lg text-xs border transition-all"
              style={isEquipped ? {

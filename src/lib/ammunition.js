@@ -23,6 +23,10 @@ export function normalizeAmmoForDisplay(inventory = []) {
   return result;
 }
 
+export function isDepletedInventoryItem(item) {
+  return item != null && Object.prototype.hasOwnProperty.call(item, 'quantity') && Number(item.quantity) <= 0;
+}
+
 export function formatInventoryItemName(item) {
   const name = canonicalAmmoName(item?.name);
   if (!name) return item?.name || 'Item';

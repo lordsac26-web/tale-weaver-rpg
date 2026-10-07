@@ -8,7 +8,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { hasUsableItemContent, useCanonicalMagicItem } from '@/components/game/contentDetails';
-import { canonicalAmmoName, formatInventoryItemName, formatWeaponProperty } from '@/lib/ammunition';
+import { canonicalAmmoName, formatInventoryItemName, formatWeaponProperty, isDepletedInventoryItem } from '@/lib/ammunition';
 
 /**
  * Enhanced InventoryGrid with detailed item information,
@@ -86,7 +86,7 @@ export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, on
           {items.map((item, idx) => {
             const rarityStyle = getItemRarityStyle(item.rarity);
             const equipped = isEquipped(item);
-            const depletedAmmo = !!canonicalAmmoName(item.name) && (Number(item.quantity) || 0) === 0;
+            const depletedAmmo = isDepletedInventoryItem(item);
             
             return (
               <motion.div
@@ -105,6 +105,8 @@ export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, on
                         background: rarityStyle.bg,
                         borderColor: equipped ? 'rgba(40,160,80,0.6)' : rarityStyle.border,
                         boxShadow: equipped ? '0 0 12px rgba(40,160,80,0.2)' : 'none',
+                        opacity: depletedAmmo ? 0.55 : 1,
+                        filter: depletedAmmo ? 'grayscale(0.75)' : 'none',
                       }}
                     >
                       <div className="h-full flex flex-col items-center justify-center text-center">
@@ -115,6 +117,11 @@ export default function InventoryGrid({ items = [], onEquip, onDelete, onUse, on
                         {!canonicalAmmoName(item.name) && item.quantity > 1 && (
                           <div className="text-xs mt-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(60,40,10,0.8)', color: '#f0c040' }}>
                             ×{item.quantity}
+                          </div>
+                        )}
+                        {depletedAmmo && (
+                          <div className="absolute inset-0 rounded-xl flex items-center justify-center pointer-events-none">
+                            <span className="font-fantasy text-[0.6rem] tracking-widest px-2 py-0.5 rounded-full" style={{ background: 'rgba(40,10,5,0.92)', border: '1px solid rgba(200,60,40,0.55)', color: '#ffb89a' }}>USED</span>
                           </div>
                         )}
                         {equipped && (
