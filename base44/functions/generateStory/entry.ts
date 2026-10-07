@@ -123,7 +123,7 @@ export default async function(req) {
     }
     const ambushIntent = action === 'choice' && selectedChoiceContract.action_type !== 'weapon_attack' ? classifyPrecisionAmbushIntent(selectedChoice) : null;
     const narrativeRangedIntent=action==='choice'&&!ambushIntent&&selectedChoiceContract.action_type==='weapon_attack'?selectedChoiceContract.weapon_attack:null;
-    const stealthSetupIntent = action === 'choice' ? classifyStealthSetupIntent(selectedChoice || custom_input, authoritativeChoiceContext?.check) : null;
+    const stealthSetupIntent = action === 'choice' && !narrativeRangedIntent ? classifyStealthSetupIntent(selectedChoice || custom_input, authoritativeChoiceContext?.check) : null;
     const infiltrationPlan = action === 'choice' ? planInfiltrationAdvancement({ session, actionText:selectedChoice||custom_input, check:authoritativeChoiceContext?.check, requestId:storyRequestId }) : null;
     if (ambushIntent && (!authoritativeChoiceContext?.check || !Number.isFinite(Number(authoritativeChoiceContext.check.raw_d20)) || !Number.isFinite(Number(authoritativeChoiceContext.check.final_total)))) return Response.json({ error: 'Precision stealth strikes require a fresh persisted Stealth setup receipt before narration.', invalid: true }, { status: 409 });
     let authoritativeWait=null;

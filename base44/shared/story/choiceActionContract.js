@@ -15,8 +15,10 @@ export function canonicalSkill(value) {
 
 export function classifyLegacyChoiceAction(text) {
   const source = String(text || '').trim();
-  if (rangedAttackPattern.test(source)) {
-    const target = source.match(/\b(?:guard|cultist|scout|ritualist|necromancer|archer|soldier|bandit|goblin|orc|wolf)\b/i)?.[0] || null;
+  const explicitBowShot = /\b(?:shot|fire|shoot|assassinate)\b/i.test(source) && /\b(?:bow|longbow|crossbow|angry hornet)\b/i.test(source) && !/\b(?:do not|don't|without firing|not fire)\b/i.test(source);
+  if (rangedAttackPattern.test(source) || explicitBowShot) {
+    const namedTarget = source.match(/\b(?:assassinate|shoot|shot at|fire at)\s+(?:the\s+)?([\w'-]+(?:\s+[\w'-]+){0,2})\s*$/i)?.[1];
+    const target = namedTarget || source.match(/\b(?:weaver|guard|cultist|scout|ritualist|necromancer|archer|soldier|bandit|goblin|orc|wolf)\b/i)?.[0] || null;
     const nonlethal = /\b(incapacitate|nonlethal|knock\s+out|subdue|disable)\b/i.test(source);
     return { action_type: 'weapon_attack', evidence: 'deterministic_ranged_phrase', weapon_attack: { target_ref: target, weapon_hint: /crossbow|bolt/i.test(source) ? 'Crossbow' : 'Longbow', attack_mode: 'ranged', declared_attack_count: 1, intent: nonlethal ? 'incapacitate_requested' : 'damage', nonlethal_guaranteed: false } };
   }

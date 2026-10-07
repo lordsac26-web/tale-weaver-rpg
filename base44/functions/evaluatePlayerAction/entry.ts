@@ -6,6 +6,7 @@ import { isExplicitCraftingAction } from '../../shared/story/choiceAwardRouting.
 import { validatePlayerText } from '../../shared/story/playerText.ts';
 import { resolveGroundedAction } from '../../shared/story/groundedAction.ts';
 import { resolveStowResume } from '../../shared/story/stowResume.ts';
+import { classifyLegacyChoiceAction } from '../../shared/story/choiceActionContract.js';
 
 export default async function(req) {
   try {
@@ -28,6 +29,12 @@ export default async function(req) {
     // During combat the DM must decide whether a free-text action is a skill check,
     // continues/escalates the fight, or de-escalates it (talk / surrender / parley).
     if (in_combat) {
+      const explicitShot = classifyLegacyChoiceAction(action);
+      if (explicitShot && /\bangry hornet\b/i.test(action)) {
+        const target = (combat_enemies || []).find(name => String(name).toLowerCase().includes(String(explicitShot.weapon_attack.target_ref || '').toLowerCase()));
+        if (!target) return Response.json({ error: 'Name the living target for this magic-ammunition attack.', writes: 0 }, { status: 409 });
+        return Response.json({ action, outcome_type: 'attack', requires_check: false, target_name: target, attack_type: 'weapon', risk_level: 'high', reasoning: 'Fire the named magic ammunition through the weapon attack pipeline; each duplicate resolves separately.', reward: null, request_id, writes: 0 });
+      }
       const prompt = `You are a thoughtful Dungeon Master adjudicating a player's free-form action DURING an active combat encounter in D&D 5e. Stop and reason carefully using the scene context before deciding.
 
 Character: ${character?.name}, ${character?.race} ${character?.class} Level ${character?.level}
@@ -123,6 +130,8 @@ Return ONLY a JSON object:
       if (incomingParentKey && authoritativeParentKey !== incomingParentKey) return Response.json({ error:'Composite parent key does not match the authoritative parse.', action_type:'composite_action', parent_key:authoritativeParentKey, writes:0, function_version:'evaluate-player-action-v2.3.0' }, { status:409 });
       return Response.json({ action, action_type: 'composite_action', parent_key: authoritativeParentKey, composite_plan: compositePlan, valid: compositePlan.valid, alternatives: compositePlan.alternatives, requires_check: false, risk_level: 'high', reasoning: compositePlan.valid ? 'The complete ordered plan passed authoritative preflight.' : 'The complete ordered plan cannot be performed as stated; no spell slot, concentration, ammunition, attack, combat, or story state was changed.', request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.3.0', writes: 0 });
     }
+    const deterministicAttack = classifyLegacyChoiceAction(action);
+    if (deterministicAttack) return Response.json({ ...deterministicAttack, action, requires_check: false, skill: null, dc: null, risk_level: 'high', reasoning: 'This is a weapon attack, not a Stealth check. Initiative, concealment advantage, ammunition and damage resolve through the authoritative attack controls.', request_id, writes: 0 });
     const projectileRecovery = await prepareProjectileRecoveryProposal({ base44, session, character, actionText: action });
     if (projectileRecovery.handled) {
       if (projectileRecovery.status >= 400) return Response.json({ error: projectileRecovery.error, writes: 0, combat_id: projectileRecovery.combat_id || null }, { status: projectileRecovery.status });

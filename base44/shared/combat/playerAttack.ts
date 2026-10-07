@@ -16,6 +16,7 @@ import { appendRecoverableItem, buildRecoverableItem } from '../story/recoveryTr
 import { resolveExplicitThrownWeapon } from '../story/projectileLifecycle.ts';
 import { resolveSneakAttack } from './sneakAttack.ts';
 import { isConfirmedChoice } from '../classChoiceReview.ts';
+import { selectMultiplyingAmmo, rollAmmoDuplicates, commitMultiplyingAmmo } from './multiplyingAmmunition.ts';
 
 export async function handlePlayerAttack(ctx) {
   const { base44, session_id, combat_id, character_id, payload, request_id, roll_d20 = rollD20 } = ctx;
@@ -70,6 +71,7 @@ export async function handlePlayerAttack(ctx) {
   let attackType = 'melee';
   let extraDamageDice = []; // For smite, sneak attack, etc
   let ammunitionCommit = null;
+  let magicAmmo = null;
   let projectileCommit = null;
   let sneakAttackApplied = false; // tracks if Sneak Attack was used this attack (once-per-turn guard)
   let colossusApplied = false; // Hunter Ranger Colossus Slayer (once-per-turn guard)
@@ -540,9 +542,14 @@ export async function handlePlayerAttack(ctx) {
     }
     if (isRanged && usesAmmo) {
       if (!request_id) return Response.json({ error: 'Ammunition attacks require request_id.', invalid: true, writes: 0 }, { status: 400 });
-      const ammoPlan=planAmmunitionUse(character.inventory||[],weapon,1);
-      if(!ammoPlan.ok)return Response.json({error:ammoPlan.error,invalid:true,writes:0},{status:ammoPlan.status||400});
-      ammunitionCommit=ammoPlan;
+      const selected = selectMultiplyingAmmo({ inventory: character.inventory || [], weapon, actionText: modifiers.action_text, selectedName: payload.ammunition_name });
+      if (!selected.ok) return Response.json({ error: selected.error, invalid: true, writes: 0 }, { status: 409 });
+      if (selected.handled) magicAmmo = { ...selected, damage_type: weapon.damage_type || 'piercing' };
+      else {
+        const ammoPlan=planAmmunitionUse(character.inventory||[],weapon,1);
+        if(!ammoPlan.ok)return Response.json({error:ammoPlan.error,invalid:true,writes:0},{status:ammoPlan.status||400});
+        ammunitionCommit=ammoPlan;
+      }
     }
     const isFinesse = (weapon.properties || []).includes('finesse');
     const strMod = statMod(character.strength);
@@ -1072,6 +1079,21 @@ export async function handlePlayerAttack(ctx) {
     logEntry.text = `${character.name} ${missLabel} ${target.name}! (Roll: ${attackDisplay} vs AC ${target.ac}) Modifiers: ${attackModifierComponents.map((component) => `${component.source} ${component.value >= 0 ? '+' : ''}${component.value}`).join('; ')}.${advantageSources.length ? ` Advantage source: ${advantageSources.join('; ')}.` : ''}${disadvantageSources.length ? ` Disadvantage source: ${disadvantageSources.join('; ')}.` : ''}`;
   }
 
+  if (magicAmmo) {
+    const original = { projectile_index: 0, duplicate: false, ...logEntry, hit, critical: isCritical, damage };
+    // Guided Strike is a next-attack resource, not a bonus for every duplicate.
+    const guided = Number(combatLog.world_state?.guided_strike_bonus || 0);
+    const volley = rollAmmoDuplicates({ selection: magicAmmo, target: { ...target, ac: target.ac + targetACBonus }, attackMod: attackMod - guided, damageDice, damageBonus, advSources, disSources, advantageSources, disadvantageSources, modifierComponents: attackModifierComponents.filter(c => c.source !== 'Guided Strike'), forceCrit, rerollOnes: isHalfling, huntersMark, critFloor: target.hexblade_cursed_by === character_id ? 19 : character.class === 'Fighter' && String(character.subclass || '').toLowerCase().includes('champion') ? (character.level >= 15 ? 18 : 19) : 20, rollD20Fn: ctx.roll_duplicate_d20 || rollD20, rollDie: ctx.roll_die || rollDice });
+    const committed = await commitMultiplyingAmmo({ base44, characterId: character_id, sessionId: session_id, combatId: combat_id, requestId: request_id, selection: magicAmmo, volley, original });
+    logEntry.magic_ammunition = committed.receipt;
+    logEntry.ammunition = committed.receipt;
+    target.hp_current = Math.max(0, target.hp_current - volley.damage);
+    if (target.hp_current === 0) target.is_conscious = false;
+    damage += volley.damage; hit = hit || volley.any_hit;
+    logEntry.hit = hit; logEntry.damage = damage;
+    logEntry.text += ` ${magicAmmo.item.name}: ${volley.duplicate_dice} [${volley.duplicate_count_rolls.join(', ')}] = ${volley.duplicate_count} duplicates. ${volley.shots.map(s => `Duplicate ${s.projectile_index}: ${s.advantage ? 'Advantage ' : s.disadvantage ? 'Disadvantage ' : ''}[${s.all_rolls.join(', ')}] + ${s.attack_bonus} = ${s.attack_roll} vs AC ${s.target_ac}, ${s.hit ? `${s.critical ? 'critical, ' : ''}${s.damage} damage` : 'miss'}${s.advantage_sources.length ? `; source: ${s.advantage_sources.join('; ')}` : ''}`).join(' | ')}. Total shot damage ${damage}; HP ${target.hp_current}/${target.hp_max}. ${committed.receipt.destroyed ? 'Original ammunition destroyed.' : 'All projectiles missed; original remains magical.'}`;
+  }
+
   // Consume only structured concealment states whose canonical rule explicitly
   // says they end on attack. Greater Invisibility-style effects remain intact.
   if (attackConcealment.some((condition) => condition.break_on_attack || ['stealthed', 'hidden', 'concealed'].includes(String(condition.name || '').toLowerCase()))) {
@@ -1193,100 +1215,5 @@ export async function handlePlayerAttack(ctx) {
   });
 }
 
-// ─── OFF-HAND ATTACK (Two-Weapon Fighting, PHB p.195) ───────────────────────
-// Bonus action attack with a light weapon in the off-hand. No ability modifier
-// added to damage unless the character has the Two-Weapon Fighting fighting style.
-export async function handleOffhandAttack(ctx) {
-  const { base44, session_id, combat_id, character_id, payload } = ctx;
-  const { target_id, modifiers = {} } = payload;
-  const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
-  const character = await base44.asServiceRole.entities.Character.get(character_id);
-  const combatants = [...combatLog.combatants];
-  const target = combatants.find(c => c.id === target_id);
-  if (!target) return Response.json({ error: 'Target not found' }, { status: 404 });
-
-  // Off-hand weapon comes from the offhand slot; must be a light melee weapon
-  const offhand = character.equipped?.offhand;
-  const mainhand = character.equipped?.weapon || character.equipped?.mainhand;
-  const isLight = (w) => (w?.properties || []).map(p => p.toLowerCase()).includes('light')
-    || ['dagger','shortsword','scimitar','handaxe','light hammer','club','sickle'].includes((w?.name || '').toLowerCase());
-
-  if (!offhand || !isLight(offhand) || !isLight(mainhand)) {
-    return Response.json({ error: 'Two-weapon fighting requires a light melee weapon in each hand.', invalid: true }, { status: 400 });
-  }
-
-  // Bonus action gating
-  if (combatLog.world_state?.bonus_action_used) {
-    return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
-  }
-
-  const strMod = statMod(character.strength);
-  const dexMod = statMod(character.dexterity);
-  const isFinesse = (offhand.properties || []).map(p => p.toLowerCase()).includes('finesse');
-  const abilityMod = isFinesse ? Math.max(strMod, dexMod) : strMod;
-  const profBonus = character.proficiency_bonus || 2;
-
-  // H-X1 fix: off-hand swings go through the SAME centralized resolver as
-  // main-hand attacks — advantage/disadvantage cancellation, exhaustion,
-  // target-condition advantage, auto-crits, and Halfling Lucky all apply.
-  const offConcealment = getAttackConcealment(character.conditions);
-  const offAdvSources = [!!modifiers.advantage, offConcealment.length > 0];
-  const offDisSources = [!!modifiers.disadvantage, (character.exhaustion_level || 0) >= 3];
-  const offTargetConds = (target.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
-  if (['paralyzed', 'stunned', 'unconscious', 'restrained', 'prone', 'blinded'].some(cn => offTargetConds.includes(cn))) {
-    offAdvSources.push(true); // off-hand is always a melee attack (prone = advantage)
-  }
-  const offRollResult = resolveAttackRoll({
-    advSources: offAdvSources,
-    disSources: offDisSources,
-    forceCrit: offTargetConds.includes('paralyzed') || offTargetConds.includes('unconscious'),
-    rerollOnes: (character.race || '') === 'Halfling',
-  });
-  const attackRoll = offRollResult.roll;
-  const isCritical = offRollResult.isCritical;
-  const isMiss = offRollResult.isMiss;
-  const attackMod = abilityMod + profBonus + (offhand.attack_bonus || 0);
-  const totalAttack = attackRoll + attackMod;
-  const hit = !isMiss && (isCritical || totalAttack >= target.ac);
-
-  // Two-Weapon Fighting style: add ability modifier to off-hand damage
-  const hasTWFStyle = (character.fighting_style || '').toLowerCase().includes('two-weapon');
-  let damage = 0;
-  const damageRolls = [];
-  if (hit) {
-    const dMatch = (offhand.damage_dice || offhand.damage || '1d4').match(/^(\d+)d(\d+)$/);
-    const numDice = dMatch ? (isCritical ? parseInt(dMatch[1]) * 2 : parseInt(dMatch[1])) : (isCritical ? 2 : 1);
-    const sides = dMatch ? parseInt(dMatch[2]) : 4;
-    for (let i = 0; i < numDice; i++) { const r = rollDice(sides); damageRolls.push(r); damage += r; }
-    // Off-hand: NO ability mod to damage unless TWF style (PHB p.195). Negative mod always applies.
-    if (hasTWFStyle) damage += abilityMod;
-    else if (abilityMod < 0) damage += abilityMod;
-    damage += (offhand.damage_bonus || 0);
-    damage = Math.max(1, damage);
-    target.hp_current = Math.max(0, target.hp_current - damage);
-    if (target.hp_current === 0) target.is_conscious = false;
-  }
-
-  const logEntry = {
-    round: combatLog.round, actor: character.name, action: 'offhand_attack', target: target.name,
-    hit, critical: isCritical, attack_roll: totalAttack, damage,
-    text: hit
-      ? `${character.name} strikes with their off-hand ${offhand.name}${isCritical ? ' (CRIT!)' : ''} for ${damage} damage!${hasTWFStyle ? '' : ' (no ability mod — off-hand)'} (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${offConcealment.length ? ' Advantage: attacking from concealment.' : ''}${target.hp_current === 0 ? ` ${target.name} falls!` : ` HP: ${target.hp_current}/${target.hp_max}`}`
-      : `${character.name}'s off-hand ${offhand.name} misses ${target.name}! (Roll: ${attackRoll}+${attackMod}=${totalAttack} vs AC ${target.ac})${offConcealment.length ? ' Advantage: attacking from concealment.' : ''}`
-  };
-
-  const updatedCombatants = combatants.map(c => c.id === target_id ? target : c);
-
-  // Off-hand uses the BONUS ACTION, not an action — do not consume an action or advance the turn
-  const { worldState: newWorldState } = resolveActionAndAdvance(combatLog, updatedCombatants, character, { isBonusAction: true });
-
-  const result = await finalizeAndPersistCombat(base44, character_id, combat_id, session_id, updatedCombatants,
-    [...(combatLog.log_entries || []), logEntry],
-    combatLog.current_turn_index, combatLog.round, newWorldState);
-
-  return Response.json({
-    hit, damage, damage_rolls: damageRolls, attack_roll: totalAttack, log_entry: logEntry,
-    target_hp: target.hp_current, result, combat_ended: result !== 'ongoing',
-    bonus_action_used: true, two_weapon_style: hasTWFStyle
-  });
-}
+// Preserve the established import surface after extracting the independent handler.
+export { handleOffhandAttack } from './offhandAttack.ts';

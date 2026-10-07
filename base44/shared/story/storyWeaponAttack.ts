@@ -3,6 +3,7 @@ import { executePlayerAttackCore } from '../combat/playerAttackCore.ts';
 import { handlePlayerAttack } from '../combat/playerAttack.ts';
 import { getAttackConcealment } from '../combat/conditions.ts';
 import { planAmmunitionUse } from '../ammunitionTransaction.ts';
+import { selectMultiplyingAmmo } from '../combat/multiplyingAmmunition.ts';
 import { resolveAuthoritativeSkillModifier } from '../skills/authoritativeSkillModifier.ts';
 import { resolveStoryAttackTarget, storyAttackClarification } from './storyAttackTarget.ts';
 
@@ -26,7 +27,9 @@ export async function executeStoryWeaponAttack({ base44, user, sessionId, reques
   const targetSpec = targetResolution.target;
   const weapon = character.equipped?.weapon || character.equipped?.mainhand;
   if (!weapon || String(weapon.type || '').toLowerCase() !== 'ranged') return { status: 409, body: { error: 'Equip a ranged weapon before retrying this choice.', writes: 0 } };
-  const ammo = planAmmunitionUse(character.inventory || [], weapon, 1);
+  const special = selectMultiplyingAmmo({ inventory: character.inventory || [], weapon, actionText: contract.text });
+  if (!special.ok) return { status: 409, body: { error: special.error, writes: 0 } };
+  const ammo = special.handled ? { ok: true } : planAmmunitionUse(character.inventory || [], weapon, 1);
   if (!ammo.ok) return { status: ammo.status || 409, body: { error: ammo.error, writes: 0 } };
 
   const concealment = getAttackConcealment(character.conditions || []);
