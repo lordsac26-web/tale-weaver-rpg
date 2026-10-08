@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { executeThrownWeaponAction, recoverThrownWeapon } from '../../shared/story/thrownWeaponAction.ts';
+import { resolveExplicitThrownWeapon } from '../../shared/story/projectileLifecycle.ts';
 import { hashValue as hash, PROTECTED_DND_IDS as LIVE_IDS, readProtectedDndState } from '../../shared/tests/liveProtection.ts';
 
 const readProtected = (base44) => readProtectedDndState(base44.asServiceRole);
@@ -16,6 +17,10 @@ export default async function testThrownWeaponRegression(req) {
       fixtures.push({ character: character.id, session: session.id }); return { character, session };
     };
     const invoke = (fixture, id, weapon_attack, sessionId = fixture.session.id) => executeThrownWeaponAction({ base44, ownerId: fixture.character.created_by_id, payload: { session_id: sessionId, character_id: fixture.character.id, action_text: 'throw my Dagger at the wolf', request_id: id, weapon_attack } });
+    const explicitNoArrows = resolveExplicitThrownWeapon({ actionText: 'throw my dagger at the wolf', inventory: [{ ...dagger, quantity: 1 }, { name: 'Arrows', quantity: 0 }], selectedWeapon: { name: 'Longbow', type: 'ranged', properties: ['Ammunition (150/600)'] } });
+    results.push({ name: 'explicit thrown dagger bypasses empty arrow inventory even when a longbow is selected', pass: explicitNoArrows.ok && explicitNoArrows.weapon.name === 'Dagger' && explicitNoArrows.quantity_after === 0 });
+    const explicitNoRangedWeapon = resolveExplicitThrownWeapon({ actionText: 'throw my dagger at the wolf', inventory: [{ ...dagger, quantity: 1 }], selectedWeapon: null });
+    results.push({ name: 'explicit thrown dagger resolves with no equipped ranged weapon', pass: explicitNoRangedWeapon.ok && explicitNoRangedWeapon.weapon.damage_dice === '1d4' });
     const valid = await make('live-shape'); const before = await base44.asServiceRole.entities.Character.get(valid.character.id); const untouchedHash = await hash({ equipped: before.equipped, rope: before.inventory[3] });
     const hit = await invoke(valid, 'hit', { item_id: dagger.equipment_id, target: 'Necrotic Wolf', outcome: { committed: true, hit: true, kill: true } }); const afterHit = await base44.asServiceRole.entities.Character.get(valid.character.id);
     results.push({ name: 'exact live two-Dagger shape explicit item identity hit kill consumes only selected Dagger', pass: hit.status === 200 && hit.body.receipt?.kill && !(afterHit.inventory || []).some((item) => item.equipment_id === dagger.equipment_id) && (afterHit.inventory || []).some((item) => item.item_id === legacy.item_id) });

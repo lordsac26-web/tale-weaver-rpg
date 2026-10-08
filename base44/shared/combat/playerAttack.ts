@@ -540,7 +540,9 @@ export async function handlePlayerAttack(ctx) {
     if (isRanged && hasLoading && combatLog.world_state?.loading_weapon_fired) {
       return Response.json({ error: `${weapon.name} has the Loading property — it can only be fired once per turn.`, invalid: true }, { status: 400 });
     }
-    if (isRanged && usesAmmo) {
+    // A thrown weapon is its own projectile transaction. Even though its attack is
+    // ranged, it never consumes bow/crossbow ammunition from the equipped weapon.
+    if (isRanged && usesAmmo && !projectileCommit) {
       if (!request_id) return Response.json({ error: 'Ammunition attacks require request_id.', invalid: true, writes: 0 }, { status: 400 });
       const selected = selectMultiplyingAmmo({ inventory: character.inventory || [], weapon, actionText: modifiers.action_text, selectedName: payload.ammunition_name });
       if (!selected.ok) return Response.json({ error: selected.error, invalid: true, writes: 0 }, { status: 409 });
