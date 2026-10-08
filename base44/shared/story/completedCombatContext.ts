@@ -30,14 +30,33 @@ export async function readCompletedCombatContext(base44, session) {
   return buildCompletedCombatContext(combat);
 }
 
+export function materializeCompletedCombatCorpses({ session, context }) {
+  const location = session?.current_location || '';
+  return (context?.defeated_enemies || []).map((enemy) => {
+    const combatId = String(context.combat_id || 'completed-combat');
+    const combatantId = String(enemy.entity_id || enemy.id || enemy.name || 'enemy');
+    const name = String(enemy.name || 'Defeated enemy').replace(/^The\s+/i, '').trim() || 'Defeated enemy';
+    const id = `combat-corpse:${combatId}:${combatantId}`;
+    return {
+      id, session_id: session.id, location, name: `${name}'s Corpse`, aliases: [name, `The ${name}`, 'body', 'corpse', 'remains'],
+      type: 'corpse', quantity: 1, source_quantity: 1, source_name: name, source_ordinal: 1,
+      status: 'dead', alive: false, transfer_state: 'world', affordances: ['inspect', 'stow'],
+      evidence: { authority: 'completed_combat', combat_id: combatId, combatant_id: combatantId, result: context.result, status: 'dead' },
+      death_provenance: { source: 'completed_combat', combat_id: combatId, combatant_id: combatantId, enemy_name: enemy.name || name, hp: 0, status: 'dead' },
+    };
+  });
+}
+
 export async function persistCompletedCombatContext(base44, sessionId, combat) {
   const context = buildCompletedCombatContext(combat);
   const session = await base44.asServiceRole.entities.GameSession.get(sessionId);
   if (!session) return context;
-  const current = session.world_state?.last_completed_combat;
-  if (current?.combat_id === context.combat_id) return current;
+  const corpses = materializeCompletedCombatCorpses({ session, context });
+  const existing = session.world_state?.scene_entities || [];
+  const registry = new Map(existing.map((entity) => [entity.id, entity]));
+  corpses.forEach((corpse) => registry.set(corpse.id, corpse));
   await base44.asServiceRole.entities.GameSession.update(sessionId, {
-    world_state: { ...(session.world_state || {}), last_completed_combat: context },
+    world_state: { ...(session.world_state || {}), last_completed_combat: context, scene_entities: [...registry.values()].slice(-64) },
   });
   return context;
 }

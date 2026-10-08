@@ -1,6 +1,7 @@
 import { SCENE_ENTITY_SCHEMA, evidenceEntries, materializeSceneCandidates, sceneRevision, SCENE_GROUNDING_VERSION } from './sceneEvidence.ts';
 import { evaluateActiveEffects } from './activeEffects.ts';
 import { readNarrativeCorpseEntities } from './narrativeCorpseSources.ts';
+import { materializeCompletedCombatCorpses, readCompletedCombatContext } from './completedCombatContext.ts';
 
 // Context is a bounded projection. Source entries included in the model call are
 // complete, never a clipped prefix. Validation still sees ALL subsequent entries.
@@ -14,10 +15,17 @@ export async function buildGroundedContext({ base44, session, character, reconci
   const structured = [...(session.world_state?.scene_entities || []), ...(session.combat_state?.combatants || []), ...combats.flatMap(c => (c.combatants || []).map(x => ({ ...x, combat_id: c.id })))];
   const stored = [...(character.inventory || []), ...(character.stowed_items || [])];
   const transferredIds = new Set(stored.map(x => x.scene_entity_id || x.death_provenance?.scene_entity_id).filter(Boolean));
-  let entities = (await readNarrativeCorpseEntities({ session, structured })).filter(x => !transferredIds.has(x.id));
+  const completedCombat = await readCompletedCombatContext(base44, session);
+  const completedCombatCorpses = materializeCompletedCombatCorpses({ session, context: completedCombat });
+  let entities = [...(await readNarrativeCorpseEntities({ session, structured })), ...completedCombatCorpses]
+    .filter((entity, index, all) => !transferredIds.has(entity.id) && all.findIndex((candidate) => candidate.id === entity.id) === index);
   const diagnostics = [];
   for (const entity of (session.world_state?.scene_entities || []).slice(0, 64)) {
     if (entity.session_id !== session.id || entity.location !== (session.current_location || '') || transferredIds.has(entity.id)) continue;
+    if (entity.evidence?.authority === 'completed_combat') {
+      if (!entities.some((candidate) => candidate.id === entity.id)) entities.push(entity);
+      continue;
+    }
     const source = evidenceEntries(session).find(e => e.request_id === entity.source_request_id);
     if (!source || source.text.slice(entity.evidence?.span_start, entity.evidence?.span_end) !== entity.evidence?.quote) continue;
     const projected = await materializeSceneCandidates({ session, entry: source, structured, candidates: [{ name: entity.source_name || entity.name, aliases: entity.aliases?.slice(1), type: entity.type, quantity: entity.source_quantity || 1, status: entity.status, source_request_id: source.request_id, quote: entity.evidence.quote }] });

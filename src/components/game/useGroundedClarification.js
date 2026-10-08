@@ -17,7 +17,7 @@ export default function useGroundedClarification({ sessionId, characterId, onRes
     inFlight.current = true; setBusy(true); setError('');
     try {
       const result = await base44.functions.invoke('evaluatePlayerAction', { session_id: sessionId, character_id: characterId, action: state.original.action,
-        answer_text: checked.text, expected_scene_revision: state.original.grounded_action?.scene_revision, request_id: state.original.request_id });
+        answer_text: checked.text, expected_scene_revision: state.data.grounded_action?.scene_revision, request_id: state.original.request_id });
       if (result.data?.clarification_required) { setState(s => ({ ...s, data: result.data })); return false; }
       onResolved(result.data); setState(null); return true;
     } catch (err) { setError(err?.response?.data?.error || err.message || 'Your reply is preserved. Please retry.'); return false; }
