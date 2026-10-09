@@ -24,6 +24,11 @@ export function classifyItemTransferIntent(actionText) {
     if (!itemPhrase || (INSPECTION_ONLY.test(text) && !/inventory|carry|keep on me/i.test(text))) return null;
     return { type: 'item_transfer', item_phrase: itemPhrase.slice(0, 120), source_hint: source[1], destination: 'Carried Inventory', destination_kind: 'carried', version: ITEM_TRANSFER_VERSION };
   }
+  // Retrieval verbs ("take", "pull", "remove") without a source container are
+  // NOT world-transfers — "take the staff and use it to invert polarity" is an
+  // action verb, not a placement. Only explicit placement verbs ("place",
+  // "put", "drop", "leave", etc.) qualify for world-transfer.
+  if (!source && /\b(?:retrieve|retrieves|retrieved|take|takes|took|pull|pulls|pulled|remove|removes|removed)\b/i.test(verb[0])) return null;
   if (!destination) return null;
   const destinationName = destination[1].replace(/\s+/g, ' ').trim();
   if (!destinationName || BAG.test(destinationName)) return null;

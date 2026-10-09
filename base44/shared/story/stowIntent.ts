@@ -38,10 +38,11 @@ const scoredTokens = (value) => normalize(value).split(' ').filter((token) => to
  * Resolve the stow item phrase against carried inventory via token overlap.
  * Returns { kind: 'unique', item, index } | { kind: 'ambiguous', candidates } | { kind: 'unresolved' }.
  */
-export function resolveStowTarget(character, itemPhrase) {
+export function resolveStowTarget(character, itemPhrase, worldItems = []) {
   const inventory = Array.isArray(character.inventory) ? character.inventory : [];
   const phraseTokens = scoredTokens(itemPhrase);
-  if (!phraseTokens.length) return { kind: 'unresolved', candidates: [] };
+  const inventoryCandidates = () => inventory.map((item) => String(item?.name || '').trim()).filter(Boolean);
+  if (!phraseTokens.length) return { kind: 'unresolved', candidates: inventoryCandidates() };
   const matches = inventory.map((item, index) => {
     const nameTokens = scoredTokens(item?.name);
     const overlap = nameTokens.filter((token) => phraseTokens.includes(token)).length;
@@ -50,7 +51,17 @@ export function resolveStowTarget(character, itemPhrase) {
   const distinct = new Set(matches.map((entry) => entry.name));
   if (matches.length === 1 && distinct.size === 1) return { kind: 'unique', item: matches[0].item, index: matches[0].index };
   if (matches.length > 1) return { kind: 'ambiguous', candidates: [...distinct] };
-  return { kind: 'unresolved', candidates: [] };
+  // Fallback: search world_items (items placed in the scene by prior transfers)
+  const worldList = Array.isArray(worldItems) ? worldItems : [];
+  const worldMatches = worldList.map((item, index) => {
+    const nameTokens = scoredTokens(item?.name);
+    const overlap = nameTokens.filter((token) => phraseTokens.includes(token)).length;
+    return { item, index, name: String(item?.name || '').trim(), coverage: nameTokens.length ? overlap / nameTokens.length : 0, overlap };
+  }).filter((entry) => entry.overlap > 0 && (entry.coverage >= 0.5 || phraseTokens.includes(normalize(entry.name))));
+  const worldDistinct = new Set(worldMatches.map((entry) => entry.name));
+  if (worldMatches.length === 1 && worldDistinct.size === 1) return { kind: 'unique', item: worldMatches[0].item, index: worldMatches[0].index, source: 'world_items' };
+  if (worldMatches.length > 1) return { kind: 'ambiguous', candidates: [...worldDistinct] };
+  return { kind: 'unresolved', candidates: inventoryCandidates() };
 }
 
 const stableIdentity = (item) => String(item?.equipment_id || item?.item_id || '').trim() || (item?.death_provenance?.combat_id && item?.death_provenance?.combatant_id ? `corpse:${item.death_provenance.combat_id}:${item.death_provenance.combatant_id}` : `name:${normalize(item?.name)}`);
@@ -111,7 +122,7 @@ export async function executeStowAction({ base44, ownerId = null, payload }) {
 
   const contextual = /\b(?:corpses|bodies)\b/i.test(parsed.item_phrase) || payload.contextual_stow === true;
   if (contextual && payload.source_story_request_id && payload.source_story_request_id !== session.story_log?.at(-1)?.request_id) return { status: 409, body: { handled: true, error: 'The scene has changed since that attempt. Nothing has been moved.', writes: 0 } };
-  let resolution = contextual ? await resolveContextualCorpseSet({ base44, session, character, itemPhrase: parsed.item_phrase, container: parsed.container, selectedIds: payload.selected_source_ids, answerText: payload.answer_text }) : resolveStowTarget(character, parsed.item_phrase);
+  let resolution = contextual ? await resolveContextualCorpseSet({ base44, session, character, itemPhrase: parsed.item_phrase, container: parsed.container, selectedIds: payload.selected_source_ids, answerText: payload.answer_text }) : resolveStowTarget(character, parsed.item_phrase, session?.world_state?.world_items || []);
   if (!contextual && resolution.kind === 'unresolved') resolution = await resolveCompletedCombatCorpse({ base44, session, character, itemPhrase: parsed.item_phrase, requestId: token });
   if (resolution.kind === 'already_stowed') return { status: 200, body: { handled: true, success: true, already_processed: true, stow: { token, item_id: stableIdentity(resolution.item), item_name: resolution.item.name, quantity: 1, container: resolution.item.container, source: 'completed_combat', stow_intent_version: STOW_INTENT_VERSION }, receipt: null, stowed_items: character.stowed_items || [], inventory: character.inventory || [], writes: 0 } };
   if (!['unique', 'set'].includes(resolution.kind)) return { status: 200, body: { handled: true, success: false, clarification_required: true, item_phrase: parsed.item_phrase, container: parsed.container,
@@ -139,6 +150,11 @@ export async function executeStowAction({ base44, ownerId = null, payload }) {
     if (remaining <= 0) inventory.splice(resolution.index, 1);
     else inventory[resolution.index] = { ...selected, quantity: remaining };
   }
+  const worldItems = source === 'world_items' ? [...(latestSession.world_state?.world_items || [])] : [];
+  if (source === 'world_items') {
+    if (remaining <= 0) worldItems.splice(resolution.index, 1);
+    else worldItems[resolution.index] = { ...selected, quantity: remaining };
+  }
   const at = new Date().toISOString();
   const receipt = { token, item_id: stableIdentity(selected), item_name: selected.name, quantity: stowQuantity, container: parsed.container, source, quantity_before: quantity, quantity_after: remaining, at, state_hash_before: await hash({ inventory: character.inventory || [], stowed_items: character.stowed_items || [] }), stow_intent_version: STOW_INTENT_VERSION };
   const stowed = Array.isArray(character.stowed_items) ? [...character.stowed_items] : [];
@@ -148,6 +164,9 @@ export async function executeStowAction({ base44, ownerId = null, payload }) {
   receipt.capacity = fit.totals;
   receipt.state_hash_after = await hash({ inventory, stowed_items: stowed });
   abilities[STOW_RECEIPTS_KEY] = [...receipts.slice(-47), receipt];
+  if (source === 'world_items') {
+    await base44.asServiceRole.entities.GameSession.update(session.id, { world_state: { ...(latestSession.world_state || {}), world_items: worldItems } });
+  }
   await base44.asServiceRole.entities.Character.update(character.id, { inventory, stowed_items: stowed, long_rest_abilities: abilities });
-  return { status: 200, body: { handled: true, success: true, already_processed: false, stow: receipt, receipt, stowed_items: stowed, inventory, writes: 1 } };
+  return { status: 200, body: { handled: true, success: true, already_processed: false, stow: receipt, receipt, stowed_items: stowed, inventory, writes: source === 'world_items' ? 2 : 1 } };
 }
