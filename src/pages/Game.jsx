@@ -373,7 +373,7 @@ export default function Game() {
     setStoryLoading(true);
     try {
       const result = await storyContinuationRef.current.send(requestId, async () => {
-      const mechanicalCast = preCast || await maybeCastStorySpell(choice.text, requestId);
+      const mechanicalCast = preCast || (choice.action_type !== 'weapon_attack' ? await maybeCastStorySpell(choice.text, requestId) : null);
       const mechanicalItem = await maybeUseStoryConsumable(choice.text);
       const mechanicsContext = [
         mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
