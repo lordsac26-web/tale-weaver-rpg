@@ -459,12 +459,19 @@ export default function Game() {
     catch (err) { choiceDispatchInFlightRef.current = false; setChoices(choices); setNarrative(prev => [...prev, { type: 'action_error', text: err.message }]); return; }
     const retryReceipt = storyContinuationRef.current.receipt(requestId) || resumed;
     if (retryReceipt) { await continueChoiceWithRoll(choice, choiceIndex, requestId, null, retryReceipt); return; }
+    // Weapon attacks resolve through executeStoryWeaponAttack on the backend.
+    // The choice text often contains spell names as descriptive adjectives
+    // (e.g. "silence-imbued arrow") that would falsely trigger castUtilitySpell
+    // and fail on target resolution, blocking the entire weapon attack flow.
+    // The backend handles imbued-projection spell resolution authoritatively.
     let preCast = null;
-    try { preCast = await maybeCastStorySpell(choice.text, requestId); }
-    catch (err) {
-      choiceDispatchInFlightRef.current = false;
-      setNarrative(prev => [...prev, { type: 'action_error', text: getFunctionErrorMessage(err, 'That spell could not be cast, so the action was not resolved.') }]);
-      return;
+    if (choice.action_type !== 'weapon_attack') {
+      try { preCast = await maybeCastStorySpell(choice.text, requestId); }
+      catch (err) {
+        choiceDispatchInFlightRef.current = false;
+        setNarrative(prev => [...prev, { type: 'action_error', text: getFunctionErrorMessage(err, 'That spell could not be cast, so the action was not resolved.') }]);
+        return;
+      }
     }
     const checkCharacter = preCast ? { ...character, spell_slots: preCast.spell_slots, active_modifiers: preCast.active_modifiers } : character;
 
@@ -614,7 +621,7 @@ export default function Game() {
     setStoryLoading(true);
     try {
       const result = await storyContinuationRef.current.send(requestId, async () => {
-      const mechanicalCast = preCast || await maybeCastStorySpell(action, requestId);
+      const mechanicalCast = preCast || (outcome?.action_type !== 'weapon_attack' ? await maybeCastStorySpell(action, requestId) : null);
       const mechanicalItem = await maybeUseStoryConsumable(action);
       const mechanicsContext = [
         mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
@@ -683,11 +690,15 @@ export default function Game() {
 
     setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
     setChoices([]);
+    // Weapon attacks resolve through their own pipeline; skip spell detection
+    // to avoid false positives from descriptive adjectives like "silence-imbued".
     let preCast = null;
-    try { preCast = await maybeCastStorySpell(action, requestId); }
-    catch (err) {
-      setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'That spell could not be cast, so the action was not resolved as buffed.'), success: false }]);
-      return;
+    if (actionType !== 'weapon_attack') {
+      try { preCast = await maybeCastStorySpell(action, requestId); }
+      catch (err) {
+        setNarrative(prev => [...prev, { type: 'roll_result', text: getFunctionErrorMessage(err, 'That spell could not be cast, so the action was not resolved as buffed.'), success: false }]);
+        return;
+      }
     }
     const checkCharacter = preCast ? { ...character, spell_slots: preCast.spell_slots, active_modifiers: preCast.active_modifiers } : character;
 

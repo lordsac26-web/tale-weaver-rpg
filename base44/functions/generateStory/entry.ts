@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 import { resolveItemRecovery } from '../../shared/story/itemRecovery.ts';
 import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
+import { resolveImbuedProjectileSpell, IMBUED_PROJECTILE_SPELL_VERSION } from '../../shared/story/imbuedProjectileSpell.ts';
 import { reconcileSessionCombat } from '../../shared/combat/sessionCombatState.ts';
 import { factualAftermathFallback, findDeadCombatantContradictions, readCompletedCombatContext } from '../../shared/story/completedCombatContext.ts';
 import { isPwt, repairPostRestNarration } from '../../shared/story/postRestResiduals.ts';
@@ -213,6 +214,26 @@ export default async function(req) {
       if (castOutcome.status >= 400) return Response.json(castOutcome.body, { status: castOutcome.status });
       if (castOutcome.body?.spell_detected) authoritativeSpellCast = castOutcome.body;
     }
+    // Imbued projectile resolution: when a weapon_attack choice describes a
+    // spell-imbued projectile (e.g. "silence-imbued arrow"), auto-anchor the
+    // spell to the weapon attack's target_ref position. This drops any active
+    // concentration (e.g. Pass without Trace), consumes the correct slot, and
+    // applies the spell as a point-area effect centered on the target — mapping
+    // the narrative fiction to RAW-legal mechanics without blocking the attack.
+    let imbuedProjectileCast = null;
+    if (action === 'choice' && storyRequestId && selectedChoiceContract.action_type === 'weapon_attack' && selectedChoiceContract.weapon_attack) {
+      const imbuedOutcome = await resolveImbuedProjectileSpell({
+        base44,
+        user,
+        payload: { session_id, character_id: character.id, action_text: selectedChoice, weapon_attack: selectedChoiceContract.weapon_attack, request_id: storyRequestId },
+      });
+      if (imbuedOutcome.handled && imbuedOutcome.error) return Response.json({ error: imbuedOutcome.error, code: imbuedOutcome.code, invalid: true, imbued_projectile_spell_version: IMBUED_PROJECTILE_SPELL_VERSION, writes: imbuedOutcome.writes ?? 0 }, { status: 409 });
+      if (imbuedOutcome.handled && imbuedOutcome.cast) {
+        imbuedProjectileCast = imbuedOutcome.cast;
+        authoritativeSpellCast = imbuedOutcome.cast;
+        character = await base44.asServiceRole.entities.Character.get(character.id);
+      }
+    }
     if (action === 'choice' && storyRequestId) {
       const existingIndex = (session.story_log || []).findIndex((entry) => entry?.request_id === storyRequestId);
       const existing = existingIndex >= 0 ? session.story_log[existingIndex] : null;
@@ -419,6 +440,8 @@ ${adultToneInstruction}
 6. How do environment (season, time, weather) and current conditions influence the scene?
 
 Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Every choice MUST carry action_type; only skill_check choices may carry skill_check and dc, while weapon_attack choices carry target_ref, weapon_hint, attack_mode, declared_attack_count, and intent inside weapon_attack. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. For a concrete item gained by the CURRENT action, set current_recovery to an exact structured object: {type:"arrows", quantity:1-20} or {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise current_recovery must be null. Never claim that an item was found or recovered unless current_recovery is exact and the authoritative check succeeded. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null. Never emit a recovery object with quantity 0. For completed crafting, set crafting_outcome with an exact recipe_id, completed:true, time_minutes, tool provenance, exact yield_quantity, mechanically_identical, output ammunition identity/compatibility, ingredient quantities and inventory or scene-resource provenance. A passed check alone is progress, not an award. If any recipe, yield, ingredient, tool, time, or provenance fact is absent, crafting_outcome must be null and narration must not say ammunition was received, completed, or added.
+
+SPELL-IMBUED PROJECTILE CONTRACT: When composing a weapon_attack choice that mentions a spell-imbued projectile (e.g. "silence-imbued arrow"), the spell auto-anchors to the target_ref's position as a point-area effect. This is mechanically legal: the spell targets the point where the creature stands, not the projectile itself. Always set weapon_attack.target_ref to the creature being attacked. Never describe a spell as attached to a moving arrow, bolt, or projectile — phrase it as casting the spell centered on the target's position, then firing. Ensure the target is within the spell's range (120 feet for Silence). If the character is concentrating on another spell (e.g. Pass without Trace), casting a new concentration spell ends the prior one — note this in the choice text so the player understands the concentration swap.
 
 CONDITION CONTRACT: condition_update is ONLY for a real mechanical status affecting the PLAYER CHARACTER. Set target to "player" only when the player is actually affected; use "other" for an enemy/NPC effect and "none" when no player condition changes. Never use placeholder labels such as "None", "Normal", or "N/A". Use the remove field when a prior player condition ends. Choose duration "scene", "combat", or "persistent" accurately. Enemy conditions that begin combat belong in that enemy's starting_conditions, never on the player.
 
@@ -783,7 +806,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...result, ...finished.body, ...(narratedLoot?.applied ? { narrated_loot: narratedLoot } : {}), ...(narratedDepletion?.applied ? { narrated_depletion: narratedDepletion } : {}) };
     }
 
-    return Response.json({ ...result, failed_check_continuation_version:FAILED_CHECK_CONTINUATION_VERSION, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), narrated_depletion_version: NARRATED_DEPLETION_VERSION, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });
+    return Response.json({ ...result, failed_check_continuation_version:FAILED_CHECK_CONTINUATION_VERSION, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), narrated_depletion_version: NARRATED_DEPLETION_VERSION, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION, imbued_projectile_spell_version: IMBUED_PROJECTILE_SPELL_VERSION, ...(imbuedProjectileCast ? { imbued_projectile_cast: { spell_name: imbuedProjectileCast.spell_name, slot_level: imbuedProjectileCast.slot_level, target_anchor: selectedChoiceContract.weapon_attack?.target_ref } } : {}) });
 
   } catch (error) {
     console.error('Story generation error:', error);
