@@ -22,7 +22,7 @@ export default async function(req) {
     record('"retrieve X from bag" classifies as a carried retrieval',retrieveClassification?.destination_kind==='carried');
 
     // 3. Correct world-transfer still works (placement verbs)
-    const placeAction='place the staff on the altar';
+    const placeAction='place the staff in the tomb';
     const placeClassification=classifyItemTransferIntent(placeAction);
     record('"place X on altar" classifies as a world transfer',placeClassification?.destination_kind==='world');
 
