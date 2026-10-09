@@ -11,7 +11,7 @@ export default async function(req) {
     const protectedBefore=await hashValue(await readProtectedDndState(base44.asServiceRole));
 
     // 1. Parser extracts named loot from narration
-    const narration="With the metallic clatter of the medallion and the lead-lined cylinder landing at your feet, the oppressive violet static that guarded the dais finally dissipates. You move quickly, scooping the artifacts into the extradimensional maw of your Bag of Holding, where their necrotic signature is immediately muffled by the pocket dimension's stillness.";
+    const narration="With the metallic clatter of the Obsidian Medallion and the lead-lined cylinder landing at your feet, the oppressive violet static that guarded the dais finally dissipates. You move quickly, scooping the Obsidian Medallion and the lead-lined cylinder into the extradimensional maw of your Bag of Holding, where their necrotic signature is immediately muffled by the pocket dimension's stillness.";
     const loot=extractNarratedLoot(narration);
     record('parser extracts obsidian medallion from narration',loot.some(i=>/medallion/i.test(i.name)));
     record('parser extracts lead-lined cylinder from narration',loot.some(i=>/cylinder/i.test(i.name)));
