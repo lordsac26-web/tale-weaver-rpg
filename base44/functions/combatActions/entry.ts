@@ -592,7 +592,137 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, log_entry: logEntry, bonus_action_used: true });
   }
 
-  return Response.json({ error: 'Unknown action. Use: companion_turn | breath_weapon | second_wind | channel_divinity_turn_undead | channel_divinity_guided_strike | channel_divinity_preserve_life | hidden_step | daunting_roar | adrenaline_rush | frenzy_attack | hexblade_curse' }, { status: 400 });
+  // ─── CUNNING ACTION: HIDE (Rogue L2, PHB p.96) ───────────────────────────────
+  // Bonus action: make a Dexterity (Stealth) check vs the highest enemy passive
+  // Perception. On success, the character is Hidden until they attack, cast a
+  // spell, or make noise — their next attack has advantage. Uses only the bonus
+  // action; the action and remaining attacks are preserved.
+  if (action === 'cunning_action_hide') {
+    const combatLog = await base44.asServiceRole.entities.CombatLog.get(combat_id);
+    const character = await base44.asServiceRole.entities.Character.get(character_id);
+    if (!character) return Response.json({ error: 'Forbidden' }, { status: 403 });
+
+    const hasCunningAction = (character.features || []).some(f => /cunning action/i.test(f));
+    if (!hasCunningAction) {
+      return Response.json({ error: 'Cunning Action requires Rogue level 2.', invalid: true }, { status: 400 });
+    }
+    if (combatLog.world_state?.bonus_action_used) {
+      return Response.json({ error: 'Bonus action already used this turn.', invalid: true }, { status: 400 });
+    }
+
+    const combatants = [...(combatLog.combatants || [])];
+    const enemies = combatants.filter(c => c.type === 'enemy' && c.is_conscious);
+    if (enemies.length === 0) {
+      return Response.json({ error: 'No conscious enemies to hide from.', invalid: true }, { status: 400 });
+    }
+
+    // ── Stealth modifier (authoritative) ──
+    const dexMod = statMod(character.dexterity || 10);
+    const profBonus = character.proficiency_bonus || 2;
+    const stealthTraining = (character.skills || {})['Stealth'] || (character.skills || {})['stealth'];
+    const confirmedExpertise = Array.isArray(character.class_choices?.expertise)
+      && character.class_choices.expertise.includes('Stealth')
+      && character.class_choices?.__review_confirmed?.expertise === true;
+    const expertiseActive = stealthTraining === 'expert' && confirmedExpertise;
+    const stealthProficiency = (expertiseActive || stealthTraining === 'expert' || stealthTraining === 'proficient' || stealthTraining === true)
+      ? (expertiseActive ? profBonus * 2 : profBonus) : 0;
+    const stealthMod = dexMod + stealthProficiency;
+
+    // ── Advantage sources ──
+    // Boots of Elvenkind: advantage on Stealth (Dexterity) checks.
+    const hasBootsOfElvenkind = /elvenkind/i.test(character.equipped?.boots?.name || character.equipped?.boots?.effect || '');
+    // Mithral armor: no Stealth disadvantage (already handled by armor type, but note it).
+    const mithralArmor = /mithral/i.test(character.equipped?.armor?.name || '') || character.equipped?.armor?.magic_properties?.includes('mithral');
+    // Silence on the enemy: the target cannot hear the player, suppressing sound-based detection.
+    const enemyInSilence = enemies.some(e => (e.conditions || []).some(c => {
+      const name = typeof c === 'string' ? c : c?.name;
+      return name && name.toLowerCase() === 'silenced';
+    }));
+
+    // ── Roll Stealth (with advantage if Boots of Elvenkind) ──
+    const roll1 = rollD20();
+    const roll2 = hasBootsOfElvenkind ? rollD20() : null;
+    const selectedRoll = roll2 ? Math.max(roll1, roll2) : roll1;
+    const stealthTotal = selectedRoll + stealthMod;
+
+    // ── DC: highest enemy passive Perception ──
+    let dc = 10;
+    for (const enemy of enemies) {
+      const wisMod = statMod(enemy.wisdom || 10);
+      const enemyPP = 10 + wisMod + (enemy.passive_perception_bonus || 0);
+      if (enemyPP > dc) dc = enemyPP;
+    }
+    const success = stealthTotal >= dc;
+
+    // ── Build modifier breakdown for the log ──
+    const modComponents = [
+      { type: 'ability', source: 'dexterity', value: dexMod },
+      { type: 'proficiency', source: expertiseActive ? 'Stealth expertise' : 'Stealth proficiency', value: stealthProficiency },
+    ];
+    const advantageSources = [];
+    if (hasBootsOfElvenkind) advantageSources.push('Boots of Elvenkind');
+    const modText = modComponents.map(c => `${c.source} +${c.value}`).join('; ')
+      + (hasBootsOfElvenkind ? '; Boots of Elvenkind (advantage)' : '')
+      + (enemyInSilence ? '; Silence suppresses sound' : '')
+      + (mithralArmor ? '; Mithral armor (no Stealth disadvantage)' : '');
+
+    let logText;
+    if (success) {
+      const playerComp = combatants.find(c => c.type === 'player');
+      if (playerComp) {
+        const existing = (playerComp.conditions || []).map(c => (typeof c === 'string' ? c : c?.name));
+        if (!existing.some(n => n && n.toLowerCase() === 'hidden')) {
+          playerComp.conditions = [...(playerComp.conditions || []), { name: 'Hidden', source: 'Cunning Action', duration: 'until next attack or noise' }];
+        }
+      }
+      const charConds = (character.conditions || []).filter(c => {
+        const name = typeof c === 'string' ? c : c?.name;
+        return name && name.toLowerCase() !== 'hidden';
+      });
+      await base44.asServiceRole.entities.Character.update(character_id, {
+        conditions: [...charConds, { name: 'Hidden', source: 'Cunning Action', duration: 'combat', applied_at: new Date().toISOString() }],
+      });
+      logText = `🫥 ${character.name} uses Cunning Action to Hide as a bonus action! Stealth ${stealthTotal} vs DC ${dc}${hasBootsOfElvenkind ? ` (advantage: [${roll1}${roll2 ? `, ${roll2}` : ''}] → ${selectedRoll})` : ` (roll ${selectedRoll})`}. Modifiers: ${modText}. You are Hidden — your next attack has advantage.`;
+    } else {
+      logText = `${character.name} tries to Hide as a bonus action but fails! Stealth ${stealthTotal} vs DC ${dc}${hasBootsOfElvenkind ? ` (advantage: [${roll1}${roll2 ? `, ${roll2}` : ''}] → ${selectedRoll})` : ` (roll ${selectedRoll})`}. Modifiers: ${modText}.`;
+    }
+
+    const logEntry = {
+      round: combatLog.round, actor: character.name, action: 'cunning_action_hide',
+      target: null, hit: false, text: logText,
+      roll_breakdown: {
+        roll_type: 'stealth', roll_origin: 'ai',
+        dice: { mode: hasBootsOfElvenkind ? 'advantage' : 'normal', rolls: roll2 ? [roll1, roll2] : [roll1], selected: selectedRoll, advantage_sources: advantageSources, disadvantage_sources: [] },
+        modifiers: modComponents,
+        modifier_total: stealthMod, final_total: stealthTotal, dc,
+      },
+    };
+
+    const ws = { ...(combatLog.world_state || {}), bonus_action_used: true };
+    if (success) {
+      ws.ambush_setup = {
+        ...(ws.ambush_setup || {}),
+        type: 'cunning_action_hide',
+        concealed: true,
+        advantage_attribution: 'Attacking from hidden (Cunning Action)',
+        attack_resolved: false,
+        setup_success: true,
+        setup_receipt_id: `cunning-action-hide:${combatLog.round}`,
+      };
+    }
+
+    await base44.asServiceRole.entities.CombatLog.update(combat_id, {
+      combatants, log_entries: [...(combatLog.log_entries || []), logEntry], world_state: ws,
+    });
+
+    return Response.json({
+      success, log_entry: logEntry, stealth_total: stealthTotal, dc, bonus_action_used: true,
+      hidden: success, advantage_on_next_attack: success,
+      roll_breakdown: logEntry.roll_breakdown,
+    });
+  }
+
+  return Response.json({ error: 'Unknown action. Use: companion_turn | breath_weapon | second_wind | channel_divinity_turn_undead | channel_divinity_guided_strike | channel_divinity_preserve_life | hidden_step | daunting_roar | adrenaline_rush | frenzy_attack | hexblade_curse | cunning_action_hide' }, { status: 400 });
   } catch (error) {
     return Response.json({ error: error.message || 'Combat action error' }, { status: 500 });
   }

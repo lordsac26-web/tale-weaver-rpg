@@ -29,6 +29,21 @@ export default async function(req) {
     // During combat the DM must decide whether a free-text action is a skill check,
     // continues/escalates the fight, or de-escalates it (talk / surrender / parley).
     if (in_combat) {
+      // Cunning Action: Hide (Rogue L2, PHB p.96) — recognized as a legal bonus
+      // action, NOT a generic skill check. The Stealth check resolves against
+      // enemy passive Perception with fully attributed modifiers (Expertise,
+      // Boots of Elvenkind, Silence suppression). No separate "break LOS" check.
+      const hideIntent = /\b(hide|hiding|stealth|re-?hide)\b/i.test(action) && /\b(bonus\s*action|cunning\s*action)\b/i.test(action);
+      const hasCunningAction = (character.features || []).some(f => /cunning action/i.test(f));
+      if (hideIntent && hasCunningAction) {
+        return Response.json({
+          action, outcome_type: 'cunning_action_hide', requires_check: true, skill: 'Stealth',
+          dc: null, target_name: null, attack_type: null, risk_level: 'low',
+          reasoning: 'Cunning Action: Hide (Rogue 2). This is a legal bonus action. Make a single Stealth check vs the enemy\'s passive Perception with all modifiers attributed (Expertise, Boots of Elvenkind, Silence suppression). On success you are Hidden and your next attack has advantage. No separate "break line of sight" check is needed when the enemy never established sight. The bonus action is consumed; your action and remaining attacks are preserved.',
+          ends_combat_on_success: false, reward: null, request_id: String(request_id || '').slice(0, 120),
+          function_version: 'evaluate-player-action-v2.2-cunning-action', in_combat: true, bonus_action: true,
+        });
+      }
       const explicitShot = classifyLegacyChoiceAction(action);
       if (explicitShot && /\bangry hornet\b/i.test(action)) {
         const target = (combat_enemies || []).find(name => String(name).toLowerCase().includes(String(explicitShot.weapon_attack.target_ref || '').toLowerCase()));
