@@ -9,18 +9,19 @@ export const classifyPrecisionAmbushIntent = (value) => {
   const strike = /\b(strike|attack|shot|shoot|fire|arrow)\b/.test(text);
   const precision = /\b(precision|precise|surgical|long[- ]range|ranged)\b/.test(text);
   const stealth = /\b(stealth|shadow|hidden|conceal|unseen)\b/.test(text);
-  const target = /\b(necromancer|ritual master|ritualist|obsidian circle scout)\b/.test(text);
+  const target = /\b(necromancer|ritual master|ritualist|ritual leader|obsidian circle scout)\b/.test(text);
   return strike && precision && target ? { type: 'precision_stealth_strike', setup_skill: 'Stealth', target_hint: targetNameFromIntent(text), stealth_language: stealth } : null;
 };
 
 export const targetNameFromIntent = (value) => {
   const text = String(value || '').toLowerCase();
   if (text.includes('ritual master')) return 'Ritual Master';
+  if (text.includes('ritual leader')) return 'Ritual Leader';
   if (text.includes('obsidian circle scout')) return 'Obsidian Circle Scout';
   return 'Necromancer';
 };
 
-const targetPattern = /necromancer|ritual master|ritualist|obsidian circle scout/i;
+const targetPattern = /necromancer|ritual master|ritualist|ritual leader|obsidian circle scout/i;
 export const isMatchingAmbushTarget = (name) => targetPattern.test(String(name || ''));
 
 export const normalizePendingAmbushRoster = (enemies) => {

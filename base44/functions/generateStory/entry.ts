@@ -200,7 +200,11 @@ export default async function(req) {
       }
     }
     let authoritativeSpellCast = null;
-    if (action === 'choice' && storyRequestId) {
+    // Skip utility spell detection for weapon_attack choices — they have their own
+    // resolution path (executeStoryWeaponAttack) and the text often contains spell
+    // names as descriptive adjectives (e.g. "silence-imbued arrow") that would
+    // falsely trigger spell detection and fail on target resolution.
+    if (action === 'choice' && storyRequestId && selectedChoiceContract.action_type !== 'weapon_attack') {
       const castOutcome = await executeUtilitySpellCast({
         base44,
         user,
