@@ -34,7 +34,7 @@ export async function executeLongRestStoryAction({ base44, ownerId, payload }) {
   const existing = (session.story_log || []).find((entry) => entry?.request_id === parentId);
   const narration = `You complete a long rest. ${character.name} is restored to ${character.hp_current}/${character.hp_max} HP, and the world reaches ${session.time_of_day}.`;
   if (!existing?.text) {
-    const entry = { timestamp: new Date().toISOString(), action: 'choice', request_id: parentId, player_choice: payload.action_text, text: narration, choices: [], long_rest: { receipt_id: receiptId, intent: parsed.intent, clock: core.body.clock } };
+    const entry = { timestamp: new Date().toISOString(), action: 'choice', request_id: parentId, player_choice: payload.action_text, text: narration, choices: [], mechanics_status: 'complete', long_rest: { receipt_id: receiptId, intent: parsed.intent, clock: core.body.clock } };
     await base44.asServiceRole.entities.GameSession.update(session.id, { story_log: [...(session.story_log || []), entry].slice(-60) });
   }
   return { status: 200, body: { handled: true, success: true, already_processed: !!core.body.already_processed, function_version:LONG_REST_STORY_VERSION, parsed_intent: parsed, parent_id: parentId, receipt_id: receiptId, rest: core.body, character, session, narration: existing?.text || narration } };

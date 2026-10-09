@@ -10,6 +10,11 @@ export function hydrateLatestStoryEntry(session) {
 export function acceptSequencedStoryPayload(payload, sequence, latestSequence) {
   if (sequence !== latestSequence) return { accepted: false, reason: 'superseded' };
   if (payload?.persistence_confirmed !== true) return { accepted: false, reason: 'persistence_unconfirmed' };
+  // Long rest and other terminal actions bypass the strict 4-choice pair match.
+  // They are persistence-confirmed by the server and carry no story_entry/hydration.
+  if (payload?.long_rest === true) {
+    return { accepted: true, hydration: { text: String(payload.narrative || ''), choices: normalizeStoryChoices(payload.choices) } };
+  }
   const entry = payload.story_entry, choices = normalizeStoryChoices(entry?.choices);
   const matched = !!entry?.request_id && String(entry?.text || '') && choices.length === 4
     && payload.hydration?.request_id === entry.request_id && String(payload.hydration?.text || '') === String(entry.text)
