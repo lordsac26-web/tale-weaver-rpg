@@ -36,6 +36,7 @@ import { resolveFailedCheckCandidate, resolveNarratedStowCandidate, FAILED_CHECK
 import { selectStoryChoice } from '../../shared/story/selectedStoryChoice.ts';
 import { confirmPersistedStoryPair, finishStoryPersistence } from '../../shared/story/storyPersistence.ts';
 import { materializeNarratedLoot } from '../../shared/story/narratedLootMaterialization.ts';
+import { materializeNarratedDepletion, NARRATED_DEPLETION_VERSION } from '../../shared/story/narratedItemDepletion.ts';
 import { resolveStoryStowTransition } from '../../shared/story/storyStowTransition.ts';
 import { validatePlayerText } from '../../shared/story/playerText.ts';
 import { SCENE_ENTITY_SCHEMA } from '../../shared/story/sceneEvidence.ts';
@@ -768,13 +769,17 @@ Write a gripping 1-2 paragraph combat narrative.`;
       // items have been physically taken/looted, materialize them into inventory
       // or stowed_items with story-log provenance. Non-destructive: adds only.
       const narratedLoot = await materializeNarratedLoot({ base44, sessionId: session_id, characterId: character.id, requestId: storyRequestId || completedEntry.request_id || null, narrative: completedEntry.text, storyIndex: committedTransition.index });
+      // Depletion mirror: if narration transfers an item OUT of the player's
+      // possession (give, entrust, drop, sell, leave behind), remove it from
+      // inventory/stowed and record it with the recipient in world state.
+      const narratedDepletion = await materializeNarratedDepletion({ base44, sessionId: session_id, characterId: character.id, requestId: storyRequestId || completedEntry.request_id || null, narrative: completedEntry.text, storyIndex: committedTransition.index });
 
       const finished = await finishStoryPersistence({ db: base44.asServiceRole, sessionId: session_id, requestId: storyRequestId || completedEntry.request_id || null, expectedHash: responsePayloadHash });
       if (finished.status !== 200) return Response.json(finished.body, { status: finished.status });
-      result = { ...result, ...finished.body, ...(narratedLoot?.applied ? { narrated_loot: narratedLoot } : {}) };
+      result = { ...result, ...finished.body, ...(narratedLoot?.applied ? { narrated_loot: narratedLoot } : {}), ...(narratedDepletion?.applied ? { narrated_depletion: narratedDepletion } : {}) };
     }
 
-    return Response.json({ ...result, failed_check_continuation_version:FAILED_CHECK_CONTINUATION_VERSION, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });
+    return Response.json({ ...result, failed_check_continuation_version:FAILED_CHECK_CONTINUATION_VERSION, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), narrated_depletion_version: NARRATED_DEPLETION_VERSION, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });
 
   } catch (error) {
     console.error('Story generation error:', error);
