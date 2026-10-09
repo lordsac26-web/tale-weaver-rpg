@@ -29,10 +29,10 @@ const LOOT_TABLES = {
     { name: 'Potion of Invisibility', type: 'consumable', rarity: 'uncommon', effect: 'Become invisible for 1 hour', weight: 0.5, value: 250 },
     { name: 'Scroll of Fireball', type: 'consumable', rarity: 'uncommon', effect: 'Cast Fireball (3rd level)', weight: 0.1, value: 300 },
     { name: 'Wand of Magic Missiles', type: 'weapon', rarity: 'uncommon', effect: '7 charges, recharge daily', weight: 1, value: 500 },
-    { name: 'Cloak of Protection', type: 'armor', rarity: 'uncommon', effect: '+1 AC and saving throws', weight: 2, value: 400 },
+    { name: 'Cloak of Protection', type: 'wondrous_item', rarity: 'uncommon', effect: '+1 AC and saving throws', weight: 2, value: 400 },
     { name: '+1 Weapon', type: 'weapon', rarity: 'uncommon', effect: '+1 to attack and damage rolls', weight: 3, value: 600 },
-    { name: 'Bracers of Archery', type: 'armor', rarity: 'uncommon', effect: '+2 damage with longbow/shortbow', weight: 1, value: 500 },
-    { name: 'Boots of Elvenkind', type: 'armor', rarity: 'uncommon', effect: 'Advantage on Stealth (Dexterity)', weight: 1, value: 450 },
+    { name: 'Bracers of Archery', type: 'wondrous_item', rarity: 'uncommon', effect: '+2 damage with longbow/shortbow', weight: 1, value: 500 },
+    { name: 'Boots of Elvenkind', type: 'wondrous_item', rarity: 'uncommon', effect: 'Advantage on Stealth (Dexterity)', weight: 1, value: 450 },
   ],
 
   // Rare items
@@ -40,12 +40,12 @@ const LOOT_TABLES = {
     { name: 'Superior Healing Potion', type: 'consumable', rarity: 'rare', effect: 'Restore 8d4+8 HP', weight: 0.5, value: 500 },
     { name: 'Ring of Protection', type: 'accessory', rarity: 'rare', effect: '+1 AC and saving throws', weight: 0.1, value: 1000 },
     { name: 'Bag of Holding', type: 'gear', rarity: 'rare', effect: 'Holds 500 lbs in extradimensional space', weight: 15, value: 1500 },
-    { name: 'Boots of Speed', type: 'armor', rarity: 'rare', effect: 'Double movement speed (bonus action)', weight: 2, value: 1200 },
+    { name: 'Boots of Speed', type: 'wondrous_item', rarity: 'rare', effect: 'Double movement speed (bonus action)', weight: 2, value: 1200 },
     { name: 'Amulet of Health', type: 'accessory', rarity: 'rare', effect: 'Constitution becomes 19', weight: 0.2, value: 2000 },
     { name: 'Flame Tongue Sword', type: 'weapon', rarity: 'rare', effect: '+2d6 fire damage when activated', weight: 3, value: 2500 },
     { name: '+2 Weapon', type: 'weapon', rarity: 'rare', effect: '+2 to attack and damage rolls', weight: 3, value: 2000 },
     { name: 'Belt of Giant Strength (Hill)', type: 'accessory', rarity: 'rare', effect: 'Strength becomes 21', weight: 1, value: 3000 },
-    { name: 'Cloak of Displacement', type: 'armor', rarity: 'rare', effect: 'Attackers have disadvantage', weight: 2, value: 2500 },
+    { name: 'Cloak of Displacement', type: 'wondrous_item', rarity: 'rare', effect: 'Attackers have disadvantage', weight: 2, value: 2500 },
     { name: 'Necklace of Fireballs', type: 'accessory', rarity: 'rare', effect: '5 beads, each casts Fireball', weight: 0.2, value: 1800 },
   ],
 
@@ -150,14 +150,22 @@ const CATEGORY_TO_SLOT = {
 };
 
 function typeToCategory(type, name = '') {
+  const nameLower = (name || '').toLowerCase();
+  // Check name first for specific wearable types — prevents wondrous items
+  // (boots, cloaks, bracers, etc.) from being misclassified as armor when
+  // the loot table 'type' field is 'armor'.
+  if (/boot|shoe|sandal|slipper/.test(nameLower)) return 'Boots';
+  if (/cloak|mantle|cape/.test(nameLower)) return 'Cloak';
+  if (/bracer|gauntlet|glove/.test(nameLower)) return 'Gloves';
+  if (/ring/.test(nameLower)) return 'Ring';
+  if (/amulet|necklace|pendant/.test(nameLower)) return 'Amulet';
+  if (/belt|girdle|sash/.test(nameLower)) return 'Belt';
+  if (/helmet|helm|hood/.test(nameLower)) return 'Helmet';
+  if (/shield/.test(nameLower)) return 'Shield';
+  // Fall back to type field for broad categories
   const value = `${type || ''} ${name || ''}`.toLowerCase();
   if (value.includes('weapon') || value.includes('sword') || value.includes('staff') || value.includes('wand')) return 'Weapon';
   if (value.includes('armor')) return 'Armor';
-  if (value.includes('shield')) return 'Shield';
-  if (value.includes('boot')) return 'Boots';
-  if (value.includes('cloak')) return 'Cloak';
-  if (value.includes('ring')) return 'Ring';
-  if (value.includes('amulet') || value.includes('necklace')) return 'Amulet';
   if (value.includes('potion') || value.includes('consumable')) return 'Potion';
   if (value.includes('tool')) return 'Tool';
   if (value.includes('gear') || value.includes('material')) return 'Adventuring Gear';

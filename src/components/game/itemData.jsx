@@ -200,14 +200,14 @@ SRD_MAGIC_ITEMS.push(...SRD_CONSUMABLES);
 
 // ─── Equipment Constraint Rules (D&D 5E) ──────────────────────────────────────
 export function getEquipConstraints(equipped, newItem) {
-  const slot = newItem.equip_slot || CATEGORY_TO_SLOT[newItem.category];
+  const slot = CATEGORY_TO_SLOT[newItem.category] || newItem.equip_slot;
   if (!slot) return { canEquip: true, reason: null };
 
   const slotDef = EQUIP_SLOTS[slot];
   if (!slotDef) return { canEquip: true, reason: null };
 
   // Count how many items are currently in this slot
-  const slotItems = Object.values(equipped).filter(i => i && (i.equip_slot || CATEGORY_TO_SLOT[i.category]) === slot);
+  const slotItems = Object.values(equipped).filter(i => i && (CATEGORY_TO_SLOT[i.category] || i.equip_slot) === slot);
 
   // Check two-handed weapon rule
   if (slot === 'mainhand') {

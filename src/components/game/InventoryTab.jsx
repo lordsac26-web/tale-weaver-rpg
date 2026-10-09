@@ -149,7 +149,7 @@ function ItemRow({ item, origIndex, equipped, onEquip, onRemove, onIdentify, onU
   const [expanded, setExpanded] = useState(false);
   const displayDescription = useEquipmentDescription(item);
   const rarity = ITEM_RARITY[item.rarity] || ITEM_RARITY.common;
-  const slot = item.equip_slot || CATEGORY_TO_SLOT[item.category];
+  const slot = CATEGORY_TO_SLOT[item.category] || item.equip_slot;
   const canEquip = !!slot;
   // Use name-based comparison instead of reference equality — after DB reload, objects are different instances
   const isEquipped = canEquip && Object.entries(equipped).some(([s, i]) => i && s !== 'weapon' && i.name === item.name);
@@ -282,6 +282,14 @@ export default function InventoryTab({ character, onUpdate, onIdentify, sessionI
       // Unequip — match by name, not reference
       Object.entries(newEquipped).forEach(([s, i]) => { if (i && s !== 'weapon' && i.name === item.name) delete newEquipped[s]; });
     } else {
+      // SAFETY GUARD: re-derive the correct slot from the item's category
+      // (authoritative) rather than the passed slot, which may come from a
+      // stale or misclassified equip_slot field. This prevents cross-slot
+      // contamination — e.g., boots with equip_slot='armor' overwriting plate.
+      const authoritativeSlot = CATEGORY_TO_SLOT[item.category] || item.equip_slot || slot;
+      if (authoritativeSlot !== slot) {
+        slot = authoritativeSlot;
+      }
       const constraint = getEquipConstraints(newEquipped, item);
       if (!constraint.canEquip) {
         alert(constraint.reason);
