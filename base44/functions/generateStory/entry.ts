@@ -19,6 +19,7 @@ import { generatedRecoveryDiagnostics, GENERATED_RECOVERY_RESOLUTION_VERSION, re
 import { guardAndCommitNarratedRecovery } from '../../shared/story/storyRecoveryGuard.ts';
 import { canonicalStoryResponsePayload, commitStoryTransition, hashStoryValue, hydrateLatestStoryEntry, storyPayloadFromCommit, STORY_TRANSITION_VERSION } from '../../shared/story/storyTransition.ts';
 import { buildGameHydration, finalizeGeneratedStoryResult } from '../../shared/story/storyBootstrap.ts';
+import { validateComposedChoice, validateComposedChoices, buildCompositionResourcesForCharacter, compositionResourceLine, CHOICE_COMPOSITION_VALIDATION_VERSION } from '../../shared/story/choiceCompositionValidation.ts';
 import { canonicalStoryStealthedCondition, classifyStealthSetupIntent, STEALTH_SETUP_HANDOFF_VERSION, withCanonicalStoryStealthed } from '../../shared/story/stealthSetupHandoff.ts';
 import { executeAuthoritativeShortWait, SHORT_WAIT_VERSION } from '../../shared/story/shortWait.ts';
 import { inferUniqueScenePickup, UNIQUE_SCENE_PICKUP_VERSION } from '../../shared/story/uniqueScenePickup.ts';
@@ -59,7 +60,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.13.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.14.0';
 
 export default async function(req) {
   try {
@@ -129,6 +130,16 @@ export default async function(req) {
     const stealthSetupIntent = action === 'choice' && !narrativeRangedIntent ? classifyStealthSetupIntent(selectedChoice || custom_input, authoritativeChoiceContext?.check) : null;
     const infiltrationPlan = action === 'choice' ? planInfiltrationAdvancement({ session, actionText:selectedChoice||custom_input, check:authoritativeChoiceContext?.check, requestId:storyRequestId }) : null;
     if (ambushIntent && (!authoritativeChoiceContext?.check || !Number.isFinite(Number(authoritativeChoiceContext.check.raw_d20)) || !Number.isFinite(Number(authoritativeChoiceContext.check.final_total)))) return Response.json({ error: 'Precision stealth strikes require a fresh persisted Stealth setup receipt before narration.', invalid: true }, { status: 409 });
+    // Dispatch-time composition re-validation: state may have changed between
+    // generation and click (slots spent, concentration started). An option that
+    // can no longer execute end-to-end is rejected zero-write with a clear
+    // reason, never mid-sequence after a slot was spent. Applies to clicked
+    // options only; player free text keeps its own intent-resolution paths.
+    if (action === 'choice' && !custom_input) {
+      const compositionResources = await buildCompositionResourcesForCharacter({ base44, character, session });
+      const dispatchValidation = validateComposedChoice(selectedChoiceContract, compositionResources);
+      if (!dispatchValidation.ok) return Response.json({ error: `This option cannot be executed right now and nothing was spent: ${dispatchValidation.reason}`, reason_code: dispatchValidation.reason_code, invalid: true, choice_composition_version: CHOICE_COMPOSITION_VALIDATION_VERSION, writes: 0 }, { status: 409 });
+    }
     let authoritativeWait=null;
     if (action === 'choice' && storyRequestId) {
       const longRest = await executeLongRestStoryAction({ base44, ownerId: user.id, payload: { session_id, character_id: character.id, action_text: selectedChoice||custom_input, choice_context: authoritativeChoiceContext, request_id: storyRequestId } });
@@ -338,6 +349,10 @@ export default async function(req) {
     // ====================== PROMPT BUILDING ======================
     let prompt = '';
     let responseSchema = null;
+    // Authoritative resource snapshot for composition-time validation of the
+    // offered choices (fresh character/session state after any dispatch).
+    let compositionResourcesForPrompt = null;
+    if (action === 'choice') compositionResourcesForPrompt = await buildCompositionResourcesForCharacter({ base44, character, session });
 
     const activeEffectsTruth = evaluateActiveEffects({ character, session });
     const activeEffectsLine = activeEffectsTruth.active.length
@@ -441,7 +456,7 @@ ${adultToneInstruction}
 
 Write 2-3 vivid, immersive paragraphs. Provide exactly 4 new choices in the structured "choices" field ONLY. Every choice MUST carry action_type; only skill_check choices may carry skill_check and dc, while weapon_attack choices carry target_ref, weapon_hint, attack_mode, declared_attack_count, and intent inside weapon_attack. Honor any skill check outcomes exactly. Make narrated HP changes, loot, and alignment shifts match the structured fields precisely. For a concrete item gained by the CURRENT action, set current_recovery to an exact structured object: {type:"arrows", quantity:1-20} or {type:"item", item:{item_id?, name, quantity, stackable, category, rarity, description, source}}. Otherwise current_recovery must be null. Never claim that an item was found or recovered unless current_recovery is exact and the authoritative check succeeded. A choice that genuinely recovers arrows must include structured recovery {type:"arrows", quantity:1-20}; otherwise recovery must be null. Never emit a recovery object with quantity 0. For completed crafting, set crafting_outcome with an exact recipe_id, completed:true, time_minutes, tool provenance, exact yield_quantity, mechanically_identical, output ammunition identity/compatibility, ingredient quantities and inventory or scene-resource provenance. A passed check alone is progress, not an award. If any recipe, yield, ingredient, tool, time, or provenance fact is absent, crafting_outcome must be null and narration must not say ammunition was received, completed, or added.
 
-SPELL-IMBUED PROJECTILE CONTRACT: When composing a weapon_attack choice that mentions a spell-imbued projectile (e.g. "silence-imbued arrow"), the spell auto-anchors to the target_ref's position as a point-area effect. This is mechanically legal: the spell targets the point where the creature stands, not the projectile itself. Always set weapon_attack.target_ref to the creature being attacked. Never describe a spell as attached to a moving arrow, bolt, or projectile — phrase it as casting the spell centered on the target's position, then firing. Ensure the target is within the spell's range (120 feet for Silence). If the character is concentrating on another spell (e.g. Pass without Trace), casting a new concentration spell ends the prior one — note this in the choice text so the player understands the concentration swap.
+${compositionResourceLine(compositionResourcesForPrompt)} For a combined spell-then-attack option, phrase it as casting the spell centered on the target's position, then firing, and set weapon_attack.target_ref to the creature being attacked. Ensure the target is within the spell's range (120 feet for Silence). If the character is concentrating on another spell (e.g. Pass without Trace), casting a new concentration spell ends the prior one — note this in the choice text so the player understands the concentration swap.
 
 CONDITION CONTRACT: condition_update is ONLY for a real mechanical status affecting the PLAYER CHARACTER. Set target to "player" only when the player is actually affected; use "other" for an enemy/NPC effect and "none" when no player condition changes. Never use placeholder labels such as "None", "Normal", or "N/A". Use the remove field when a prior player condition ends. Choose duration "scene", "combat", or "persistent" accurately. Enemy conditions that begin combat belong in that enemy's starting_conditions, never on the player.
 
@@ -571,6 +586,14 @@ Write a gripping 1-2 paragraph combat narrative.`;
     const finalInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
     if (!finalInvariant.ok) return Response.json({ error: finalInvariant.error, invalid: true, writes: 0 }, { status: 409 });
     result = finalInvariant.result;
+    // Composition-time filter: strip every option that cannot execute
+    // end-to-end with authoritative state (slots, concentration, known/
+    // prepared spells, ammunition, targeting phrasing).
+    if (Array.isArray(result.choices) && result.choices.length && (action === 'choice' || action === 'start')) {
+      const composed = validateComposedChoices(result.choices, await buildCompositionResourcesForCharacter({ base44, character, session }));
+      if (composed.rejected.length) console.warn('Choice composition filtered illegal options', JSON.stringify({ request_id: storyRequestId, action, rejected: composed.rejected }));
+      result = { ...result, choices: composed.valid_choices, choice_composition: { version: CHOICE_COMPOSITION_VALIDATION_VERSION, rejected: composed.rejected } };
+    }
     if (action === 'choice' && storyRequestId && !authoritativeStow?.success) {
       const narratedStow = await resolveNarratedStowCandidate({ base44, ownerId: user.id, sessionId: session_id, characterId: character.id, requestId: storyRequestId, candidate: result, check: authoritativeChoiceContext?.check });
       if (narratedStow.status >= 400) return Response.json(narratedStow.body, { status: narratedStow.status });
