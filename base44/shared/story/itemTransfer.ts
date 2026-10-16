@@ -1,8 +1,8 @@
-export const ITEM_TRANSFER_VERSION = 'authoritative-item-transfer-v1.0.0';
+export const ITEM_TRANSFER_VERSION = 'authoritative-item-transfer-v1.1.0';
 export const ITEM_TRANSFER_RECEIPTS_KEY = '__item_transfer_receipts';
 
 const normalize = (value) => String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-const TRANSFER_VERB = /\b(retrieve|retrieves|retrieved|take|takes|took|pull|pulls|pulled|remove|removes|removed|place|places|placed|put|puts|secure|secures|secured|inter|inters|interred|bury|buries|buried|leave|leaves|left|deposit|deposits|deposited|transfer|transfers|transferred|give|gives|gave|drop|drops|dropped|offer|offers|offered)\b/i;
+const TRANSFER_VERB = /\b(retrieve|retrieves|retrieved|take|takes|took|pull|pulls|pulled|remove|removes|removed|empty|empties|emptied|emptying|place|places|placed|put|puts|secure|secures|secured|inter|inters|interred|bury|buries|buried|leave|leaves|left|deposit|deposits|deposited|transfer|transfers|transferred|give|gives|gave|drop|drops|dropped|offer|offers|offered)\b/i;
 const SOURCE_CONTAINER = /\b(?:out of|from)\s+(?:the\s+|my\s+)?(bag of holding|bag|backpack|pack|satchel|pouch|case|container|tomb|grave|ground)\b/i;
 const DESTINATION = /\b(?:into|inside|within|in|to|at)\s+(?:the\s+|a\s+|an\s+|my\s+)?([^,.]+?)(?:\s+for\b|\s+so\b|\s+before\b|\s+after\b|[,.]|$)/i;
 const INSPECTION_ONLY = /\b(?:look|inspect|examine|study|read)\b/i;
@@ -18,7 +18,7 @@ export function classifyItemTransferIntent(actionText) {
   if (!verb) return null;
   const source = text.match(SOURCE_CONTAINER);
   const destination = text.slice(verb.index + verb[0].length).match(DESTINATION);
-  const retrieval = !!source && /retrieve|take|took|pull|remove/i.test(verb[0]);
+  const retrieval = !!source && /retrieve|take|took|pull|remove|empty/i.test(verb[0]);
   if (retrieval) {
     const itemPhrase = text.slice(verb.index + verb[0].length, source.index).replace(/^\s*(?:the|a|an|my|his|her|their)\s+/i, '').trim();
     if (!itemPhrase || (INSPECTION_ONLY.test(text) && !/inventory|carry|keep on me/i.test(text))) return null;
@@ -27,7 +27,10 @@ export function classifyItemTransferIntent(actionText) {
   // Retrieval verbs ("take", "pull", "remove") without a source container are
   // NOT world-transfers — "take the staff and use it to invert polarity" is an
   // action verb, not a placement. Only explicit placement verbs ("place",
-  // "put", "drop", "leave", etc.) qualify for world-transfer.
+  // "put", "drop", "leave", etc.) qualify for world-transfer. "empty" is the
+  // exception: its grammar is inherently a transfer ("empty X into Y"), so it
+  // proceeds to the placement branch whenever a destination is present and
+  // returns null otherwise (no destination word matches).
   if (!source && /\b(?:retrieve|retrieves|retrieved|take|takes|took|pull|pulls|pulled|remove|removes|removed)\b/i.test(verb[0])) return null;
   if (!destination) return null;
   const destinationName = destination[1].replace(/\s+/g, ' ').trim();
