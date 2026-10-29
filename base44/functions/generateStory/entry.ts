@@ -10,6 +10,7 @@ import { executePwtCompoundAction } from '../../shared/story/compoundPwtAction.t
 import { executeLongRestStoryAction } from '../../shared/story/longRestStoryAction.ts';
 import { executeThrownWeaponAction, recoverThrownWeapon } from '../../shared/story/thrownWeaponAction.ts';
 import { classifyNarrativeRangedAttackIntent, classifyPrecisionAmbushIntent, normalizePendingAmbushRoster, pendingAmbushNarrative, pendingNarrativeRangedAttack, stripGeneratedChoiceAnnotations } from '../../shared/story/generatedChoiceIntent.js';
+import { enforceExplicitAttackTransition, explicitAttackClarification, EXPLICIT_ATTACK_TRANSITION_VERSION } from '../../shared/story/explicitAttackTransition.ts';
 import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkillCheck.ts';
 import { matchPersistedStorySkillReceipt, STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION } from '../../shared/story/storySkillReceiptCompatibility.ts';
 import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
@@ -586,6 +587,22 @@ Write a gripping 1-2 paragraph combat narrative.`;
     const finalInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
     if (!finalInvariant.ok) return Response.json({ error: finalInvariant.error, invalid: true, writes: 0 }, { status: 409 });
     result = finalInvariant.result;
+    // Explicit attack contract: an attack the player declares on established
+    // hostiles must open structured combat (initiative, CombatLog, HP) or return
+    // exactly ONE clarification. It runs only after every authoritative cast or
+    // attack path has had its turn, so it governs only turns that would otherwise
+    // resolve a live fight as prose. Narration here never mints HP, XP or loot.
+    const attackGateSkip = !!(narrativeRangedIntent || ambushIntent || authoritativeWeaponAction || result.authoritative_weapon_attack || authoritativeSpellCast
+      || session.in_combat || completedCombat || selectedChoiceContract.action_type === 'weapon_attack');
+    if (action === 'choice' && !attackGateSkip) {
+      const attackTransition = await enforceExplicitAttackTransition({
+        actionText: selectedChoice || custom_input, session, candidate: result,
+        regenerate: (instruction) => generateNarrative(`${prompt}\n\n${instruction}`),
+        finalize: (retry) => finalizeGeneratedStoryResult(retry, { location: retry?.location_update || session.current_location || 'the current area', requestId: storyRequestId, previousChoices: hydrateLatestStoryEntry(session).choices }),
+      });
+      if (attackTransition.blocked) return Response.json(explicitAttackClarification(attackTransition.intent, attackTransition.gate), { status: 409 });
+      if (attackTransition.applied) result = attackTransition.candidate;
+    }
     // Composition-time filter: strip every option that cannot execute
     // end-to-end with authoritative state (slots, concentration, known/
     // prepared spells, ammunition, targeting phrasing).
@@ -829,7 +846,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...result, ...finished.body, ...(narratedLoot?.applied ? { narrated_loot: narratedLoot } : {}), ...(narratedDepletion?.applied ? { narrated_depletion: narratedDepletion } : {}) };
     }
 
-    return Response.json({ ...result, failed_check_continuation_version:FAILED_CHECK_CONTINUATION_VERSION, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), narrated_depletion_version: NARRATED_DEPLETION_VERSION, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION, imbued_projectile_spell_version: IMBUED_PROJECTILE_SPELL_VERSION, ...(imbuedProjectileCast ? { imbued_projectile_cast: { spell_name: imbuedProjectileCast.spell_name, slot_level: imbuedProjectileCast.slot_level, target_anchor: selectedChoiceContract.weapon_attack?.target_ref } } : {}) });
+    return Response.json({ ...result, failed_check_continuation_version:FAILED_CHECK_CONTINUATION_VERSION, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), narrated_depletion_version: NARRATED_DEPLETION_VERSION, explicit_attack_transition_version: EXPLICIT_ATTACK_TRANSITION_VERSION, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION, imbued_projectile_spell_version: IMBUED_PROJECTILE_SPELL_VERSION, ...(imbuedProjectileCast ? { imbued_projectile_cast: { spell_name: imbuedProjectileCast.spell_name, slot_level: imbuedProjectileCast.slot_level, target_anchor: selectedChoiceContract.weapon_attack?.target_ref } } : {}) });
 
   } catch (error) {
     console.error('Story generation error:', error);
