@@ -20,6 +20,7 @@ import { generatedRecoveryDiagnostics, GENERATED_RECOVERY_RESOLUTION_VERSION, re
 import { guardAndCommitNarratedRecovery } from '../../shared/story/storyRecoveryGuard.ts';
 import { canonicalStoryResponsePayload, commitStoryTransition, hashStoryValue, hydrateLatestStoryEntry, storyPayloadFromCommit, STORY_TRANSITION_VERSION } from '../../shared/story/storyTransition.ts';
 import { buildGameHydration, finalizeGeneratedStoryResult } from '../../shared/story/storyBootstrap.ts';
+import { checkStorySceneRevision, STORY_SCENE_REVISION_VERSION } from '../../shared/story/storySceneRevision.ts';
 import { validateComposedChoice, validateComposedChoices, buildCompositionResourcesForCharacter, compositionResourceLine, CHOICE_COMPOSITION_VALIDATION_VERSION } from '../../shared/story/choiceCompositionValidation.ts';
 import { canonicalStoryStealthedCondition, classifyStealthSetupIntent, STEALTH_SETUP_HANDOFF_VERSION, withCanonicalStoryStealthed } from '../../shared/story/stealthSetupHandoff.ts';
 import { executeAuthoritativeShortWait, SHORT_WAIT_VERSION } from '../../shared/story/shortWait.ts';
@@ -72,7 +73,7 @@ export default async function(req) {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { session_id, action, choice_index, choice_text: rawChoiceText, custom_input: rawCustomInput, choice_context: incomingChoiceContext, request_id, story_sequence } = await req.json();
+    const { session_id, action, choice_index, choice_text: rawChoiceText, custom_input: rawCustomInput, choice_context: incomingChoiceContext, request_id, story_sequence, source_entry_request_id } = await req.json();
     const checkedInput = validatePlayerText(rawCustomInput || '', true), checkedChoice = validatePlayerText(rawChoiceText || '', true);
     if (!checkedInput.ok || !checkedChoice.ok) return Response.json({ error: checkedInput.error || checkedChoice.error, writes: 0 }, { status: 400 });
     const custom_input = checkedInput.text, choice_text = checkedChoice.text;
@@ -100,6 +101,14 @@ export default async function(req) {
       const existingOpening = hydrateLatestStoryEntry(session);
       if (existingOpening.text && existingOpening.choices.length >= 4) return Response.json({ narrative: existingOpening.text, choices: existingOpening.choices, ...storyPayloadFromCommit({ entry: existingOpening.entry, index: existingOpening.index, persistence_confirmed: true }), persistence_confirmed: true, already_processed: true });
     }
+    // Revision lock: a clicked option carries the request_id of the entry whose list
+    // the player actually rendered. If the scene has advanced since, the click acts on
+    // a stale screen, so it is rejected zero-write with a refresh instruction instead
+    // of being resolved against whatever the newest options happen to be. This runs
+    // AFTER replay detection so a legitimate retry of the committed request still
+    // replays, and BEFORE any cast, stow, transfer, award or generation dispatch.
+    const sceneRevision = checkStorySceneRevision({ action, choiceIndex: choice_index, choiceText: rawChoiceText, sourceEntryRequestId: source_entry_request_id, session });
+    if (!sceneRevision.ok) return Response.json(sceneRevision.body, { status: sceneRevision.status });
     let authoritativeChoiceContext = incomingChoiceContext && typeof incomingChoiceContext === 'object' ? incomingChoiceContext : {};
     if (action === 'choice' && authoritativeChoiceContext?.check?.raw_d20 != null) {
       const incomingCheck = authoritativeChoiceContext.check;
@@ -577,7 +586,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...recoveryResolution.result, recovery_diagnostics: { parser_version:recoveryResolution.parser_version, classification:recoveryResolution.classification, attempts:recoveryResolution.attempts, fallback_used:!!recoveryResolution.fallback_used } };
       console.info('Story recovery resolution', JSON.stringify({ request_id:storyRequestId, ...recoveryResolution, result:undefined }));
     }
-    result = finalizeGeneratedStoryResult(result, { location: result?.location_update || session.current_location || 'the current area', requestId: storyRequestId, previousChoices: hydrateLatestStoryEntry(session).choices });
+    result = finalizeGeneratedStoryResult(result, { location: result?.location_update || session.current_location || 'the current area', requestId: storyRequestId, previousChoices: hydrateLatestStoryEntry(session).choices, lastPlayerAction: selectedChoice || custom_input });
     const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
     if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0, parser_version:NARRATED_RECOVERY_PARSER_VERSION, recovery_diagnostics:result.recovery_diagnostics }, { status: 409 });
     result = skillInvariant.result;
@@ -601,7 +610,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       const attackTransition = await enforceExplicitAttackTransition({
         actionText: selectedChoice || custom_input, session, candidate: result,
         regenerate: (instruction) => generateNarrative(`${prompt}\n\n${instruction}`),
-        finalize: (retry) => finalizeGeneratedStoryResult(retry, { location: retry?.location_update || session.current_location || 'the current area', requestId: storyRequestId, previousChoices: hydrateLatestStoryEntry(session).choices }),
+        finalize: (retry) => finalizeGeneratedStoryResult(retry, { location: retry?.location_update || session.current_location || 'the current area', requestId: storyRequestId, previousChoices: hydrateLatestStoryEntry(session).choices, lastPlayerAction: selectedChoice || custom_input }),
       });
       if (attackTransition.blocked) return Response.json(explicitAttackClarification(attackTransition.intent, attackTransition.gate), { status: 409 });
       if (attackTransition.applied) result = attackTransition.candidate;
@@ -655,7 +664,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       const persistedStorySequence = Number(commitSession?.world_state?.__story_transition_sequence || 0);
       if (incomingStorySequence > 0 && persistedStorySequence > incomingStorySequence) return Response.json({ error: 'A newer story transition is already committed.', superseded: true, writes: 0, transition_version: STORY_TRANSITION_VERSION }, { status: 409 });
       const immediatelyPreceding = hydrateLatestStoryEntry(commitSession);
-      result = finalizeGeneratedStoryResult(result, { location: result?.location_update || commitSession.current_location || 'the current area', requestId: storyRequestId, previousChoices: immediatelyPreceding.choices });
+      result = finalizeGeneratedStoryResult(result, { location: result?.location_update || commitSession.current_location || 'the current area', requestId: storyRequestId, previousChoices: immediatelyPreceding.choices, lastPlayerAction: selectedChoice || custom_input });
       const skillCheck = authoritativeChoiceContext?.check?.raw_d20 != null ? authoritativeChoiceContext.check : null;
       const previousChoiceHash = await hashStoryValue(immediatelyPreceding.choices);
       const currentChoiceHash = await hashStoryValue(result.choices);
@@ -774,7 +783,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       result = { ...result, ...finished.body, ...(narratedLoot?.applied ? { narrated_loot: narratedLoot } : {}), ...(narratedDepletion?.applied ? { narrated_depletion: narratedDepletion } : {}) };
     }
 
-    return Response.json({ ...result, failed_check_continuation_version:FAILED_CHECK_CONTINUATION_VERSION, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), narrated_depletion_version: NARRATED_DEPLETION_VERSION, explicit_attack_transition_version: EXPLICIT_ATTACK_TRANSITION_VERSION, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION, imbued_projectile_spell_version: IMBUED_PROJECTILE_SPELL_VERSION, ...(imbuedProjectileCast ? { imbued_projectile_cast: { spell_name: imbuedProjectileCast.spell_name, slot_level: imbuedProjectileCast.slot_level, target_anchor: selectedChoiceContract.weapon_attack?.target_ref } } : {}) });
+    return Response.json({ ...result, failed_check_continuation_version:FAILED_CHECK_CONTINUATION_VERSION, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), narrated_depletion_version: NARRATED_DEPLETION_VERSION, explicit_attack_transition_version: EXPLICIT_ATTACK_TRANSITION_VERSION, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION, story_scene_revision_version: STORY_SCENE_REVISION_VERSION, imbued_projectile_spell_version: IMBUED_PROJECTILE_SPELL_VERSION, ...(imbuedProjectileCast ? { imbued_projectile_cast: { spell_name: imbuedProjectileCast.spell_name, slot_level: imbuedProjectileCast.slot_level, target_anchor: selectedChoiceContract.weapon_attack?.target_ref } } : {}) });
 
   } catch (error) {
     console.error('Story generation error:', error);

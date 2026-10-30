@@ -389,6 +389,7 @@ export default function Game() {
         choice_text: choice.text,
         request_id: requestId,
         story_sequence: Date.now() * 1000 + storySequence,
+        source_entry_request_id: hydrateLatestStoryEntry(session).request_id || null, // revision the click was rendered from; server rejects a mismatch zero-write
         choice_context: { action_type: choice.action_type, check: skillReceipt || { success: skillSuccess === true }, recovery: choice.recovery || null, weapon_attack: choice.action_type === 'weapon_attack' ? choice.weapon_attack : buildThrownWeaponContext(choice.text, character, skillSuccess !== false), ambush_intent: classifyPrecisionAmbushIntent(choice.text), ...(rollSubmission ? { roll_submission: rollSubmission } : {}) },
         custom_input: (choice.skill_check
           ? `${choice.text} [Skill Check: ${choice.skill_check} DC${choice.dc} — ${skillSuccess ? 'SUCCESS' : 'FAILURE'}${skillReceipt ? ` (d20 ${skillReceipt.raw_d20} + base ${skillReceipt.modifier_breakdown.base_skill} + effects ${skillReceipt.modifier_breakdown.effect_bonus} = ${skillReceipt.final_total})` : ''}]`
