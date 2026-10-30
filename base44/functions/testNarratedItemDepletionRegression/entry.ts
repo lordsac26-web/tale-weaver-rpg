@@ -46,7 +46,7 @@ export default async function(req) {
   // We can't easily mock base44 here, so test the extraction + matching logic.
   // If the item isn't in the character's inventory/stowed, it should not deplete.
   // This is covered by findOwnedItem returning null and ownedDepletions being empty.
-  assert('version constant exported', NARRATED_DEPLETION_VERSION === 'narrated-depletion-v1.0.0');
+  assert('version constant exported', NARRATED_DEPLETION_VERSION === 'narrated-depletion-v2.0.0');
 
   // Test 10: extractNarratedDepletions — "return the amulet to the priest"
   const dep10 = extractNarratedDepletions('You return the silver amulet to the high priest with a bow.');

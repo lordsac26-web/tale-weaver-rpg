@@ -6,8 +6,28 @@ export const dispositionIdentity = item => String(item?.instance_id || item?.ite
 export const dispositionHash = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value ?? null))))).map(x => x.toString(16).padStart(2, '0')).join('');
 export const ownedDispositionItems = character => ['inventory', 'stowed_items'].flatMap(source => (character?.[source] || []).map((item, index) => ({ item, source, index, ref: `${source}:${index}` })).filter(x => Number(x.item.quantity ?? 1) > 0));
 const aliases = item => [...new Set([item.name, ...(item.aliases || []), /\b(staff|head|dagger|sword|vial|potion|orb|amulet|ledger|medallion)\b/i.exec(item.name || '')?.[1]].filter(Boolean).map(normDispositionName))];
-export const dispositionNameMatches = (item, text) => aliases(item).some(a => a && (` ${normDispositionName(text)} `).includes(` ${a} `));
+const DETERMINERS = new Set(['the', 'a', 'an', 'my', 'your', 'his', 'her', 'their', 'its', 'this', 'that', 'these', 'those']);
+const SOURCE_PREPOSITIONS = new Set(['from', 'out', 'inside', 'within', 'in']);
+// "from the Bag of Holding" names the container an item came OUT of, so the
+// container is never the thing being disposed of.
+const mentionedAsSourceOnly = (text, phrase) => {
+  const words = normDispositionName(text).split(' ').filter(Boolean), target = phrase.split(' ').filter(Boolean), hits = [];
+  if (!target.length) return false;
+  for (let i = 0; i + target.length <= words.length; i += 1) if (target.every((word, offset) => words[i + offset] === word)) hits.push(i);
+  if (!hits.length) return false;
+  return hits.every(index => {
+    let before = index - 1;
+    while (before >= 0 && DETERMINERS.has(words[before])) before -= 1;
+    return before >= 0 && SOURCE_PREPOSITIONS.has(words[before]);
+  });
+};
+export const dispositionNameMatches = (item, text) => {
+  const matched = aliases(item).filter(a => a && (` ${normDispositionName(text)} `).includes(` ${a} `));
+  return matched.length > 0 && !matched.every(a => mentionedAsSourceOnly(text, a));
+};
 const removal = /\b(?:drop(?:s|ped|ping)?|discard(?:s|ed|ing)?|abandon(?:s|ed|ing)?|left behind|leav(?:e|es|ing)\b[^.!?]*\bbehind|give|gives|gave|giving|hand(?:s|ed|ing)?|entrust(?:s|ed|ing)?|surrender(?:s|ed)?|sell|sold|sacrifice(?:s|d)?|destroy(?:s|ed|ing)?|shatter(?:s|ed|ing)?|smash(?:es|ed|ing)?|burn(?:s|ed|ing)?|consume(?:s|d|ing)?|swallow(?:s|ed|ing)?|drink|drinks|drank|drunk|eat|eats|ate|devour(?:s|ed)?|disintegrat(?:e|es|ed)|expend(?:s|ed)?|used up)\b/i;
+// "in your hands", "his hand" is anatomy, never a transfer verb.
+const withoutBodyParts = text => String(text || '').replace(/\b(?:your|my|his|her|their|its|the)\s+hands?\b/gi, ' ');
 const hypothetical = /\b(?:if|could|would|might|may|should|will|intend|plan|try|attempt|almost|not|never|cannot|can't|doesn't|didn't|without)\b/i;
 const outcome = text => /\b(?:consume|consumes|consumed|swallow|swallows|swallowed|drink|drinks|drank|drunk|eat|eats|ate|devour|expended|used up)\b/i.test(text) ? 'consumed' : /\b(?:destroy|destroys|destroyed|shatter|shatters|shattered|smash|smashed|burn|burned|disintegrate|disintegrated|sacrifice|sacrificed)\b/i.test(text) ? 'destroyed' : /\b(?:give|gives|gave|hand|hands|handed|entrust|entrusts|entrusted|surrender|sell|sold)\b/i.test(text) ? 'given' : 'dropped';
 const destination = text => text.match(/\b(?:onto|on|at|into|to|before|within)\s+([^.!?;]+?)(?:,|$)/i)?.[1]?.trim() || 'the scene';
@@ -17,7 +37,7 @@ const destination = text => text.match(/\b(?:onto|on|at|into|to|before|within)\s
 export function inferDispositionClaims(character, narrative) {
   const found = [];
   for (const quote of String(narrative || '').match(/[^.!?]+[.!?]?/g) || []) {
-    if (!removal.test(quote) || hypothetical.test(quote)) continue;
+    if (!removal.test(withoutBodyParts(quote)) || hypothetical.test(quote)) continue;
     const candidates = ownedDispositionItems(character).filter(x => dispositionNameMatches(x.item, quote));
     if (!candidates.length) continue;
     for (const c of candidates) {
@@ -72,5 +92,5 @@ export function projectDispositionDelta(character, records) {
 
 export function dispositionWorldItem(record) {
   const terminal = !record.retrievable;
-  return { ...record.item_snapshot, item_id: record.item_id, quantity: record.quantity, container: record.destination, location: record.location, status: terminal ? record.disposition : record.item_snapshot.status || 'placed', world_status: terminal ? record.disposition : 'placed', retrievable: record.retrievable, disposition_receipt_id: record.receipt_id, disposition_provenance: record };
+  return { ...record.item_snapshot, item_id: record.item_id, item_name: record.item_name, quantity: record.quantity, container: record.destination, location: record.location, status: terminal ? record.disposition : record.item_snapshot.status || 'placed', world_status: terminal ? record.disposition : 'placed', retrievable: record.retrievable, disposition_receipt_id: record.receipt_id, disposition_provenance: record };
 }
