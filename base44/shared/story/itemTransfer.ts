@@ -46,7 +46,7 @@ export function resolveItemTransferTarget(character, session, itemPhrase) {
   const sources = [
     ...(character?.stowed_items || []).map((item, index) => ({ item, index, source: 'stowed_items' })),
     ...(character?.inventory || []).map((item, index) => ({ item, index, source: 'inventory' })),
-    ...(session?.world_state?.world_items || []).map((item, index) => ({ item, index, source: 'world_items' })),
+    ...(session?.world_state?.world_items || []).map((item, index) => ({ item, index, source: 'world_items' })).filter(({ item }) => item.retrievable !== false && !['destroyed', 'consumed'].includes(item.world_status) && item.location === session.current_location),
   ];
   const matches = sources.map((entry) => {
     const itemTokens = tokens(entry.item?.name);

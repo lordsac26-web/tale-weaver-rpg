@@ -1,4 +1,5 @@
 import { canonicalAmmoName } from '../ammunition.ts';
+import { blockedDispositionAcquisition } from './itemDispositionPlan.ts';
 
 export const RECOVERABLE_LEDGER_KEY = '__recoverable_items';
 export const SPENT_ITEM_LEDGER_KEY = '__spent_item_ledger';
@@ -136,6 +137,7 @@ export async function executeRecoveryTransaction({ base44, ownerId = null, sessi
   let inventory = Array.isArray(character.inventory) ? character.inventory : [];
   const results = [];
   for (const request of work) {
+    if (blockedDispositionAcquisition(character, request.item)) return { status: 409, body: { applied: false, reason: 'item_was_destroyed_or_consumed', writes: 0 } };
     const applied = request.kind === 'anomaly' ? { ok: true, inventory, inventory_result: 'preexisting_missed_decrement_reconciled' } : request.kind === 'unique' ? applyUnique(inventory, request) : applyStack(inventory, request);
     if (!applied.ok) return { status: 409, body: { applied: false, reason: applied.reason, writes: 0 } };
     inventory = applied.inventory;

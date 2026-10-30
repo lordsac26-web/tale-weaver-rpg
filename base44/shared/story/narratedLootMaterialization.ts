@@ -1,4 +1,5 @@
 import { classifyNarratedAcquisitions } from './narratedStoryInventoryCommit.ts';
+import { dispositionNameMatches } from './itemDispositionPlan.ts';
 
 export const NARRATED_LOOT_VERSION = 'narrated-loot-v1.0.0';
 
@@ -105,7 +106,9 @@ export async function materializeNarratedLoot({ base44, sessionId, characterId, 
   if (!session || !character) return { applied: false, materialized: [], writes: 0 };
 
   // Filter out items that already exist in inventory or stowed_items
-  const newItems = loot.filter(item => !itemExists(character, item.name));
+  const newItems = loot.filter(item => !itemExists(character, item.name) && !(character.item_dispositions || []).some(r => dispositionNameMatches(r.item_snapshot, item.name)));
+  // Previously disposed identities must return through an explicit world-item
+  // retrieval, never through this prose-based add-only materializer.
   if (!newItems.length) return { applied: false, materialized: [], writes: 0 };
 
   // Determine if narration mentions Bag of Holding as destination

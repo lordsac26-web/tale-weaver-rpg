@@ -1,4 +1,5 @@
 import { canonicalStoryResponsePayload, hashStoryValue, storyPayloadFromCommit } from './storyTransition.ts';
+import { confirmItemDispositionReceipts } from './itemDispositionCommit.ts';
 
 export const STORY_PERSISTENCE_VERSION = 'story-persistence-v1.0.0';
 const failure = (reason, afterWrite = false) => ({ status: 409, body: { error: `Story persistence requires reconciliation: ${reason}. No new action was replayed.`, error_code: reason, persistence_confirmed: false, preserve_scene: true, partial_write_possible: afterWrite, writes: afterWrite ? null : 0, story_persistence_version: STORY_PERSISTENCE_VERSION } });
@@ -39,6 +40,7 @@ export async function finishStoryPersistence({ db, sessionId, requestId, expecte
   const staged = await confirmPersistedStoryPair({ readSession: () => db.entities.GameSession.get(sessionId), requestId, expectedHash, allowPending: true, afterWrite: true });
   if (staged.status !== 200) return staged;
   const entry = staged.body.story_entry;
+  if (!await confirmItemDispositionReceipts({ db, session: staged.session, entry })) return failure('item_disposition_receipt_missing', true);
   if (entry.mechanics_status === 'pending') {
     const story_log = staged.session.story_log.map(x => x.request_id === requestId ? { ...x, mechanics_status: 'complete' } : x);
     await db.entities.GameSession.update(sessionId, { story_log });

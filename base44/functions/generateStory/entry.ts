@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.57';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 import { resolveItemRecovery } from '../../shared/story/itemRecovery.ts';
 import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
@@ -39,7 +39,10 @@ import { resolveFailedCheckCandidate, resolveNarratedStowCandidate, FAILED_CHECK
 import { selectStoryChoice } from '../../shared/story/selectedStoryChoice.ts';
 import { confirmPersistedStoryPair, finishStoryPersistence } from '../../shared/story/storyPersistence.ts';
 import { materializeNarratedLoot } from '../../shared/story/narratedLootMaterialization.ts';
-import { materializeNarratedDepletion, NARRATED_DEPLETION_VERSION } from '../../shared/story/narratedItemDepletion.ts';
+import { NARRATED_DEPLETION_VERSION } from '../../shared/story/narratedItemDepletion.ts';
+import { prepareStoryDispositions } from '../../shared/story/storyDispositionGuard.ts';
+import { commitItemDispositions } from '../../shared/story/itemDispositionCommit.ts';
+import { applyStoryCharacterConsequences } from '../../shared/story/storyCharacterConsequences.ts';
 import { resolveStoryStowTransition } from '../../shared/story/storyStowTransition.ts';
 import { validatePlayerText } from '../../shared/story/playerText.ts';
 import { SCENE_ENTITY_SCHEMA } from '../../shared/story/sceneEvidence.ts';
@@ -61,7 +64,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.14.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.15.0';
 
 export default async function(req) {
   try {
@@ -645,6 +648,9 @@ Write a gripping 1-2 paragraph combat narrative.`;
 
     if (result.narrative) {
       const commitSession = storyRequestId ? await base44.asServiceRole.entities.GameSession.get(session_id) : session;
+      const dispositionCharacter = await base44.asServiceRole.entities.Character.get(character.id);
+      const dispositionPlan = await prepareStoryDispositions({ base44, character: dispositionCharacter, session: commitSession, requestId: storyRequestId, narrative: result.narrative, check: authoritativeChoiceContext?.check, location: result.location_update || commitSession.current_location });
+      if (!dispositionPlan.ok) return Response.json({ error: dispositionPlan.error, error_code: 'item_disposition_refused', preserve_scene: true, persistence_confirmed: false }, { status: 409 });
       const incomingStorySequence = Number(story_sequence || 0);
       const persistedStorySequence = Number(commitSession?.world_state?.__story_transition_sequence || 0);
       if (incomingStorySequence > 0 && persistedStorySequence > incomingStorySequence) return Response.json({ error: 'A newer story transition is already committed.', superseded: true, writes: 0, transition_version: STORY_TRANSITION_VERSION }, { status: 409 });
@@ -659,6 +665,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
         ...(storyRequestId ? { request_id: storyRequestId } : {}),
         player_choice: action === 'choice' ? selectedChoice : (custom_input ?? choice_index),
         text: result.narrative, choices: result.choices, mechanics_status: 'pending',
+        item_disposition_plan: dispositionPlan, generate_story_version: GENERATE_STORY_VERSION,
         transition_outcome: { combat_trigger: !!result.combat_trigger, enemies: result.enemies || [], hp_change: result.hp_change || 0, xp_earned: result.xp_earned || 0, combat_handoff: result.combat_handoff || null, pending_ambush_attack: result.pending_ambush_attack || null },
         ...(skillCheck ? { skill_check: skillCheck, skill_display: result.skill_display } : {}),
         choice_evidence: { previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash, guard: result.choice_guard },
@@ -753,93 +760,14 @@ Write a gripping 1-2 paragraph combat narrative.`;
       const staged = await confirmPersistedStoryPair({ readSession: () => base44.asServiceRole.entities.GameSession.get(session_id), requestId: storyRequestId || completedEntry.request_id || null, expectedHash: responsePayloadHash, allowPending: true, afterWrite: true });
       if (staged.status !== 200) return Response.json(staged.body, { status: staged.status });
 
-      // Target-aware character conditions. Enemy/NPC effects never belong on the
-      // Character record, and placeholders such as "None" are always discarded.
-      if (character) {
-        // Re-read the authoritative exhaustion level + conditions right before
-        // reconciling, so a long rest that reduced exhaustion to 0 (and cleared
-        // the Exhausted badge) during the LLM call is honored. Never keep or
-        // re-add a stale Exhausted/Exhaustion badge when the level is 0.
-        const freshChar = await base44.asServiceRole.entities.Character.get(character.id);
-        const authoritativeExhaustion = Number((freshChar || character).exhaustion_level || 0);
-        const originalConditions = Array.isArray((freshChar || character).conditions) ? (freshChar || character).conditions : [];
-        const incoming = result.condition_update && typeof result.condition_update === 'object'
-          ? result.condition_update
-          : { target: 'none', add: '', remove: [], duration: 'scene' };
-        const removals = new Set((Array.isArray(incoming.remove) ? incoming.remove : [])
-          .map(conditionKey).filter(Boolean));
-        const changingLocation = !!(result.location_update && result.location_update !== session.current_location);
-        const leavingCombat = action === 'choice' && !result.combat_trigger && !session.in_combat;
-        let nextConditions = originalConditions.filter(cond => {
-          const key = conditionKey(cond);
-          if (!validConditionName(cond) || removals.has(key)) return false;
-          // Exhausted is authoritative only when the mechanical exhaustion level is positive.
-          // Purge stale story badges left by earlier narrative turns.
-          if ((key === 'exhausted' || key === 'exhaustion') && authoritativeExhaustion <= 0) return false;
-          const duration = typeof cond === 'object' ? cond.duration : null;
-          if (duration === 'scene' && changingLocation) return false;
-          if (duration === 'combat' && leavingCombat) return false;
-          // Migrate old story-created temporary records that had no duration metadata.
-          if (!duration && typeof cond === 'object' && cond.source === 'story' && !session.in_combat && TEMPORARY_STORY_CONDITIONS.has(key)) return false;
-          return true;
-        });
-        if (stealthSetupIntent?.establishes_concealment) {
-          const stealthCondition=canonicalStoryStealthedCondition({characterId:character.id,sessionId:session_id,requestId:storyRequestId,receipt:authoritativeChoiceContext.check});
-          nextConditions=withCanonicalStoryStealthed(nextConditions,stealthCondition);
-        } else if (incoming.target === 'player' && validConditionName(incoming.add)) {
-          const name = canonicalStoryConditionName(conditionName(incoming.add));
-          const key = name.toLowerCase();
-          // Exhaustion is a mechanical level, not a free-form story badge. Never
-          // let narrative output add Exhausted while the authoritative level is 0.
-          const mechanicalExhaustion = authoritativeExhaustion;
-          const isInvalidExhaustionAdd = (key === 'exhausted' || key === 'exhaustion') && mechanicalExhaustion <= 0;
-          if (key === 'stealthed') {
-            let foundStealthed = false;
-            nextConditions = nextConditions.filter((cond) => {
-              if (conditionKey(cond) !== 'stealthed') return true;
-              if (foundStealthed) return false;
-              foundStealthed = true;
-              return true;
-            });
-          }
-          if (!isInvalidExhaustionAdd && !isPwt(name) && !nextConditions.some(cond => conditionKey(cond) === key)) {
-            const pwtAttributed = key === 'stealthed' && authoritativeChoiceContext?.check?.modifier_breakdown?.pwt_active === true;
-            nextConditions.push({
-              name, source: pwtAttributed ? 'Pass without Trace' : 'story', duration: incoming.duration || 'scene',
-              applied_at: new Date().toISOString(),
-              ...(pwtAttributed ? { caster_id: session.world_state?.active_concentration?.caster_id, target_id: character.id } : {})
-            });
-          }
-        }
-        nextConditions = normalizeStoryConditions(nextConditions);
-        if (JSON.stringify(nextConditions) !== JSON.stringify(originalConditions)) {
-          await base44.asServiceRole.entities.Character.update(character.id, { conditions: nextConditions });
-        }
-      }
-
-      // HP change
-      if (result.hp_change && character) {
-        const newHp = Math.max(0, Math.min(character.hp_max || 0, (character.hp_current || 0) + result.hp_change));
-        if (newHp !== character.hp_current) {
-          await base44.asServiceRole.entities.Character.update(character.id, { hp_current: newHp });
-        }
-      }
-
-      // XP earned — persist to the character record so progress and level-ups are real
-      if (result.xp_earned && character) {
-        await base44.asServiceRole.entities.Character.update(character.id, {
-          xp: (character.xp || 0) + result.xp_earned
-        });
-      }
+      const narratedDepletion = await commitItemDispositions({ db: base44.asServiceRole, sessionId: session_id, characterId: character.id, plan: dispositionPlan });
+      if (!narratedDepletion.ok) return Response.json(narratedDepletion.body, { status: narratedDepletion.status });
+      await applyStoryCharacterConsequences({ base44, character, session, sessionId: session_id, requestId: storyRequestId, result, action, stealthSetupIntent, choiceContext: authoritativeChoiceContext });
 
       // Narrated loot materialization — when narration declares that named
       // items have been physically taken/looted, materialize them into inventory
       // or stowed_items with story-log provenance. Non-destructive: adds only.
       const narratedLoot = await materializeNarratedLoot({ base44, sessionId: session_id, characterId: character.id, requestId: storyRequestId || completedEntry.request_id || null, narrative: completedEntry.text, storyIndex: committedTransition.index });
-      // Depletion mirror: if narration transfers an item OUT of the player's
-      // possession (give, entrust, drop, sell, leave behind), remove it from
-      // inventory/stowed and record it with the recipient in world state.
-      const narratedDepletion = await materializeNarratedDepletion({ base44, sessionId: session_id, characterId: character.id, requestId: storyRequestId || completedEntry.request_id || null, narrative: completedEntry.text, storyIndex: committedTransition.index });
 
       const finished = await finishStoryPersistence({ db: base44.asServiceRole, sessionId: session_id, requestId: storyRequestId || completedEntry.request_id || null, expectedHash: responsePayloadHash });
       if (finished.status !== 200) return Response.json(finished.body, { status: finished.status });

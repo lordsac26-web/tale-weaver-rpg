@@ -19,6 +19,8 @@
         "Dragonborn",
         "Aasimar",
         "Genasi",
+        "Aasimar",
+        "Genasi",
         "Goliath",
         "Firbolg",
         "Tabaxi",
@@ -185,6 +187,13 @@
         "type": "object"
       },
       "description": "Items stowed inside containers (e.g. Bag of Holding): {name, quantity, category, description, container, is_identified, stowed_at, stow_request_id, provenance: {source, story_request_id, acquired_at}}"
+    },
+    "item_dispositions": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Permanent possession-removal receipts and full original item snapshots. Written atomically with inventory/stowed deltas; never cleared by rests. Includes outcome, exact evidence quote, quantity, destination, location and recoverability."
     },
     "equipped": {
       "type": "object",

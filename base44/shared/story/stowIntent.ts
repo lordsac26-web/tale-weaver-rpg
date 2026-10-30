@@ -57,7 +57,7 @@ export function resolveStowTarget(character, itemPhrase, worldItems = []) {
     const nameTokens = scoredTokens(item?.name);
     const overlap = nameTokens.filter((token) => phraseTokens.includes(token)).length;
     return { item, index, name: String(item?.name || '').trim(), coverage: nameTokens.length ? overlap / nameTokens.length : 0, overlap };
-  }).filter((entry) => entry.overlap > 0 && (entry.coverage >= 0.5 || phraseTokens.includes(normalize(entry.name))));
+  }).filter((entry) => entry.item.retrievable !== false && !['destroyed', 'consumed'].includes(entry.item.world_status) && entry.overlap > 0 && (entry.coverage >= 0.5 || phraseTokens.includes(normalize(entry.name))));
   const worldDistinct = new Set(worldMatches.map((entry) => entry.name));
   if (worldMatches.length === 1 && worldDistinct.size === 1) return { kind: 'unique', item: worldMatches[0].item, index: worldMatches[0].index, source: 'world_items' };
   if (worldMatches.length > 1) return { kind: 'ambiguous', candidates: [...worldDistinct] };
@@ -137,6 +137,7 @@ export async function executeStowAction({ base44, ownerId = null, payload }) {
 
   if (resolution.kind === 'set') return commitCorpseStowSet({ base44, character: latestCharacter, session: latestSession, resolution, token, parsed: { ...parsed, original_action: payload.action_text }, abilities, receipts, version: STOW_INTENT_VERSION });
   const selected = resolution.item;
+  if (resolution.source === 'world_items' && (selected.retrievable === false || selected.location !== session.current_location)) return { status: 409, body: { handled: true, success: false, error: 'That item is not retrievable at this location.', writes: 0 } };
   // General fit validation applies to item stows too: recorded weight, or a
   // conservative canonical default, against the container's real capacity.
   const fit = validateContainerFit({ character, container: parsed.container, incoming: [selected] });
