@@ -34,7 +34,7 @@ import SkillCheckRollModal from '@/components/game/SkillCheckRollModal';
 import AskDMDialog from '@/components/game/AskDMDialog';
 import { canonicalSkillName } from '@/components/game/skillCheckResolver';
 import { buildThrownWeaponContext } from '@/lib/thrownWeaponIntent';
-import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '../../base44/shared/skills/authoritativeSkillModifier';
+import { buildSkillCheckReceipt, resolveAuthoritativeSkillModifier } from '@/lib/authoritativeSkillModifier';
 import { classifyPrecisionAmbushIntent, stripGeneratedChoiceAnnotations } from '../../base44/shared/story/generatedChoiceIntent';
 import { normalizeChoiceCheckDisplay } from '../../base44/shared/story/choiceCheckDisplay';
 import { normalizeChoiceActionContract, CHOICE_ACTION_FRONTEND_VERSION } from '../../base44/shared/story/choiceActionContract';

@@ -8,7 +8,7 @@ import { getSpellSlotsForLevel } from './spellData';
 import { ConditionTooltip } from './GameTooltip';
 import XPBar from './XPBar';
 import { deriveConditionBadges } from '../../../base44/shared/spells/conditionIdentity';
-import { getPeriodForHour } from '../../../base44/shared/story/worldClock';
+import { getPeriodForHour } from '@/lib/worldClock';
 import { evaluateActiveEffects } from '@/lib/activeEffects';
  
 export default function HUD({ character, session }) {
