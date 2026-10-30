@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { X, Moon, Coffee, Loader2, Heart, Zap, Flame, Shield, Plus, Minus, CheckCircle2, AlertTriangle } from 'lucide-react';
 import CampfireRestAnimation from './CampfireRestAnimation';
 import useCampRestFlow from './useCampRestFlow';
-import { CAMP_REST_TRANSITION_VERSION } from '../../../base44/shared/rest/campRestFlow';
+import { CAMP_REST_TRANSITION_VERSION } from '@/lib/game/campRestFlow';
 
 export default function RestModal({ character, sessionId, onClose, onRest, onBusyChange }) {
   const totalHitDice = character?.level || 1;

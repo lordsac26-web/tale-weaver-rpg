@@ -1,4 +1,4 @@
-import { formatAmmunitionProperty, formatAuthoritativeAmmoLabel } from '../../base44/shared/ammunitionFormat.js';
+import { formatAmmunitionProperty, formatAuthoritativeAmmoLabel } from './game/ammunitionFormat';
 
 const aliases = { arrows: 'Arrows', arrow: 'Arrows', bolts: 'Bolts', bolt: 'Bolts', 'crossbow bolts': 'Bolts', 'crossbow bolt': 'Bolts', 'sling bullets': 'Sling Bullets', 'sling bullet': 'Sling Bullets', bullets: 'Sling Bullets', bullet: 'Sling Bullets' };
 const units = { Arrows: 'arrow', Bolts: 'bolt', 'Sling Bullets': 'sling bullet' };

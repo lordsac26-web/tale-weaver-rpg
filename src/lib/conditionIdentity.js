@@ -20,6 +20,21 @@ const structuredScore = (entry, kind) => {
   return (kind === 'condition' ? 20 : 0) + (linked ? 40 : 0) + (timed ? 20 : 0) + (entry.concentration === true ? 10 : 0);
 };
 
+export function deriveConditionBadges(conditions = [], modifiers = []) {
+  const chosen = new Map();
+  const consider = (entry, kind, allowNew) => {
+    if (!entry) return;
+    const key = conditionIdentityKey(entry);
+    if (!key || (!allowNew && !chosen.has(key))) return;
+    const candidate = { entry, kind, key, score: structuredScore(entry, kind) };
+    const prior = chosen.get(key);
+    if (!prior || candidate.score > prior.score) chosen.set(key, candidate);
+  };
+  for (const condition of conditions || []) consider(condition, 'condition', true);
+  for (const modifier of modifiers || []) consider(modifier, 'modifier', false);
+  return [...chosen.values()].map(({ entry }) => entry);
+}
+
 export const preferStructuredCondition = (conditions = [], identity) => {
   const key = conditionIdentityKey(identity);
   return (conditions || []).filter((condition) => conditionIdentityKey(condition) === key)

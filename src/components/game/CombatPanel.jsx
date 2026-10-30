@@ -24,7 +24,7 @@ import SmiteSlotPicker from './SmiteSlotPicker';
 import CombatActWindow from './CombatActWindow';
 import SkillCheckRollModal from './SkillCheckRollModal';
 import { ammoStatusForWeapon } from '@/lib/ammunition';
-import { buildCombatRequestKey } from '../../../base44/shared/combat/combatFollowupTransition';
+import { buildCombatRequestKey } from '@/lib/game/combatFollowupTransition';
 
 export default function CombatPanel({ combat, character, rollMode = 'ai', onPlayerAttack, onNextTurn, onEndTurn, onFlee, loading, lastCombatEvent, onCharacterUpdate, onCombatAct, actEvaluating }) {
   const [selectedTarget, setSelectedTarget] = useState(null);

@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import { getSpellSlotsForLevel } from './spellData';
 import { ConditionTooltip } from './GameTooltip';
 import XPBar from './XPBar';
-import { deriveConditionBadges } from '../../../base44/shared/spells/conditionIdentity';
+import { deriveConditionBadges } from '@/lib/conditionIdentity';
 import { getPeriodForHour } from '@/lib/worldClock';
 import { evaluateActiveEffects } from '@/lib/activeEffects';
  

@@ -7,7 +7,7 @@ import VendorCard from '@/components/shop/VendorCard';
 import VendorShop from '@/components/shop/VendorShop';
 import MarketCurrency from '@/components/shop/MarketCurrency';
 import { AnimatePresence } from 'framer-motion';
-import { MARKET_UX_BUNDLE_VERSION } from '../../base44/shared/marketUxContract';
+import { MARKET_UX_BUNDLE_VERSION } from '@/lib/game/marketUxContract';
 
 export default function Market() {
   const navigate = useNavigate();

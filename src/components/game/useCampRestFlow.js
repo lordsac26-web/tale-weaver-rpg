@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { campRestReducer, createCampRestState, createRestSubmissionGate } from '../../../base44/shared/rest/campRestFlow';
+import { campRestReducer, createCampRestState, createRestSubmissionGate } from '@/lib/game/campRestFlow';
 
 export default function useCampRestFlow({ sessionId, maxHitDice, onRest, onClose, onBusyChange }) {
   const [state, dispatch] = useReducer(campRestReducer, undefined, createCampRestState);

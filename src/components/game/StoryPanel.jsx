@@ -5,7 +5,7 @@ import SkillCheckResult from './SkillCheckResult';
 import MicButton from './MicButton';
 import { stopAllNarration } from './narrationControl';
 import { stripEmbeddedChoices } from './stripEmbeddedChoices';
-import { normalizeChoiceCheckDisplay } from '../../../base44/shared/story/choiceCheckDisplay';
+import { normalizeChoiceCheckDisplay } from '@/lib/game/choiceCheckDisplay';
 import AskDMDialog from './AskDMDialog';
 import StowClarificationCard from '@/components/game/StowClarificationCard';
 import PlayerTextLimit from '@/components/game/PlayerTextLimit';

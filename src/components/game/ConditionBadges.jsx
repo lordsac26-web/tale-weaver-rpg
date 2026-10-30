@@ -1,6 +1,6 @@
 import React from 'react';
 import { getConditionEffect, conditionKey } from './conditionEffects';
-import { deriveConditionBadges } from '../../../base44/shared/spells/conditionIdentity';
+import { deriveConditionBadges } from '@/lib/conditionIdentity';
 import {
   Tooltip,
   TooltipContent,
