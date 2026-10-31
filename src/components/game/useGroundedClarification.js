@@ -18,7 +18,17 @@ export default function useGroundedClarification({ sessionId, characterId, onRes
     try {
       const result = await base44.functions.invoke('evaluatePlayerAction', { session_id: sessionId, character_id: characterId, action: state.original.action,
         answer_text: checked.text, expected_scene_revision: state.data.grounded_action?.scene_revision, request_id: state.original.request_id });
-      if (result.data?.clarification_required) { setState(s => ({ ...s, data: result.data })); return false; }
+      if (result.data?.clarification_required) {
+        // A reply that still cannot identify one saved object used to replace the card
+        // with an identical one, which read as "Reply did nothing". Say so explicitly
+        // and keep the reply so the player can pick one of the offered names.
+        const repeated = String(result.data.reasoning || '') === String(state.data.reasoning || '');
+        setState(s => ({ ...s, data: result.data, reply }));
+        setError(repeated
+          ? 'That reply still does not name one saved object, so nothing was changed. Choose one of the offered names above, or answer with the exact name shown.'
+          : '');
+        return false;
+      }
       onResolved(result.data); setState(null); return true;
     } catch (err) { setError(err?.response?.data?.error || err.message || 'Your reply is preserved. Please retry.'); return false; }
     finally { inFlight.current = false; setBusy(false); }
