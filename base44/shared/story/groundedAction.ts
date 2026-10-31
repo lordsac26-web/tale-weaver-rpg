@@ -5,6 +5,11 @@ const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim
 export const sceneInteractionIntent = text => !/\b(?:take down|attack|shoot|cast|invoke|rest|wait)\b/i.test(text || '') && /\b(?:inspect|examine|investigate|search|open|loot|take|pick up|drop|stow|put|place|remove|retrieve)\b/i.test(text || '');
 const infer = text => /\b(?:stow|put|place)\b/i.test(text) ? 'stow' : /\bopen\b/i.test(text) ? 'open' : /\bloot\b/i.test(text) ? 'loot' : /\b(?:take|pick up)\b/i.test(text) ? 'take' : /\bdrop\b/i.test(text) ? 'drop' : /\b(?:remove|retrieve)\b/i.test(text) ? 'remove' : 'inspect';
 const safeLabel = text => String(text || '').replace(/[\r\n]+/g, ' ').slice(0, 300);
+// A model that has nothing to report often writes the string "null" instead of a
+// blank. Read as a real value that becomes a phantom "which object do you mean"
+// question over an already unambiguous target.
+const PLACEHOLDER_LABELS = new Set(['', 'null', 'undefined', 'none', 'n/a', 'nan']);
+const cleanLabel = text => { const value = safeLabel(text).trim(); return PLACEHOLDER_LABELS.has(value.toLowerCase()) ? '' : value; };
 const PLACEMENT = new Set(['stow', 'drop']);
 const tokensOf = value => new Set(String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter(token => token.length > 2));
 const overlapOf = (left, right) => { const a = tokensOf(left), b = tokensOf(right); if (!a.size || !b.size) return 0; return [...a].filter(token => b.has(token)).length / Math.min(a.size, b.size); };
@@ -57,7 +62,10 @@ export async function resolveGroundedAction({ base44, session, character, action
   // question. The carried object is the target; the world object is its destination.
   const carriedMatches = matches.filter(x => x.place), sceneMatches = matches.filter(x => !x.place);
   const placement = PLACEMENT.has(intent) && carriedMatches.length === wantedCount && sceneMatches.length > 0 ? { carried: carriedMatches, destination: sceneMatches } : null;
-  const explicit = placement ? true : matches.length === wantedCount && matches.every(x => norm(text).includes(norm(x.id)) || norm(text).includes(norm(x.name)));
+  // Naming an object by one of its established aliases ("the weaver", "the body") is
+  // naming it — requiring the full record name would re-ask a question the player
+  // already answered.
+  const explicit = placement ? true : matches.length === wantedCount && matches.every(x => [x.id, x.name, ...(x.aliases || []), ...(x.player_aliases || [])].filter(Boolean).some(name => norm(text).includes(norm(name))));
   let proposal = placement
     ? { intent, target_ids: placement.carried.map(x => x.id), quantity: wantedCount, destination: placement.destination.map(groundedDisplayName).join(' / '), uncertainty: '' }
     : { intent, target_ids: matches.map(x => x.id), quantity: wantedCount, destination: '', uncertainty: '' };
@@ -73,14 +81,14 @@ export async function resolveGroundedAction({ base44, session, character, action
   const valid = OPS.includes(proposal.intent) && proposal.intent === intent && Array.isArray(ids) && ids.length > 0 && ids.length <= 8 && new Set(ids).size === ids.length && Number.isInteger(proposal.quantity) && proposal.quantity >= 1 && proposal.quantity <= 8 && ids.every(id => catalog.some(x => x.id === id));
   matches = valid ? ids.map(id => catalog.find(x => x.id === id)) : [];
   const deadRequired = intent === 'stow' && /\b(?:corpse|corpses|bodies|dead)\b/i.test(checked.text);
-  let uncertainty = proposal.uncertainty;
+  let uncertainty = cleanLabel(proposal.uncertainty);
   const clarificationOptions = buildClarificationOptions({ catalog, actionText: text });
   if (!valid || (wantedCount > 1 && matches.length !== wantedCount)) uncertainty = `Which ${wantedCount > 1 ? `${wantedCount} objects` : 'object'} do you mean${clarificationOptions.length ? `: ${clarificationOptions.map(option => option.name).join(', ')}` : '? I do not have a supported interactable identity here'}?`;
   if (deadRequired && matches.some(x => x.status !== 'dead')) uncertainty = 'I can connect the reference, but collapse or unconsciousness does not prove death. You can inspect the bodies; I will not mark them dead or move them as verified corpses.';
   if (matches.some(x => !x.place && ['loot', 'take', 'drop', 'remove'].includes(intent))) uncertainty = 'I can identify the scene object, but this transfer still needs a validated item/contents transaction. You can inspect it now; I will not promise unsupported loot or move it into inventory.';
   if (intent === 'stow' && matches.some(x => !x.place)) uncertainty = matches.some(x => x.status !== 'dead') ? 'That is a world object, not a carried inventory item. Inspect it first; a validated pickup must establish ownership before it can be stowed.' : 'The narration establishes these remains, but their validated container-transfer and fit evidence is not complete. No bodies have moved; inspect them rather than repeating the stow request.';
   if (intent === 'open' && matches.some(x => x.type !== 'container')) uncertainty = 'I can identify that object, but it has no supported opening interaction. You can inspect it instead.';
-  const plan = { version: context.version, session_id: session.id, scene_id: context.scene_id, scene_revision: context.revision, intent, target_ids: matches.map(x => x.id), quantity: proposal.quantity, destination: safeLabel(proposal.destination),
-    targets: matches.map(x => ({ ...x, display_name: groundedDisplayName(x) })), evidence: matches.map(x => x.evidence || { authority: 'owned_inventory', id: x.id, place: x.place }), mechanical_prerequisites: [], uncertainty: safeLabel(uncertainty), context_omitted_entries: context.omitted_entries };
+  const plan = { version: context.version, session_id: session.id, scene_id: context.scene_id, scene_revision: context.revision, intent, target_ids: matches.map(x => x.id), quantity: proposal.quantity, destination: cleanLabel(proposal.destination),
+    targets: matches.map(x => ({ ...x, display_name: groundedDisplayName(x) })), evidence: matches.map(x => x.evidence || { authority: 'owned_inventory', id: x.id, place: x.place }), mechanical_prerequisites: [], uncertainty: cleanLabel(uncertainty), context_omitted_entries: context.omitted_entries };
   return { handled: true, status: 200, writes: 0, clarification_required: !!plan.uncertainty, reasoning: plan.uncertainty || `This refers to ${matches.map(groundedDisplayName).join(' and ')} in the saved scene${plan.destination ? `, with ${plan.destination} as the destination` : ''}.`, grounded_action: plan, clarification_options: clarificationOptions, context };
 }
