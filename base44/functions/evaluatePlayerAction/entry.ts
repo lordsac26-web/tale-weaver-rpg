@@ -207,9 +207,12 @@ Return a JSON object with these fields only:
       }
     });
 
+    // Say what was classified. An attack that needs a setup roll is still an attack —
+    // labelling it only "skill_check" is what let a strike become prose downstream.
+    const isAttackClassification = String(result?.action || '').toLowerCase() === 'attack';
     const actionType = isExplicitCraftingAction({ actionText: action }) ? 'crafting' : result.requires_check ? 'skill_check' : 'utility';
     const namingOnly = grounding.handled && /^(?:inspect|examine|look at|put|stow|place)\b/i.test(action) && !/\b(?:stealth|quiet|secret|trap|hidden|lock|force|search|investigat)\w*/i.test(action);
-    return Response.json({ ...result, ...(namingOnly ? { requires_check: false, skill: null, dc: null } : {}), grounded_action: grounding.grounded_action || null, ground_answer_text: checkedAnswer.text, action, action_type: namingOnly ? 'utility' : actionType, request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.5-grounded' });
+    return Response.json({ ...result, is_attack: isAttackClassification, attack_target: result.target_name || null, ...(namingOnly ? { requires_check: false, skill: null, dc: null } : {}), grounded_action: grounding.grounded_action || null, ground_answer_text: checkedAnswer.text, action, action_type: namingOnly ? 'utility' : actionType, request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.6-attack-classified' });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

@@ -4,13 +4,14 @@ import { resolveItemRecovery } from '../../shared/story/itemRecovery.ts';
 import { executeUtilitySpellCast } from '../../shared/spells/castUtilitySpell.ts';
 import { resolveImbuedProjectileSpell, IMBUED_PROJECTILE_SPELL_VERSION } from '../../shared/story/imbuedProjectileSpell.ts';
 import { reconcileSessionCombat } from '../../shared/combat/sessionCombatState.ts';
-import { factualAftermathFallback, findDeadCombatantContradictions, readCompletedCombatContext } from '../../shared/story/completedCombatContext.ts';
+import { factualAftermathFallback, findDeadCombatantContradictions, isCompletedCombatAftermath, readCompletedCombatContext } from '../../shared/story/completedCombatContext.ts';
+import { dispositionAuditApplies, INTENT_ROUTER_VERSION, PLAYER_FACING_UNSAVED_ACTION, routePlayerIntent } from '../../shared/story/intentRouter.ts';
 import { isPwt, repairPostRestNarration } from '../../shared/story/postRestResiduals.ts';
 import { executePwtCompoundAction } from '../../shared/story/compoundPwtAction.ts';
 import { executeLongRestStoryAction } from '../../shared/story/longRestStoryAction.ts';
 import { executeThrownWeaponAction, recoverThrownWeapon } from '../../shared/story/thrownWeaponAction.ts';
 import { classifyNarrativeRangedAttackIntent, classifyPrecisionAmbushIntent, normalizePendingAmbushRoster, pendingAmbushNarrative, pendingNarrativeRangedAttack, stripGeneratedChoiceAnnotations } from '../../shared/story/generatedChoiceIntent.js';
-import { enforceExplicitAttackTransition, explicitAttackClarification, EXPLICIT_ATTACK_TRANSITION_VERSION } from '../../shared/story/explicitAttackTransition.ts';
+import { classifyExplicitAttackIntent, enforceExplicitAttackTransition, explicitAttackClarification, EXPLICIT_ATTACK_TRANSITION_VERSION } from '../../shared/story/explicitAttackTransition.ts';
 import { enforceStorySkillOutcomeInvariant } from '../../shared/story/storySkillCheck.ts';
 import { matchPersistedStorySkillReceipt, STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION } from '../../shared/story/storySkillReceiptCompatibility.ts';
 import { resolutionFromReceipt } from '../../shared/story/unifiedStorySkillResolution.ts';
@@ -119,6 +120,10 @@ export default async function(req) {
     }
     const completedCombat = await readCompletedCombatContext(base44, session) || (authoritativeChoiceContext?.completed_combat && typeof authoritativeChoiceContext.completed_combat === 'object'
       ? authoritativeChoiceContext.completed_combat : null);
+    // Scope aftermath to the turn that follows the fight. Unscoped, the campaign's
+    // oldest victory stays "current": the prompt forbids combat, the explicit-attack
+    // gate is skipped, and a declared attack has nowhere to go but prose.
+    const currentCombat = completedCombat && isCompletedCombatAftermath({ session, context: completedCombat }) ? completedCombat : null;
     const latestChoices = hydrateLatestStoryEntry(session).choices;
     const selection = selectStoryChoice({ latestChoices, choiceIndex: action === 'choice' ? choice_index : undefined, choiceText: choice_text, customInput: custom_input, context: authoritativeChoiceContext });
     if (!selection.ok) return Response.json({ ...selection, invalid: true, preserve_scene: true, writes: 0 }, { status: 409 });
@@ -390,7 +395,7 @@ ${authoritativeWeaponAction ? `AUTHORITATIVE THROWN-WEAPON RESULT: exactly one $
 ${authoritativeRecovery ? `AUTHORITATIVE ITEM RECOVERY: ${authoritativeRecovery.annotation} This inventory result is already committed when successful. Never claim any other item or quantity.` : ''}
 ${authoritativeWait ? `AUTHORITATIVE TIME ADVANCE: ${authoritativeWait.time_advance.clock.before_label} to ${authoritativeWait.time_advance.clock.after_label}; exactly ${authoritativeWait.time_advance.clock.elapsed_hours} game hours elapsed. This is not a rest and restored no resources. Expired effects: ${(authoritativeWait.time_advance.expired_effects||[]).map(effect=>effect.name).join(', ')||'none'}. Narrate this exact passage of time without changing it.` : ''}
 ${scenePickup ? `AUTHORITATIVE SCENE PICKUP: exactly one ${scenePickup.recovery.item.name} was already added from story entry ${scenePickup.provenance.source_story_index}. Its identity is unresolved; do not reveal rarity, powers, charges, attunement, or a canonical name.` : ''}
-${completedCombat ? `COMPLETED COMBAT CONTEXT: Combat ${completedCombat.combat_id} ended in ${completedCombat.result}. Dead enemies: ${(completedCombat.defeated_enemies || completedCombat.dead_enemies || []).map((enemy) => enemy.name || enemy.id).join(', ') || 'all listed enemies'}. This is aftermath narration only: combat_trigger MUST be false, enemies MUST be [], and no dead enemy may escape or re-engage.` : ''}
+${currentCombat ? `COMPLETED COMBAT CONTEXT: Combat ${currentCombat.combat_id} ended in ${currentCombat.result}. Dead enemies: ${(currentCombat.defeated_enemies || currentCombat.dead_enemies || []).map((enemy) => enemy.name || enemy.id).join(', ') || 'all listed enemies'}. This is aftermath narration only: combat_trigger MUST be false, enemies MUST be [], and no dead enemy may escape or re-engage.` : ''}
 ${authoritativeChoiceContext?.authoritative_skill_resolution ? `AUTHORITATIVE SKILL CHECK: ${authoritativeChoiceContext.check.skill} DC${authoritativeChoiceContext.check.dc}; original d20 ${authoritativeChoiceContext.check.raw_d20} + authoritative modifier ${authoritativeChoiceContext.check.modifier_total} = ${authoritativeChoiceContext.check.final_total}; ${authoritativeChoiceContext.check.success ? 'SUCCESS' : 'FAILURE'}. The narration, condition update, HP change, and combat trigger must honor this exact receipt.` : ''}
 ${infiltrationPlan ? `INFILTRATION ADVANCEMENT CONTRACT: ${infiltrationPlan.success ? `The successful action must advance from stage ${infiltrationPlan.before.stage} to ${infiltrationPlan.after.stage}, move the threat from ${infiltrationPlan.before.threat_position} to ${infiltrationPlan.after.threat_position}, move the player to ${infiltrationPlan.after.player_position}, keep awareness ${infiltrationPlan.after.guard_awareness}, and produce materially new choices. Never say no further action is taken.` : 'The failed action must produce a distinct bounded consequence without advancing infiltration progress.'}` : ''}
 ${ambushIntent ? `PENDING AMBUSH CONTRACT: This action resolves ONLY the Stealth setup phase. Do not narrate an arrow release, weapon attack, hit, damage, target defeat, concentration break, or death. If combat starts, the living ritual target must appear exactly once in enemies with complete HP and AC; the actual strike will be resolved later through player_attack.` : ''}
@@ -543,11 +548,11 @@ Write a gripping 1-2 paragraph combat narrative.`;
     result = await resolveFailedCheckCandidate({ candidate: result, check: authoritativeChoiceContext?.check, regenerate: (instruction) => generateNarrative(`${prompt}\n\n${instruction}`) });
     const postRestNoMagic = Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested && !isPwt((character.conditions || []).find(isPwt)) && !isPwt(session.world_state?.active_concentration);
     if (postRestNoMagic && result?.narrative) result = { ...result, narrative: repairPostRestNarration(result.narrative).text };
-    const contradictions = completedCombat ? findDeadCombatantContradictions(result?.narrative, completedCombat) : [];
+    const contradictions = currentCombat ? findDeadCombatantContradictions(result?.narrative, currentCombat) : [];
     if (contradictions.length) {
       result = await generateNarrative(`${prompt}\n\nCONTINUITY CORRECTION: The prior candidate falsely gave agency to defeated enemies: ${contradictions.map(item => `${item.name} (${item.action})`).join(', ')}. Rewrite the narration with every defeated enemy motionless and unable to act, speak, flee, struggle, or trigger combat.`);
-      if (findDeadCombatantContradictions(result?.narrative, completedCombat).length) {
-        result = { ...result, narrative: factualAftermathFallback(completedCombat), combat_trigger: false, enemies: [], choices: [] };
+      if (findDeadCombatantContradictions(result?.narrative, currentCombat).length) {
+        result = { ...result, narrative: factualAftermathFallback(currentCombat), combat_trigger: false, enemies: [], choices: [] };
       }
     }
     if (ambushIntent) {
@@ -605,7 +610,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
     // attack path has had its turn, so it governs only turns that would otherwise
     // resolve a live fight as prose. Narration here never mints HP, XP or loot.
     const attackGateSkip = !!(narrativeRangedIntent || ambushIntent || authoritativeWeaponAction || result.authoritative_weapon_attack || authoritativeSpellCast
-      || session.in_combat || completedCombat || selectedChoiceContract.action_type === 'weapon_attack');
+      || session.in_combat || currentCombat || selectedChoiceContract.action_type === 'weapon_attack');
     if (action === 'choice' && !attackGateSkip) {
       const attackTransition = await enforceExplicitAttackTransition({
         actionText: selectedChoice || custom_input, session, candidate: result,
@@ -650,16 +655,26 @@ Write a gripping 1-2 paragraph combat narrative.`;
 
     // Story narration never owns combat linkage. Only startCombat may link a live
     // CombatLog, and invalid legacy linkage is reconciled to story mode above.
-    if (completedCombat) {
+    if (currentCombat) {
       result.combat_trigger = false;
       result.enemies = [];
     }
 
     if (result.narrative) {
       const commitSession = storyRequestId ? await base44.asServiceRole.entities.GameSession.get(session_id) : session;
+      // The possession-disposal validator belongs to the disposal/stow flow only. A
+      // strike, a cast, a shove or a throw cannot dispose of anything, so asking it
+      // for inventory evidence there is a category error — and its internal wording
+      // must never reach the player.
+      const routedIntent = routePlayerIntent({ actionText: selectedChoice || custom_input, session: commitSession, attackIntent: classifyExplicitAttackIntent({ actionText: selectedChoice || custom_input, session: commitSession }) });
       const dispositionCharacter = await base44.asServiceRole.entities.Character.get(character.id);
-      const dispositionPlan = await prepareStoryDispositions({ base44, character: dispositionCharacter, session: commitSession, requestId: storyRequestId, narrative: result.narrative, check: authoritativeChoiceContext?.check, location: result.location_update || commitSession.current_location });
-      if (!dispositionPlan.ok) return Response.json({ error: dispositionPlan.error, error_code: 'item_disposition_refused', preserve_scene: true, persistence_confirmed: false }, { status: 409 });
+      const dispositionPlan = dispositionAuditApplies(routedIntent)
+        ? await prepareStoryDispositions({ base44, character: dispositionCharacter, session: commitSession, requestId: storyRequestId, narrative: result.narrative, check: authoritativeChoiceContext?.check, location: result.location_update || commitSession.current_location })
+        : { ok: true, plan: null, skipped_pipeline: routedIntent.pipeline };
+      if (!dispositionPlan.ok) {
+        console.warn('Disposition audit refused the turn', JSON.stringify({ request_id: storyRequestId, pipeline: routedIntent.pipeline, internal_reason: dispositionPlan.error }));
+        return Response.json({ error: PLAYER_FACING_UNSAVED_ACTION, error_code: 'action_not_saved', invalid: true, preserve_scene: true, persistence_confirmed: false, writes: 0, intent_router_version: INTENT_ROUTER_VERSION }, { status: 409 });
+      }
       const incomingStorySequence = Number(story_sequence || 0);
       const persistedStorySequence = Number(commitSession?.world_state?.__story_transition_sequence || 0);
       if (incomingStorySequence > 0 && persistedStorySequence > incomingStorySequence) return Response.json({ error: 'A newer story transition is already committed.', superseded: true, writes: 0, transition_version: STORY_TRANSITION_VERSION }, { status: 409 });
@@ -769,7 +784,9 @@ Write a gripping 1-2 paragraph combat narrative.`;
       const staged = await confirmPersistedStoryPair({ readSession: () => base44.asServiceRole.entities.GameSession.get(session_id), requestId: storyRequestId || completedEntry.request_id || null, expectedHash: responsePayloadHash, allowPending: true, afterWrite: true });
       if (staged.status !== 200) return Response.json(staged.body, { status: staged.status });
 
-      const narratedDepletion = await commitItemDispositions({ db: base44.asServiceRole, sessionId: session_id, characterId: character.id, plan: dispositionPlan });
+      const narratedDepletion = dispositionPlan.plan
+        ? await commitItemDispositions({ db: base44.asServiceRole, sessionId: session_id, characterId: character.id, plan: dispositionPlan.plan })
+        : { ok: true, applied: false, skipped_pipeline: routedIntent.pipeline };
       if (!narratedDepletion.ok) return Response.json(narratedDepletion.body, { status: narratedDepletion.status });
       await applyStoryCharacterConsequences({ base44, character, session, sessionId: session_id, requestId: storyRequestId, result, action, stealthSetupIntent, choiceContext: authoritativeChoiceContext });
 

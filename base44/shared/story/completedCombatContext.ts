@@ -10,6 +10,7 @@ export function buildCompletedCombatContext(combat) {
   const defeated = combatants.filter((entry) => entry.type === 'enemy' && !entry.can_act);
   return {
     combat_id: combat?.id || null,
+    ended_at: combat?.encounter_date || combat?.updated_date || combat?.created_date || null,
     result: combat?.result || null,
     outcome: combat?.result === 'victory' ? 'victory' : 'completed',
     combatants,
@@ -28,6 +29,19 @@ export async function readCompletedCombatContext(base44, session) {
   try { combat = await base44.asServiceRole.entities.CombatLog.get(combatId); } catch {}
   if (!combat || combat.is_active || !['victory', 'defeat', 'fled', 'resolved'].includes(combat.result)) return stored || null;
   return buildCompletedCombatContext(combat);
+}
+
+// A finished fight governs the narration only for the turn that follows it. Without
+// this scope the oldest victory in a campaign stays "the current combat" forever:
+// the prompt forbids combat, the explicit-attack gate is skipped, and a declared
+// attack can only be resolved as prose. Historical combat is history, not the scene.
+export function isCompletedCombatAftermath({ session, context, graceMs = 15 * 60 * 1000 } = {}) {
+  const endedAt = Date.parse(String(context?.ended_at || ''));
+  if (!Number.isFinite(endedAt)) return false;
+  const entries = session?.story_log || [];
+  const lastAt = Date.parse(String(entries.at(-1)?.timestamp || ''));
+  if (!Number.isFinite(lastAt)) return entries.length === 0;
+  return lastAt <= endedAt + graceMs;
 }
 
 export function materializeCompletedCombatCorpses({ session, context }) {

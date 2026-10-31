@@ -37,7 +37,17 @@ export function classifyExplicitAttackIntent({ actionText, session } = {}) {
     return { required: false, reason: NON_CREATURE_OBJECT.test(text) ? 'non_creature_target' : 'no_creature_target' };
   }
   const hint = namedTarget || nounMatch[0].toLowerCase();
-  const established = namedTarget ? true : new RegExp(`\\b${escapeRe(nounMatch[0])}\\b`, 'i').test(recentText);
+  // Number-agnostic establishment: narration says "two cultists", the player says "the
+  // nearest cultist". Matching the bare noun made that group unestablished, so the one
+  // guard built for declared attacks declined to run — the owner's exact phrasing.
+  const variants = (noun) => {
+    const base = String(noun || '');
+    const forms = new Set([base, `${base}s`, `${base}es`]);
+    if (/y$/i.test(base)) forms.add(`${base.slice(0, -1)}ies`);
+    if (/(?:ies|es|s)$/i.test(base)) forms.add(base.replace(/(?:ies|es|s)$/i, ''));
+    return [...forms].filter(Boolean);
+  };
+  const established = namedTarget ? true : variants(nounMatch[0]).some((form) => new RegExp(`\\b${escapeRe(form)}\\b`, 'i').test(recentText));
   if (!established) return { required: false, reason: 'no_established_hostiles', target_hint: hint };
   return { required: true, reason: 'explicit_attack_on_established_hostiles', target_kind: namedTarget ? 'entity' : 'collective', target_hint: hint, established_entities: living, recent_hostile_evidence: true };
 }

@@ -79,7 +79,7 @@ export default async function(req) {
     test('abandoned campaign can never be selected as active combat', reconciled.valid === false, { reason: reconciled.reason, in_combat: abandonedSession.in_combat });
 
     const passed = tests.filter(t => t.pass).length, allPass = passed === tests.length;
-    return Response.json({ function_version: 'explicit-attack-transition-regression-v1.0.0', explicit_attack_transition_version: EXPLICIT_ATTACK_TRANSITION_VERSION, passed, failed: tests.length - passed, total: tests.length, all_pass: allPass, tests }, { status: allPass ? 200 : 500 });
+    return Response.json({ failures: tests.filter(t => !t.pass).map(t => ({ name: t.name, detail: t.detail })), function_version: 'explicit-attack-transition-regression-v1.0.0', explicit_attack_transition_version: EXPLICIT_ATTACK_TRANSITION_VERSION, passed, failed: tests.length - passed, total: tests.length, all_pass: allPass, tests }, { status: allPass ? 200 : 500 });
   } catch (error) {
     return Response.json({ error: error.message || 'Explicit attack transition regression failed.', tests }, { status: 500 });
   }
