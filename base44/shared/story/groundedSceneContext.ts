@@ -1,6 +1,6 @@
 import { SCENE_ENTITY_SCHEMA, evidenceEntries, materializeSceneCandidates, sceneRevision, SCENE_GROUNDING_VERSION } from './sceneEvidence.ts';
 import { evaluateActiveEffects } from './activeEffects.ts';
-import { readNarrativeCorpseEntities } from './narrativeCorpseSources.ts';
+import { readNarrativeCorpseEntities, sameNarrativeScene } from './narrativeCorpseSources.ts';
 import { materializeCompletedCombatCorpses, readCompletedCombatContext } from './completedCombatContext.ts';
 
 // Context is a bounded projection. Source entries included in the model call are
@@ -16,7 +16,7 @@ export async function buildGroundedContext({ base44, session, character, reconci
   const stored = [...(character.inventory || []), ...(character.stowed_items || [])];
   const transferredIds = new Set(stored.map(x => x.scene_entity_id || x.death_provenance?.scene_entity_id).filter(Boolean));
   const completedCombat = await readCompletedCombatContext(base44, session);
-  const completedCombatCorpses = materializeCompletedCombatCorpses({ session, context: completedCombat });
+  const completedCombatCorpses = materializeCompletedCombatCorpses({ session, context: completedCombat }).filter(entity => sameNarrativeScene(entity.location, session.current_location));
   let entities = [...(await readNarrativeCorpseEntities({ session, structured })), ...completedCombatCorpses]
     .filter((entity, index, all) => !transferredIds.has(entity.id) && all.findIndex((candidate) => candidate.id === entity.id) === index);
   const diagnostics = [];

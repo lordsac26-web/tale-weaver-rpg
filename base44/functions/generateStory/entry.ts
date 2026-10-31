@@ -49,8 +49,9 @@ import { resolveStoryStowTransition } from '../../shared/story/storyStowTransiti
 import { validatePlayerText } from '../../shared/story/playerText.ts';
 import { SCENE_ENTITY_SCHEMA } from '../../shared/story/sceneEvidence.ts';
 import { prepareGroundedStoryCommit } from '../../shared/story/groundedStoryCommit.ts';
-import { resolveGroundedAction } from '../../shared/story/groundedAction.ts';
+import groundedStoryDispatch from '../../shared/story/groundedStoryDispatch.ts';
 import { defeatedSceneTargetForRef } from '../../shared/story/sceneCombatTargets.ts';
+
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -67,7 +68,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.16.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.17.0';
 
 export default async function(req) {
   try {
@@ -131,12 +132,10 @@ export default async function(req) {
     const selectedChoiceContract = selection.contract;
     authoritativeChoiceContext = { ...authoritativeChoiceContext, recovery: normalizeDeclaredRecovery(authoritativeChoiceContext.recovery ?? selectedChoiceContract.recovery) };
     const selectedChoice = action === 'choice' ? stripGeneratedChoiceAnnotations(selectedChoiceContract.text) : '';
-    let groundedAction = null;
-    if (action === 'choice' && incomingChoiceContext?.grounded_action) {
-      const grounded = await resolveGroundedAction({ base44, session, character, actionText: selectedChoice || custom_input, answerText: incomingChoiceContext.ground_answer_text || '', expectedRevision: incomingChoiceContext.grounded_action.scene_revision });
-      if (grounded.status >= 400 || grounded.clarification_required) return Response.json({ error: grounded.error || grounded.reasoning, preserve_scene: true, writes: 0 }, { status: grounded.status >= 400 ? grounded.status : 409 });
-      groundedAction = grounded.grounded_action;
-    }
+    const groundedDispatch = action === 'choice' ? await groundedStoryDispatch({ base44, session, character,
+      actionText: selectedChoice || custom_input, choiceContext: incomingChoiceContext, requestId: storyRequestId, storySequence: story_sequence }) : {};
+    if (groundedDispatch.response) return Response.json({ ...groundedDispatch.response.body, generate_story_version: GENERATE_STORY_VERSION }, { status: groundedDispatch.response.status });
+    const groundedAction = groundedDispatch.plan || null;
     if (action === 'choice' && selectedChoiceContract.action_type === 'composite_action') {
       const spellName = selectedChoiceContract.children?.find((child) => child.action_type === 'spell_cast')?.spell_name;
       const spellCandidates = spellName ? await base44.asServiceRole.entities.Spell.filter({ name: spellName }, '-updated_date', 50) : [];

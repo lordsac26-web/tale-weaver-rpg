@@ -102,7 +102,7 @@ export default async function handleRest(req) {
   const receiptToken = String(rest_request_id || '').slice(0, 120);
   const restReceipts = Array.isArray(session?.world_state?.__rest_receipts) ? session.world_state.__rest_receipts : [];
   const priorRest = rest_type === 'long' && receiptToken ? restReceipts.find((entry) => entry.token === receiptToken) : null;
-  if (priorRest?.response) return Response.json({ ...priorRest.response, already_processed: true });
+  if (priorRest?.response) return Response.json({ ...priorRest.response, character, session, already_processed: true });
   if (rest_type === 'long' && !['long_rest_8h', 'sleep_until_dawn'].includes(rest_intent)) return Response.json({ error: 'Invalid long-rest intent' }, { status: 400 });
   if (rest_type === 'long') {
     const outcome = await executeCampLongRest({ base44, user, character, session, payload: { rest_request_id, rest_intent, location_safe } });

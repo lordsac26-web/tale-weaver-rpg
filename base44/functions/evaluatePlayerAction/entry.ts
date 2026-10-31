@@ -168,8 +168,9 @@ Return ONLY a JSON object:
       resume_request_id: stowResume.request_id, check_receipt: stowResume.resume, superseded_request_ids: stowResume.superseded_request_ids,
       reasoning: `A saved ${stowResume.resume.skill} check (${stowResume.resume.final_total} vs DC ${stowResume.resume.dc}) already covers this exact stow attempt in this scene. Confirm it below — no new roll.`,
       request_id: String(request_id || '').slice(0, 120), writes: 0, function_version: 'evaluate-player-action-v2.6-stow-resume' });
-    const grounding = await resolveGroundedAction({ base44, session, character, actionText: action, answerText: checkedAnswer.text, expectedRevision: expected_scene_revision });
+    const grounding = await resolveGroundedAction({ base44, session, character, actionText: action, answerText: checkedAnswer.text, expectedRevision: expected_scene_revision, requestId: String(request_id || '').slice(0, 120) });
     if (grounding.status >= 400) return Response.json(grounding, { status: grounding.status });
+    if (grounding.action_blocked || grounding.grounded_action?.intent === 'loot') return Response.json({ ...grounding, context: undefined, action, request_id, function_version: 'evaluate-player-action-v2.8.0-loot' });
     // Candidates come from the relevance-filtered, deduped, player-facing projection —
     // never a raw slice of context entities (which dumped whole inventories, repeated
     // one identity twice, and surfaced internal record names like "Cultist_Cell's Corpse").

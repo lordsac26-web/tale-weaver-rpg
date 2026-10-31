@@ -1,5 +1,6 @@
 import { buildGroundedContext } from './groundedSceneContext.ts';
 import { validatePlayerText } from './playerText.ts';
+import { groundCorpseLoot, isCorpseLootAction } from './corpseLootGrounding.ts';
 const OPS = ['inspect','open','loot','take','drop','stow','remove'];
 const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 export const sceneInteractionIntent = text => !/\b(?:take down|attack|shoot|cast|invoke|rest|wait)\b/i.test(text || '') && /\b(?:inspect|examine|investigate|search|open|loot|take|pick up|drop|stow|put|place|remove|retrieve)\b/i.test(text || '');
@@ -47,12 +48,13 @@ export const buildClarificationOptions = ({ catalog = [], actionText = '', limit
   }
   return options;
 };
-export async function resolveGroundedAction({ base44, session, character, actionText, answerText = '', expectedRevision, allowReconciliation = true }) {
+export async function resolveGroundedAction({ base44, session, character, actionText, answerText = '', expectedRevision, allowReconciliation = true, requestId = '', boundIds = [] }) {
   const checked = validatePlayerText(actionText), answer = validatePlayerText(answerText, true);
   if (!checked.ok || !answer.ok) return { handled: true, status: 400, error: checked.error || answer.error, writes: 0 };
   if (!sceneInteractionIntent(checked.text)) return { handled: false };
   let context = await buildGroundedContext({ base44, session, character });
   if (expectedRevision && expectedRevision !== context.revision) return { handled: true, status: 409, error: 'The scene changed while you were replying. Your draft is preserved; review the current scene before retrying.', writes: 0 };
+  if (isCorpseLootAction(checked.text)) return groundCorpseLoot({ base44, session, context, actionText: checked.text, answerText: answer.text, requestId, boundIds });
   const text = `${checked.text}\n${answer.text}`, intent = infer(checked.text);
   let catalog = [...context.entities, ...context.owned];
   let matches = catalog.filter(x => norm(text).includes(norm(x.id)) || [x.name, ...(x.aliases || []), ...(x.player_aliases || [])].filter(Boolean).some(n => norm(text).includes(norm(n))));
@@ -90,5 +92,6 @@ export async function resolveGroundedAction({ base44, session, character, action
   if (intent === 'open' && matches.some(x => x.type !== 'container')) uncertainty = 'I can identify that object, but it has no supported opening interaction. You can inspect it instead.';
   const plan = { version: context.version, session_id: session.id, scene_id: context.scene_id, scene_revision: context.revision, intent, target_ids: matches.map(x => x.id), quantity: proposal.quantity, destination: cleanLabel(proposal.destination),
     targets: matches.map(x => ({ ...x, display_name: groundedDisplayName(x) })), evidence: matches.map(x => x.evidence || { authority: 'owned_inventory', id: x.id, place: x.place }), mechanical_prerequisites: [], uncertainty: cleanLabel(uncertainty), context_omitted_entries: context.omitted_entries };
+  if (answer.text && plan.uncertainty) return { handled: true, status: 200, writes: 0, action_blocked: true, clarification_required: false, reasoning: `This attempt is stopped: ${plan.uncertainty} No action or roll was performed.`, grounded_action: plan };
   return { handled: true, status: 200, writes: 0, clarification_required: !!plan.uncertainty, reasoning: plan.uncertainty || `This refers to ${matches.map(groundedDisplayName).join(' and ')} in the saved scene${plan.destination ? `, with ${plan.destination} as the destination` : ''}.`, grounded_action: plan, clarification_options: clarificationOptions, context };
 }

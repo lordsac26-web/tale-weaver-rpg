@@ -25,6 +25,7 @@ export default function useStoryCustomAction({ customInput, setCustomInput, stow
         if (restored?.data || restored?.finished) setCustomInput('');
         return;
       }
+      if (result.data?.action_blocked) { setNarrative(prev => [...prev, { type: 'action_error', text: result.data.reasoning || result.data.error }]); return; }
       if (result.data?.clarification_required && grounded) { grounded.install(result.data); setCustomInput(text); return; }
       setPendingProposal({ ...result.data, action: text, ...(composite ? { parent_key: composite.parent_key } : {}) });
     } catch (err) {

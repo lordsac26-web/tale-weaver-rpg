@@ -531,7 +531,10 @@ export default function Game() {
   };
 
   // Intercept custom input — send to DM for adjudication first
-  const groundedClarification = useGroundedClarification({ sessionId, characterId: character?.id, onResolved: data => setPendingProposal(data) });
+  const groundedClarification = useGroundedClarification({ sessionId, characterId: character?.id, onResolved: data => {
+    if (data.action_blocked) setNarrative(prev => [...prev, { type: 'action_error', text: data.reasoning || data.error }]);
+    else { setCustomInput(''); setPendingProposal(data); }
+  } });
   const handleCustomInput = useStoryCustomAction({ customInput, setCustomInput, stow: stowClarification, grounded: groundedClarification, sessionId, character, session, narrative, setEvaluatingAction, setPendingProposal, setNarrative, buildCompositePreflightRequest, acceptCompositePreflightResponse });
 
   // Recognize only explicit casts of spells the character actually knows or has
@@ -678,6 +681,7 @@ export default function Game() {
   const executeProposedAction = async (proposal) => {
     setPendingProposal(null);
     const { action, action_type: actionType, requires_check, skill, dc, recovery } = proposal;
+    if (proposal.action_blocked) { setNarrative(prev => [...prev, { type: 'action_error', text: proposal.reasoning || proposal.error }]); return; }
     if (proposal.action_type === 'composite_action') {
       setNarrative(prev => [...prev, { type: 'action_error', text: proposal.valid ? 'The composite plan is validated but must be resolved through its ordered authoritative children.' : `${proposal.reasoning} Choose one of the legal alternatives shown; the scene and choices remain unchanged.` }]);
       return;

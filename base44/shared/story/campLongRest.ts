@@ -1,4 +1,5 @@
 import { executeLongRestCore } from './longRestCore.ts';
+import { replayRestReceipt } from './restReceiptStorage.ts';
 
 export const CAMP_LONG_REST_BACKEND_VERSION = 'camp-long-rest-backend-v1.0.0';
 
@@ -7,7 +8,7 @@ export async function executeCampLongRest({ base44, user, character, session, pa
   if (!requestId) return { status: 400, body: { error: 'A stable rest_request_id is required for a long rest.' } };
   const receipts = Array.isArray(session.world_state?.__rest_receipts) ? session.world_state.__rest_receipts : [];
   const prior = receipts.find((entry) => entry.token === requestId);
-  if (prior?.response) return { status: 200, body: { ...prior.response, already_processed: true, backend_version: CAMP_LONG_REST_BACKEND_VERSION } };
+  if (prior?.response) return { status: 200, body: { ...replayRestReceipt(prior, character, session), backend_version: CAMP_LONG_REST_BACKEND_VERSION } };
   if (!['long_rest_8h', 'sleep_until_dawn'].includes(payload.rest_intent)) return { status: 400, body: { error: 'Invalid long-rest intent' } };
 
   if (!payload.location_safe && Math.random() < 0.2) {

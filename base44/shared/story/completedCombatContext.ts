@@ -5,11 +5,12 @@ export function buildCompletedCombatContext(combat) {
   const combatants = (combat?.combatants || []).map((entry) => {
     const hp = Math.max(0, Number(entry.hp_current ?? entry.hp ?? 0) || 0);
     const defeated = entry.type === 'enemy' && (hp === 0 || entry.is_conscious === false);
-    return { entity_id: entry.id, ...(entry.scene_entity_id ? { scene_entity_id: entry.scene_entity_id } : {}), name: entry.name || 'Unknown combatant', type: entry.type, hp, is_conscious: entry.is_conscious !== false, status: defeated ? 'dead' : 'active', can_act: !defeated };
+    return { entity_id: entry.id, ...(entry.scene_entity_id ? { scene_entity_id: entry.scene_entity_id } : {}), aliases: entry.aliases || [], name: entry.name || 'Unknown combatant', type: entry.type, hp, is_conscious: entry.is_conscious !== false, status: defeated ? 'dead' : 'active', can_act: !defeated };
   });
   const defeated = combatants.filter((entry) => entry.type === 'enemy' && !entry.can_act);
   return {
     combat_id: combat?.id || null,
+    location: combat?.location || null,
     ended_at: combat?.encounter_date || combat?.updated_date || combat?.created_date || null,
     result: combat?.result || null,
     outcome: combat?.result === 'victory' ? 'victory' : 'completed',
@@ -45,18 +46,20 @@ export function isCompletedCombatAftermath({ session, context, graceMs = 15 * 60
 }
 
 export function materializeCompletedCombatCorpses({ session, context }) {
-  const location = session?.current_location || '';
+  const source = (session.story_log || []).find(entry => entry.authoritative_weapon_attack?.combat_id === context?.combat_id || entry.request_id === `victory-aftermath:${context?.combat_id}`);
+  const location = context?.location || source?.scene_location || session?.current_location || '';
   return (context?.defeated_enemies || []).map((enemy) => {
     const combatId = String(context.combat_id || 'completed-combat');
     const combatantId = String(enemy.entity_id || enemy.id || enemy.name || 'enemy');
     const name = String(enemy.name || 'Defeated enemy').replace(/^The\s+/i, '').trim() || 'Defeated enemy';
     const id = `combat-corpse:${combatId}:${combatantId}`;
     return {
-      id, session_id: session.id, location, name: `${name}'s Corpse`, aliases: [name, `The ${name}`, 'body', 'corpse', 'remains'],
+      id, session_id: session.id, location, name: `${name}'s Corpse`, aliases: [...new Set([name, `The ${name}`, ...(enemy.aliases || []), 'body', 'corpse', 'remains'])],
+      defeat_id: `${combatId}:${combatantId}`, original_creature_id: enemy.scene_entity_id || combatantId,
       type: 'corpse', quantity: 1, source_quantity: 1, source_name: name, source_ordinal: 1,
-      status: 'dead', alive: false, transfer_state: 'world', affordances: ['inspect', 'stow'],
+      status: 'dead', alive: false, transfer_state: 'world', affordances: ['inspect', 'loot', 'stow'],
       evidence: { authority: 'completed_combat', combat_id: combatId, combatant_id: combatantId, result: context.result, status: 'dead' },
-      death_provenance: { source: 'completed_combat', combat_id: combatId, combatant_id: combatantId, enemy_name: enemy.name || name, hp: 0, status: 'dead' },
+      death_provenance: { source: 'completed_combat', combat_id: combatId, combatant_id: combatantId, enemy_name: enemy.name || name, hp: 0, status: 'dead', died_at: context.ended_at },
     };
   });
 }

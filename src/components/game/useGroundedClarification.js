@@ -9,7 +9,7 @@ export default function useGroundedClarification({ sessionId, characterId, onRes
   const inFlight = useRef(false);
   useEffect(() => { if (state) localStorage.setItem(key, JSON.stringify(state)); else localStorage.removeItem(key); }, [key, state]);
   const install = data => { setState({ original: data, data, reply: '' }); setError(''); };
-  const submit = async (reply = state?.reply || '') => {
+  const submit = async (reply = state?.reply || '', selectedId = '') => {
     if (!state || inFlight.current) return false;
     const checked = validatePlayerText(reply);
     setState(s => ({ ...s, reply }));
@@ -17,20 +17,18 @@ export default function useGroundedClarification({ sessionId, characterId, onRes
     inFlight.current = true; setBusy(true); setError('');
     try {
       const result = await base44.functions.invoke('evaluatePlayerAction', { session_id: sessionId, character_id: characterId, action: state.original.action,
-        answer_text: checked.text, expected_scene_revision: state.data.grounded_action?.scene_revision, request_id: state.original.request_id });
-      if (result.data?.clarification_required) {
-        // A reply that still cannot identify one saved object used to replace the card
-        // with an identical one, which read as "Reply did nothing". Say so explicitly
-        // and keep the reply so the player can pick one of the offered names.
-        const repeated = String(result.data.reasoning || '') === String(state.data.reasoning || '');
-        setState(s => ({ ...s, data: result.data, reply }));
-        setError(repeated
-          ? 'That reply still does not name one saved object, so nothing was changed. Choose one of the offered names above, or answer with the exact name shown.'
-          : '');
-        return false;
+        answer_text: selectedId || checked.text, expected_scene_revision: state.data.grounded_action?.scene_revision, request_id: state.original.request_id });
+      if (result.data?.action_blocked || result.data?.clarification_required) {
+        onResolved({ ...result.data, action_blocked: true, clarification_required: false, reasoning: result.data.reasoning || 'This search could not identify a supported target. Nothing was taken.' });
+        setState(null); return false;
       }
       onResolved(result.data); setState(null); return true;
-    } catch (err) { setError(err?.response?.data?.error || err.message || 'Your reply is preserved. Please retry.'); return false; }
+    } catch (err) {
+      const message = err?.response?.data?.error || err.message || 'Your reply is preserved. Please retry.';
+      if (err?.response?.data?.action_blocked || err?.response?.status === 409) { onResolved({ action_blocked: true, reasoning: message }); setState(null); }
+      else setError(message);
+      return false;
+    }
     finally { inFlight.current = false; setBusy(false); }
   };
   return { state, busy, error, pending: !!state, install, submit, setReply: reply => setState(s => ({ ...s, reply })), cancel: () => { if (!inFlight.current) setState(null); } };
