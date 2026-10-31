@@ -16,6 +16,17 @@ export function sceneCombatRoster(session) {
     authoritative_scene_stats: true, ...(Number.isFinite(entity.distance_feet) ? { distance_feet: entity.distance_feet } : {}) }));
 }
 
+const refKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+// A registry identity that is no longer alive can never be re-materialized from
+// narration and can never be offered as a shootable option.
+export function defeatedSceneTargetForRef(session, targetRef) {
+  const key = refKey(targetRef);
+  if (!key) return null;
+  return (session?.world_state?.scene_entities || []).find(entity => entity?.type === 'creature' && entity.status !== 'alive'
+    && [entity.name, ...(entity.aliases || [])].filter(Boolean).some(name => key.includes(refKey(name)))) || null;
+}
+
 // Evaluation is read-only. No target is a clarification, NEVER a Perception check.
 export function preflightStoryAttack({ actionText, session }) {
   const contract = classifyLegacyChoiceAction(actionText);

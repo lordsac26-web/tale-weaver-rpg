@@ -6,7 +6,7 @@ import { planAmmunitionUse } from '../ammunitionTransaction.ts';
 import { selectMultiplyingAmmo } from '../combat/multiplyingAmmunition.ts';
 import { resolveAuthoritativeSkillModifier } from '../skills/authoritativeSkillModifier.ts';
 import { resolveStoryAttackTarget, storyAttackClarification } from './storyAttackTarget.ts';
-import { sceneCombatRoster } from './sceneCombatTargets.ts';
+import { defeatedSceneTargetForRef, sceneCombatRoster } from './sceneCombatTargets.ts';
 
 export const STORY_WEAPON_ATTACK_VERSION = 'story-weapon-attack-v1.1.0';
 const RECEIPTS = '__story_weapon_attack_receipts';
@@ -23,8 +23,12 @@ export async function executeStoryWeaponAttack({ base44, user, sessionId, reques
   const targetRef = String(contract.weapon_attack?.target_ref || '').trim();
   const precedingScene = (session.story_log || []).slice(-2).map((entry) => `${entry?.player_choice || ''} ${entry?.text || ''}`).join(' ');
   const registeredEnemies = sceneCombatRoster(session);
+  const defeatedTarget = defeatedSceneTargetForRef(session, targetRef);
   const targetResolution = resolveStoryAttackTarget({ targetRef, enemies: registeredEnemies.length ? registeredEnemies : enemies, sceneText: precedingScene, characterLevel: character.level, requireAuthoritativeRoster: registeredEnemies.length > 0 });
   if (!targetResolution.ok) return { status: 200, body: { handled: true, clarification_required: true, reason: targetResolution.reason, candidates: targetResolution.candidates || [], narrative: storyAttackClarification(targetRef, targetResolution.candidates), preserve_scene: true, writes: 0 } };
+  // A defeated registry identity is never resurrected from prose, even when the
+  // narration still mentions it by name.
+  if (targetResolution.materialized && defeatedTarget) return { status: 200, body: { handled: true, clarification_required: true, reason: 'target_already_defeated', candidates: registeredEnemies.map(enemy => enemy.name), narrative: `${defeatedTarget.name} is already defeated — no attack was rolled, no ammunition was spent, and combat did not begin. Choose a living target or another action.`, preserve_scene: true, writes: 0 } };
   const roster = targetResolution.enemies;
   const targetSpec = targetResolution.target;
   const weapon = character.equipped?.weapon || character.equipped?.mainhand;

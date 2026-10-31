@@ -50,6 +50,7 @@ import { validatePlayerText } from '../../shared/story/playerText.ts';
 import { SCENE_ENTITY_SCHEMA } from '../../shared/story/sceneEvidence.ts';
 import { prepareGroundedStoryCommit } from '../../shared/story/groundedStoryCommit.ts';
 import { resolveGroundedAction } from '../../shared/story/groundedAction.ts';
+import { defeatedSceneTargetForRef } from '../../shared/story/sceneCombatTargets.ts';
 
 /**
  * AI Story Engine - Master Dungeon Master Edition (JavaScript)
@@ -626,7 +627,11 @@ Write a gripping 1-2 paragraph combat narrative.`;
     if (Array.isArray(result.choices) && result.choices.length && (action === 'choice' || action === 'start')) {
       const composed = validateComposedChoices(result.choices, await buildCompositionResourcesForCharacter({ base44, character, session }));
       if (composed.rejected.length) console.warn('Choice composition filtered illegal options', JSON.stringify({ request_id: storyRequestId, action, rejected: composed.rejected }));
-      result = { ...result, choices: composed.valid_choices, choice_composition: { version: CHOICE_COMPOSITION_VALIDATION_VERSION, rejected: composed.rejected } };
+      const shootable = composed.valid_choices.filter((choice) => {
+        const dead = choice.action_type === 'weapon_attack' && defeatedSceneTargetForRef(session, choice.weapon_attack?.target_ref);
+        return !dead;
+      });
+      result = { ...result, choices: shootable, choice_composition: { version: CHOICE_COMPOSITION_VALIDATION_VERSION, rejected: composed.rejected, defeated_target_options_removed: composed.valid_choices.length - shootable.length } };
     }
     if (action === 'choice' && storyRequestId && !authoritativeStow?.success) {
       const narratedStow = await resolveNarratedStowCandidate({ base44, ownerId: user.id, sessionId: session_id, characterId: character.id, requestId: storyRequestId, candidate: result, check: authoritativeChoiceContext?.check });
