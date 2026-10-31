@@ -4,7 +4,7 @@
 // structured combat (initiative + CombatLog + HP) or return exactly ONE
 // clarification that names the supported phrasing. Narration-only fights are
 // rejected zero-write, so no XP, loot, wound, or death can be minted from text.
-export const EXPLICIT_ATTACK_TRANSITION_VERSION = 'explicit-attack-transition-v1.0.0';
+export const EXPLICIT_ATTACK_TRANSITION_VERSION = 'explicit-attack-transition-v1.1.0';
 
 const ATTACK_VERB = /\b(attack|attacks|attacking|kill|kills|killing|slay|slays|slaying|strike|strikes|striking|eliminate|eliminates|eliminating|assault|charge|charges|engage|engages|fight|fights|loose|shoot|shoots|fire|fires|volley|dispatch|dispatches|cut down|mow down|mow|lay waste|wipe out|execute|executes|butcher|butchers)\b/i;
 const HOSTILE_NOUN = /\b(cultists?|enemies|enemy|guards?|sentinels?|sentries|soldiers?|raiders?|bandits?|skeletons?|zombies?|ghouls?|wraiths?|stirges?|acolytes?|vanguard|scouts?|thugs?|mercenaries|assassins?|creatures?|monsters?|goblins?|orcs?|trolls?|ogres?|knights?|wardens?|priests?|necromancers?|ritualists?|minions?|remnants?|survivors?|hostiles?)\b/i;
@@ -19,7 +19,7 @@ const norm = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g,
 // previously narrated casualty never removes a living group from the scene.
 export function establishedSceneHostiles(session) {
   const living = (session?.world_state?.scene_entities || [])
-    .filter((entity) => entity && entity.type !== 'corpse' && entity.status !== 'dead')
+    .filter((entity) => entity?.type === 'creature' && entity.status === 'alive' && entity.alive !== false && entity.location === session.current_location && (!entity.transfer_state || entity.transfer_state === 'world'))
     .map((entity) => entity.name)
     .filter(Boolean);
   const recentText = (session?.story_log || []).slice(-3).map((entry) => String(entry?.text || '')).join(' ');
@@ -30,7 +30,7 @@ export function classifyExplicitAttackIntent({ actionText, session } = {}) {
   const text = String(actionText || '');
   if (!text.trim() || !ATTACK_VERB.test(text)) return { required: false, reason: 'no_attack_verb' };
   const { living, recentText } = establishedSceneHostiles(session);
-  const namedTarget = living.find((name) => text.toLowerCase().includes(String(name).toLowerCase()));
+  const namedTarget = (session?.world_state?.scene_entities || []).find(entity => living.includes(entity.name) && [entity.name, ...(entity.aliases || [])].some(name => name && new RegExp(`\\b${escapeRe(name)}\\b`, 'i').test(text)))?.name;
   const nounMatch = text.match(HOSTILE_NOUN);
   if (!namedTarget && !nounMatch) {
     if (COLLECTIVE_REF.test(text) && living.length) return { required: true, reason: 'explicit_attack_on_established_hostiles', target_kind: 'collective', target_hint: living.length === 1 ? living[0] : 'the hostile figures', established_entities: living };

@@ -4,7 +4,7 @@ import { parseCompositeAction } from './compositeActionContract';
 import { normalizeDeclaredRecovery } from './choiceAwardRouting';
 
 export const CHOICE_ACTION_CONTRACT_VERSION = 'choice-action-contract-v1.0.0';
-export const CHOICE_ACTION_FRONTEND_VERSION = 'choice-action-transition-v1.3.0';
+export const CHOICE_ACTION_FRONTEND_VERSION = 'choice-action-transition-v1.4.0';
 export const CHOICE_ACTION_TYPES = ['skill_check', 'weapon_attack', 'spell_cast', 'composite_action', 'crafting', 'utility', 'social', 'movement', 'rest', 'item_use', 'combat_transition'];
 export const CANONICAL_SKILLS = ['Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight','Intimidation','Investigation','Medicine','Nature','Perception','Performance','Persuasion','Religion','Sleight of Hand','Stealth','Survival'];
 
@@ -18,10 +18,12 @@ export function canonicalSkill(value) {
 
 export function classifyLegacyChoiceAction(text) {
   const source = String(text || '').trim();
-  const explicitBowShot = /\b(?:shot|fire|shoot|assassinate)\b/i.test(source) && /\b(?:bow|longbow|crossbow|angry hornet)\b/i.test(source) && !/\b(?:do not|don't|without firing|not fire)\b/i.test(source);
-  if (rangedAttackPattern.test(source) || explicitBowShot) {
+  const explicitBowShot = /\b(?:shot|fire|shoot|assassinate)\b/i.test(source) && /\b(?:bow|long\s*bow|crossbow|angry hornet)\b/i.test(source);
+  const armedAttack = /\b(?:attack|strike|kill)\b/i.test(source) && /\b(?:with|using)\b/i.test(source) && /\b(?:long\s*bow|bow|crossbow)\b/i.test(source);
+  const negated = /\b(?:do not|don't|without firing|not fire|not attack)\b/i.test(source);
+  if (!negated && (rangedAttackPattern.test(source) || explicitBowShot || armedAttack)) {
     const namedTarget = source.match(/\b(?:assassinate|shoot|shot at|fire at)\s+(?:the\s+)?([\w'-]+(?:\s+[\w'-]+){0,2})\s*$/i)?.[1];
-    const target = namedTarget || source.match(/\b(?:weaver|guard|cultist|scout|ritualist|necromancer|archer|soldier|bandit|goblin|orc|wolf)\b/i)?.[0] || null;
+    const target = namedTarget || source.match(/\b(?:(?:closest|nearest)\s+)?(?:weaver|guard|cultist|scout|ritualist|necromancer|archer|soldier|bandit|goblin|orc|wolf)\b/i)?.[0] || null;
     const nonlethal = /\b(incapacitate|nonlethal|knock\s+out|subdue|disable)\b/i.test(source);
     return { action_type: 'weapon_attack', evidence: 'deterministic_ranged_phrase', weapon_attack: { target_ref: target, weapon_hint: /crossbow|bolt/i.test(source) ? 'Crossbow' : 'Longbow', attack_mode: 'ranged', declared_attack_count: 1, intent: nonlethal ? 'incapacitate_requested' : 'damage', nonlethal_guaranteed: false } };
   }
@@ -33,7 +35,7 @@ export function normalizeChoiceActionContract(choice = {}) {
   const composite = parseCompositeAction(text);
   if (composite) return { ...choice, ...composite, text, skill_check: null, dc: null, recovery: null, weapon_attack: null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
   const legacyAttack = classifyLegacyChoiceAction(text);
-  if (legacyAttack) return { ...choice, ...legacyAttack, text, skill_check: null, dc: null, recovery: null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
+  if (legacyAttack) return { ...choice, ...legacyAttack, weapon_attack: choice?.action_type === 'weapon_attack' && choice.weapon_attack?.target_ref ? { ...legacyAttack.weapon_attack, ...choice.weapon_attack } : legacyAttack.weapon_attack, text, skill_check: null, dc: null, recovery: null, contract_version: CHOICE_ACTION_CONTRACT_VERSION };
   const requestedType = CHOICE_ACTION_TYPES.includes(choice?.action_type) ? choice.action_type : null;
   const skill = canonicalSkill(choice?.skill_check);
   const dc = Number(choice?.dc ?? choice?.skill_check?.dc);

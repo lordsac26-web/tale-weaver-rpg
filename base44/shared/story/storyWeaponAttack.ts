@@ -6,8 +6,9 @@ import { planAmmunitionUse } from '../ammunitionTransaction.ts';
 import { selectMultiplyingAmmo } from '../combat/multiplyingAmmunition.ts';
 import { resolveAuthoritativeSkillModifier } from '../skills/authoritativeSkillModifier.ts';
 import { resolveStoryAttackTarget, storyAttackClarification } from './storyAttackTarget.ts';
+import { sceneCombatRoster } from './sceneCombatTargets.ts';
 
-export const STORY_WEAPON_ATTACK_VERSION = 'story-weapon-attack-v1.0.0';
+export const STORY_WEAPON_ATTACK_VERSION = 'story-weapon-attack-v1.1.0';
 const RECEIPTS = '__story_weapon_attack_receipts';
 const responseBody = async (response) => ({ status: response.status, body: await response.json() });
 
@@ -21,7 +22,8 @@ export async function executeStoryWeaponAttack({ base44, user, sessionId, reques
   if (!requestId || contract?.action_type !== 'weapon_attack') return { status: 400, body: { error: 'A typed weapon attack and stable request ID are required.', writes: 0 } };
   const targetRef = String(contract.weapon_attack?.target_ref || '').trim();
   const precedingScene = (session.story_log || []).slice(-2).map((entry) => `${entry?.player_choice || ''} ${entry?.text || ''}`).join(' ');
-  const targetResolution = resolveStoryAttackTarget({ targetRef, enemies, sceneText: precedingScene, characterLevel: character.level });
+  const registeredEnemies = sceneCombatRoster(session);
+  const targetResolution = resolveStoryAttackTarget({ targetRef, enemies: registeredEnemies.length ? registeredEnemies : enemies, sceneText: precedingScene, characterLevel: character.level, requireAuthoritativeRoster: registeredEnemies.length > 0 });
   if (!targetResolution.ok) return { status: 200, body: { handled: true, clarification_required: true, reason: targetResolution.reason, candidates: targetResolution.candidates || [], narrative: storyAttackClarification(targetRef, targetResolution.candidates), preserve_scene: true, writes: 0 } };
   const roster = targetResolution.enemies;
   const targetSpec = targetResolution.target;

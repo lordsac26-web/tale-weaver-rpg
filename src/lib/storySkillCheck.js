@@ -13,7 +13,7 @@ export const prepareStorySkillCheck = ({ sessionId, characterId, skill, dc, requ
 export const resumeStorySkillResolution = (session, actionText, skill, dc) => {
   const sourceId = session?.story_log?.at(-1)?.request_id;
   const receipt = [...(session?.world_state?.__skill_check_receipts || [])].reverse().find(entry =>
-    entry.source_story_request_id === sourceId && entry.action_text === actionText && entry.skill === skill && Number(entry.dc) === Number(dc)
+    entry.superseded !== true && entry.non_resolving !== true && entry.source_story_request_id === sourceId && entry.action_text === actionText && entry.skill === skill && Number(entry.dc) === Number(dc)
     && !(session.story_log || []).some(story => story.request_id === entry.request_id));
   if (!receipt) return null;
   return { receipt, raw: receipt.raw_d20, allRolls: receipt.all_rolls || [receipt.raw_d20], modifier: receipt.modifier_total, breakdown: receipt.modifier_breakdown, final: receipt.final_total, success: receipt.success, hadAdvantage: !!receipt.had_advantage, hadDisadvantage: !!receipt.had_disadvantage, advantageSources: receipt.advantage_sources || [] };

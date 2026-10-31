@@ -66,7 +66,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.15.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.16.0';
 
 export default async function(req) {
   try {
@@ -89,7 +89,7 @@ export default async function(req) {
     if (!characterBelongsToUser(character, user)) {
       return Response.json({ error: 'Session character does not belong to the authenticated user' }, { status: 403 });
     }
-    if (action === 'hydrate') return Response.json(buildGameHydration(session, character));
+    if (action === 'hydrate') return Response.json({ ...buildGameHydration(session, character), generate_story_version: GENERATE_STORY_VERSION, intent_router_version: INTENT_ROUTER_VERSION, explicit_attack_transition_version: EXPLICIT_ATTACK_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });
     const storyRequestId = String(request_id || '').slice(0, 120);
     // Replay an accepted pair before any cast, stow, transfer, or award dispatch.
     const replayIndex = action === 'choice' && storyRequestId ? (session.story_log || []).findIndex((entry) => entry?.request_id === storyRequestId && entry?.text) : -1;

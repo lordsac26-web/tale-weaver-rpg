@@ -5,7 +5,7 @@
 // narrated as prose, then audited by the possession-disposal validator. Every hop
 // looked reasonable alone. The fix is one ordered answer that every hop reads, so an
 // intent lands in exactly one pipeline and cannot fall through into another.
-export const INTENT_ROUTER_VERSION = 'story-intent-router-v1.0.0';
+export const INTENT_ROUTER_VERSION = 'story-intent-router-v1.1.0';
 
 // Shown to the player when a turn cannot be saved. Deliberately says nothing about
 // evidence, catalogues, quotes, or any other internal validator vocabulary.
@@ -35,7 +35,7 @@ export function routePlayerIntent({ actionText, session, attackIntent = null } =
 
   // An explicit attack on established hostiles is the strongest signal there is —
   // the attack classification wins over every verb that could reinterpret it.
-  if (attackIntent?.required) return { ...base, pipeline: attackIntent.target_kind === 'collective' ? 'combat_attack' : 'combat_attack', reason: attackIntent.reason, is_combat: true, target_hint: attackIntent.target_hint };
+  if (attackIntent?.required || (attackIntent?.reason === 'no_established_hostiles' && attackIntent.target_hint)) return { ...base, pipeline: 'combat_attack', reason: attackIntent.reason, is_combat: true, target_hint: attackIntent.target_hint };
 
   if (THROWN_VERB.test(text) && HOSTILE_REF.test(text)) return { ...base, pipeline: 'thrown_weapon', reason: 'thrown_weapon_at_target', is_combat: true };
   if (SPELL_VERB.test(text)) return { ...base, pipeline: 'spell', reason: 'explicit_spell_cast', is_combat: /\b(?:at|on|toward|against)\b/i.test(text) };

@@ -5,7 +5,7 @@ export function buildCompletedCombatContext(combat) {
   const combatants = (combat?.combatants || []).map((entry) => {
     const hp = Math.max(0, Number(entry.hp_current ?? entry.hp ?? 0) || 0);
     const defeated = entry.type === 'enemy' && (hp === 0 || entry.is_conscious === false);
-    return { entity_id: entry.id, name: entry.name || 'Unknown combatant', type: entry.type, hp, is_conscious: entry.is_conscious !== false, status: defeated ? 'dead' : 'active', can_act: !defeated };
+    return { entity_id: entry.id, ...(entry.scene_entity_id ? { scene_entity_id: entry.scene_entity_id } : {}), name: entry.name || 'Unknown combatant', type: entry.type, hp, is_conscious: entry.is_conscious !== false, status: defeated ? 'dead' : 'active', can_act: !defeated };
   });
   const defeated = combatants.filter((entry) => entry.type === 'enemy' && !entry.can_act);
   return {
@@ -68,6 +68,11 @@ export async function persistCompletedCombatContext(base44, sessionId, combat) {
   const corpses = materializeCompletedCombatCorpses({ session, context });
   const existing = session.world_state?.scene_entities || [];
   const registry = new Map(existing.map((entity) => [entity.id, entity]));
+  for (const defeated of context.defeated_enemies || []) {
+    const original = defeated.scene_entity_id && registry.get(defeated.scene_entity_id);
+    if (original) registry.set(original.id, { ...original, status: 'dead', alive: false, hp_current: 0,
+      combat_stats: { ...original.combat_stats, current_hp: 0 }, defeated_in_combat_id: context.combat_id });
+  }
   corpses.forEach((corpse) => registry.set(corpse.id, corpse));
   await base44.asServiceRole.entities.GameSession.update(sessionId, {
     world_state: { ...(session.world_state || {}), last_completed_combat: context, scene_entities: [...registry.values()].slice(-64) },

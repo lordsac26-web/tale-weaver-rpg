@@ -65,6 +65,7 @@ export async function handleStartCombat(ctx) {
     const statMult = levelFactor * hpFactor;
 
     const scaled = rawEnemies.map(e => {
+      if (e.authoritative_scene_stats === true && e.scene_entity_id) return { ...e };
       const baseHp = parseInt(e.hp) || e.hp_current || 10;
       const baseAtk = e.attack_bonus ?? 3;
       const baseDmgBonus = e.damage_bonus ?? 2;
@@ -193,6 +194,7 @@ export async function handleStartCombat(ctx) {
       id: `enemy_${Math.random().toString(36).substr(2, 9)}`,
       name: enemy.name || enemy.monster_name || `Enemy`,
       type: 'enemy',
+      ...(enemy.scene_entity_id ? { scene_entity_id: enemy.scene_entity_id, source_request_id: enemy.source_request_id, aliases: enemy.aliases || [] } : {}),
       initiative_roll: initRoll,
       initiative_mod: initMod,
       initiative_total: initRoll + initMod,

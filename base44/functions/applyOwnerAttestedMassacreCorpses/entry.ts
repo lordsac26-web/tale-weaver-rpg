@@ -1,5 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.57';
 import { hashStoryValue } from '../../shared/story/storyTransition.ts';
+import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
+import { reconcileOwnerCultistScene } from '../../shared/repairs/ownerCultistScene.ts';
 
 /**
  * Owner-attested scene repair.
@@ -28,6 +30,13 @@ export default async function (req) {
 
   const session = await base44.asServiceRole.entities.GameSession.get(SESSION_ID);
   if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
+  const character = await base44.asServiceRole.entities.Character.get(session.character_id);
+  if (!characterBelongsToUser(character, user)) return Response.json({ error: 'This scene belongs to another character owner.', writes: 0 }, { status: 403 });
+  const payload = await req.json().catch(() => ({}));
+  if (payload.reconcile_current_scene === true) {
+    const outcome = await reconcileOwnerCultistScene({ base44, session, user, apply: payload.apply === true });
+    return Response.json(outcome.body, { status: outcome.status });
+  }
   const entry = (session.story_log || []).find((item) => item?.request_id === STORY_REQUEST_ID);
   if (!entry?.text) return Response.json({ error: 'The massacre story entry was not found; nothing written.', writes: 0 }, { status: 404 });
 

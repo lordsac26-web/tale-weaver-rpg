@@ -1,6 +1,8 @@
 import { characterBelongsToUser } from '../combat/authGuard.ts';
 import { resolveStorySkillCheck } from './storySkillCheck.ts';
 import { validatePlayerText } from './playerText.ts';
+import { classifyLegacyChoiceAction } from './choiceActionContract.js';
+import { classifyExplicitAttackIntent } from './explicitAttackTransition.ts';
 
 const rollD20 = () => {
   const bytes = new Uint32Array(1);
@@ -46,9 +48,13 @@ export async function resolveUnifiedStorySkillCheck({ db, user, payload, rollD20
   if (!session || !character || session.character_id !== character.id || (user && !characterBelongsToUser(character, user))) {
     return { status: 403, body: { error: 'Character and session linkage is invalid', writes: 0 } };
   }
+  const attackIntent = classifyExplicitAttackIntent({ actionText: checkedText.text, session });
+  if (classifyLegacyChoiceAction(checkedText.text) || attackIntent.required || attackIntent.reason === 'no_established_hostiles') return { status: 409, body: {
+    error: 'An explicit attack cannot roll or reuse a story skill check. Resolve it through the weapon attack controls.', error_code: 'attack_cannot_resolve_as_skill', preserve_scene: true, writes: 0 } };
   const receipts = Array.isArray(session.world_state?.__skill_check_receipts) ? session.world_state.__skill_check_receipts : [];
   const prior = receipts.find((entry) => entry?.request_id === requestId && entry?.unified_story_skill_resolution === true);
   if (prior) {
+    if (prior.superseded === true || prior.non_resolving === true) return { status: 409, body: { error: 'This receipt was retired and cannot resolve an action.', error_code: 'receipt_superseded', writes: 0 } };
     if (String(prior.skill) !== String(payload.skill) || Number(prior.dc) !== Number(payload.dc)) return { status: 409, body: { error: 'Idempotent skill-check request conflicts with its stored resolution', writes: 0 } };
     return { status: 200, body: { ...resolutionFromReceipt(prior, true), writes: 0, already_processed: true } };
   }

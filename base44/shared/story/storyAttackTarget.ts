@@ -1,6 +1,6 @@
 export const STORY_ATTACK_TARGET_VERSION = 'story-attack-target-v1.0.0';
 
-const ignored = new Set(['the', 'a', 'an', 'lead', 'leader', 'primary', 'main', 'target', 'squad', 'group', 'precise']);
+const ignored = new Set(['the', 'a', 'an', 'lead', 'leader', 'primary', 'main', 'target', 'squad', 'group', 'precise', 'closest', 'nearest']);
 const words = (value) => String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter((word) => word && !ignored.has(word));
 const normalized = (value) => words(value).join(' ');
 const validEnemy = (enemy) => Number(enemy?.hp ?? enemy?.current_hp) > 0 && Number(enemy?.ac) > 0;
@@ -14,15 +14,20 @@ const nameMatches = (name, targetRef) => {
   return targetWords.length > 0 && targetWords.every((word) => nameWords.has(word));
 };
 
-export function resolveStoryAttackTarget({ targetRef, enemies = [], sceneText = '', characterLevel = 1 } = {}) {
+export function resolveStoryAttackTarget({ targetRef, enemies = [], sceneText = '', characterLevel = 1, requireAuthoritativeRoster = false } = {}) {
   const ref = String(targetRef || '').trim();
   const meaningful = words(ref);
   if (!ref || meaningful.length === 0) return { ok: false, clarification_required: true, reason: 'missing_target_ref' };
 
   const roster = (Array.isArray(enemies) ? enemies : []).filter(validEnemy);
-  const matches = roster.filter((enemy) => nameMatches(enemy.name || enemy.monster_name, ref));
-  if (matches.length === 1) return { ok: true, target: { ...matches[0] }, enemies: [{ ...matches[0] }], materialized: false };
+  const matches = roster.filter((enemy) => enemy.scene_entity_id === ref || [enemy.name || enemy.monster_name, ...(enemy.aliases || [])].some(name => nameMatches(name, ref)));
+  if (matches.length === 1) return { ok: true, target: { ...matches[0] }, enemies: roster, materialized: false };
+  if (matches.length > 1 && /\b(?:closest|nearest)\b/i.test(ref) && matches.every(enemy => Number.isFinite(enemy.distance_feet))) {
+    const ordered = [...matches].sort((a, b) => a.distance_feet - b.distance_feet);
+    if (ordered[0].distance_feet < ordered[1].distance_feet) return { ok: true, target: { ...ordered[0] }, enemies: roster, materialized: false };
+  }
   if (matches.length > 1) return { ok: false, clarification_required: true, reason: 'ambiguous_authoritative_targets', candidates: matches.map((enemy) => enemy.name) };
+  if (requireAuthoritativeRoster) return { ok: false, clarification_required: true, reason: 'missing_living_scene_target', candidates: roster.map(enemy => enemy.name) };
 
   if (!nameMatches(sceneText, ref)) return { ok: false, clarification_required: true, reason: 'target_not_established_in_scene', candidates: roster.map((enemy) => enemy.name).filter(Boolean) };
 

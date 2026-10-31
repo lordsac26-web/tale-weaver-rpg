@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.57';
 import { characterBelongsToUser } from '../../shared/combat/authGuard.ts';
 import { prepareProjectileRecoveryProposal } from '../../shared/story/projectileLifecycle.ts';
 import { preflightCompositeAction } from '../../shared/story/compositeActionPreflight.ts';
@@ -7,6 +7,9 @@ import { validatePlayerText } from '../../shared/story/playerText.ts';
 import { resolveGroundedAction } from '../../shared/story/groundedAction.ts';
 import { resolveStowResume } from '../../shared/story/stowResume.ts';
 import { classifyLegacyChoiceAction } from '../../shared/story/choiceActionContract.js';
+import { preflightStoryAttack } from '../../shared/story/sceneCombatTargets.ts';
+import { classifyExplicitAttackIntent, EXPLICIT_ATTACK_TRANSITION_VERSION } from '../../shared/story/explicitAttackTransition.ts';
+import { INTENT_ROUTER_VERSION } from '../../shared/story/intentRouter.ts';
 
 export default async function(req) {
   try {
@@ -145,8 +148,14 @@ Return ONLY a JSON object:
       if (incomingParentKey && authoritativeParentKey !== incomingParentKey) return Response.json({ error:'Composite parent key does not match the authoritative parse.', action_type:'composite_action', parent_key:authoritativeParentKey, writes:0, function_version:'evaluate-player-action-v2.3.0' }, { status:409 });
       return Response.json({ action, action_type: 'composite_action', parent_key: authoritativeParentKey, composite_plan: compositePlan, valid: compositePlan.valid, alternatives: compositePlan.alternatives, requires_check: false, risk_level: 'high', reasoning: compositePlan.valid ? 'The complete ordered plan passed authoritative preflight.' : 'The complete ordered plan cannot be performed as stated; no spell slot, concentration, ammunition, attack, combat, or story state was changed.', request_id: String(request_id || '').slice(0, 120), function_version: 'evaluate-player-action-v2.3.0', writes: 0 });
     }
-    const deterministicAttack = classifyLegacyChoiceAction(action);
-    if (deterministicAttack) return Response.json({ ...deterministicAttack, action, requires_check: false, skill: null, dc: null, risk_level: 'high', reasoning: 'This is a weapon attack, not a Stealth check. Initiative, concealment advantage, ammunition and damage resolve through the authoritative attack controls.', request_id, writes: 0 });
+    const attackPreflight = preflightStoryAttack({ actionText: action, session });
+    if (attackPreflight.handled) return Response.json({ ...attackPreflight.body, request_id,
+      function_version: 'evaluate-player-action-v2.7.0', intent_router_version: INTENT_ROUTER_VERSION,
+      explicit_attack_transition_version: EXPLICIT_ATTACK_TRANSITION_VERSION }, { status: attackPreflight.status });
+    const explicitAttack = classifyExplicitAttackIntent({ actionText: action, session });
+    if (explicitAttack.required || explicitAttack.reason === 'no_established_hostiles') return Response.json({ error: 'This is an attack, not a skill check. Choose a weapon attack and a living target in this scene.',
+      error_code: 'explicit_attack_requires_combat', requires_check: false, skill: null, dc: null, preserve_scene: true, writes: 0,
+      function_version: 'evaluate-player-action-v2.7.0', intent_router_version: INTENT_ROUTER_VERSION }, { status: 409 });
     const projectileRecovery = await prepareProjectileRecoveryProposal({ base44, session, character, actionText: action });
     if (projectileRecovery.handled) {
       if (projectileRecovery.status >= 400) return Response.json({ error: projectileRecovery.error, writes: 0, combat_id: projectileRecovery.combat_id || null }, { status: projectileRecovery.status });

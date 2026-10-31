@@ -628,7 +628,7 @@ export default function Game() {
         mechanicalCast ? ` [MECHANICS: ${mechanicalCast.spell_name} was authoritatively cast at level ${mechanicalCast.slot_level || 0}; its slot, concentration, and canonical effects are already recorded. Do not deduct another slot.]` : '',
         mechanicalItem ? ` [MECHANICS: ${mechanicalItem.quantity} ${mechanicalItem.item_name} were authoritatively consumed and restored ${mechanicalItem.heal_amount} HP. Do not narrate a different quantity or apply another mechanical heal.]` : '',
       ].join('');
-      return { session_id: sessionId, action: 'choice', request_id: requestId, story_sequence: Date.now() * 1000 + storySequence, choice_context: { ...outcome, weapon_attack: buildThrownWeaponContext(action, character, outcome?.check?.success !== false) }, custom_input: action + checkResult + mechanicsContext };
+      return { session_id: sessionId, action: 'choice', request_id: requestId, story_sequence: Date.now() * 1000 + storySequence, source_entry_request_id: hydrateLatestStoryEntry(session).request_id || null, choice_context: { ...outcome, weapon_attack: outcome?.action_type === 'weapon_attack' ? outcome.weapon_attack || normalizeChoiceActionContract({ text: action }).weapon_attack : buildThrownWeaponContext(action, character, outcome?.check?.success !== false) }, custom_input: action + checkResult + mechanicsContext };
       });
       const data = result.data;
       if(data.time_advance?.clock&&data.session)setSession(data.session);
@@ -682,11 +682,11 @@ export default function Game() {
       setNarrative(prev => [...prev, { type: 'action_error', text: proposal.valid ? 'The composite plan is validated but must be resolved through its ordered authoritative children.' : `${proposal.reasoning} Choose one of the legal alternatives shown; the scene and choices remain unchanged.` }]);
       return;
     }
-    const resumed = resumeStorySkillResolution(session, action, skill, dc);
+    const resumed = actionType === 'weapon_attack' ? null : resumeStorySkillResolution(session, action, skill, dc);
     let requestId;
     try { requestId = storyContinuationRef.current.begin(`proposal:${session?.story_log?.at(-1)?.request_id}:${action}`, () => resumed?.receipt.request_id || `story-action:${sessionId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`); }
     catch (err) { setNarrative(prev => [...prev, { type: 'action_error', text: err.message }]); return; }
-    const retryReceipt = storyContinuationRef.current.receipt(requestId) || resumed;
+    const retryReceipt = actionType === 'weapon_attack' ? null : storyContinuationRef.current.receipt(requestId) || resumed;
     if (retryReceipt) { await continueProposalWithRoll(action, actionType || 'skill_check', skill, dc, recovery, requestId, null, retryReceipt); return; }
 
     setNarrative(prev => [...prev, { type: 'player_action', text: action }]);
@@ -705,7 +705,7 @@ export default function Game() {
 
     // No check required — straight to the story.
     if (!requires_check || !skill || !dc) {
-      await runProposalStory(action, '', { action_type: actionType || 'utility', check: { success: true }, recovery: recovery || null, grounded_action: proposal.grounded_action || null, ground_answer_text: proposal.ground_answer_text || '' }, requestId, preCast);
+      await runProposalStory(action, '', { action_type: actionType || 'utility', weapon_attack: proposal.weapon_attack || null, check: { success: true }, recovery: recovery || null, grounded_action: proposal.grounded_action || null, ground_answer_text: proposal.ground_answer_text || '' }, requestId, preCast);
       return;
     }
 
