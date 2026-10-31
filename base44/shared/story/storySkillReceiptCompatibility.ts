@@ -8,6 +8,11 @@ export function matchPersistedStorySkillReceipt({ persisted, incoming, requestId
   if (!persisted || !candidate || persisted.unified_story_skill_resolution !== true || persisted.request_id !== requestId) {
     return { ok: false, reason: 'missing_persisted_resolution' };
   }
+  // A retired receipt (an attack misrouted as a skill check, with no story entry and
+  // no CombatLog) can never resolve again. Retirement is permanent, not advisory: a
+  // save-resume or "reuse the saved roll" path that re-surfaces the receipt still
+  // cannot turn it into a legitimate skill attempt or attack.
+  if (persisted.superseded === true || persisted.non_resolving === true) return { ok: false, reason: 'receipt_superseded' };
   const incomingRequestId = candidate.request_id || candidate.id || null;
   if (incomingRequestId && incomingRequestId !== requestId) return { ok: false, reason: 'request_id_mismatch' };
   const timestamp = candidate.receipt_timestamp || candidate.at || null;
