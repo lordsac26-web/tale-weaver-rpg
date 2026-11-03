@@ -26,6 +26,7 @@ export const MANDATORY_NIGHTLY_SUITES = [
   'testPersistentRollModeRegression',
   'testAskDMRecentRollRegression',
   'testSemanticCorpseLootRegression',
+  'testPlayerFacingPlaceholderRegression',
 ];
 
 export const PROTECTED_NIGHTLY_IDS = {

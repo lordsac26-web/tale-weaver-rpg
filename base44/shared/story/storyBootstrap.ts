@@ -1,5 +1,6 @@
 import { hydrateLatestStoryEntry, normalizeStoryChoices } from './storyTransition.ts';
 import { normalizeChoiceActionContract } from './choiceActionContract.js';
+import { playerFacingLocationLabel } from './playerFacingTextGuard.ts';
 
 export const STORY_BOOTSTRAP_VERSION = 'story-bootstrap-v1.2.0';
 
@@ -64,7 +65,8 @@ const FALLBACK_FRAMES = [
 ];
 
 export function groundedFallbackChoices({ location = 'the current area', requestId = '', previousChoices = [], lastPlayerAction = '' } = {}) {
-  const place = String(location || 'the current area').trim().replace(/[.!?]+$/, '') || 'the current area';
+  // A missing display name falls back to descriptive prose, never a state key.
+  const place = playerFacingLocationLabel(String(location || 'the current area').trim().replace(/[.!?]+$/, '') || 'the current area');
   const previous = normalizeGeneratedChoices(previousChoices).map((choice) => choice.text);
   const performed = normalizeChoiceText(lastPlayerAction);
   const seed = [...String(requestId)].reduce((sum, char) => sum + char.charCodeAt(0), 0);

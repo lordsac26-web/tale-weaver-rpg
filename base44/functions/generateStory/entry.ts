@@ -52,6 +52,7 @@ import { prepareGroundedStoryCommit } from '../../shared/story/groundedStoryComm
 import groundedStoryDispatch from '../../shared/story/groundedStoryDispatch.ts';
 import { defeatedSceneTargetForRef } from '../../shared/story/sceneCombatTargets.ts';
 import { advanceWorldClockBySeconds } from '../../shared/story/worldClock.ts';
+import { guardPlayerFacingStoryText, isUnresolvedStateToken, playerFacingLocationLabel } from '../../shared/story/playerFacingTextGuard.ts';
 
 
 /**
@@ -330,7 +331,7 @@ export default async function(req) {
 
     const charSummary = character ? `${character.name}, Lvl ${character.level} ${character.race} ${character.class}${character.subclass ? ` (${character.subclass})` : ''} | HP: ${character.hp_current}/${character.hp_max} | AC: ${character.armor_class} | Alignment: ${character.alignment || 'Neutral'} | Stats: STR ${character.strength}, DEX ${character.dexterity}, CON ${character.constitution}, INT ${character.intelligence}, WIS ${character.wisdom}, CHA ${character.charisma} | Skills: ${Object.entries(character.skills || {}).filter(([k,v])=>v).map(([k])=>k).join(', ')} | Conditions: ${(character.conditions || []).map(c => c.name || c).join(', ') || 'None'} | Spell slots: ${slotSummary} | Backstory: ${(character.backstory || 'None').slice(0, 400)}` : '';
 
-    const worldSummary = `Location: ${session.current_location || 'Unknown'} | Season: ${session.season} | Time: ${session.time_of_day} | Weather: ${session.weather || 'clear'} | Quests: ${(session.active_quests || []).map(q => q.title).join(', ') || 'None'} | Reputation: ${session.reputation || 0}${session.adult_mode ? ' | Adult mode: ON' : ''}`;
+    const worldSummary = `Location: ${playerFacingLocationLabel(session.current_location, 'Unknown')} | Season: ${session.season} | Time: ${session.time_of_day} | Weather: ${session.weather || 'clear'} | Quests: ${(session.active_quests || []).map(q => q.title).join(', ') || 'None'} | Reputation: ${session.reputation || 0}${session.adult_mode ? ' | Adult mode: ON' : ''}`;
 
     // Widen the memory window and explicitly surface what the PLAYER did each turn,
     // not just the DM's narration — so deliberate, consequential acts (e.g. swallowing
@@ -398,7 +399,7 @@ ${authoritativeWait ? `AUTHORITATIVE TIME ADVANCE: ${authoritativeWait.time_adva
 ${scenePickup ? `AUTHORITATIVE SCENE PICKUP: exactly one ${scenePickup.recovery.item.name} was already added from story entry ${scenePickup.provenance.source_story_index}. Its identity is unresolved; do not reveal rarity, powers, charges, attunement, or a canonical name.` : ''}
 ${currentCombat ? `COMPLETED COMBAT CONTEXT: Combat ${currentCombat.combat_id} ended in ${currentCombat.result}. Dead enemies: ${(currentCombat.defeated_enemies || currentCombat.dead_enemies || []).map((enemy) => enemy.name || enemy.id).join(', ') || 'all listed enemies'}. This is aftermath narration only: combat_trigger MUST be false, enemies MUST be [], and no dead enemy may escape or re-engage.` : ''}
 ${authoritativeChoiceContext?.authoritative_skill_resolution ? `AUTHORITATIVE SKILL CHECK: ${authoritativeChoiceContext.check.skill} DC${authoritativeChoiceContext.check.dc}; original d20 ${authoritativeChoiceContext.check.raw_d20} + authoritative modifier ${authoritativeChoiceContext.check.modifier_total} = ${authoritativeChoiceContext.check.final_total}; ${authoritativeChoiceContext.check.success ? 'SUCCESS' : 'FAILURE'}. The narration, condition update, HP change, and combat trigger must honor this exact receipt.` : ''}
-${infiltrationPlan ? `INFILTRATION ADVANCEMENT CONTRACT: ${infiltrationPlan.success ? `The successful action must advance from stage ${infiltrationPlan.before.stage} to ${infiltrationPlan.after.stage}, move the threat from ${infiltrationPlan.before.threat_position} to ${infiltrationPlan.after.threat_position}, move the player to ${infiltrationPlan.after.player_position}, keep awareness ${infiltrationPlan.after.guard_awareness}, and produce materially new choices. Never say no further action is taken.` : 'The failed action must produce a distinct bounded consequence without advancing infiltration progress.'}` : ''}
+${infiltrationPlan ? `INFILTRATION ADVANCEMENT CONTRACT: ${infiltrationPlan.success ? `The successful action must advance from stage ${infiltrationPlan.before.stage} to ${infiltrationPlan.after.stage}, move the threat from ${playerFacingLocationLabel(infiltrationPlan.before.threat_position)} to ${playerFacingLocationLabel(infiltrationPlan.after.threat_position)}, move the player to ${playerFacingLocationLabel(infiltrationPlan.after.player_position)}, keep awareness ${infiltrationPlan.after.guard_awareness}, and produce materially new choices. Never say no further action is taken.` : 'The failed action must produce a distinct bounded consequence without advancing infiltration progress.'}` : ''}
 ${ambushIntent ? `PENDING AMBUSH CONTRACT: This action resolves ONLY the Stealth setup phase. Do not narrate an arrow release, weapon attack, hit, damage, target defeat, concentration break, or death. If combat starts, the living ritual target must appear exactly once in enemies with complete HP and AC; the actual strike will be resolved later through player_attack.` : ''}
 ${narrativeRangedIntent ? `AUTHORITATIVE RANGED ATTACK CONTRACT: This is an attempted ranged weapon attack. Set combat_trigger true and provide complete living enemy stat blocks. Do not narrate a release, attack roll, hit, miss, damage, death, arrow count, or ammunition change; those resolve only through player_attack after combat starts.` : ''}
 ${Number(character.exhaustion_level || 0) === 0 && session.world_state?.post_rest_continuity?.rested ? 'POST-REST FACT: the character is fully rested and alert. Do not describe fatigue, tiredness, weariness, raggedness, sleeplessness, or exhaustion unless a new structured mechanic explicitly causes it.' : ''}
@@ -685,12 +686,17 @@ Write a gripping 1-2 paragraph combat narrative.`;
       if (incomingStorySequence > 0 && persistedStorySequence > incomingStorySequence) return Response.json({ error: 'A newer story transition is already committed.', superseded: true, writes: 0, transition_version: STORY_TRANSITION_VERSION }, { status: 409 });
       const immediatelyPreceding = hydrateLatestStoryEntry(commitSession);
       result = finalizeGeneratedStoryResult(result, { location: result?.location_update || commitSession.current_location || 'the current area', requestId: storyRequestId, previousChoices: immediatelyPreceding.choices, lastPlayerAction: selectedChoice || custom_input });
+      // Commit-time guard: player-facing text never ships a raw state key or
+      // template variable; every leak is repaired and logged before the write.
+      const placeholderGuard = guardPlayerFacingStoryText(result);
+      if (placeholderGuard.repairs.length) console.warn('Unresolved placeholder tokens repaired before commit', JSON.stringify({ request_id: storyRequestId, repairs: placeholderGuard.repairs }));
+      result = placeholderGuard.result;
       const skillCheck = authoritativeChoiceContext?.check?.raw_d20 != null ? authoritativeChoiceContext.check : null;
       const previousChoiceHash = await hashStoryValue(immediatelyPreceding.choices);
       const currentChoiceHash = await hashStoryValue(result.choices);
       const responsePayloadHash = await hashStoryValue(canonicalStoryResponsePayload({ requestId: storyRequestId, text: result.narrative, choices: result.choices, skillCheck }));
       const completedEntry = {
-        timestamp: new Date().toISOString(), action, scene_location: result.location_update || commitSession.current_location || '',
+        timestamp: new Date().toISOString(), action, scene_location: result.location_update || playerFacingLocationLabel(commitSession.current_location, ''),
         ...(storyRequestId ? { request_id: storyRequestId } : {}),
         player_choice: action === 'choice' ? selectedChoice : (custom_input ?? choice_index),
         text: result.narrative, choices: result.choices, mechanics_status: 'pending',
@@ -764,6 +770,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
       }
 
       if (result.location_update) updateData.current_location = result.location_update;
+      else if (isUnresolvedStateToken(commitSession.current_location)) updateData.current_location = playerFacingLocationLabel(commitSession.current_location);
       if (action === 'start' && result.opening_signature) updateData.opening_signature = result.opening_signature;
       if (result.reputation_change) updateData.reputation = (session.reputation || 0) + result.reputation_change;
       if (result.plot_flag) updateData.plot_flags = { ...(session.plot_flags || {}), [result.plot_flag]: true };
