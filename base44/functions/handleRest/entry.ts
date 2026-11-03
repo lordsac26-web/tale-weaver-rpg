@@ -403,7 +403,10 @@ export default async function handleRest(req) {
     const completedAt = new Date().toISOString();
     const clock = advanceWorldClock({ timeOfDay: session.time_of_day, worldState: session.world_state, elapsedHours: restElapsedHours, completedAt });
     const clockResult = { intent: rest_intent, ...clock.clock };
-    const receipt = { token: receiptToken || `long-rest:${completedAt}`, response: { ...response, time_of_day: clock.time_of_day, clock: clockResult }, completed_at: completedAt };
+    // Receipts keep the outcome only; replays rehydrate current character/session
+    // state, so historical snapshots never accumulate in world_state again.
+    const { character: _restSnapshot, session: _restSession, ...compactResponse } = { ...response, time_of_day: clock.time_of_day, clock: clockResult };
+    const receipt = { token: receiptToken || `long-rest:${completedAt}`, response: compactResponse, completed_at: completedAt };
     clock.world_state.__rest_receipts = [...restReceipts.filter((entry) => entry.token !== receipt.token).slice(-24), receipt];
     clock.world_state.active_concentration = null;
      clock.world_state.post_rest_continuity = { rested: true, exhausted: Number(updatedChar.exhaustion_level || 0) === 0, completed_at: completedAt, clock_hour: clock.clock.after_hour, period: clock.clock.after_period, expired_effects: clearedConditions.filter(name => String(name).toLowerCase() === 'pass without trace') };

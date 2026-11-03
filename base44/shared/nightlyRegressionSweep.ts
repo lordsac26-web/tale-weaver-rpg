@@ -25,6 +25,7 @@ export const MANDATORY_NIGHTLY_SUITES = [
   'testMonotonicEffectDurationRegression',
   'testPersistentRollModeRegression',
   'testAskDMRecentRollRegression',
+  'testSemanticCorpseLootRegression',
 ];
 
 export const PROTECTED_NIGHTLY_IDS = {
@@ -142,7 +143,27 @@ export async function executeNightlyRegressionSweep({ base44, runKey, environmen
   const protectedAfter = await readProtected(db);
   const protectedUnchanged = protectedBefore.hash === protectedAfter.hash;
   const cleanupVerified = residue.length === 0 && Object.values(details).every((detail) => detail.cleanup_verified);
-  const allPass = failed === 0 && cleanupVerified && protectedUnchanged && Object.values(details).every((detail) => detail.status === 'passed');
+  // Size budget: world_state must stay compact and cannot regrow. Receipts are
+  // capped (25 rests, 64 scene entities) and rest receipts must store outcomes,
+  // not full historical character snapshots.
+  const sizeBudget = { world_state_limit_bytes: 262144, rest_receipt_limit: 25, scene_entity_limit: 64, sessions: {} };
+  for (const id of PROTECTED_NIGHTLY_IDS.GameSession) {
+    const record = await db.entities.GameSession.get(id).catch(() => null);
+    if (!record) continue;
+    const restReceipts = Array.isArray(record.world_state?.__rest_receipts) ? record.world_state.__rest_receipts : [];
+    sizeBudget.sessions[id] = {
+      world_state_bytes: JSON.stringify(record.world_state || {}).length,
+      rest_receipts: restReceipts.length,
+      rest_receipts_compacted: restReceipts.every((entry) => !entry?.response?.character),
+      scene_entities: Array.isArray(record.world_state?.scene_entities) ? record.world_state.scene_entities.length : 0,
+    };
+  }
+  const sizeBudgetPassed = Object.values(sizeBudget.sessions).every((entry) =>
+    entry.world_state_bytes <= sizeBudget.world_state_limit_bytes
+    && entry.rest_receipts <= sizeBudget.rest_receipt_limit
+    && entry.rest_receipts_compacted
+    && entry.scene_entities <= sizeBudget.scene_entity_limit);
+  const allPass = failed === 0 && cleanupVerified && protectedUnchanged && sizeBudgetPassed && Object.values(details).every((detail) => detail.status === 'passed');
   const completedAt = new Date().toISOString();
   const aggregate = {
     run_key: key,
@@ -154,7 +175,7 @@ export async function executeNightlyRegressionSweep({ base44, runKey, environmen
     failed,
     total,
     all_pass: allPass,
-    suite_details: { suites: details, manifest, disposable_residue: residue, protected_before: protectedBefore, protected_after: protectedAfter, sweep_version: NIGHTLY_SWEEP_VERSION },
+    suite_details: { suites: details, manifest, disposable_residue: residue, protected_before: protectedBefore, protected_after: protectedAfter, size_budget: { ...sizeBudget, passed: sizeBudgetPassed }, sweep_version: NIGHTLY_SWEEP_VERSION },
     cleanup_verified: cleanupVerified,
     protected_unchanged: protectedUnchanged,
     environment,

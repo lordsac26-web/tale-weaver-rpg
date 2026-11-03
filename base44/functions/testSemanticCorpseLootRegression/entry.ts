@@ -30,7 +30,7 @@ export default async function(req) {
       const result = await resolveSemanticSceneReference({ base44: fake, catalog: [corpse], actionText: 'loot the cultist', answerText: reply });
       check(`reply_${reply}`, result.target?.id === corpse.id);
     }
-    const second = { ...corpse, id: 'corpse-2', name: 'Cultist Guard 2', source_ordinal: 2, aliases: ['cultist','guard'], death_provenance: { ...corpse.death_provenance, combatant_id: 'enemy-2' } };
+    const second = { ...corpse, id: 'corpse-2', name: 'Cultist Guard 2', source_ordinal: 2, aliases: ['cultist','guard'], defeat_id: 'fixture-combat:enemy-2', death_provenance: { ...corpse.death_provenance, combatant_id: 'enemy-2' } };
     const context = { revision: 'fixture-revision', entities: [corpse, second] };
     const initial = await groundCorpseLoot({ base44: fake, session, context, actionText: 'loot the cultist', requestId: 'pending-1' });
     check('one_genuine_ambiguity_prompt', initial.clarification_required && initial.clarification_options.length === 2);

@@ -51,6 +51,7 @@ import { SCENE_ENTITY_SCHEMA } from '../../shared/story/sceneEvidence.ts';
 import { prepareGroundedStoryCommit } from '../../shared/story/groundedStoryCommit.ts';
 import groundedStoryDispatch from '../../shared/story/groundedStoryDispatch.ts';
 import { defeatedSceneTargetForRef } from '../../shared/story/sceneCombatTargets.ts';
+import { advanceWorldClockBySeconds } from '../../shared/story/worldClock.ts';
 
 
 /**
@@ -720,7 +721,11 @@ Write a gripping 1-2 paragraph combat narrative.`;
       const infiltrationUpdate=buildInfiltrationSessionUpdate({session:commitSession,plan:infiltrationPlan});
       if(infiltrationUpdate){updateData.time_of_day=infiltrationUpdate.time_of_day;updateData.world_state=infiltrationUpdate.world_state;}
       if (incomingStorySequence > 0) updateData.world_state = { ...(updateData.world_state || commitSession.world_state || {}), __story_transition_sequence: incomingStorySequence };
-      updateData.world_state = { ...(updateData.world_state || commitSession.world_state || {}), scene_entities: sceneCommit.registry };
+      // Every committed story turn advances the game clock by a small narrated
+      // increment (10 minutes). Without this the exploration clock froze and a
+      // 1-hour buff (Pass without Trace) never lapsed across days of play.
+      const turnClock = advanceWorldClockBySeconds({ worldState: commitSession.world_state, elapsedSeconds: 600, completedAt: new Date().toISOString(), source: 'story_turn' });
+      updateData.world_state = { ...(updateData.world_state || {}), ...turnClock, scene_entities: sceneCommit.registry };
 
       // Campaign Memory Refresh — keep a persistent running log of key events so
       // deliberate player actions are never forgotten. A player's custom action is
