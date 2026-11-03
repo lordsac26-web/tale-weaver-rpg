@@ -49,6 +49,8 @@ import useStoryStowClarification from '@/components/game/useStoryStowClarificati
 import useStoryCustomAction from '@/components/game/useStoryCustomAction';
 import useGroundedClarification from '@/components/game/useGroundedClarification';
 import usePlayerDraft from '@/components/game/usePlayerDraft';
+import useStoryRecovery from '@/components/game/useStoryRecovery';
+import StoryRecoveryCard from '@/components/game/StoryRecoveryCard';
 
 const getFunctionErrorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.response?.data?.message ||
@@ -88,6 +90,7 @@ export default function Game() {
   const choiceDispatchInFlightRef = useRef(false);
   const storyContinuationRef = useRef(null);
   if (!storyContinuationRef.current) storyContinuationRef.current = createStoryContinuation(payload => base44.functions.invoke('generateStory', payload));
+  const storyRecovery = useStoryRecovery({ sessionId, onRecovered: async () => { await loadState(); setNarrative(previous => [...previous, { type: 'action_error', text: 'Recovered your saved action. Continuing without another roll.' }]); } });
   const [storyActionLabel, setStoryActionLabel] = useState(null);
   const [companions, setCompanions] = useState([]);
   const [showCompanions, setShowCompanions] = useState(false);
@@ -153,7 +156,9 @@ export default function Game() {
   const loadState = useCallback(async (transition = {}) => {
     if (!sessionId) { navigate('/Home'); return; }
     const authoritative = await base44.functions.invoke('generateStory', { session_id: sessionId, action: 'hydrate' });
+    storyRecovery.observe(authoritative.data);
     let sess = authoritative.data?.session;
+    storyContinuationRef.current.reconcile(sess);
     let loadedChar = authoritative.data?.character || null;
     if (!sess || !loadedChar) { navigate('/Home'); return; }
     const combatResolution = await resolveSessionCombat(sess);
@@ -182,7 +187,7 @@ export default function Game() {
         transition.storySequence === storyRequestSequenceRef.current &&
         hydration.request_id === transition.expectedRequestId
       );
-      if (transitionIsCurrent) setChoices(sess.in_combat ? [] : hydration.choices);
+      if (transitionIsCurrent) setChoices(sess.in_combat || authoritative.data?.story_recovery ? [] : hydration.choices);
     } else if (transition.storySequence == null) {
       setChoices([]);
     }
@@ -190,6 +195,7 @@ export default function Game() {
     // resolveSessionCombat above is authoritative in both directions: it resumes
     // an active fight, exits an already-completed fight, or surfaces a retryable
     // synchronization error instead of leaving the player on an endless spinner.
+    if (authoritative.data?.recovery) setNarrative(previous => [...previous, { type: 'action_error', text: 'Recovered your saved action. Continuing without another roll.' }]);
     if (combatResolution.recovered) {
       setNarrative(prev => [...prev, { type: 'narration', text: 'The previous combat had already ended. Your story state has been safely restored.' }]);
     }
@@ -423,8 +429,9 @@ export default function Game() {
       storyContinuationRef.current.accepted(requestId);
     } catch (err) {
       console.error('Failed to process choice:', err);
+      storyRecovery.capture(err);
       await loadState().catch(() => null);
-      setNarrative(prev => [...prev, { type: choice.action_type === 'weapon_attack' ? 'action_error' : 'narration', text: `${getFunctionErrorMessage(err, 'The action could not be resolved.')} The authoritative scene and choice were preserved; retry when ready.` }]);
+      setNarrative(prev => [...prev, { type: 'action_error', text: getFunctionErrorMessage(err, 'The action could not be resolved. Your last confirmed scene is preserved.') }]);
     } finally {
       choiceDispatchInFlightRef.current = false;
       setStoryActionLabel(null);
@@ -433,7 +440,7 @@ export default function Game() {
   };
 
   const handleChoice = async (choiceIndex) => {
-    if (choiceDispatchInFlightRef.current) return;
+    if (choiceDispatchInFlightRef.current || storyRecovery.blocked) return;
     choiceDispatchInFlightRef.current = true;
     const sourceChoice = normalizeChoiceActionContract(choices[choiceIndex]);
     const choiceRoute = routeStoryAction(sourceChoice);
@@ -657,6 +664,7 @@ export default function Game() {
       storyContinuationRef.current.accepted(requestId);
     } catch (err) {
       console.error('Failed to execute action:', err);
+      storyRecovery.capture(err);
       await loadState().catch(() => null);
       setNarrative(prev => [...prev, { type: 'narration', text: `${getFunctionErrorMessage(err, 'The Dungeon Master pauses... Something went awry.')} The last saved scene is displayed; this does not prove the attempted action completed. Do not repeat it until its saved result is confirmed.` }]);
     } finally {
@@ -1618,6 +1626,7 @@ export default function Game() {
 
       {showAskDM && <AskDMDialog sessionId={sessionId} characterId={character?.id} combatId={inCombat ? validCombatId : null} onClose={() => setShowAskDM(false)} />}
       <CombatActionError message={combatActionError} onClose={() => setCombatActionError(null)} />
+      <StoryRecoveryCard controller={storyRecovery} />
 
       {/* Main Game Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
@@ -1745,7 +1754,7 @@ export default function Game() {
                       onChoice={character?.hp_current <= 0 ? () => {} : handleChoice} 
                       customInput={customInput}
                       setCustomInput={character?.hp_current <= 0 ? () => {} : setCustomInput} 
-                      onCustomSubmit={character?.hp_current <= 0 ? () => {} : handleCustomInput} sessionId={sessionId} characterId={character?.id} stowClarification={stowClarification} groundedClarification={groundedClarification} />
+                      onCustomSubmit={character?.hp_current <= 0 || storyRecovery.blocked ? () => {} : handleCustomInput} sessionId={sessionId} characterId={character?.id} stowClarification={stowClarification} groundedClarification={groundedClarification} />
                   )}
                 </div>
               </div>

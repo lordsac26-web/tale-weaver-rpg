@@ -19,15 +19,18 @@ const retireTargets = ({ session, requestIds }) => {
 // Retire receipts in place: removed from the resolvable list, preserved in the
 // orphan ledger with retired provenance. Never touches a receipt whose story
 // entry actually committed.
-const retireReceiptsIntoLedger = async ({ db, session, targets, reason }) => {
+export const retireReceiptsIntoLedger = async ({ db, session, targets, reason }) => {
   const worldState = session.world_state || {};
   const receipts = worldState.__skill_check_receipts || [];
   const ledger = [...(worldState.__orphan_skill_receipts || [])];
   const retiredAt = new Date().toISOString();
   const kept = receipts.filter((receipt) => !targets.includes(receipt));
   for (const receipt of targets) ledger.push({ ...receipt, superseded: true, non_resolving: true, retired_at: retiredAt, retired_reason: reason });
-  await db.entities.GameSession.update(session.id, { world_state: { ...worldState, __skill_check_receipts: kept, __orphan_skill_receipts: ledger.slice(-60) } });
-  return { retired: targets.length, reason };
+  const retiredIds = [...new Set([...(worldState.__retired_story_request_ids || []), ...ledger.map(receipt => receipt.request_id)])];
+  await db.entities.GameSession.updateMany({ id: session.id, updated_date: session.updated_date }, { $set: { world_state: { ...worldState, __skill_check_receipts: kept, __orphan_skill_receipts: ledger.slice(-60), __retired_story_request_ids: retiredIds } } });
+  const saved = await db.entities.GameSession.get(session.id);
+  const confirmed = targets.every(receipt => saved.world_state?.__retired_story_request_ids?.includes(receipt.request_id));
+  return { retired: confirmed ? targets.length : 0, reason, confirmed };
 };
 
 export const retireUnsavedActionReceipt = async ({ db, sessionId, requestId, reason }) => {

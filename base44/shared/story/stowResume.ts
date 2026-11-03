@@ -12,7 +12,7 @@ export function resolveStowResume({ session, character, actionText }) {
   if (!source) return null;
   const attempts = (session.world_state?.__skill_check_receipts || []).filter(x => {
     const prior = classifyStowIntent(x.action_text);
-    return x.unified_story_skill_resolution === true && x.source_story_request_id === source && prior
+    return x.superseded !== true && x.non_resolving !== true && !(session.world_state?.__retired_story_request_ids || []).includes(x.request_id) && x.unified_story_skill_resolution === true && x.source_story_request_id === source && prior
       && /\b(?:corpses|bodies)\b/i.test(prior.item_phrase) && prior.container === parsed.container
       && !session.story_log.some(e => e.request_id === x.request_id);
   });

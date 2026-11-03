@@ -149,7 +149,9 @@ export async function materializeNarratedLoot({ base44, sessionId, characterId, 
 
   if (Object.keys(updateData).length === 0) return { applied: false, materialized: [], writes: 0 };
 
-  await db.entities.Character.update(characterId, updateData);
+  await db.entities.Character.updateMany({ id: characterId, updated_date: character.updated_date }, { $set: updateData });
+  const confirmed = await db.entities.Character.get(characterId);
+  if (!newItems.every(item => [...(confirmed.inventory || []), ...(confirmed.stowed_items || [])].some(saved => saved.provenance?.story_request_id === requestId && saved.name === item.name))) throw new Error('Narrated loot write was not confirmed; the saved action can be reconciled.');
   return {
     applied: true,
     materialized: newItems.map(item => ({ name: item.name, category: inferCategory(item.name), weight: inferWeight(item.name), container: bagMentioned ? 'Bag of Holding' : null, provenance })),

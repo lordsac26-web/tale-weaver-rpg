@@ -17,6 +17,12 @@ export default function createStoryContinuation(invoke) {
       if (!pending.payload) pending.payload = Promise.resolve().then(buildPayload);
       return invoke(await pending.payload);
     },
+    reconcile(session) {
+      if (!pending) return;
+      const retired = (session?.world_state?.__retired_story_request_ids || []).includes(pending.id) || (session?.world_state?.__orphan_skill_receipts || []).some(receipt => receipt.request_id === pending.id);
+      const committed = (session?.story_log || []).some(entry => entry.request_id === pending.id && entry.mechanics_status === 'complete');
+      if (retired || committed) pending = null;
+    },
     accepted(id) { if (pending?.id === id) pending = null; },
     cancelled(id) { if (pending?.id === id && !pending.receipt && !pending.payload) pending = null; },
   };

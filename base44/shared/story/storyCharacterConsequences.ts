@@ -1,6 +1,7 @@
 import { canonicalStoryConditionName, normalizeStoryConditions } from './activeEffects.ts';
 import { canonicalStoryStealthedCondition, withCanonicalStoryStealthed } from './stealthSetupHandoff.ts';
 import { isPwt } from './postRestResiduals.ts';
+import { commitStoryConsequencePlan } from './storyConsequenceCommit.ts';
 
 const CONDITION_PLACEHOLDERS = new Set(['', 'none', 'normal', 'no condition', 'no conditions', 'n/a', 'null', 'undefined']);
 const TEMPORARY_STORY_CONDITIONS = new Set(['silenced', 'silence', 'blinded', 'charmed', 'deafened', 'frightened', 'grappled', 'incapacitated', 'invisible', 'paralyzed', 'petrified', 'poisoned', 'prone', 'restrained', 'stunned', 'unconscious', 'hidden', 'marked target', 'alert', 'rejuvenated']);
@@ -9,9 +10,8 @@ const conditionKey = value => conditionName(value).toLowerCase();
 const validConditionName = value => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
 
 // Extracted without changing the pre-existing condition, HP or XP rules.
-export async function applyStoryCharacterConsequences({ base44, character, session, sessionId, requestId, result, action, stealthSetupIntent, choiceContext }) {
-  if (!character) return;
-  const freshChar = await base44.asServiceRole.entities.Character.get(character.id);
+export function planStoryCharacterConsequences({ character, session, sessionId, requestId, result, action, stealthSetupIntent, choiceContext }) {
+  const freshChar = character;
   const authoritativeExhaustion = Number((freshChar || character).exhaustion_level || 0);
   const originalConditions = Array.isArray((freshChar || character).conditions) ? (freshChar || character).conditions : [];
   const incoming = result.condition_update && typeof result.condition_update === 'object' ? result.condition_update : { target: 'none', add: '', remove: [], duration: 'scene' };
@@ -50,10 +50,18 @@ export async function applyStoryCharacterConsequences({ base44, character, sessi
     }
   }
   nextConditions = normalizeStoryConditions(nextConditions);
-  if (JSON.stringify(nextConditions) !== JSON.stringify(originalConditions)) await base44.asServiceRole.entities.Character.update(character.id, { conditions: nextConditions });
+  const before = {}, after = {};
+  if (JSON.stringify(nextConditions) !== JSON.stringify(originalConditions)) { before.conditions = character.conditions; after.conditions = nextConditions; }
   if (result.hp_change) {
-    const newHp = Math.max(0, Math.min(character.hp_max || 0, (character.hp_current || 0) + result.hp_change));
-    if (newHp !== character.hp_current) await base44.asServiceRole.entities.Character.update(character.id, { hp_current: newHp });
+    const hp = Math.max(0, Math.min(character.hp_max || 0, (character.hp_current || 0) + result.hp_change));
+    if (hp !== character.hp_current) { before.hp_current = character.hp_current; after.hp_current = hp; }
   }
-  if (result.xp_earned) await base44.asServiceRole.entities.Character.update(character.id, { xp: (character.xp || 0) + result.xp_earned });
+  if (result.xp_earned) { before.xp = character.xp; after.xp = (character.xp || 0) + result.xp_earned; }
+  return { before, after };
+}
+
+export async function applyStoryCharacterConsequences(args) {
+  const character = await args.base44.asServiceRole.entities.Character.get(args.character.id);
+  const plan = planStoryCharacterConsequences({ ...args, character });
+  return commitStoryConsequencePlan({ db: args.base44.asServiceRole, characterId: character.id, plan });
 }

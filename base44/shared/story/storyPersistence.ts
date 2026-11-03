@@ -14,7 +14,7 @@ export async function confirmPersistedStoryPair({ readSession, requestId, expect
       const { entry, index } = matches[0];
       if (entry.mechanics_status === 'pending' && !allowPending) return failure('partial_mechanics_commit', true);
       const hash = await hashStoryValue(canonicalStoryResponsePayload({ requestId, text: entry.text, choices: entry.choices, skillCheck: entry.skill_check }));
-      if (!entry.text || entry.choices?.length !== 4 || !entry.choice_evidence?.response_payload_hash || hash !== entry.choice_evidence.response_payload_hash || (expectedHash && hash !== expectedHash)) return failure('persisted_pair_hash_mismatch', afterWrite);
+      if (!entry.text || (!entry.transition_outcome?.combat_trigger && entry.choices?.length !== 4) || !entry.choice_evidence?.response_payload_hash || hash !== entry.choice_evidence.response_payload_hash || (expectedHash && hash !== expectedHash)) return failure('persisted_pair_hash_mismatch', afterWrite);
       if (index !== session.story_log.length - 1) return failure('superseded_persisted_pair', afterWrite);
       return { status: 200, session, body: { ...(entry.transition_outcome || {}), ...storyPayloadFromCommit({ entry, index, persistence_confirmed: true }), story_persistence_version: STORY_PERSISTENCE_VERSION } };
     }
@@ -36,14 +36,17 @@ export async function buildStoryClarification({ db, sessionId, characterId, requ
 
 // Stage before consequences, complete only afterwards. An interrupted consequence
 // path cannot replay as completed or silently apply damage/resources twice.
-export async function finishStoryPersistence({ db, sessionId, requestId, expectedHash }) {
+export async function finishStoryPersistence({ db, sessionId, requestId, expectedHash, recoveryReceipt = null }) {
   const staged = await confirmPersistedStoryPair({ readSession: () => db.entities.GameSession.get(sessionId), requestId, expectedHash, allowPending: true, afterWrite: true });
   if (staged.status !== 200) return staged;
   const entry = staged.body.story_entry;
   if (!await confirmItemDispositionReceipts({ db, session: staged.session, entry })) return failure('item_disposition_receipt_missing', true);
   if (entry.mechanics_status === 'pending') {
-    const story_log = staged.session.story_log.map(x => x.request_id === requestId ? { ...x, mechanics_status: 'complete' } : x);
-    await db.entities.GameSession.update(sessionId, { story_log });
+    const story_log = staged.session.story_log.map(x => x.request_id === requestId ? { ...x, mechanics_status: 'complete', ...(recoveryReceipt ? { mechanics_reconciliation: recoveryReceipt } : {}) } : x);
+    const world = staged.session.world_state || {};
+    const receipts = world.__story_reconciliation_receipts || [];
+    const patch = { story_log, ...(recoveryReceipt ? { world_state: { ...world, __story_reconciliation_receipts: [...receipts.filter(r => r.reconciliation_id !== recoveryReceipt.reconciliation_id), recoveryReceipt].slice(-30) } } : {}) };
+    await db.entities.GameSession.updateMany({ id: sessionId, updated_date: staged.session.updated_date }, { $set: patch });
   }
   return confirmPersistedStoryPair({ readSession: () => db.entities.GameSession.get(sessionId), requestId, expectedHash, afterWrite: true });
 }

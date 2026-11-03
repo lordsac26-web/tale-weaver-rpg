@@ -44,7 +44,10 @@ import { materializeNarratedLoot } from '../../shared/story/narratedLootMaterial
 import { NARRATED_DEPLETION_VERSION } from '../../shared/story/narratedItemDepletion.ts';
 import { prepareStoryDispositions } from '../../shared/story/storyDispositionGuard.ts';
 import { commitItemDispositions } from '../../shared/story/itemDispositionCommit.ts';
-import { applyStoryCharacterConsequences } from '../../shared/story/storyCharacterConsequences.ts';
+import { planStoryCharacterConsequences } from '../../shared/story/storyCharacterConsequences.ts';
+import { finishPendingStoryCommit, STORY_COMMIT_RECOVERY_VERSION } from '../../shared/story/storyCommitRecovery.ts';
+import resumeStorySession from '../../shared/story/resumeStorySession.ts';
+import storySessionMetadata from '../../shared/story/storySessionMetadata.ts';
 import { resolveStoryStowTransition } from '../../shared/story/storyStowTransition.ts';
 import { validatePlayerText } from '../../shared/story/playerText.ts';
 import { SCENE_ENTITY_SCHEMA } from '../../shared/story/sceneEvidence.ts';
@@ -71,7 +74,7 @@ const TEMPORARY_STORY_CONDITIONS = new Set([
 const conditionName = (value) => String(typeof value === 'string' ? value : value?.name || '').trim();
 const conditionKey = (value) => conditionName(value).toLowerCase();
 const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(value));
-const GENERATE_STORY_VERSION = 'generate-story-v2.17.0';
+const GENERATE_STORY_VERSION = 'generate-story-v2.18.0';
 
 export default async function(req) {
   // Readable in the catch path so a failed commit can retire the roll receipt.
@@ -85,7 +88,7 @@ export default async function(req) {
     const checkedInput = validatePlayerText(rawCustomInput || '', true), checkedChoice = validatePlayerText(rawChoiceText || '', true);
     if (!checkedInput.ok || !checkedChoice.ok) return Response.json({ error: checkedInput.error || checkedChoice.error, writes: 0 }, { status: 400 });
     const custom_input = checkedInput.text, choice_text = checkedChoice.text;
-    failureSessionId = session_id; failureRequestId = String(request_id || '').slice(0, 120);
+    const storyRequestId = String(request_id || (action === 'start' ? `story-start:${session_id}` : `story:${session_id}:${crypto.randomUUID()}`)).slice(0, 120);
 
     let session = await base44.asServiceRole.entities.GameSession.get(session_id);
     if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
@@ -97,15 +100,20 @@ export default async function(req) {
     if (!characterBelongsToUser(character, user)) {
       return Response.json({ error: 'Session character does not belong to the authenticated user' }, { status: 403 });
     }
-    if (action === 'hydrate') return Response.json({ ...buildGameHydration(session, character), generate_story_version: GENERATE_STORY_VERSION, intent_router_version: INTENT_ROUTER_VERSION, explicit_attack_transition_version: EXPLICIT_ATTACK_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });
-    const storyRequestId = String(request_id || '').slice(0, 120);
+    failureSessionId = session_id; failureRequestId = storyRequestId;
+    const resumedSession = await resumeStorySession({ base44, sessionId: session_id, requestId: storyRequestId });
+    session = resumedSession.session;
+    character = await base44.asServiceRole.entities.Character.get(session.character_id);
+    if (action === 'hydrate') return Response.json({ ...buildGameHydration(session, character), story_recovery: resumedSession.blocked?.body || null, recovery: resumedSession.recovery, generate_story_version: GENERATE_STORY_VERSION, intent_router_version: INTENT_ROUTER_VERSION, explicit_attack_transition_version: EXPLICIT_ATTACK_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION });
+    if (resumedSession.blocked) return Response.json(resumedSession.blocked.body, { status: resumedSession.blocked.status });
+    if ((session.world_state?.__retired_story_request_ids || []).includes(storyRequestId) || (session.world_state?.__orphan_skill_receipts || []).some(receipt => receipt.request_id === storyRequestId)) return Response.json({ error: 'The interrupted attempt was retired. Continue from the recovered scene.', error_code: 'receipt_superseded', recovery_available: true, writes: 0 }, { status: 409 });
     // Replay an accepted pair before any cast, stow, transfer, or award dispatch.
     const replayIndex = action === 'choice' && storyRequestId ? (session.story_log || []).findIndex((entry) => entry?.request_id === storyRequestId && entry?.text) : -1;
     if (replayIndex >= 0) {
       const replay = await confirmPersistedStoryPair({ readSession: () => base44.asServiceRole.entities.GameSession.get(session_id), requestId: storyRequestId });
       return Response.json({ ...replay.body, already_processed: replay.status === 200, generate_story_version: GENERATE_STORY_VERSION, ...(replay.status === 200 ? { writes: 0 } : {}) }, { status: replay.status });
     }
-    if (action !== 'hydrate' && session.story_log?.at(-1)?.mechanics_status === 'pending') return Response.json({ error: 'A prior story action has an incomplete mechanics commit. Keep gameplay paused for reconciliation.', error_code: 'partial_mechanics_commit', preserve_scene: true, partial_write_possible: true, writes: 0 }, { status: 409 });
+
     if (action === 'start') {
       const existingOpening = hydrateLatestStoryEntry(session);
       if (existingOpening.text && existingOpening.choices.length >= 4) return Response.json({ narrative: existingOpening.text, choices: existingOpening.choices, ...storyPayloadFromCommit({ entry: existingOpening.entry, index: existingOpening.index, persistence_confirmed: true }), persistence_confirmed: true, already_processed: true });
@@ -723,6 +731,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
         ...(result.scene_advancement ? { scene_advancement: result.scene_advancement, infiltration_guard: result.infiltration_guard } : {}),
         ...(result.authoritative_weapon_attack ? { authoritative_weapon_attack: result.authoritative_weapon_attack, action_contract: selectedChoiceContract } : {})
       };
+      completedEntry.mechanics_commit = { version: STORY_COMMIT_RECOVERY_VERSION, character_consequences: planStoryCharacterConsequences({ character: dispositionCharacter, session: commitSession, sessionId: session_id, requestId: storyRequestId, result, action, stealthSetupIntent, choiceContext: authoritativeChoiceContext }) };
       result = { ...result, previous_choice_hash: previousChoiceHash, current_choice_hash: currentChoiceHash, response_payload_hash: responsePayloadHash };
       const sceneCommit = await prepareGroundedStoryCommit({ session: commitSession, entry: completedEntry, candidates: result.scene_entities, existingPlan: groundedAction });
       completedEntry.scene_entities = sceneCommit.entities;
@@ -741,96 +750,23 @@ Write a gripping 1-2 paragraph combat narrative.`;
       const turnClock = advanceWorldClockBySeconds({ worldState: commitSession.world_state, elapsedSeconds: 600, completedAt: new Date().toISOString(), source: 'story_turn' });
       updateData.world_state = { ...(updateData.world_state || {}), ...turnClock, scene_entities: sceneCommit.registry };
 
-      // Campaign Memory Refresh — keep a persistent running log of key events so
-      // deliberate player actions are never forgotten. A player's custom action is
-      // almost always significant intent, so we always record it here.
-      const existingMemory = (session.campaign_memory && session.campaign_memory !== "This is still early in the campaign. Major events and relationships will be tracked here.")
-        ? session.campaign_memory
-        : '';
-      let memoryLines = existingMemory ? existingMemory.split('\n').filter(Boolean) : [];
-
-      if (action === 'choice' && typeof custom_input === 'string' && custom_input.trim()) {
-        memoryLines.push(`• Player chose to: ${custom_input.trim().slice(0, 160)}`);
-      } else if (updatedLog.length % 10 === 0 || action === 'start') {
-        memoryLines.push(`• ${(result.narrative || "").slice(0, 200)}`);
-      }
-
-      if (memoryLines.length) {
-        // Keep the most recent 25 key events to bound prompt size.
-        updateData.campaign_memory = memoryLines.slice(-25).join('\n');
-      }
-
-      // PERMANENT KEY EVENTS — when the AI flags a critical, irreversible moment,
-      // append it to the permanent log. This is never pruned, so the story engine
-      // references it on every future turn. Deduped on summary to avoid repeats.
-      if (typeof result.key_event === 'string' && result.key_event.trim()) {
-        const existingEvents = Array.isArray(session.key_events) ? session.key_events : [];
-        const summary = result.key_event.trim();
-        const alreadyLogged = existingEvents.some(ev =>
-          (ev.summary || '').toLowerCase() === summary.toLowerCase()
-        );
-        if (!alreadyLogged) {
-          updateData.key_events = [
-            ...existingEvents,
-            { summary, timestamp: new Date().toISOString(), turn: updatedLog.length }
-          ];
-        }
-      }
-
+      Object.assign(updateData, storySessionMetadata({ session, action, customInput: custom_input, result, updatedLog }));
       if (result.location_update) updateData.current_location = result.location_update;
       else if (isUnresolvedStateToken(commitSession.current_location)) updateData.current_location = playerFacingLocationLabel(commitSession.current_location);
-      if (action === 'start' && result.opening_signature) updateData.opening_signature = result.opening_signature;
-      if (result.reputation_change) updateData.reputation = (session.reputation || 0) + result.reputation_change;
-      if (result.plot_flag) updateData.plot_flags = { ...(session.plot_flags || {}), [result.plot_flag]: true };
-      // Combat linkage is intentionally omitted here. Story writes must never
-      // revive a stale in_combat flag or create an empty combat state.
 
-      // Quest handling
-      if (result.quest_update) {
-        const activeQuests = [...(session.active_quests || [])];
-        const completedQuests = [...(session.completed_quests || [])];
-        if (result.quest_update.new_quest) {
-          activeQuests.push({ title: result.quest_update.new_quest, timestamp: new Date().toISOString() });
-          updateData.active_quests = activeQuests;
-        }
-        if (result.quest_update.completed_quest) {
-          const idx = activeQuests.findIndex(q => q.title === result.quest_update.completed_quest);
-          if (idx >= 0) {
-            const done = activeQuests.splice(idx, 1)[0];
-            completedQuests.push({ ...done, completed_at: new Date().toISOString() });
-            updateData.active_quests = activeQuests;
-            updateData.completed_quests = completedQuests;
-          }
-        }
-      }
-
-      await base44.asServiceRole.entities.GameSession.update(session_id, updateData);
-      const staged = await confirmPersistedStoryPair({ readSession: () => base44.asServiceRole.entities.GameSession.get(session_id), requestId: storyRequestId || completedEntry.request_id || null, expectedHash: responsePayloadHash, allowPending: true, afterWrite: true });
-      if (staged.status !== 200) return Response.json(staged.body, { status: staged.status });
-
-      const narratedDepletion = dispositionPlan.plan
-        ? await commitItemDispositions({ db: base44.asServiceRole, sessionId: session_id, characterId: character.id, plan: dispositionPlan.plan })
-        : { ok: true, applied: false, skipped_pipeline: routedIntent.pipeline };
-      if (!narratedDepletion.ok) return Response.json(narratedDepletion.body, { status: narratedDepletion.status });
-      await applyStoryCharacterConsequences({ base44, character, session, sessionId: session_id, requestId: storyRequestId, result, action, stealthSetupIntent, choiceContext: authoritativeChoiceContext });
-
-      // Narrated loot materialization — when narration declares that named
-      // items have been physically taken/looted, materialize them into inventory
-      // or stowed_items with story-log provenance. Non-destructive: adds only.
-      const narratedLoot = await materializeNarratedLoot({ base44, sessionId: session_id, characterId: character.id, requestId: storyRequestId || completedEntry.request_id || null, narrative: completedEntry.text, storyIndex: committedTransition.index });
-
-      const finished = await finishStoryPersistence({ db: base44.asServiceRole, sessionId: session_id, requestId: storyRequestId || completedEntry.request_id || null, expectedHash: responsePayloadHash });
-      if (finished.status !== 200) return Response.json(finished.body, { status: finished.status });
-      result = { ...result, ...finished.body, ...(narratedLoot?.applied ? { narrated_loot: narratedLoot } : {}), ...(narratedDepletion?.applied ? { narrated_depletion: narratedDepletion } : {}) };
+      await base44.asServiceRole.entities.GameSession.updateMany({ id: session_id, updated_date: commitSession.updated_date }, { $set: updateData });
+      const finished = await finishPendingStoryCommit({ base44, sessionId: session_id, requestId: storyRequestId });
+      if (finished.status !== 200) { console.warn('Story commit paused for recoverable postprocessing', JSON.stringify({ request_id: storyRequestId, reason: finished.body.recovery_reason })); return Response.json(finished.body, { status: finished.status }); }
+      result = { ...result, ...finished.body };
     }
 
     return Response.json({ ...result, failed_check_continuation_version:FAILED_CHECK_CONTINUATION_VERSION, action_contract_version:CHOICE_ACTION_CONTRACT_VERSION, choice_award_routing_version:CHOICE_AWARD_ROUTING_VERSION, composite_action_contract_version:COMPOSITE_ACTION_CONTRACT_VERSION, composite_action_preflight_version:COMPOSITE_ACTION_PREFLIGHT_VERSION, story_weapon_attack_version:STORY_WEAPON_ATTACK_VERSION, crafting_transaction_version:CRAFTING_TRANSACTION_VERSION, ...(authoritativeWait?{time_advance:authoritativeWait.time_advance,session:authoritativeWait.session,character:authoritativeWait.character}:{}), ...(scenePickup?{scene_pickup:{classification:scenePickup.classification,provenance:scenePickup.provenance}}:{}), narrated_depletion_version: NARRATED_DEPLETION_VERSION, explicit_attack_transition_version: EXPLICIT_ATTACK_TRANSITION_VERSION, generate_story_version:GENERATE_STORY_VERSION, recovery_resolution_version:GENERATED_RECOVERY_RESOLUTION_VERSION, parser_version:NARRATED_RECOVERY_PARSER_VERSION, stealth_handoff_version:STEALTH_SETUP_HANDOFF_VERSION, short_wait_version:SHORT_WAIT_VERSION, item_transfer_version:ITEM_TRANSFER_VERSION, item_transfer:authoritativeTransfer, infiltration_advancement_version:INFILTRATION_ADVANCEMENT_VERSION, unique_scene_pickup_version:UNIQUE_SCENE_PICKUP_VERSION, transition_version: result?.transition_version || STORY_TRANSITION_VERSION, story_skill_receipt_compatibility_version: STORY_SKILL_RECEIPT_COMPATIBILITY_VERSION, story_scene_revision_version: STORY_SCENE_REVISION_VERSION, imbued_projectile_spell_version: IMBUED_PROJECTILE_SPELL_VERSION, ...(imbuedProjectileCast ? { imbued_projectile_cast: { spell_name: imbuedProjectileCast.spell_name, slot_level: imbuedProjectileCast.slot_level, target_anchor: selectedChoiceContract.weapon_attack?.target_ref } } : {}) });
 
   } catch (error) {
-    console.error('Story generation error:', error);
+    console.error('Story generation error:', JSON.stringify({ session_id: failureSessionId, request_id: failureRequestId, error: error.message, stack: error.stack }));
     // An exception mid-commit (write limits, validation failures) must not leave
     // the roll receipt behind as a resolvable result either.
     if (failureSessionId && failureRequestId) await retireUnsavedActionReceipt({ db: createClientFromRequest(req).asServiceRole, sessionId: failureSessionId, requestId: failureRequestId, reason: 'story_generation_exception' });
-    return Response.json({ error: error.message || 'Story generation failed' }, { status: 500 });
+    return Response.json({ error: error.message || 'Story generation failed', recovery_available: !!failureSessionId, request_id: failureRequestId }, { status: 500 });
   }
 }

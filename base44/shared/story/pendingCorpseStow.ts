@@ -13,7 +13,7 @@ export function pendingCorpseReceipt(session, character, requestedId) {
   const source = session.story_log?.at(-1)?.request_id;
   const attempts = (session.world_state?.__skill_check_receipts || []).filter(x => {
     const parsed = classifyStowIntent(x.action_text);
-    return x.unified_story_skill_resolution === true && x.success === true && x.source_story_request_id === source && parsed && /\b(?:corpses|bodies)\b/i.test(parsed.item_phrase)
+    return x.superseded !== true && x.non_resolving !== true && !(session.world_state?.__retired_story_request_ids || []).includes(x.request_id) && x.unified_story_skill_resolution === true && x.success === true && x.source_story_request_id === source && parsed && /\b(?:corpses|bodies)\b/i.test(parsed.item_phrase)
       && !session.story_log.some(e => e.request_id === x.request_id);
   });
   if (!attempts.length) return undefined;

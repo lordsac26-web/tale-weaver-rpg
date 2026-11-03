@@ -16,7 +16,7 @@ export function acceptSequencedStoryPayload(payload, sequence, latestSequence) {
     return { accepted: true, hydration: { text: String(payload.narrative || ''), choices: normalizeStoryChoices(payload.choices) } };
   }
   const entry = payload.story_entry, choices = normalizeStoryChoices(entry?.choices);
-  const matched = !!entry?.request_id && String(entry?.text || '') && choices.length === 4
+  const matched = !!entry?.request_id && entry.mechanics_status !== 'pending' && String(entry?.text || '') && (entry.transition_outcome?.combat_trigger === true || choices.length === 4)
     && payload.hydration?.request_id === entry.request_id && String(payload.hydration?.text || '') === String(entry.text)
     && JSON.stringify(normalizeStoryChoices(payload.hydration?.choices)) === JSON.stringify(choices)
     && String(payload.narrative || '') === String(entry.text)

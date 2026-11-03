@@ -43,6 +43,15 @@ export async function handleStartCombat(ctx) {
   if (session.character_id !== character.id) {
     return Response.json({ error: 'Session character linkage mismatch' }, { status: 403 });
   }
+  if (storyRequestId) {
+    const { items } = await base44.asServiceRole.entities.CombatLog.filter({ session_id, 'world_state.story_request_id': storyRequestId }, { sort: '-created_date', limit: 1 });
+    const existing = items[0];
+    if (existing) {
+      const active = existing.is_active === true && existing.result === 'ongoing';
+      if (active) await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: existing.id } });
+      return Response.json({ combat_id: existing.id, resumed: active, completed: !active, no_start: true });
+    }
+  }
   const handoffInvariant = validateStorySkillCombatHandoff(session, storyRequestId, storySkillHandoff);
   if (!handoffInvariant.ok) return Response.json({ error: handoffInvariant.error, invalid: true, writes: 0 }, { status: 409 });
 
@@ -241,7 +250,7 @@ export async function handleStartCombat(ctx) {
     log_entries: [{ round: 1, text: `⚔️ Combat begins! Initiative: ${combatants.map(c => `${c.name} (${c.initiative_total})`).join(' → ')}` }],
     is_active: true,
     result: 'ongoing',
-    world_state: { actions_used_this_turn: 0, attacks_used_this_action: 0, attacks_remaining: 0, bonus_action_used: false, reaction_used: false, concentration_spell: activeConcentration?.source || null, concentration_caster: activeConcentration ? character.name : null, ...(ambushSetup ? { pending_ambush_attack: true, ambush_setup: ambushSetup, ambush_source_target: combatants.find((entry) => entry.type === 'enemy' && String(entry.name || '') === String(ambushSetup.target_name || '')) || null } : {}) }
+    world_state: { story_request_id: storyRequestId || null, actions_used_this_turn: 0, attacks_used_this_action: 0, attacks_remaining: 0, bonus_action_used: false, reaction_used: false, concentration_spell: activeConcentration?.source || null, concentration_caster: activeConcentration ? character.name : null, ...(ambushSetup ? { pending_ambush_attack: true, ambush_setup: ambushSetup, ambush_source_target: combatants.find((entry) => entry.type === 'enemy' && String(entry.name || '') === String(ambushSetup.target_name || '')) || null } : {}) }
     });
     await base44.asServiceRole.entities.GameSession.update(session_id, { in_combat: true, combat_state: { combat_id: combatLog.id } });
   } catch (error) {

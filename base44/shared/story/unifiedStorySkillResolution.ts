@@ -3,6 +3,7 @@ import { resolveStorySkillCheck } from './storySkillCheck.ts';
 import { validatePlayerText } from './playerText.ts';
 import { classifyLegacyChoiceAction } from './choiceActionContract.js';
 import { classifyExplicitAttackIntent } from './explicitAttackTransition.ts';
+import { reconcileStorySession } from './storyCommitRecovery.ts';
 
 const rollD20 = () => {
   const bytes = new Uint32Array(1);
@@ -41,13 +42,18 @@ export async function resolveUnifiedStorySkillCheck({ db, user, payload, rollD20
   const characterId = payload?.character_id;
   const requestId = String(payload?.request_id || '').trim().slice(0, 120);
   if (!sessionId || !characterId || !requestId) return { status: 400, body: { error: 'session_id, character_id, and request_id are required', writes: 0 } };
-  const [session, character] = await Promise.all([
+  let [session, character] = await Promise.all([
     db.entities.GameSession.get(sessionId).catch(() => null),
     db.entities.Character.get(characterId).catch(() => null),
   ]);
   if (!session || !character || session.character_id !== character.id || (user && !characterBelongsToUser(character, user))) {
     return { status: 403, body: { error: 'Character and session linkage is invalid', writes: 0 } };
   }
+  const recovered = await reconcileStorySession({ base44: { asServiceRole: db }, sessionId, preserveRequestId: requestId });
+  if (recovered.blocked) return recovered.blocked;
+  session = recovered.session;
+  if ((session.world_state?.__retired_story_request_ids || []).includes(requestId) || (session.world_state?.__orphan_skill_receipts || []).some(entry => entry.request_id === requestId)) return { status: 409, body: { error: 'This attempt was retired and cannot be resumed or rolled again.', error_code: 'receipt_superseded', writes: 0 } };
+  if (session.story_log?.at(-1)?.transition_outcome?.combat_trigger && !session.in_combat) return { status: 409, body: { error: 'The saved action starts combat. Reload to continue from that result.', error_code: 'combat_handoff_pending', recovery_available: true, writes: 0 } };
   const attackIntent = classifyExplicitAttackIntent({ actionText: checkedText.text, session });
   if (classifyLegacyChoiceAction(checkedText.text) || attackIntent.required || attackIntent.reason === 'no_established_hostiles') return { status: 409, body: {
     error: 'An explicit attack cannot roll or reuse a story skill check. Resolve it through the weapon attack controls.', error_code: 'attack_cannot_resolve_as_skill', preserve_scene: true, writes: 0 } };

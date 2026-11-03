@@ -52,7 +52,7 @@ export function acceptSequencedStoryPayload(payload, sequence, latestSequence) {
   if (payload?.persistence_confirmed !== true) return { accepted: false, reason: 'persistence_unconfirmed' };
   const entry = payload?.story_entry;
   const persistedChoices = normalizeStoryChoices(entry?.choices);
-  const pairConfirmed = !!entry?.request_id && String(entry?.text || '') && persistedChoices.length === 4
+  const pairConfirmed = !!entry?.request_id && entry.mechanics_status !== 'pending' && String(entry?.text || '') && (entry.transition_outcome?.combat_trigger === true || persistedChoices.length === 4)
     && payload?.hydration?.request_id === entry.request_id
     && String(payload?.hydration?.text || '') === String(entry.text)
     && JSON.stringify(normalizeStoryChoices(payload?.hydration?.choices)) === JSON.stringify(persistedChoices)

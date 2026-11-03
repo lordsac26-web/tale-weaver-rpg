@@ -42,7 +42,7 @@ export async function commitItemDispositions({ db, sessionId, characterId, plan,
 }
 
 export async function confirmItemDispositionReceipts({ db, session, entry }) {
-  const records = entry.item_disposition_plan?.records || [];
+  const records = entry.item_disposition_plan?.plan?.records || entry.item_disposition_plan?.records || [];
   if (!records.length) return true;
   const character = await db.entities.Character.get(session.character_id);
   return records.every(r => character.item_dispositions?.some(p => p.receipt_id === r.receipt_id && p.item_id === r.item_id) && session.world_state?.world_items?.some(w => w.disposition_receipt_id === r.receipt_id));
