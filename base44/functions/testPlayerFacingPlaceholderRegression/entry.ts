@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.57';
-import { humanizeStateToken, isUnresolvedStateToken, playerFacingLocationLabel, guardPlayerFacingStoryText } from '../../shared/story/playerFacingTextGuard.ts';
+import { humanizeStateToken, isUnresolvedStateToken, playerFacingLocationLabel, guardPlayerFacingStoryText, sanitizePlayerFacingText } from '../../shared/story/playerFacingTextGuard.ts';
 import { groundedFallbackChoices } from '../../shared/story/storyBootstrap.ts';
 
 const PROTECTED_SESSION = '6a6825edd695bd65a4322256';
@@ -45,6 +45,14 @@ export default async function (req) {
     check('guard_repairs_all_choices', guarded.result.choices.every((choice) => !isUnresolvedStateToken(choice.text)));
     check('guard_repairs_location_label', !isUnresolvedStateToken(guarded.result.location_update) && guarded.result.location_update === 'the objective entry');
     check('guard_reports_each_repair', guarded.repairs.length >= 5);
+
+    // Player-quoted text, possessives and apostrophes must pass through the
+    // sanitizer untouched — the guard repairs unresolved placeholders only.
+    const quoted = sanitizePlayerFacingText('scrawl on the wall in thieves cant "You were warned"');
+    check('player_quoted_text_untouched', quoted.text === 'scrawl on the wall in thieves cant "You were warned"' && quoted.repairs.length === 0);
+    const apostrophes = sanitizePlayerFacingText("The Thieves' Cant is subtle, and the guard's post lies ahead.");
+    check('possessives_and_apostrophes_preserved', apostrophes.text === "The Thieves' Cant is subtle, and the guard's post lies ahead." && apostrophes.repairs.length === 0);
+    check('sanitizer_introduces_no_stray_space_before_apostrophe', !/[a-z]\s'/.test(apostrophes.text) && !/[a-z]\s'/.test(quoted.text));
 
     // Live backlog lint: the protected session's recent entries, scene labels,
     // and current location must never contain an unresolved token.

@@ -53,6 +53,7 @@ import groundedStoryDispatch from '../../shared/story/groundedStoryDispatch.ts';
 import { defeatedSceneTargetForRef } from '../../shared/story/sceneCombatTargets.ts';
 import { advanceWorldClockBySeconds } from '../../shared/story/worldClock.ts';
 import { guardPlayerFacingStoryText, isUnresolvedStateToken, playerFacingLocationLabel } from '../../shared/story/playerFacingTextGuard.ts';
+import { retireUnsavedActionReceipt } from '../../shared/story/orphanSkillReceipt.ts';
 
 
 /**
@@ -73,6 +74,8 @@ const validConditionName = (value) => !CONDITION_PLACEHOLDERS.has(conditionKey(v
 const GENERATE_STORY_VERSION = 'generate-story-v2.17.0';
 
 export default async function(req) {
+  // Readable in the catch path so a failed commit can retire the roll receipt.
+  let failureSessionId = null, failureRequestId = null;
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -82,6 +85,7 @@ export default async function(req) {
     const checkedInput = validatePlayerText(rawCustomInput || '', true), checkedChoice = validatePlayerText(rawChoiceText || '', true);
     if (!checkedInput.ok || !checkedChoice.ok) return Response.json({ error: checkedInput.error || checkedChoice.error, writes: 0 }, { status: 400 });
     const custom_input = checkedInput.text, choice_text = checkedChoice.text;
+    failureSessionId = session_id; failureRequestId = String(request_id || '').slice(0, 120);
 
     let session = await base44.asServiceRole.entities.GameSession.get(session_id);
     if (!session) return Response.json({ error: 'Session not found' }, { status: 404 });
@@ -595,7 +599,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
     }
     result = finalizeGeneratedStoryResult(result, { location: result?.location_update || session.current_location || 'the current area', requestId: storyRequestId, previousChoices: hydrateLatestStoryEntry(session).choices, lastPlayerAction: selectedChoice || custom_input });
     const skillInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
-    if (!skillInvariant.ok) return Response.json({ error: skillInvariant.error, invalid: true, writes: 0, parser_version:NARRATED_RECOVERY_PARSER_VERSION, recovery_diagnostics:result.recovery_diagnostics }, { status: 409 });
+    if (!skillInvariant.ok) { await retireUnsavedActionReceipt({ db: base44.asServiceRole, sessionId: session_id, requestId: storyRequestId, reason: 'story_skill_outcome_invariant_refused' }); return Response.json({ error: skillInvariant.error, invalid: true, writes: 0, parser_version:NARRATED_RECOVERY_PARSER_VERSION, recovery_diagnostics:result.recovery_diagnostics }, { status: 409 }); }
     result = skillInvariant.result;
     const infiltrationBeat=await guardInfiltrationBeat({candidate:result,previousEntry:(session.story_log||[]).at(-1),plan:infiltrationPlan,regenerate:({metrics,plan})=>generateNarrative(`${prompt}\n\nDUPLICATE-BEAT CORRECTION: The prior candidate was static or too similar (narration ${metrics.narrative_similarity.toFixed(3)}, choices ${metrics.choice_similarity.toFixed(3)}). Rewrite once so the ${plan.success?'successful':'failed'} infiltration action creates a distinct consequence, advances to the contracted structured state when successful, and offers four materially different choices. Never reuse the prior beat or say no further action is taken.`)});
     result={...infiltrationBeat.result,infiltration_guard:infiltrationBeat.guard};
@@ -604,7 +608,7 @@ Write a gripping 1-2 paragraph combat narrative.`;
     // narration-derived inventory dispatch; this never changes its receipt.
     result = await resolveFailedCheckCandidate({ candidate: result, check: authoritativeChoiceContext?.check });
     const finalInvariant = enforceStorySkillOutcomeInvariant(result, selectedChoice || custom_input, authoritativeChoiceContext?.authoritative_skill_resolution);
-    if (!finalInvariant.ok) return Response.json({ error: finalInvariant.error, invalid: true, writes: 0 }, { status: 409 });
+    if (!finalInvariant.ok) { await retireUnsavedActionReceipt({ db: base44.asServiceRole, sessionId: session_id, requestId: storyRequestId, reason: 'story_skill_outcome_invariant_refused' }); return Response.json({ error: finalInvariant.error, invalid: true, writes: 0 }, { status: 409 }); }
     result = finalInvariant.result;
     // Explicit attack contract: an attack the player declares on established
     // hostiles must open structured combat (initiative, CombatLog, HP) or return
@@ -679,6 +683,10 @@ Write a gripping 1-2 paragraph combat narrative.`;
         : { ok: true, plan: null, skipped_pipeline: routedIntent.pipeline };
       if (!dispositionPlan.ok) {
         console.warn('Disposition audit refused the turn', JSON.stringify({ request_id: storyRequestId, pipeline: routedIntent.pipeline, internal_reason: dispositionPlan.error }));
+        // The turn is refused zero-write, so the persisted roll receipt is now an
+        // orphan: retire it so no resume or replay path treats it as a completed
+        // attempt. The refusal itself performs this one bookkeeping write only.
+        await retireUnsavedActionReceipt({ db: base44.asServiceRole, sessionId: session_id, requestId: storyRequestId, reason: 'disposition_audit_refused' });
         return Response.json({ error: PLAYER_FACING_UNSAVED_ACTION, error_code: 'action_not_saved', invalid: true, preserve_scene: true, persistence_confirmed: false, writes: 0, intent_router_version: INTENT_ROUTER_VERSION }, { status: 409 });
       }
       const incomingStorySequence = Number(story_sequence || 0);
@@ -820,6 +828,9 @@ Write a gripping 1-2 paragraph combat narrative.`;
 
   } catch (error) {
     console.error('Story generation error:', error);
+    // An exception mid-commit (write limits, validation failures) must not leave
+    // the roll receipt behind as a resolvable result either.
+    if (failureSessionId && failureRequestId) await retireUnsavedActionReceipt({ db: createClientFromRequest(req).asServiceRole, sessionId: failureSessionId, requestId: failureRequestId, reason: 'story_generation_exception' });
     return Response.json({ error: error.message || 'Story generation failed' }, { status: 500 });
   }
 }

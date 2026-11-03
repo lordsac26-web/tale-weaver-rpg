@@ -5,7 +5,7 @@
 // narrated as prose, then audited by the possession-disposal validator. Every hop
 // looked reasonable alone. The fix is one ordered answer that every hop reads, so an
 // intent lands in exactly one pipeline and cannot fall through into another.
-export const INTENT_ROUTER_VERSION = 'story-intent-router-v1.1.0';
+export const INTENT_ROUTER_VERSION = 'story-intent-router-v1.2.0';
 
 // Shown to the player when a turn cannot be saved. Deliberately says nothing about
 // evidence, catalogues, quotes, or any other internal validator vocabulary.
@@ -19,10 +19,13 @@ const SHOVE_VERB = /\b(?:shove|shoves|shoving|push|pushes|pushing|bull rush|grap
 const THROWN_VERB = /\b(?:throw|throws|throwing|hurl|hurls|hurling|fling|flings|flinging|lob|lobs|lobbing)\b/i;
 const HOSTILE_REF = /\b(?:cultists?|enemies|enemy|guards?|sentinels?|sentries|soldiers?|raiders?|bandits?|skeletons?|zombies?|ghouls?|acolytes?|ritualists?|necromancers?|creatures?|monsters?|hostiles?|nearest|cultist|him|her|them|it)\b/i;
 
-// Combat pipelines never touch the possession-disposal validator: a strike cannot
-// dispose of an item, so surfacing inventory-evidence requirements there is nonsense.
-const COMBAT_PIPELINES = new Set(['combat_attack', 'thrown_weapon', 'spell', 'shove']);
-export const dispositionAuditApplies = (route) => !COMBAT_PIPELINES.has(route?.pipeline);
+// Strict intent routing: the possession-disposal audit runs on DISPOSAL intents
+// only. On Nov 2 it audited a narrative wall-scrawl turn, the evidence pass inferred
+// a possession change the prose never made, and a legitimately successful roll was
+// refused as "could not be saved safely". A strike cannot dispose of an item, and
+// neither can authoring text or placing an owned item into a container: those
+// flows own their own authoritative evidence.
+export const dispositionAuditApplies = (route) => route?.pipeline === 'dispose';
 
 /**
  * @returns {{ pipeline: string, reason: string, is_combat: boolean, target_hint: string|null, version: string }}
@@ -44,3 +47,16 @@ export function routePlayerIntent({ actionText, session, attackIntent = null } =
   if (DISPOSE_VERB.test(text)) return { ...base, pipeline: 'dispose', reason: 'possession_removal' };
   return { ...base, pipeline: 'narrative', reason: 'no_mechanical_pipeline' };
 }
+
+// Writing a message the character can author — a warning, a sigil, a note in
+// Thieves' Cant — is narrative, not a dexterity contest: no roll can fail it, so
+// no check is offered. Sleight of Hand is for palming or planting objects unseen,
+// not for scrawling text the player wants found. Forging another hand's writing,
+// or scribing under observation, stays a DM-evaluated skill intent.
+const MESSAGE_WRITE_VERB = /\b(?:scrawl|scrawls|writ(?:e|es|ing)|carv(?:e|es|ing)|chalk(?:s|ing)?|scratch(?:es|ing)?|etch(?:es|ing)?|inscrib\w*|scribbl\w*|daub|paint(?:s|ing)?|leav(?:e|es|ing)|left)\b/i;
+const MESSAGE_OBJECT = /\b(?:message|note|warning|words|writing|cant|sigil|symbol|sign|phrase|graffiti|letters?|text|rune|name)\b/i;
+const FORGERY_OR_COVERT = /\b(?:forge(?:d|ry)?|disguise|someone else'?s|another'?s (?:handwriting|name|signature)|copy (?:a |the |someone'?s )?(?:signature|seal)|undetected|unseen|unnoticed|while (?:being )?watched|under observation|without being seen)\b/i;
+export const isMessageWritingIntent = (actionText) => {
+  const text = String(actionText || '');
+  return MESSAGE_WRITE_VERB.test(text) && MESSAGE_OBJECT.test(text) && !FORGERY_OR_COVERT.test(text);
+};

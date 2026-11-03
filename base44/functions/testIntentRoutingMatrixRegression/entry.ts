@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.57';
-import { routePlayerIntent, dispositionAuditApplies, PLAYER_FACING_UNSAVED_ACTION, INTENT_ROUTER_VERSION } from '../../shared/story/intentRouter.ts';
+import { routePlayerIntent, dispositionAuditApplies, isMessageWritingIntent, PLAYER_FACING_UNSAVED_ACTION, INTENT_ROUTER_VERSION } from '../../shared/story/intentRouter.ts';
+import { findOrphanSkillReceipts } from '../../shared/story/orphanSkillReceipt.ts';
 import { classifyExplicitAttackIntent } from '../../shared/story/explicitAttackTransition.ts';
 import { isCompletedCombatAftermath } from '../../shared/story/completedCombatContext.ts';
 
@@ -29,6 +30,7 @@ export default async function testIntentRoutingMatrixRegression(req) {
       ['put the ironwood tuning fork in my bag', 'stow'],
       ['drop my shortsword', 'dispose'],
       ['look around the node', 'narrative'],
+      ['scrawl on the wall in theives cant "You were warned"', 'narrative'],
     ];
     for (const [text, expected] of matrix) {
       const routed = route(text);
@@ -40,7 +42,11 @@ export default async function testIntentRoutingMatrixRegression(req) {
     // ---- B. Validator isolation: unreachable from every combat intent.
     const combatRoutes = matrix.filter(([, pipeline]) => ['combat_attack', 'thrown_weapon', 'spell', 'shove'].includes(pipeline)).map(([text]) => route(text));
     record('disposal validator never applies to a combat intent', combatRoutes.every((routed) => dispositionAuditApplies(routed) === false));
-    record('disposal validator still applies to stow, dispose and prose turns', ['stow', 'dispose', 'narrative'].every((pipeline) => dispositionAuditApplies({ pipeline }) === true));
+    record('disposal validator applies only to disposal intents', dispositionAuditApplies({ pipeline: 'dispose' }) === true && ['stow', 'narrative', 'combat_attack', 'thrown_weapon', 'spell', 'shove'].every((pipeline) => dispositionAuditApplies({ pipeline }) === false));
+    record('the Nov 2 wall-scrawl refusal class cannot recur: narrative turns skip the disposal audit', dispositionAuditApplies(route('scrawl on the wall in theives cant "You were warned"')) === false);
+    record('a wall scrawl in Thieves\' Cant is narrative, not a Sleight of Hand contest', isMessageWritingIntent('scrawl on the wall in theives cant "You were warned"') === true);
+    record('forged or covert writing still falls through to DM evaluation', isMessageWritingIntent('write a forged letter in the magistrate\'s hand without being seen') === false);
+    record('plain actions are not message-writing', isMessageWritingIntent('attack the nearest cultist') === false && isMessageWritingIntent('put the ironwood tuning fork in my bag') === false);
 
     // ---- Root cause: a stale victory must not stay "the current combat".
     const stale = isCompletedCombatAftermath({ session: { story_log: [{ timestamp: '2026-10-31T16:58:38.766Z', text: 'later turn' }] }, context: { ended_at: '2026-10-11T22:34:26.226Z' } });
@@ -64,12 +70,17 @@ export default async function testIntentRoutingMatrixRegression(req) {
     record('the misrouted roll was never consumed by a story turn', !(session?.story_log || []).some((entry) => entry?.request_id === athletics[0]?.request_id));
     record('it is retired and cannot replay as a later check', orphans.some((entry) => entry?.request_id === athletics[0]?.request_id) && !receipts.some((entry) => entry?.request_id === athletics[0]?.request_id));
     record('no story entry was left half-committed', (session?.story_log || []).every((entry) => entry?.mechanics_status === 'complete'));
+    // ---- E2. The Nov 2 orphan-receipt class: a refused commit retires its roll.
+    const ledger = session?.world_state?.__orphan_skill_receipts || [];
+    const refusedScrawl = ledger.filter((entry) => /er9bck$/.test(String(entry?.request_id || '')));
+    record('the refused Nov 2 scrawl roll is retired non-resolving in the orphan ledger', refusedScrawl.length === 1 && refusedScrawl[0].superseded === true && refusedScrawl[0].non_resolving === true && !receipts.some((entry) => /er9bck$/.test(String(entry?.request_id || ''))));
+    record('no resolvable receipt lacks a committed story entry (15 min grace)', findOrphanSkillReceipts({ session, graceMinutes: 15 }).length === 0);
     record('no combat was fabricated by the failure', session?.in_combat !== true);
     const combats = await base44.asServiceRole.entities.CombatLog.filter({ session_id: '6a6825edd695bd65a4322256' }, '-created_date', 1);
     const lastEntryAt = Date.parse(String(session?.story_log?.at(-1)?.timestamp || '')) || 0;
     record('no CombatLog was created after the failure point', !combats[0] || (Date.parse(String(combats[0].created_date || '')) || 0) <= lastEntryAt);
 
     const passed = results.filter((item) => item.pass).length, allPass = passed === results.length;
-    return Response.json({ function_version: 'test-intent-routing-matrix-v1.0.0', intent_router_version: INTENT_ROUTER_VERSION, passed, failed: results.length - passed, total: results.length, all_pass: allPass, results }, { status: allPass ? 200 : 500 });
+    return Response.json({ function_version: 'test-intent-routing-matrix-v1.1.0', intent_router_version: INTENT_ROUTER_VERSION, passed, failed: results.length - passed, total: results.length, all_pass: allPass, results }, { status: allPass ? 200 : 500 });
   } catch (error) { return Response.json({ error: error.message || 'Intent routing matrix failed' }, { status: 500 }); }
 }
