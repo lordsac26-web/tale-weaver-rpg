@@ -14,6 +14,7 @@ import {
 } from '../../shared/combat/authGuard.ts';
 import { reconcileSessionCombat } from '../../shared/combat/sessionCombatState.ts';
 import { executePlayerAttackCore } from '../../shared/combat/playerAttackCore.ts';
+import { expireTimedCombatantConditions } from '../../shared/combat/timedConditions.ts';
 
 /**
  * Combat Engine — thin HTTP router. All combat logic lives in focused modules
@@ -66,7 +67,14 @@ Deno.serve(async (req) => {
     try {
       const combat = await base44.asServiceRole.entities.CombatLog.get(requestedId);
       if (!combat) return Response.json({ state: 'missing', combat: null, combat_id: requestedId });
-      return Response.json({ state: combat.is_active ? 'active' : 'completed', combat, combat_id: requestedId, session_in_combat: !!session.in_combat });
+      // Display-side game-clock expiry: a timed condition (e.g. Pass without Trace)
+      // whose game time has passed never renders as attached, even before the next
+      // authoritative write removes it from the roster.
+      const expiry = expireTimedCombatantConditions({ combatants: combat.combatants || [], session });
+      const displayedCombat = expiry.expired.length
+        ? { ...combat, combatants: expiry.combatants, expired_conditions: expiry.expired }
+        : combat;
+      return Response.json({ state: combat.is_active ? 'active' : 'completed', combat: displayedCombat, combat_id: requestedId, session_in_combat: !!session.in_combat });
     } catch {
       return Response.json({ state: 'missing', combat: null, combat_id: requestedId });
     }
@@ -199,7 +207,15 @@ Deno.serve(async (req) => {
     // Idempotency: a replayed request returns the stored outcome without re-processing
     if (combat && request_id) {
       const prior = checkReceipt(combat.world_state, request_id);
-      if (prior) return Response.json({ ...prior, idempotent_replay: true });
+      if (prior) {
+        // An attack receipt is a completed resolution: refuse the resubmission
+        // zero-write instead of replaying it, so a repeat click can never
+        // re-narrate a hit or reuse the stale budget stored in the first outcome.
+        if (action === 'player_attack' || action === 'offhand_attack') {
+          return Response.json({ error: 'That attack already resolved this turn.', error_code: 'attack_already_resolved', invalid: true, already_resolved: true, idempotent_replay: true, prior_outcome: prior, writes: 0 }, { status: 409 });
+        }
+        return Response.json({ ...prior, idempotent_replay: true });
+      }
     }
   }
 

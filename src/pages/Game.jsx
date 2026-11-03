@@ -42,7 +42,7 @@ import { acceptCompositePreflightResponse, buildCompositePreflightRequest, COMPO
 import { prepareStorySkillCheck, resolveStorySkillRoll, resumeStorySkillResolution } from '@/lib/storySkillCheck';
 import { acceptSequencedStoryPayload, hydrateLatestStoryEntry, STORY_TRANSITION_VERSION } from '@/lib/storyTransition';
 import applyStoryClarification from '@/lib/storyClarification';
-import { beginCombatIntent, buildCombatRequestKey, COMBAT_FOLLOWUP_TRANSITION_VERSION, finishCombatIntent, oneEphemeralCombatError } from '@/lib/game/combatFollowupTransition';
+import { attackBudget, beginCombatIntent, buildCombatRequestKey, COMBAT_FOLLOWUP_TRANSITION_VERSION, finishCombatIntent, oneEphemeralCombatError } from '@/lib/game/combatFollowupTransition';
 import { normalizeRollMode } from '@/lib/rollMode';
 import createStoryContinuation from '@/lib/storyContinuation';
 import useStoryStowClarification from '@/components/game/useStoryStowClarification';
@@ -969,6 +969,7 @@ export default function Game() {
       setCombat(null);
       setSession(prev => prev ? { ...prev, in_combat: false, combat_state: {} } : prev);
     }
+    return state;
   };
 
   // Self-heal a delayed combat record, and also recover sessions whose referenced
@@ -1024,7 +1025,7 @@ export default function Game() {
     // Invalid action (e.g. out of ammunition) — surface message, don't consume the turn
     if (data?.invalid) {
       setCombatActionError(current => oneEphemeralCombatError(current, data.error || 'That action is not available.'));
-      if (data.target_defeated) await reloadCombat(combatId);
+      if (data.target_defeated || data.already_resolved) await reloadCombat(combatId);
       setCombatLoading(false);
       return false;
     }
@@ -1052,23 +1053,29 @@ export default function Game() {
     // CRITICAL: Reload combat state immediately to update action tracking.
     // Spell casts also refresh Character before Extra Attack can return early, so
     // the HUD reflects the deducted slot immediately rather than one turn later.
-    await reloadCombat(combatId);
+    const postAttackState = await reloadCombat(combatId);
     const freshAttackChars = await base44.entities.Character.filter({ id: character?.id });
     if (freshAttackChars[0]) setCharacter(prev => ({ ...prev, ...freshAttackChars[0] }));
 
-    if (data.actions_remaining > 0 && !data.combat_ended) {
+    // Authoritative budget: the remaining-attacks message and the decision to run
+    // enemy turns come from the freshly persisted combat record — never from
+    // response fields, which a replayed receipt could have cached.
+    const budget = attackBudget(character, postAttackState.combat?.world_state || {});
+    const stillPlayerTurn = postAttackState.state === 'active'
+      && postAttackState.combat?.combatants?.[postAttackState.combat.current_turn_index]?.type === 'player';
+
+    if (stillPlayerTurn && budget.remaining > 0 && !data.combat_ended) {
       setNarrative(prev => [...prev, {
         type: 'roll_result',
-        text: `${data.actions_remaining} action${data.actions_remaining > 1 ? 's' : ''} remaining this turn.`,
+        text: `${budget.remaining} attack${budget.remaining > 1 ? 's' : ''} remaining this turn.`,
         success: true
       }]);
-      await reloadCombat(combatId); // keep UI in sync
       setCombatLoading(false);
-      return true; // Stop here - player still has actions
+      return true; // Stop here - player still has attacks
     }
 
-    // No actions remaining - process enemy turns
-    if (!data.combat_ended) {
+    // No attacks remaining - process enemy turns
+    if (!data.combat_ended && postAttackState.state === 'active') {
       await processEnemyTurns(combatId);
     }
 

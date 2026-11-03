@@ -32,6 +32,22 @@ export async function handlePlayerAttack(ctx) {
   const hasColossusSlayer = isConfirmedChoice(character, 'hunters_prey', 'colossus_slayer');
   const isHordeBreakerAttack = modifiers.horde_breaker === true;
 
+  // Receipt-id dedupe: a resubmitted attack must never append a second log entry
+  // or apply its outcome twice — the first resolution is the only one.
+  if (request_id && (combatLog.log_entries || []).some((entry) => entry?.request_id === request_id)) {
+    return Response.json({ error: 'That attack already resolved this turn.', error_code: 'attack_already_resolved', invalid: true, already_resolved: true, idempotent_replay: true, writes: 0 }, { status: 409 });
+  }
+  // Loop guard (mirror of executePlayerAttackCore, from this handler's own read):
+  // once the Attack action's budget is spent, no further attack may resolve this
+  // turn — not even if the dispatch-time snapshot was stale.
+  const attackCapThisTurn = getActionsPerTurn(character);
+  const attacksUsedBeforeThis = Number.isFinite(Number(combatLog.world_state?.attacks_used_this_action))
+    ? Number(combatLog.world_state.attacks_used_this_action)
+    : Number(combatLog.world_state?.actions_used_this_turn || 0);
+  if (attacksUsedBeforeThis >= attackCapThisTurn) {
+    return Response.json({ error: 'No attacks remain in this Attack action.', error_code: 'no_attacks_remaining', invalid: true, writes: 0 }, { status: 409 });
+  }
+
   const combatants = [...combatLog.combatants];
   const playerCombatant = combatants.find(c => c.type === 'player' && c.id === character_id);
   const authoritativePlayerConditions = [...(playerCombatant?.conditions || []), ...(character.conditions || [])];
@@ -1205,15 +1221,25 @@ export async function handlePlayerAttack(ctx) {
     logEntry.concentration_broken = true;
   }
 
+  // The action ledger commits in the same compare-and-set write as the attack
+  // outcome; a write that landed after this handler's read triggers a ledger
+  // reconciliation so the counters can never drift or double-count.
+  const commitOpts = {
+    read_updated_date: combatLog.updated_date || null,
+    request_id: request_id || null,
+    action_ledger: { cost: (isQuickenedMain || isHordeBreakerAttack) ? 0 : 1, actions_per_turn: actionsPerTurn },
+    out: {},
+  };
   const result = await finalizeAndPersistCombat(base44, character_id, combat_id, session_id, updatedCombatants,
-    updatedLog, nextIndex, nextRound, newWorldState);
+    updatedLog, nextIndex, nextRound, newWorldState, {}, commitOpts);
 
   return Response.json({
     hit, damage, damage_rolls: damageRolls, raw_d20: attackResult.roll, all_rolls: attackResult.rolls, attack_roll: totalAttack, log_entry: logEntry,
     target_hp: target.hp_current, result, combat_ended: result !== 'ongoing',
     next_turn_index: nextIndex,
     actions_remaining: actionsRemaining > 0 ? actionsRemaining : 0,
-    actions_per_turn: actionsPerTurn
+    actions_per_turn: actionsPerTurn,
+    action_ledger: commitOpts.out.action_ledger || { actions_used_this_turn: newWorldState.actions_used_this_turn, attacks_used_this_action: newWorldState.attacks_used_this_action, attacks_remaining: newWorldState.attacks_remaining, turn_index: nextIndex, round: nextRound }
   });
 }
 
