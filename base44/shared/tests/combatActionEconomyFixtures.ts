@@ -111,7 +111,8 @@ export default async function combatActionEconomyFixtures() {
   const rowAfterSecond = await worldA.stores.CombatLog.get('fixture-combat');
   const liveAfterSecond = rowAfterSecond.combatants.find((entry) => entry.id === 'enemy_live');
   check('second attack exhausts the budget exactly once', second.status === 200 && second.body.actions_remaining === 0
-    && rowAfterSecond.world_state.attacks_used_this_action === 2);
+    && rowAfterSecond.world_state.attacks_used_this_action === 0
+    && rowAfterSecond.world_state.last_attack_sequence?.attacks_used_this_action === 2);
   check('turn advances past the player and skips the dead combatant', rowAfterSecond.current_turn_index === 2
     && rowAfterSecond.world_state.actions_used_this_turn === 0 && second.body.action_ledger?.turn_index === 2);
   check('second attack damage applied exactly once', liveAfterSecond.hp_current === 22 - first.body.damage - second.body.damage
