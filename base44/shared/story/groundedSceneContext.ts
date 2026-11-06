@@ -20,7 +20,7 @@ export async function buildGroundedContext({ base44, session, character, reconci
   let entities = [...(await readNarrativeCorpseEntities({ session, structured })), ...completedCombatCorpses]
     .filter((entity, index, all) => !transferredIds.has(entity.id) && all.findIndex((candidate) => candidate.id === entity.id) === index);
   const diagnostics = [];
-  for (const entity of (session.world_state?.scene_entities || []).slice(0, 64)) {
+  for (const entity of (session.world_state?.scene_entities || [])) {
     if (entity.session_id !== session.id || entity.location !== (session.current_location || '') || transferredIds.has(entity.id)) continue;
     const transferProof = entity.evidence?.authority === 'item_transfer' && (session.world_state?.__item_transfer_receipts || []).some(receipt => receipt.request_id === entity.evidence.request_id && receipt.item_id === entity.evidence.source_item_id);
     if (entity.evidence?.authority === 'completed_combat' || transferProof) {
@@ -47,8 +47,7 @@ export async function buildGroundedContext({ base44, session, character, reconci
       }
     }
   }
-  entities = entities.slice(0, 64);
-  const owned = (items, place) => items.slice(0, 64).map((x, i) => ({ id: x.scene_entity_id || x.instance_id || x.item_id || x.equipment_id || `${place}:${i}:${x.name}`, name: x.name, quantity: x.quantity ?? 1, place, container: x.container || null }));
+  const owned = (items, place) => items.map((x, i) => ({ id: x.scene_entity_id || x.instance_id || x.item_id || x.equipment_id || `${place}:${i}:${x.name}`, name: x.name, quantity: x.quantity ?? 1, place, container: x.container || null }));
   return { version: SCENE_GROUNDING_VERSION, session_id: session.id, scene_id: `${session.id}:${session.current_location || ''}`, revision: await sceneRevision(session, character), location: session.current_location || '',
     entries: entries.map(e => ({ request_id: e.request_id, text: e.text })), omitted_entries: recent.length - entries.length, entities, diagnostics,
     owned: [...owned(character.inventory || [], 'carried'), ...owned(character.stowed_items || [], 'stowed')],

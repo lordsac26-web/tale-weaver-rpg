@@ -38,7 +38,9 @@ export default async function testClarificationCandidateEnumerationRegression(re
     record('whole inventory is never dumped', options.every((option) => !['Shortsword', 'Torch', 'Mithral Plate', "Explorer's Pack"].includes(option.name)));
     record('scene interactables are offered as plausible targets', options.some((option) => option.name === 'Final Necrotic Nexus') && options.some((option) => option.name === "Cultist's Corpse"));
     record('irrelevant carried items are never offered', options.filter((option) => option.id.startsWith('carried:')).length === 0);
-    record('option list is bounded', options.length <= 6);
+    const fullScope=Array.from({length:80},(_,i)=>({id:`scope:${i}`,name:`Saved fixture ${i}`,type:'object'}));
+    const complete=buildClarificationOptions({catalog:fullScope,actionText:'Inspect Saved fixture 79'});
+    record('complete scope is ranked without six-option truncation',complete.length===80&&complete[0].name==='Saved fixture 79');
     record('every offered name is the authoritative player-facing name of a saved object', options.every((option) => LIVE_CATALOG.some((entity) => groundedDisplayName(entity) === option.name)));
     record('every option carries an id and a name for the chip contract', options.every((option) => option.id && option.name));
     const crack = buildClarificationOptions({ catalog: [{ id: 'fracture:1', name: 'Hairline Fracture in the Obsidian Base', aliases: ['hairline fracture'], player_aliases: ['crack'], type: 'container' }], actionText: 'place the ironwood tuning fork into the crack' });

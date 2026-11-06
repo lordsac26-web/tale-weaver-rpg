@@ -8,7 +8,8 @@ export async function resolveBagTransferClarification({db,session,character,acti
   const parsed=parseBagTransfer(actionText);
   const result=body=>({handled:true,status:200,body});
   const fail=(message,status=409)=>({handled:true,status,body:{error:message,preserve_pending:true,clarification_intent_id:pending?.id || intentId,writes:0,version:BAG_TRANSFER_VERSION}});
-  const prior=intentId && (session.world_state?.__item_transfer_receipts||[]).find(x=>x.request_id===intentId&&x.version===BAG_TRANSFER_VERSION);
+  const receiptId=intentId || requestId;
+  const prior=receiptId && (session.world_state?.__item_transfer_receipts||[]).find(x=>x.request_id===receiptId&&x.version===BAG_TRANSFER_VERSION);
   if(prior) return result(committedBagBody(session,character,prior,true));
   if(operation==='restore') return result(pending ? bagClarificationBody(pending) : {pending:false,writes:0});
   if(operation==='cancel') {
@@ -36,7 +37,8 @@ export async function resolveBagTransferClarification({db,session,character,acti
   }
   const answer=bagNorm(answerText || (!parsed&&actionText ? actionText : ''));
   const matches=pending.candidates.filter(x=>selectedId ? x.id===selectedId : answer && (bagNorm(x.name)===answer || bagNorm(x.id)===answer || answer.includes(bagNorm(x.name))));
-  const selected=matches.length===1 ? matches[0] : null;
+  const exactSource=parsed && bagNorm(parsed.item_phrase)===bagNorm(pending.intent.item_phrase) && pending.candidates.length===1 && pending.candidates[0].exact_name ? pending.candidates[0] : null;
+  const selected=matches.length===1 ? matches[0] : !selectedId&&!answer ? exactSource : null;
   if((selectedId||answer)&&!selected) return result(bagClarificationBody(pending,'That reply did not identify one of the saved bag contents. Choose a listed item or type its full name; your original removal and destination are preserved.'));
   if(!selected&&!confirm) {
     if(pending.candidates.length===1) return result({action:pending.action,action_type:'utility',requires_check:false,skill:null,dc:null,risk_level:'low',request_id:pending.id,

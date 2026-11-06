@@ -1,7 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.57';
 import { resolveBagTransferClarification } from '../../shared/story/bagTransferClarification.ts';
-import { BAG_PENDING_KEY, parseBagTransfer } from '../../shared/story/bagTransferPlan.ts';
+import { BAG_PENDING_KEY, parseBagTransfer, bagTransferCandidates } from '../../shared/story/bagTransferPlan.ts';
 import controller from '../../shared/tests/groundedClarificationController.js';
+import { buildClarificationOptions, resolveGroundedAction } from '../../shared/story/groundedAction.ts';
+import { buildGroundedContext } from '../../shared/story/groundedSceneContext.ts';
+import { normalizeEntityName } from '../../shared/story/entityNameMatch.ts';
 
 export default async function(req) {
   const client=createClientFromRequest(req), user=await client.auth.me();
@@ -73,6 +76,46 @@ export default async function(req) {
     forceConflict=true;const beforeConflict=JSON.stringify(records);
     try{await run({actionText:action,requestId:'intent:conflict'});}catch{}
     check('concurrent pending creation is refused without overwriting records',JSON.stringify(records)===beforeConflict);
+    const reset=()=>{Object.assign(s,structuredClone(initialRecords.GameSession));Object.assign(c,structuredClone(initialRecords.Character));};
+    const authoritative="Obsidian Circle Vanguard's Corpse";
+    const variants=[authoritative,'Obsidian Circle Vanguard\u2019s Corpse','  OBSIDIAN\u00a0Circle\tVanguard\u2019s   Corpse!!!  ','\u201cObsidian Circle Vanguard\u02bcs Corpse\u201d.','Obsidian Circle Van\u200bguard\u2019s Corpse'];
+    for(const [i,pasted] of variants.entries()){
+      reset();
+      const directAction=`remove ${pasted} from the bag and place near the iron-bound office door`;
+      const direct=await run({actionText:directAction,requestId:`exact:${i}`});
+      check(`pasted authoritative name variant ${i} commits zero-prompt`,direct.body.transfer_committed===true&&!direct.body.clarification_required&&!direct.body.bag_transfer&&direct.body.receipt.item_name===authoritative);
+      const placed=s.world_state.world_items?.[0];
+      check(`named composite ${i} preserves destination provenance and capacity`,placed?.name===authoritative&&placed?.container==='scene ground near the iron-bound office door'&&placed?.death_provenance.combat_id==='prior-encounter'&&s.world_state.__container_capacity['Bag of Holding'].weight_lb===167&&c.stowed_items.length===3&&s.story_log.at(-1).request_id===`exact:${i}`);
+      const after=JSON.stringify(records);
+      await run({actionText:directAction,requestId:`exact:${i}`});
+      check(`original named request ${i} replays zero-write`,JSON.stringify(records)===after);
+      const absent=await run({actionText:directAction,requestId:`absent:${i}`});
+      check(`absent pasted corpse ${i} never substitutes the other corpse`,absent.status===409&&JSON.stringify(records)===after);
+    }
+    check('ASCII curly and modifier apostrophes normalize identically',variants.every(value=>normalizeEntityName(value)===normalizeEntityName(authoritative)));
+    reset();
+    const ballast=Array.from({length:75},(_,i)=>({name:`Stored ledger ${i}`,quantity:1,container:'Bag of Holding'}));
+    c.stowed_items=[...ballast,...c.stowed_items,{...corpse('Other pack Corpse'),container:'Backpack'}];
+    c.inventory.push(corpse('Carried Corpse'));
+    const scope=await bagTransferCandidates(c,parseBagTransfer(action));
+    check('both corpses beyond index 64 are enumerated without bag container or scene candidates',scope.length===2&&scope.some(x=>x.name===authoritative)&&scope.every(x=>x.index>64&&/Rune-Caster|Obsidian Circle Vanguard/.test(x.name)));
+    const expanded=await run({actionText:action,requestId:'complete:two'});
+    check('ambiguous endpoint response offers the complete two-corpse scope',expanded.body.clarification_options.length===2&&expanded.body.clarification_options.some(x=>x.name===authoritative));
+    ui=makeController();ui.install(expanded.body);
+    const pastedOption=expanded.body.clarification_options.find(x=>x.name===authoritative);
+    await ui.submit(pastedOption.name,pastedOption.id);
+    check('previously omitted corpse chip binds and commits its exact identity',!ui.snapshot().pending&&resolved?.receipt?.item_name===authoritative&&s.world_state.world_items?.[0]?.name===authoritative);
+    reset();c.stowed_items=Array.from({length:80},(_,i)=>corpse(`Stored body ${i} Corpse`));
+    const many=await bagTransferCandidates(c,parseBagTransfer(action));
+    check('all 80 relevant sources survive enumeration',many.length===80&&many[79].index===79);
+    const options=buildClarificationOptions({catalog:many,actionText:'Inspect Stored body 79 Corpse'});
+    check('generic chip renderer receives all 80 ranked candidates without a limit',options.length===80&&options[0].name==='Stored body 79 Corpse');
+    let modelCalls=0;
+    const fake={asServiceRole:{entities:{CombatLog:{filter:async()=>[]}}},integrations:{Core:{InvokeLLM:async()=>{modelCalls++;throw new Error('Exact name must not invoke the model');}}}};
+    const context=await buildGroundedContext({base44:fake,session:s,character:c});
+    check('grounded context retains complete stowed ownership projection',context.owned.filter(x=>x.place==='stowed').length===80);
+    const inspected=await resolveGroundedAction({base44:fake,session:s,character:c,actionText:'Inspect Stored body 79 Corpse.'});
+    check('exact name past index 64 resolves without a model or prompt',!inspected.clarification_required&&inspected.grounded_action?.target_ids[0]===many[79].id&&modelCalls===0);
     const passed=tests.filter(x=>x.pass).length;
     return Response.json({passed,failed:tests.length-passed,total:tests.length,all_pass:passed===tests.length,tests,live_writes:0},{status:passed===tests.length?200:500});
   }catch(error){return Response.json({error:error.message||String(error),tests,live_writes:0},{status:500});}

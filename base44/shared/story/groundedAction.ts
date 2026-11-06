@@ -1,8 +1,9 @@
 import { buildGroundedContext } from './groundedSceneContext.ts';
 import { validatePlayerText } from './playerText.ts';
 import { groundCorpseLoot, isCorpseLootAction } from './corpseLootGrounding.ts';
+import { normalizeEntityName, containsEntityName } from './entityNameMatch.ts';
 const OPS = ['inspect','open','loot','take','drop','stow','remove'];
-const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const norm = normalizeEntityName;
 export const sceneInteractionIntent = text => !/\b(?:take down|attack|shoot|cast|invoke|rest|wait)\b/i.test(text || '') && /\b(?:inspect|examine|investigate|search|open|loot|take|pick up|drop|stow|put|place|remove|retrieve)\b/i.test(text || '');
 const infer = text => /\b(?:stow|put|place)\b/i.test(text) ? 'stow' : /\bopen\b/i.test(text) ? 'open' : /\bloot\b/i.test(text) ? 'loot' : /\b(?:take|pick up)\b/i.test(text) ? 'take' : /\bdrop\b/i.test(text) ? 'drop' : /\b(?:remove|retrieve)\b/i.test(text) ? 'remove' : 'inspect';
 const safeLabel = text => String(text || '').replace(/[\r\n]+/g, ' ').slice(0, 300);
@@ -27,11 +28,11 @@ export const groundedDisplayName = entity => {
  * Deduped by display name, so a repeated identity never appears twice and a raw
  * inventory dump never reaches the screen.
  */
-export const buildClarificationOptions = ({ catalog = [], actionText = '', limit = 6 } = {}) => {
+export const buildClarificationOptions = ({ catalog = [], actionText = '' } = {}) => {
   const text = norm(actionText);
   const scored = (catalog || []).map((entity, index) => {
     const names = [groundedDisplayName(entity), ...(entity.aliases || []), ...(entity.player_aliases || [])].map(value => String(value || '')).filter(Boolean);
-    return { entity, index, named: names.some(name => norm(name) && text.includes(norm(name))), relevance: names.reduce((best, name) => Math.max(best, overlapOf(name, actionText)), 0), carried: !!entity.place };
+    return { entity, index, named: names.some(name => containsEntityName(actionText,name)), relevance: names.reduce((best, name) => Math.max(best, overlapOf(name, actionText)), 0), carried: !!entity.place };
   });
   const ordered = [
     ...scored.filter(item => item.named),
@@ -44,7 +45,6 @@ export const buildClarificationOptions = ({ catalog = [], actionText = '', limit
     if (seen.has(key)) continue;
     seen.add(key);
     options.push({ id: item.entity.id, name });
-    if (options.length >= limit) break;
   }
   return options;
 };
@@ -57,7 +57,8 @@ export async function resolveGroundedAction({ base44, session, character, action
   if (isCorpseLootAction(checked.text)) return groundCorpseLoot({ base44, session, context, actionText: checked.text, answerText: answer.text, requestId, boundIds });
   const text = `${checked.text}\n${answer.text}`, intent = infer(checked.text);
   let catalog = [...context.entities, ...context.owned];
-  let matches = catalog.filter(x => norm(text).includes(norm(x.id)) || [x.name, ...(x.aliases || []), ...(x.player_aliases || [])].filter(Boolean).some(n => norm(text).includes(norm(n))));
+  const exactNames=catalog.filter(x=>containsEntityName(text,x.name));
+  let matches = exactNames.length ? exactNames : catalog.filter(x => containsEntityName(text,x.id) || [...(x.aliases || []), ...(x.player_aliases || [])].filter(Boolean).some(n => containsEntityName(text,n)));
   // A selected option is an identity binding, not more prose for the model.
   const pinned = boundIds.length === 1 ? catalog.find(x => x.id === boundIds[0]) :
     answer.text ? catalog.find(x => norm(x.id) === norm(answer.text) || norm(x.name) === norm(answer.text)) : null;
