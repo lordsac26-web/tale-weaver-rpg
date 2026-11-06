@@ -35,7 +35,7 @@ export default async function(req) {
     record('victory handoff materializes one Weaver corpse with combat death provenance', outcome === 'victory' && corpse?.name === "Weaver's Corpse" && corpse?.status === 'dead' && corpse?.death_provenance?.combatant_id === enemy.id && corpse?.location === 'Ritual Sanctum');
 
     const grounded = await resolveGroundedAction({ base44, session: handedOff, character, actionText: 'approach the body of the weaver and search it', allowReconciliation: false });
-    record('single named post-victory body search resolves directly without clarification', grounded.handled && !grounded.clarification_required && grounded.grounded_action?.intent === 'inspect' && grounded.grounded_action?.target_ids?.length === 1 && grounded.grounded_action.targets?.[0]?.id === corpse?.id, JSON.stringify(grounded.grounded_action));
+    record('single named post-victory body search resolves directly as corpse loot intent without clarification', grounded.handled && !grounded.clarification_required && grounded.grounded_action?.intent === 'loot' && grounded.grounded_action?.target_ids?.length === 1 && grounded.grounded_action.targets?.[0]?.id === corpse?.id, JSON.stringify(grounded.grounded_action));
     record('grounded target preserves completed-combat provenance', grounded.grounded_action?.targets?.[0]?.evidence?.authority === 'completed_combat' && grounded.grounded_action?.targets?.[0]?.death_provenance?.combat_id === combat.id);
 
     const clarificationPayload = { clarification_options: [{ id: 'corpse:a', name: "Weaver's Corpse" }, { id: 'corpse:b', name: "Guard's Corpse" }] };
