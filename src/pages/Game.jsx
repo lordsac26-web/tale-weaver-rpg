@@ -1013,9 +1013,16 @@ export default function Game() {
         character_id: character?.id, request_id: attackRequestId, payload: { target_id: targetId, weapon, spell, modifiers, twin_target_id: twinTargetId, ...(modifiers?.roll_submission ? { roll_submission: modifiers.roll_submission } : {}) }
       });
     } catch (err) {
-      setCombatActionError(current => oneEphemeralCombatError(current, getFunctionErrorMessage(err, 'That action could not be resolved.')));
-      finishCombatIntent(combatIntentRef, attackRequestId);
-      setCombatLoading(false);
+      try {
+        const failure = err?.response?.data || err?.data;
+        // Non-2xx refusals throw before the normal invalid-response branch.
+        // Refresh, but never auto-resubmit a roll or consume another arrow.
+        if (failure?.already_resolved || failure?.target_defeated || failure?.error_code === 'no_attacks_remaining') await reloadCombat(combatId);
+        setCombatActionError(current => oneEphemeralCombatError(current, getFunctionErrorMessage(err, 'That action could not be resolved.')));
+      } finally {
+        finishCombatIntent(combatIntentRef, attackRequestId);
+        setCombatLoading(false);
+      }
       return false;
     }
 

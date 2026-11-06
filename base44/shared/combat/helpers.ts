@@ -199,12 +199,15 @@ export const resolveActionAndAdvance = (combatLog, combatants, character, opts =
   const ar = apt - acu;
   let ni = combatLog.current_turn_index;
   let nr = combatLog.round;
-  let ws = { ...(combatLog.world_state || {}), actions_used_this_turn: acu };
+  // All action paths (including healing and utility spells) share one ledger.
+  let ws = { ...(combatLog.world_state || {}), actions_used_this_turn: acu,
+    attacks_used_this_action: acu, attacks_remaining: Math.max(0, ar) };
   if (isBonusAction) ws.bonus_action_used = true;
   if (ar <= 0) {
     const adv = advanceTurn(combatLog.current_turn_index, combatLog.round, combatants);
     ni = adv.nextIndex; nr = adv.nextRound;
-    ws = { ...ws, actions_used_this_turn: 0, bonus_action_used: false,
+    ws = { ...ws, actions_used_this_turn: 0, attacks_used_this_action: 0,
+           attacks_remaining: 0, bonus_action_used: false,
            sneak_attack_used: false, loading_weapon_fired: false, colossus_slayer_used: false,
            horde_breaker_available: false, horde_breaker_origin_target_id: null, horde_breaker_used: false,
            aasimar_rider_used: false, draconic_cry_active: false, divine_strike_used: false,
@@ -216,6 +219,8 @@ export const resolveActionAndAdvance = (combatLog, combatants, character, opts =
 export const resetTurnWorldState = (combatLog, extra = {}) => ({
   ...(combatLog.world_state || {}),
   actions_used_this_turn: 0,
+  attacks_used_this_action: 0,
+  attacks_remaining: 0,
   bonus_action_used: false,
   reaction_used: false,
   sneak_attack_used: false,

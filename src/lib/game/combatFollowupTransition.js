@@ -15,7 +15,7 @@ export function attackBudget(character, worldState = {}) {
 export function buildCombatRequestKey({ combat, sessionId, characterId, targetId = 'none', actionType, suffix = '' }) {
   const world = combat?.world_state || {};
   const slot = Number.isFinite(Number(world.attacks_used_this_action)) ? Number(world.attacks_used_this_action) : Number(world.actions_used_this_turn || 0);
-  return [COMBAT_FOLLOWUP_TRANSITION_VERSION, clean(sessionId), clean(combat?.id), `r${Number(combat?.round || 1)}`, `t${Number(combat?.current_turn_index || 0)}`, `a${slot}`, clean(characterId), clean(actionType), clean(targetId), clean(suffix)].filter(Boolean).join(':');
+  return [COMBAT_FOLLOWUP_TRANSITION_VERSION, clean(sessionId), clean(combat?.id), `r${Number(combat?.round || 1)}`, `t${Number(combat?.current_turn_index || 0)}`, `a${slot}`, clean(characterId), clean(actionType), clean(targetId), clean(suffix), ...(['attack', 'spell', 'offhand_attack'].includes(actionType) ? [`l${combat?.log_entries?.length || 0}`] : [])].filter(Boolean).join(':');
 }
 
 export function beginCombatIntent(ref, requestId) {

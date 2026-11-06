@@ -42,7 +42,8 @@ export async function handleActionSurge(ctx) {
   };
   await base44.asServiceRole.entities.CombatLog.update(combat_id, {
     log_entries: [...(combatLog.log_entries || []), logEntry],
-    world_state: { ...ws, actions_used_this_turn: newUsed },
+    world_state: { ...ws, actions_used_this_turn: newUsed, attacks_used_this_action: newUsed,
+      attacks_remaining: Math.max(0, (ws.actions_used_this_turn || 0) + (ws.attacks_remaining || 0) - newUsed) },
   });
   return Response.json({ success: true, log_entry: logEntry, uses_remaining: maxUses - (used + 1) });
 }
