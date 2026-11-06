@@ -42,6 +42,7 @@ import { acceptCompositePreflightResponse, buildCompositePreflightRequest, COMPO
 import { prepareStorySkillCheck, resolveStorySkillRoll, resumeStorySkillResolution } from '@/lib/storySkillCheck';
 import { acceptSequencedStoryPayload, hydrateLatestStoryEntry, STORY_TRANSITION_VERSION } from '@/lib/storyTransition';
 import applyStoryClarification from '@/lib/storyClarification';
+import committedTransfer from '@/lib/game/committedTransfer';
 import { attackBudget, beginCombatIntent, buildCombatRequestKey, COMBAT_FOLLOWUP_TRANSITION_VERSION, finishCombatIntent, oneEphemeralCombatError } from '@/lib/game/combatFollowupTransition';
 import { normalizeRollMode } from '@/lib/rollMode';
 import createStoryContinuation from '@/lib/storyContinuation';
@@ -538,7 +539,8 @@ export default function Game() {
   };
 
   // Intercept custom input — send to DM for adjudication first
-  const groundedClarification = useGroundedClarification({ sessionId, characterId: character?.id, onResolved: data => {
+  const groundedClarification = useGroundedClarification({ sessionId, characterId: character?.id, onResolved: async data => {
+    if (await committedTransfer(data, {loadState,setNarrative,setCustomInput})) return;
     if (data.action_blocked) setNarrative(prev => [...prev, { type: 'action_error', text: data.reasoning || data.error }]);
     else { setCustomInput(''); setPendingProposal(data); }
   } });
@@ -689,6 +691,11 @@ export default function Game() {
   const executeProposedAction = async (proposal) => {
     setPendingProposal(null);
     const { action, action_type: actionType, requires_check, skill, dc, recovery } = proposal;
+    if (proposal.bag_transfer) {
+      groundedClarification.install({...proposal,clarification_kind:'bag_transfer',clarification_options:[]});
+      await groundedClarification.submit(action, proposal.bag_transfer.selected_source_id);
+      return;
+    }
     if (proposal.action_blocked) { setNarrative(prev => [...prev, { type: 'action_error', text: proposal.reasoning || proposal.error }]); return; }
     if (proposal.action_type === 'composite_action') {
       setNarrative(prev => [...prev, { type: 'action_error', text: proposal.valid ? 'The composite plan is validated but must be resolved through its ordered authoritative children.' : `${proposal.reasoning} Choose one of the legal alternatives shown; the scene and choices remain unchanged.` }]);

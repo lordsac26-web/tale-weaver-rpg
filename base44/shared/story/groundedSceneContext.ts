@@ -22,7 +22,8 @@ export async function buildGroundedContext({ base44, session, character, reconci
   const diagnostics = [];
   for (const entity of (session.world_state?.scene_entities || []).slice(0, 64)) {
     if (entity.session_id !== session.id || entity.location !== (session.current_location || '') || transferredIds.has(entity.id)) continue;
-    if (entity.evidence?.authority === 'completed_combat') {
+    const transferProof = entity.evidence?.authority === 'item_transfer' && (session.world_state?.__item_transfer_receipts || []).some(receipt => receipt.request_id === entity.evidence.request_id && receipt.item_id === entity.evidence.source_item_id);
+    if (entity.evidence?.authority === 'completed_combat' || transferProof) {
       if (!entities.some((candidate) => candidate.id === entity.id)) entities.push(entity);
       continue;
     }

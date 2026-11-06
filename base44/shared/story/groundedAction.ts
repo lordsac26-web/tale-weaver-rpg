@@ -58,6 +58,10 @@ export async function resolveGroundedAction({ base44, session, character, action
   const text = `${checked.text}\n${answer.text}`, intent = infer(checked.text);
   let catalog = [...context.entities, ...context.owned];
   let matches = catalog.filter(x => norm(text).includes(norm(x.id)) || [x.name, ...(x.aliases || []), ...(x.player_aliases || [])].filter(Boolean).some(n => norm(text).includes(norm(n))));
+  // A selected option is an identity binding, not more prose for the model.
+  const pinned = boundIds.length === 1 ? catalog.find(x => x.id === boundIds[0]) :
+    answer.text ? catalog.find(x => norm(x.id) === norm(answer.text) || norm(x.name) === norm(answer.text)) : null;
+  if (pinned) matches = [pinned];
   const wantedCount = /\b(?:two|both|2)\b/i.test(text) ? 2 : /\b(?:three|3)\b/i.test(text) ? 3 : 1;
   // A placement ("put the fork into the crack") names a carried object AND a world
   // receptacle, so both match and demanding a single identity asks the wrong
@@ -67,7 +71,7 @@ export async function resolveGroundedAction({ base44, session, character, action
   // Naming an object by one of its established aliases ("the weaver", "the body") is
   // naming it — requiring the full record name would re-ask a question the player
   // already answered.
-  const explicit = placement ? true : matches.length === wantedCount && matches.every(x => [x.id, x.name, ...(x.aliases || []), ...(x.player_aliases || [])].filter(Boolean).some(name => norm(text).includes(norm(name))));
+  const explicit = placement || pinned ? true : matches.length === wantedCount && matches.every(x => [x.id, x.name, ...(x.aliases || []), ...(x.player_aliases || [])].filter(Boolean).some(name => norm(text).includes(norm(name))));
   let proposal = placement
     ? { intent, target_ids: placement.carried.map(x => x.id), quantity: wantedCount, destination: placement.destination.map(groundedDisplayName).join(' / '), uncertainty: '' }
     : { intent, target_ids: matches.map(x => x.id), quantity: wantedCount, destination: '', uncertainty: '' };
@@ -92,6 +96,7 @@ export async function resolveGroundedAction({ base44, session, character, action
   if (intent === 'open' && matches.some(x => x.type !== 'container')) uncertainty = 'I can identify that object, but it has no supported opening interaction. You can inspect it instead.';
   const plan = { version: context.version, session_id: session.id, scene_id: context.scene_id, scene_revision: context.revision, intent, target_ids: matches.map(x => x.id), quantity: proposal.quantity, destination: cleanLabel(proposal.destination),
     targets: matches.map(x => ({ ...x, display_name: groundedDisplayName(x) })), evidence: matches.map(x => x.evidence || { authority: 'owned_inventory', id: x.id, place: x.place }), mechanical_prerequisites: [], uncertainty: cleanLabel(uncertainty), context_omitted_entries: context.omitted_entries };
-  if (answer.text && plan.uncertainty) return { handled: true, status: 200, writes: 0, action_blocked: true, clarification_required: false, reasoning: `This attempt is stopped: ${plan.uncertainty} No action or roll was performed.`, grounded_action: plan };
+  if (answer.text && plan.uncertainty) return { handled: true, status: 200, writes: 0, preserve_pending: true, clarification_required: true,
+    reasoning: `${plan.uncertainty} Your original attempt is preserved. Choose a listed option, type its full name, or cancel before starting another action.`, grounded_action: plan, clarification_options: clarificationOptions };
   return { handled: true, status: 200, writes: 0, clarification_required: !!plan.uncertainty, reasoning: plan.uncertainty || `This refers to ${matches.map(groundedDisplayName).join(' and ')} in the saved scene${plan.destination ? `, with ${plan.destination} as the destination` : ''}.`, grounded_action: plan, clarification_options: clarificationOptions, context };
 }

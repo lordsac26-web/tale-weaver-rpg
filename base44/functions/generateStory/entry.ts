@@ -53,6 +53,7 @@ import { validatePlayerText } from '../../shared/story/playerText.ts';
 import { SCENE_ENTITY_SCHEMA } from '../../shared/story/sceneEvidence.ts';
 import { prepareGroundedStoryCommit } from '../../shared/story/groundedStoryCommit.ts';
 import groundedStoryDispatch from '../../shared/story/groundedStoryDispatch.ts';
+import { resolveBagTransferClarification } from '../../shared/story/bagTransferClarification.ts';
 import { defeatedSceneTargetForRef } from '../../shared/story/sceneCombatTargets.ts';
 import { advanceWorldClockBySeconds } from '../../shared/story/worldClock.ts';
 import { guardPlayerFacingStoryText, isUnresolvedStateToken, playerFacingLocationLabel } from '../../shared/story/playerFacingTextGuard.ts';
@@ -146,6 +147,13 @@ export default async function(req) {
     const selectedChoiceContract = selection.contract;
     authoritativeChoiceContext = { ...authoritativeChoiceContext, recovery: normalizeDeclaredRecovery(authoritativeChoiceContext.recovery ?? selectedChoiceContract.recovery) };
     const selectedChoice = action === 'choice' ? stripGeneratedChoiceAnnotations(selectedChoiceContract.text) : '';
+    if (action === 'choice') {
+      const bag = await resolveBagTransferClarification({db:base44.asServiceRole,session,character,actionText:selectedChoice || custom_input,
+        requestId:storyRequestId,intentId:authoritativeChoiceContext?.bag_transfer?.intent_id,
+        selectedId:authoritativeChoiceContext?.bag_transfer?.selected_source_id,
+        answerText:authoritativeChoiceContext?.ground_answer_text || '',confirm:true});
+      if (bag.handled) return Response.json(bag.body,{status:bag.status});
+    }
     const groundedDispatch = action === 'choice' ? await groundedStoryDispatch({ base44, session, character,
       actionText: selectedChoice || custom_input, choiceContext: incomingChoiceContext, requestId: storyRequestId, storySequence: story_sequence }) : {};
     if (groundedDispatch.response) return Response.json({ ...groundedDispatch.response.body, generate_story_version: GENERATE_STORY_VERSION }, { status: groundedDispatch.response.status });

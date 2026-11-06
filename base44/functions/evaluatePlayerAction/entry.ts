@@ -5,6 +5,7 @@ import { preflightCompositeAction } from '../../shared/story/compositeActionPref
 import { isExplicitCraftingAction } from '../../shared/story/choiceAwardRouting.js';
 import { validatePlayerText } from '../../shared/story/playerText.ts';
 import { resolveGroundedAction } from '../../shared/story/groundedAction.ts';
+import { resolveBagTransferClarification } from '../../shared/story/bagTransferClarification.ts';
 import { resolveStowResume } from '../../shared/story/stowResume.ts';
 import { classifyLegacyChoiceAction } from '../../shared/story/choiceActionContract.js';
 import { preflightStoryAttack } from '../../shared/story/sceneCombatTargets.ts';
@@ -17,8 +18,8 @@ export default async function(req) {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { action: rawAction, character: incomingCharacter, session_id, character_id, session_context, in_combat, combat_context, combat_enemies, request_id, action_type: incomingActionType, composite_plan: incomingCompositePlan, parent_key: incomingParentKey, answer_text, expected_scene_revision } = await req.json();
-    const checkedText = validatePlayerText(rawAction), checkedAnswer = validatePlayerText(answer_text || '', true);
+    const { action: rawAction, character: incomingCharacter, session_id, character_id, session_context, in_combat, combat_context, combat_enemies, request_id, action_type: incomingActionType, composite_plan: incomingCompositePlan, parent_key: incomingParentKey, answer_text, expected_scene_revision, clarification_intent_id, selected_source_id, clarification_operation, confirm_transfer } = await req.json();
+    const checkedText = validatePlayerText(rawAction || '', !!clarification_operation), checkedAnswer = validatePlayerText(answer_text || '', true);
     if (!checkedText.ok || !checkedAnswer.ok) return Response.json({ error: checkedText.error || checkedAnswer.error, writes: 0 }, { status: 400 });
     const action = checkedText.text;
     if (!session_id || !character_id) return Response.json({ error: 'session_id and character_id are required' }, { status: 400 });
@@ -27,6 +28,11 @@ export default async function(req) {
       base44.asServiceRole.entities.Character.get(character_id).catch(() => null),
     ]);
     if (!session || !character || session.character_id !== character.id || !characterBelongsToUser(character, user)) return Response.json({ error: 'Character and session linkage is invalid' }, { status: 403 });
+
+    const bagTransfer = await resolveBagTransferClarification({ db:base44.asServiceRole, session, character,
+      actionText:action, requestId:request_id, intentId:clarification_intent_id, selectedId:selected_source_id,
+      answerText:checkedAnswer.text, operation:clarification_operation, confirm:confirm_transfer === true });
+    if (bagTransfer.handled) return Response.json(bagTransfer.body, {status:bagTransfer.status});
 
     // ============ COMBAT MODE ============
     // During combat the DM must decide whether a free-text action is a skill check,
@@ -168,7 +174,7 @@ Return ONLY a JSON object:
       resume_request_id: stowResume.request_id, check_receipt: stowResume.resume, superseded_request_ids: stowResume.superseded_request_ids,
       reasoning: `A saved ${stowResume.resume.skill} check (${stowResume.resume.final_total} vs DC ${stowResume.resume.dc}) already covers this exact stow attempt in this scene. Confirm it below — no new roll.`,
       request_id: String(request_id || '').slice(0, 120), writes: 0, function_version: 'evaluate-player-action-v2.6-stow-resume' });
-    const grounding = await resolveGroundedAction({ base44, session, character, actionText: action, answerText: checkedAnswer.text, expectedRevision: expected_scene_revision, requestId: String(request_id || '').slice(0, 120) });
+    const grounding = await resolveGroundedAction({ base44, session, character, actionText: action, answerText: checkedAnswer.text, expectedRevision: expected_scene_revision, requestId: String(request_id || '').slice(0, 120), boundIds: selected_source_id ? [selected_source_id] : [] });
     if (grounding.status >= 400) return Response.json(grounding, { status: grounding.status });
     if (grounding.action_blocked || grounding.grounded_action?.intent === 'loot') return Response.json({ ...grounding, context: undefined, action, request_id, function_version: 'evaluate-player-action-v2.8.0-loot' });
     // Candidates come from the relevance-filtered, deduped, player-facing projection —
